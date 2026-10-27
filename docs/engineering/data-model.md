@@ -1399,13 +1399,18 @@ All channels are **private** (`config: { private: true }`); access is controlled
 |---|---|---|
 | `battle:{battle_id}` | SOC-03 state, reveal, podium; presence = nickname, avatar | active member of the battle's Turma |
 | `room:{room_id}` | SOC-05 timer state, group goal, reactions | active member of the room's Turma |
-| `turma:{class_group_id}` | Battle started, subject shared, moderation queue count | active member |
+| `turma:{class_group_id}` | Battle started, subject shared | active member |
+| `turma:{class_group_id}:mods` | Moderation queue count, join requests | owner/moderator |
 | `user:{user_id}` | Per-user server hints: plan recomputed, sync requested, budget reset | `uid = user_id` |
 
 ```sql
 create policy realtime_turma_read on realtime.messages for select to authenticated
 using (
-  (realtime.topic() like 'turma:%' and private.is_member(split_part(realtime.topic(), ':', 2)::uuid))
+  (realtime.topic() ~ '^turma:[0-9a-f-]{36}$' and private.is_member(split_part(realtime.topic(), ':', 2)::uuid))
+  or (realtime.topic() ~ '^turma:[0-9a-f-]{36}:mods$' and private.is_moderator(split_part(realtime.topic(), ':', 2)::uuid))
+  or (realtime.topic() like 'room:%' and exists (
+        select 1 from public.study_rooms r where r.id = split_part(realtime.topic(), ':', 2)::uuid
+        and private.is_member(r.class_group_id)))
   or (realtime.topic() like 'battle:%' and exists (
         select 1 from public.battles b where b.id = split_part(realtime.topic(), ':', 2)::uuid
         and private.is_member(b.class_group_id)))
