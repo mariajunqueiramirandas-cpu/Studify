@@ -29,6 +29,10 @@ env:
   ANDROID_COMPILE_SDK: '37.0'
   ANDROID_BUILD_TOOLS: '37.0.0'
   ANDROID_NDK: '27.1.12297006'
+  # CPU architectures in the APK. Every Android phone sold in years is arm64-v8a; armeabi-v7a keeps older and
+  # low-end 32-bit phones. x86 and x86_64 are left out: they are almost only emulators, and each ABI compiles every
+  # native library again. Add them back here (comma-separated) if an x86 device has to install the release.
+  ANDROID_ABIS: 'armeabi-v7a,arm64-v8a'
   DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
@@ -173,6 +177,27 @@ jobs:
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install --clean
 
+      # The generated gradle.properties gives Gradle a 2 GB heap and 512 MB metaspace. That is too little for this
+      # app: R8 and the CMake tasks ran the daemon out of memory, and it stalled in garbage collection instead of
+      # failing. The runner has 4 CPUs and 16 GB.
+      - name: Tune Gradle for the CI runner
+        working-directory: apps/mobile/android
+        run: |
+          set -euo pipefail
+          # The generated file has no trailing newline; add one so appended lines start on their own line.
+          [ -z "$(tail -c 1 gradle.properties)" ] || echo >> gradle.properties
+          set_prop() {
+            sed -i "/^${1//./\\.}=/d" gradle.properties
+            echo "$1=$2" >> gradle.properties
+          }
+          set_prop org.gradle.jvmargs '-Xmx6g -XX:MaxMetaspaceSize=1536m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8'
+          set_prop kotlin.daemon.jvmargs '-Xmx3g'
+          set_prop org.gradle.caching 'true'
+          set_prop reactNativeArchitectures "$ANDROID_ABIS"
+          # PNG crunching re-compresses every image on every build for a small size gain.
+          set_prop android.enablePngCrunchInReleaseBuilds 'false'
+          grep -v '^#' gradle.properties | grep .
+
       - name: Install the Android SDK packages the build needs
         run: |
           set -euo pipefail
@@ -192,15 +217,35 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Most of the build is C++ (reanimated, worklets, MMKV, nitro, screens, …) compiled for every ABI. ccache keeps
+      # the compiled objects between runs, so only changed native code is compiled again.
+      - name: Cache native compilation
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: android-release-ndk-${{ env.ANDROID_NDK }}
+          max-size: 2G
+
       - name: Build the release APK
         working-directory: apps/mobile/android
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          # React Native's CMake helpers pick ccache up from PATH; the launcher variables cover the other libraries.
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          # The NDK is reinstalled on each runner, so compare compilers by content rather than mtime. The sloppiness
+          # settings let restored precompiled headers (reanimated) and checked-out headers with new mtimes hit.
+          CCACHE_COMPILERCHECK: content
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --console=plain
+          # Release lint (lintVital*) re-analyzes the whole app on every build. CI typechecks and tests on each PR,
+          # so skip it here.
+          ./gradlew assembleRelease --console=plain \
+            -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease
+          ccache --show-stats
 
       # The Expo template signs release builds with the debug key. Re-sign with the release key so every
       # build installs over the previous ones.
