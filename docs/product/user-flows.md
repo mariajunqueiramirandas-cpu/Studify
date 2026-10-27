@@ -362,7 +362,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  W["WhatsApp: 'Bora estudar junto no Studify? 📚 Entra na nossa turma 2º A: https://{BASE_URL}/c/ABCD-EFGH'"] --> T{App installed?}
+  W["WhatsApp: 'Bora estudar junto no Studify? 📚 Entra na nossa turma 2º A: https://studify.vendua.com.br/c/ABCD-EFGH'"] --> T{App installed?}
   T -- yes --> AL["Android App Link opens S-TUR-04 Prévia da turma"]
   T -- no --> LP["S-EXT-03 Landing page: what Studify is · Baixar o app · install help · code ABCD-EFGH"]
   LP --> INS[Install APK] --> UF01["UF-01 onboarding, invite code prefilled or pasted"]

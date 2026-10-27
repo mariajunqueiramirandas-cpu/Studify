@@ -331,7 +331,7 @@ No AI is involved in duels, battles, insights or rooms (question content comes f
 points = correct ? 100 + round(50 × (1 − t / T)) : 0
 ```
 
-Answers received after `deadline_at + 3 s` grace count as timeout. Total = sum. Winner = higher total; equal = tie.
+Answers received after `deadline_at + 1.5 s` grace count as timeout (api §4.7, data-model §5.7). Total = sum. Winner = higher total; equal = tie.
 
 ### 8.3 Battle state machine and scoring
 
@@ -341,15 +341,17 @@ stateDiagram-v2
   lobby --> countdown: host taps Começar (≥ 2 players)
   lobby --> cancelled: host cancels / 15 min idle
   countdown --> question_open: 3 s
-  question_open --> question_reveal: closes_at reached or all players answered
-  question_reveal --> question_open: host taps Próxima (or auto after 10 s)
-  question_reveal --> podium: last question
-  podium --> closed: 2 min or host closes
-  question_open --> closed: host ends battle
-  question_reveal --> closed: host ends battle
+  question_open --> reveal: closes_at reached (worker battle.tick)
+  reveal --> question_open: host taps Próxima (or auto after 10 s, battle.tick)
+  reveal --> podium: last question
+  podium --> ended: 2 min (battle.tick) or host ends
+  question_open --> ended: host ends battle
+  reveal --> ended: host ends battle
 ```
 
 - Transitions are executed only by the server: Edge Function `battle-control` (host actions) and worker job `battle.tick` (scheduled for each `closes_at` and auto-advance), which is idempotent on `(battle_id, index, target_state)`.
+- Status values are the `battles.status` CHECK values (data-model): `lobby`, `question_open`, `question_closed`, `reveal`, `podium`, `ended`, `cancelled`. The question state is `question_open` and the reveal state is `reveal`; `question_closed` is reserved and not used by the flow above.
+- Realtime (api §8.2): every transition broadcasts on the private channel `battle:{id}`. The worker sends `state` at each transition, `reveal` (correct response, explanation, distribution or `null` below 5 answers, top-5 leaderboard) when a question closes, and `podium` (top 3) when the last reveal is done.
 - `opens_at` is set 1.5 s in the future when broadcasting so clients render simultaneously; clients sync clock offset on join (`server_time` in the join response).
 - **Scoring** (`T` = seconds per question, `t` as in §8.2):
 
@@ -454,7 +456,7 @@ Applies to Turma names, nicknames, room names, flag comments, SOC-06 contributio
 - [ ] 21 invalid join attempts within an hour block further attempts for 1 hour.
 - [ ] Sharing a subject moves ownership to the Turma; other members can study it without any new `ai_usage` rows being created.
 - [ ] Leaving a Turma with **Fazer uma cópia pessoal** keeps the user's card states on the copied cards.
-- [ ] In a duel, the client never receives the answer of a question before submitting; answers after `deadline + 3 s` are scored 0.
+- [ ] In a duel, the client never receives the answer of a question before submitting; answers after `deadline + 1.5 s` are scored 0.
 - [ ] Duel scoring matches §8.2 for a table of (correct, t) cases in unit tests; equal totals produce a tie.
 - [ ] A duel not played by the opponent in 48 h becomes `expired` with no XP changes.
 - [ ] A battle with 30 simulated clients runs 10 questions end-to-end; every client sees the same question within 500 ms; scores match §8.3.
@@ -472,7 +474,7 @@ Applies to Turma names, nicknames, room names, flag comments, SOC-06 contributio
 
 ## 12. Open questions
 
-1. **Domain for links (`{BASE_URL}`)** and hosting for the landing page + APK (owner's decision; needed for App Links `assetlinks.json`).
+1. ~~**Domain for links (`{BASE_URL}`)**~~ Decided 2026-10-27 (D-05): `studify.vendua.com.br`. Still open: hosting for the landing page + APK (needed for App Links `assetlinks.json`).
 2. **Default join policy:** spec chooses `approval`. Is the organizer OK approving ~40 classmates (with **Aprovar todos**), or prefer `open` + expiring links?
 3. **App admin moderation:** who handles reports escalated to the app admin (the owner of the project)? Need an admin screen or is a database view enough for v1?
 4. **Auto-apply of AI-confirmed fixes** when no moderator acts: spec keeps a human in the loop (items stay hidden "em revisão"). Should high-confidence fixes auto-apply after 72 h?

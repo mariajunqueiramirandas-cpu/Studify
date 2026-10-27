@@ -1,0 +1,41 @@
+# Supabase CLI configuration for local development (`supabase start`, `supabase db reset`).
+# Ports follow the Supabase CLI defaults. Local setup: docs/engineering/mobile-app.md §18.
+project_id = "studify"
+
+[api]
+enabled = true
+port = 54321
+# Only public is exposed to PostgREST. The `private` schema holds internal tables and is never exposed.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Postgres 15+ is required (data-model §1). 17 is the current CLI default.
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[realtime]
+enabled = true
+
+[auth]
+enabled = true
+# Native app: the deep link is the redirect target for OTP and OAuth flows (mobile-app.md §2.3, §12).
+site_url = "studify://auth/callback"
+additional_redirect_urls = ["studify://auth/callback", "https://studify.vendua.com.br"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Email sign-in uses a one-time code, not a password. Six digits, valid for one hour.
+otp_length = 6
+otp_expiry = 3600

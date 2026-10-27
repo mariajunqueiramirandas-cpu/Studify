@@ -25,7 +25,7 @@ flowchart LR
     PG[("Postgres<br/>+ RLS")]
     Storage[("Storage<br/>PDFs, images, audio")]
     RT["Realtime<br/>duels, battles, rooms"]
-    Edge["Edge Functions<br/>sync API"]
+    Edge["API server (Bun + Hono)<br/>/api/name, sync API"]
   end
 
   Worker["Job worker<br/>Node.js + pg-boss"]
@@ -53,23 +53,24 @@ flowchart LR
 | Piece | Responsibility | Why |
 |---|---|---|
 | **Android app** (Expo) | All UI; offline cache of cards, review logs, notes; FSRS scheduling runs **on device** so reviews work offline. | Phone-first, offline reviews. |
-| **Supabase** | Auth, Postgres (source of truth, Row Level Security on every table), Storage, Realtime, and **Edge Functions** for short synchronous AI calls (tutor chat, grading one answer, explain-differently). | One managed backend; RLS keeps per-user and per-Turma data isolated without a custom API for plain CRUD. |
-| **Job worker** (Node.js, TypeScript) | Long-running and bulk work: PDF ingestion, knowledge-map generation, bulk card/question/note generation (Claude Batch API), podcast audio, nightly plan recomputation, push notifications. Queue: **pg-boss** on the same Postgres. | Ingestion can take minutes; Batch API is asynchronous; Edge Functions have short time limits. |
+| **Supabase** | Auth, Postgres (source of truth, Row Level Security on every table), Storage, Realtime. |
+| **API server** (Bun + Hono, VPS) | Short synchronous AI calls and privileged operations (tutor chat, grading one answer, explain-differently, sync push, duels), served at `/api/<name>`. Formerly Supabase Edge Functions ([ADR 0008](adr/0008-vps-bun-hono-api.md)). | One managed backend; RLS keeps per-user and per-Turma data isolated without a custom API for plain CRUD. |
+| **Job worker** (Node.js, TypeScript) | Long-running and bulk work: PDF ingestion, knowledge-map generation, bulk card/question/note generation (Claude Batch API), podcast audio, nightly plan recomputation, push notifications. Queue: **pg-boss** on the same Postgres. | Ingestion can take minutes; Batch API is asynchronous; synchronous requests should not hold a connection for minutes. |
 
-**Rule:** the Claude API key lives **only** in Edge Function and worker secrets. The app never holds it and never calls Claude directly.
+**Rule:** the Claude API key lives **only** in API server and worker secrets. The app never holds it and never calls Claude directly.
 
 ## 2. Tech stack
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Language | **TypeScript** everywhere | Shared types package between app, Edge Functions and worker. |
-| Monorepo | pnpm workspaces | `apps/mobile`, `apps/worker`, `supabase/` (migrations + functions), `packages/shared` (types, schemas, FSRS wrapper, grading rules), `packages/prompts`. |
+| Language | **TypeScript** everywhere | Shared types package between app, API server and worker. |
+| Monorepo | pnpm workspaces | `apps/mobile`, `apps/worker`, `apps/api` (API server), `supabase/` (migrations), `packages/shared` (types, schemas, FSRS wrapper, grading rules), `packages/prompts`. |
 | Mobile | Expo SDK (latest stable), Expo Router, React Native | Android-only builds via EAS; development builds (not Expo Go) because of native modules (PDF viewer, widgets). |
 | Server state | TanStack Query | Caching, retries, optimistic updates. |
 | Local state | Zustand | UI/session state. |
 | Local DB | expo-sqlite + Drizzle ORM | Offline cards, card states, review logs, downloaded notes; sync queue. |
 | Validation | Zod | One schema per AI output and per API payload, shared across app/server. |
-| Backend | Supabase (Postgres 15+, Auth, Storage, Realtime, Edge Functions on Deno) | Migrations in `supabase/migrations`. |
+| Backend | Supabase cloud (Postgres 15+, Auth, Storage, Realtime) + API server on Bun + Hono, on a VPS through Dokploy (`/api/<name>`; formerly Supabase Edge Functions) | Migrations in `supabase/migrations`. See [ADR 0008](adr/0008-vps-bun-hono-api.md) and [deployment.md](deployment.md). |
 | Queue | pg-boss | Jobs table in Postgres; retries with backoff. |
 | AI | Claude API via `@anthropic-ai/sdk` | Details in [ai-pipeline.md](ai-pipeline.md). |
 | Spaced repetition | `ts-fsrs` | Runs on device and on server (same package version). |

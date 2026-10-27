@@ -1,0 +1,194 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GOL-04 snapshots per scenario > a subject already mastered gets no learn unit 1`] = `
+[
+  "2026-10-26 learn:B1 20",
+  "2026-10-26 learn:B2 20",
+  "2026-10-26 mock:hist 18",
+  "2026-10-27 mock:bio 21",
+  "2026-10-27 practice:bio:B1 10",
+  "2026-10-28 practice:bio:B2 10",
+  "2026-10-28 vespera:2026-10-29 25",
+  "2026-10-29 vespera:2026-10-30 25",
+]
+`;
+
+exports[`GOL-04 snapshots per scenario > five subjects on consecutive days, a missed day and a test added mid-week 1`] = `
+{
+  "first": {
+    "feasible": false,
+    "items": [
+      "2026-05-04 learn:bio-1 9",
+      "2026-05-04 learn:bio-2 24",
+      "2026-05-04 learn:fis-1 9",
+      "2026-05-04 learn:geo-1 9",
+      "2026-05-04 learn:hist-1 9",
+      "2026-05-04 learn:hist-2 24",
+      "2026-05-04 learn:mat-1 9",
+      "2026-05-04 mock:ex-bio 21",
+      "2026-05-04 mock:ex-hist 21",
+      "2026-05-05 mock:ex-geo 21",
+      "2026-05-05 mock:ex-mat 21",
+      "2026-05-05 practice:ex-bio:bio-1 10",
+      "2026-05-05 practice:ex-bio:bio-2 10",
+      "2026-05-05 practice:ex-fis:fis-1 10",
+      "2026-05-05 practice:ex-geo:geo-1 10",
+      "2026-05-05 practice:ex-hist:hist-2 10",
+      "2026-05-05 practice:ex-mat:mat-1 10",
+      "2026-05-05 vespera:2026-05-06 25",
+      "2026-05-06 learn:mat-2 24",
+      "2026-05-06 practice:ex-hist:hist-1 10",
+      "2026-05-06 vespera:2026-05-07 25",
+      "2026-05-07 learn:geo-2 24",
+      "2026-05-07 practice:ex-mat:mat-2 10",
+      "2026-05-07 vespera:2026-05-08 25",
+      "2026-05-08 learn:fis-2 24",
+      "2026-05-08 practice:ex-geo:geo-2 10",
+      "2026-05-08 vespera:2026-05-09 25",
+      "2026-05-09 mock:ex-fis 21",
+      "2026-05-09 practice:ex-fis:fis-2 10",
+      "2026-05-09 vespera:2026-05-10 25",
+    ],
+    "outOfPlan": [],
+    "triage": [
+      {
+        "step": "downgrade_learn",
+        "topicId": "fis-1",
+        "unitKey": "learn:fis-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "geo-1",
+        "unitKey": "learn:geo-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "mat-1",
+        "unitKey": "learn:mat-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "hist-1",
+        "unitKey": "learn:hist-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "bio-1",
+        "unitKey": "learn:bio-1",
+      },
+    ],
+  },
+  "moved": 83,
+  "replanned": {
+    "feasible": false,
+    "items": [
+      "2026-05-04 learn:bio-1 18",
+      "2026-05-04 learn:bio-2 24",
+      "2026-05-04 learn:fis-1 9",
+      "2026-05-04 learn:geo-2 12",
+      "2026-05-04 learn:hist-1 9",
+      "2026-05-04 learn:hist-2 24",
+      "2026-05-04 learn:mat-1 9",
+      "2026-05-04 mock:ex-bio 21",
+      "2026-05-05 learn:geo-1 9",
+      "2026-05-05 mock:ex-hist 21",
+      "2026-05-05 mock:ex-mat 21",
+      "2026-05-05 practice:ex-bio:bio-1 10",
+      "2026-05-05 practice:ex-bio:bio-2 10",
+      "2026-05-05 practice:ex-extra:bio-1 10",
+      "2026-05-05 practice:ex-fis:fis-1 10",
+      "2026-05-05 practice:ex-hist:hist-2 10",
+      "2026-05-05 practice:ex-mat:mat-1 10",
+      "2026-05-05 vespera:2026-05-06 25",
+      "2026-05-06 learn:mat-2 24",
+      "2026-05-06 practice:ex-geo:geo-2 10",
+      "2026-05-06 practice:ex-hist:hist-1 10",
+      "2026-05-06 vespera:2026-05-07 25",
+      "2026-05-07 mock:ex-extra 18",
+      "2026-05-07 practice:ex-mat:mat-2 10",
+      "2026-05-07 vespera:2026-05-08 35",
+      "2026-05-08 learn:fis-2 12",
+      "2026-05-08 mock:ex-geo 21",
+      "2026-05-08 practice:ex-geo:geo-1 10",
+      "2026-05-08 vespera:2026-05-09 25",
+      "2026-05-09 mock:ex-fis 21",
+      "2026-05-09 practice:ex-fis:fis-2 10",
+      "2026-05-09 vespera:2026-05-10 25",
+    ],
+    "outOfPlan": [],
+    "triage": [
+      {
+        "step": "downgrade_learn",
+        "topicId": "fis-1",
+        "unitKey": "learn:fis-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "geo-1",
+        "unitKey": "learn:geo-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "mat-1",
+        "unitKey": "learn:mat-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "hist-1",
+        "unitKey": "learn:hist-1",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "fis-2",
+        "unitKey": "learn:fis-2",
+      },
+      {
+        "step": "downgrade_learn",
+        "topicId": "geo-2",
+        "unitKey": "learn:geo-2",
+      },
+    ],
+  },
+}
+`;
+
+exports[`GOL-04 snapshots per scenario > triage variant (A = 60) 1`] = `
+{
+  "feasible": false,
+  "items": [
+    "2026-10-26 learn:B1 20",
+    "2026-10-26 learn:B2 10",
+    "2026-10-26 learn:H1 20",
+    "2026-10-27 mock:bio 21",
+    "2026-10-27 mock:hist 18",
+    "2026-10-27 practice:hist:H1 10",
+    "2026-10-28 practice:bio:B1 10",
+    "2026-10-28 practice:bio:B2 10",
+    "2026-10-28 vespera:2026-10-29 25",
+    "2026-10-29 vespera:2026-10-30 25",
+  ],
+  "outOfPlan": [],
+  "triage": [
+    {
+      "step": "downgrade_learn",
+      "topicId": "B2",
+      "unitKey": "learn:B2",
+    },
+  ],
+}
+`;
+
+exports[`GOL-04 snapshots per scenario > worked example (§11.11) 1`] = `
+[
+  "2026-10-26 learn:B1 20",
+  "2026-10-26 learn:B2 20",
+  "2026-10-26 learn:H1 20",
+  "2026-10-27 mock:bio 21",
+  "2026-10-27 mock:hist 18",
+  "2026-10-27 practice:bio:B1 10",
+  "2026-10-27 practice:hist:H1 10",
+  "2026-10-28 practice:bio:B2 10",
+  "2026-10-28 vespera:2026-10-29 25",
+  "2026-10-29 vespera:2026-10-30 25",
+]
+`;

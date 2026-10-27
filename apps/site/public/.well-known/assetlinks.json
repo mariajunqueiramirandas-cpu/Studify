@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.studify.app",
+      "sha256_cert_fingerprints": ["DE:FE:77:C2:42:AA:83:7D:B3:07:92:C0:BA:2E:07:F7:67:4D:6D:D9:19:F5:4D:BF:9F:13:21:0A:F6:26:1A:90"]
+    }
+  }
+]

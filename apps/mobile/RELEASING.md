@@ -1,0 +1,127 @@
+# Android releases
+
+`.github/workflows/android-release.yml` builds a signed release APK on every push to `main` (and on manual
+runs from `main`), then publishes it as a GitHub Release. The build runs on a GitHub-hosted runner: `expo prebuild`
+generates `android/`, Gradle builds the APK, and the APK is re-signed with the release key. EAS is not used for
+this path.
+
+Release outputs:
+
+- Tag and release name: `v<version>-build.<run number>` and `Studify <version> (build <run number>)`
+- APK asset: `studify-<version>-build<run number>.apk`, marked as the latest release
+- applicationId: `com.studify.app` (production environment)
+- Job summary: release link, APK SHA-256, and the signing certificate SHA-256 for `assetlinks.json`
+
+## One-time setup
+
+### 1. Create the release keystore
+
+Run this once, on a trusted machine:
+
+```bash
+keytool -genkeypair -v -storetype PKCS12 -keystore studify-release.keystore -alias studify -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Use the same password for the keystore and the key. PKCS12 stores one password, and keytool warns if they differ.
+
+### 2. Back up the keystore before anything else
+
+Android installs an update only over an app signed with the same key. If the keystore is lost, every installed
+copy has to be uninstalled and reinstalled, which deletes local data, and the App Links fingerprint in
+`assetlinks.json` has to be replaced. Keep the `.keystore` file and both passwords in a password manager, plus
+at least one offline copy. Never commit the keystore. `apps/mobile/.gitignore` ignores `*.keystore`.
+
+### 3. Store the keystore in GitHub
+
+Encode the keystore and save it as a repository secret (`base64 -w0` is GNU only; on macOS use `base64 < file | tr -d '\n'`):
+
+```bash
+base64 -w0 studify-release.keystore > studify-release.keystore.b64
+gh secret set ANDROID_KEYSTORE_BASE64 --repo <owner>/<repo> < studify-release.keystore.b64
+rm studify-release.keystore.b64
+```
+
+Add the other signing secrets the same way (`gh secret set NAME --repo <owner>/<repo>` prompts for the value):
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`studify` if you used the command above), and `ANDROID_KEY_PASSWORD`.
+
+The workflow stops before building if any of the four signing secrets is missing. It never publishes a
+debug-signed APK.
+
+### 4. Set the repository variables and secrets
+
+Settings > Secrets and variables > Actions.
+
+| Name | Kind | Required | Used for |
+| --- | --- | --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Secret | yes | Base64 of `studify-release.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | Secret | yes | Keystore password |
+| `ANDROID_KEY_ALIAS` | Secret | yes | Key alias (`studify`) |
+| `ANDROID_KEY_PASSWORD` | Secret | yes | Key password (same as the keystore password for PKCS12) |
+| `SENTRY_AUTH_TOKEN` | Secret | no | Uploads source maps and native symbols. Without it the upload is skipped (`SENTRY_DISABLE_AUTO_UPLOAD=true`). |
+| `EXPO_PUBLIC_SUPABASE_URL` | Variable | yes | Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Variable | yes | Supabase anon key (public by design; RLS protects the data) |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Variable | recommended | Google sign-in web client id (empty disables Google sign-in) |
+| `EXPO_PUBLIC_SENTRY_DSN` | Variable | recommended | Sentry DSN (public ingest URL) |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | Variable | no | Enables the expo-updates URL. Leave empty unless you use OTA updates. |
+| `EXPO_PUBLIC_BASE_URL` | Variable | no | Defaults to `https://studify.vendua.com.br` |
+| `EXPO_PUBLIC_API_URL` | Variable | no | Defaults to `https://studify.vendua.com.br/api`. The app does not read it yet. |
+| `APP_VERSION_SUFFIX` | Variable | no | Appended to the version name, for example `-beta.1` |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | Variable | only with `SENTRY_AUTH_TOKEN` | Sentry upload target |
+
+Every `EXPO_PUBLIC_*` value is compiled into the APK, so only public values belong in variables. Never put
+service-role keys, Anthropic keys or Sentry auth tokens in an `EXPO_PUBLIC_*` variable.
+
+### 5. Put the release fingerprint into assetlinks.json
+
+Android App Links check `https://studify.vendua.com.br/.well-known/assetlinks.json` against the signing
+certificate of the installed app. The job summary of each release prints the certificate's SHA-256 fingerprint
+in the required form (uppercase, colon-separated). The same value comes from:
+
+```bash
+keytool -list -v -keystore studify-release.keystore -alias studify
+```
+
+Copy the `SHA256:` value into `apps/site/public/.well-known/assetlinks.json`, in the entry with
+`"package_name": "com.studify.app"`, replacing `REPLACE_WITH_PRODUCTION_SHA256_FROM_eas_credentials`. Deploy the
+site so the file is live before users install a build, then check that the URL above returns the JSON.
+If the key is ever rotated, list both fingerprints in `sha256_cert_fingerprints` during the transition.
+
+## Versioning
+
+- **Version name**: `version` in `app.config.ts` (`0.1.0`), plus `APP_VERSION_SUFFIX` if the variable is set.
+- **versionCode**: the workflow sets `ANDROID_VERSION_CODE = github.run_number + 100`. Android refuses to install
+  an update with a lower versionCode, and run numbers only go up. The offset (`ANDROID_VERSION_CODE_OFFSET` in the
+  workflow) keeps the codes above any build made before this workflow existed. Raise the offset if an older build
+  ever has a higher code.
+- `app.config.ts` reads `ANDROID_VERSION_CODE` (an integer from 1 to 2100000000) and `APP_VERSION_SUFFIX`. Without
+  them, the versionCode stays at Expo's default.
+
+To run the workflow manually: Actions > Android release > Run workflow, on `main`. Runs on other branches stop before building.
+Re-running an old run fails if its release already exists. Push a new commit or start a new run instead.
+
+## Local build (optional)
+
+The release workflow is the only place the release key is used. A local build is signed with the Expo template's
+debug key, so use it only for testing.
+
+```bash
+cd apps/mobile
+EXPO_PUBLIC_ENV=production ANDROID_VERSION_CODE=101 npx expo prebuild --platform android --no-install --clean
+cd android && ./gradlew assembleRelease
+```
+
+This needs JDK 17 and the Android SDK packages platform 37, build-tools 37.0.0 and NDK 27.1.12297006. The `android/`
+and `ios/` directories are generated (continuous native generation), and `apps/mobile/.gitignore` ignores them.
+Do not edit them by hand.
+
+## EAS (optional)
+
+`.github/workflows/mobile-preview.yml` still builds preview APKs with EAS on pull requests when `EXPO_TOKEN` is set.
+That path is optional and separate from the release workflow, with two things to keep in mind:
+
+- EAS signs with its own credentials. An EAS build can update a GitHub release build only if both use the same key.
+  Upload this keystore to EAS (`npx eas-cli@latest credentials`, Android, production profile), or accept that EAS
+  builds and GitHub builds cannot install over each other.
+- EAS production uses `autoIncrement` with its own remote versionCode. Keep it above the GitHub run number + 100,
+  or EAS builds will be refused as downgrades. Preview and development builds use the `.preview` and `.development`
+  package suffixes, so they install side by side with production.

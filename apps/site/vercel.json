@@ -1,0 +1,9 @@
+{
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/(c|i|q|b)/:id", "destination": "/link.html" }
+  ],
+  "headers": [
+    { "source": "/.well-known/assetlinks.json", "headers": [{ "key": "Content-Type", "value": "application/json" }] }
+  ]
+}

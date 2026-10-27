@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  typecheck-and-unit:
+    name: Typecheck and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version comes from the packageManager field
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck all packages
+        run: pnpm -r --if-present typecheck
+      - name: Unit tests (shared)
+        run: pnpm --filter @studify/shared test
+      - name: Unit tests (prompts)
+        run: pnpm --filter @studify/prompts test
+      - name: Unit tests (ai)
+        run: pnpm --filter @studify/ai test
+      - name: Unit tests (worker)
+        run: pnpm --filter @studify/worker test
+      - name: Unit tests (mobile)
+        run: pnpm --filter @studify/mobile test
+
+  database:
+    name: Database migrations and pgTAP suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      STUDIFY_TEST_DB: studify_test_ci
+    steps:
+      - uses: actions/checkout@v4
+      # The postgres:16 service image has no pgTAP, so use the Ubuntu packages. pg_prove comes from
+      # libtap-parser-sourcehandler-pgtap-perl.
+      - name: Install PostgreSQL 16 and pgTAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16 postgresql-16-pgtap libtap-parser-sourcehandler-pgtap-perl
+      - name: Start PostgreSQL and set the postgres password
+        run: |
+          sudo systemctl start postgresql@16-main || sudo systemctl start postgresql
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -p 5432 && break
+            sleep 1
+          done
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres';"
+      - name: Build the schema and run the pgTAP suite
+        run: bash supabase/tests/run.sh
+
+  rls-coverage:
+    name: RLS coverage gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studify_test
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      STUDIFY_TEST_DB: studify_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 16 and pgTAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16 postgresql-16-pgtap libtap-parser-sourcehandler-pgtap-perl
+      - name: Start PostgreSQL and set the postgres password
+        run: |
+          sudo systemctl start postgresql@16-main || sudo systemctl start postgresql
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -p 5432 && break
+            sleep 1
+          done
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres';"
+      - name: Build the schema
+        run: bash supabase/tests/run.sh
+      - name: Every public table has RLS and a pgTAP test
+        run: pnpm db:rls-coverage
+
+  api:
+    name: API (Bun typecheck and tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck the API
+        run: pnpm --filter @studify/api typecheck
+      # The package script runs `bun test --timeout 30000` (the function tests build PDFs and AI fakes).
+      - name: API tests (bun test)
+        run: pnpm --filter @studify/api test
+
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan the full history, not only the PR head
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

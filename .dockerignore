@@ -1,0 +1,25 @@
+# Keep the build context small and free of secrets. Both images build from the repository root.
+**/node_modules
+.git
+.github
+.env
+.env.*
+!.env.example
+**/*.log
+scratchpad
+docs
+evals
+scripts
+supabase
+**/test
+**/tests
+**/*.test.ts
+
+# The mobile app is not part of any image. Its manifest stays, because the pnpm lockfile lists it.
+apps/mobile/*
+!apps/mobile/package.json
+
+# Compose and image files are not build inputs.
+docker-compose.yml
+**/Dockerfile
+**/.dockerignore

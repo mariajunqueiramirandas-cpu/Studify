@@ -16,7 +16,7 @@ studify/
 │  ├─ mobile/                  # Expo app (this document)
 │  │  ├─ app/                  # Expo Router routes (file-based)
 │  │  ├─ src/
-│  │  │  ├─ api/               # Supabase client, query hooks, Edge Function callers
+│  │  │  ├─ api/               # Supabase client, query hooks, API function callers (EXPO_PUBLIC_API_URL)
 │  │  │  ├─ db/                # expo-sqlite + Drizzle schema, migrations, sync engine
 │  │  │  ├─ features/          # one folder per PRD area: ingestion, learn, memory, practice,
 │  │  │  │                     #   tutor, goals, turma, feed, camera, interactive, motivation
@@ -30,22 +30,22 @@ studify/
 │  │  ├─ assets/               # fonts, images, bundled KaTeX/markdown-it web assets
 │  │  ├─ app.config.ts         # Expo config (dynamic, per environment)
 │  │  └─ eas.json
-│  └─ worker/                  # Node.js job worker (pg-boss)
+│  └─ worker/                  # Job worker (Bun, pg-boss)
 ├─ supabase/
 │  ├─ migrations/              # SQL migrations + RLS policies
-│  ├─ functions/               # Edge Functions (Deno)
 │  ├─ tests/                   # RLS / SQL tests
 │  └─ seed.sql
+├─ apps/api/                   # API server (Bun + Hono): /api/<name> functions, /api/health, link site
 ├─ packages/
 │  ├─ shared/                  # types, Zod schemas, ts-fsrs wrapper, grading rules, planner, sync protocol
-│  └─ prompts/                 # versioned prompt templates + output schemas (used by worker & functions)
+│  └─ prompts/                 # versioned prompt templates + output schemas (used by worker & API)
 ├─ docs/
 ├─ package.json                # pnpm workspaces
 └─ pnpm-workspace.yaml
 ```
 
 Rules:
-- `packages/shared` has **no React Native or Node-only imports**; it runs on device, in Edge Functions (Deno, via npm specifiers) and in the worker. It owns the FSRS wrapper, grade math ("Quanto preciso tirar?"), planner core and sync payload schemas so all three runtimes agree.
+- `packages/shared` has **no React Native or Node-only imports**; it runs on device, in the API server (Bun) and in the worker. It owns the FSRS wrapper, grade math ("Quanto preciso tirar?"), planner core and sync payload schemas so all three runtimes agree.
 - `apps/mobile` never imports from `packages/prompts` (prompts are server-only).
 - Expo + pnpm: use `node-linker=hoisted` in `.npmrc` (or Expo's documented monorepo setup) so Metro resolves workspace packages.
 
@@ -145,7 +145,7 @@ The canonical route list (custom scheme and HTTPS App Links) is [api.md §10](ap
 | `studify://practice/review` | Review session (from notification / widget) |
 | `studify://goal/{goal_id}/eve/{exam_id}` | Modo Véspera (from reminder) |
 
-WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. This needs a domain (open question, §20).
+WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. The domain is `studify.vendua.com.br` (D-05, decided 2026-10-27), so links are `https://studify.vendua.com.br/…`; the `{BASE_URL}` placeholder in the route tables stands for that host.
 
 ## 3. State management
 
@@ -432,10 +432,11 @@ Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_
 |---|---|
 | Node.js LTS + pnpm | `pnpm install` at the root |
 | Android Studio | Emulator (API 34+) or a physical phone with USB debugging |
-| Docker + Supabase CLI | `supabase start` runs Postgres, Auth, Storage, Realtime and Edge Functions locally; `supabase db reset` applies migrations + `seed.sql` (includes fixture PDFs metadata and a demo user) |
+| Docker + Supabase CLI | `supabase start` runs Postgres, Auth, Storage and Realtime locally; `supabase db reset` applies migrations + `seed.sql` (includes fixture PDFs metadata and a demo user). The API runs separately with Bun: `pnpm api:dev` ([deployment.md §7](deployment.md)) |
 | Dev client | Build once (`eas build --profile development --platform android` or `npx expo run:android`); afterwards `pnpm --filter mobile start` + Metro |
 | Worker | `pnpm --filter worker dev` against local Supabase; uses a **dev** Claude key with a low spend cap |
 | Env files | `apps/mobile/.env.development` holds only **public** values (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_ENV`). Secrets never go in the app. |
+| API base | `EXPO_PUBLIC_API_URL`, default `https://studify.vendua.com.br/api`. Functions are called as `${EXPO_PUBLIC_API_URL}/<name>`. For the local API on the Android emulator use `http://10.0.2.2:3000/api`. |
 
 ## 19. Keeping iOS possible later
 
@@ -446,7 +447,7 @@ Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_
 
 ## 20. Open questions
 
-1. **Domain** for HTTPS invite links / App Links and the privacy-notice page (needed before Phase 2 Turma sharing; the privacy page is needed before inviting classmates).
+1. ~~**Domain** for HTTPS invite links / App Links~~ Decided 2026-10-27 (D-05): `studify.vendua.com.br`. Still open: the privacy-notice page on that domain (needed before inviting classmates).
 2. **Reference device** for performance budgets — which phone model is most common in the class?
 3. Notification-action handling with a killed process (spike in Phase 2, §6.2).
 4. `expo-audio` vs `react-native-track-player` for background podcast playback (decide at Phase 3).

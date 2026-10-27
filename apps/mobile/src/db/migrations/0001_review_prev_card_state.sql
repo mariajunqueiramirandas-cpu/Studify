@@ -1,0 +1,1 @@
+ALTER TABLE `review_logs` ADD `prev_card_state` text;

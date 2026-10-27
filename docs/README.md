@@ -36,7 +36,7 @@ Studify turns class PDFs into a complete study system (notes, flashcards, quizze
 |---|---|
 | [Architecture](engineering/architecture.md) | System overview, stack, **canonical domain model**, conventions, NFRs |
 | [Data model](engineering/data-model.md) | Postgres schema, RLS policies, local SQLite schema |
-| [API](engineering/api.md) | Edge Functions, worker jobs, Realtime channels |
+| [API](engineering/api.md) | API server functions (`/api/<name>`), worker jobs, Realtime channels |
 | [AI pipeline](engineering/ai-pipeline.md) | Claude usage: models, prompts, structured outputs, citations, caching, batch, budgets |
 | [Learning engine](engineering/learning-engine.md) | FSRS, mastery, planner, readiness/predicted grade, calibration, TRI estimate |
 | [Mobile app](engineering/mobile-app.md) | Expo app structure, navigation, offline sync, notifications, widgets, builds |

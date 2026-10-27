@@ -3,11 +3,17 @@
 | | |
 |---|---|
 | **Status** | Draft v1 |
-| **Scope** | Every server interface: direct table access under RLS, Postgres RPC functions, Edge Functions, worker jobs, Realtime channels, push notifications, deep links |
+| **Scope** | Every server interface: direct table access under RLS, Postgres RPC functions, API functions, worker jobs, Realtime channels, push notifications, deep links |
 | **Consistent with** | [data-model.md](data-model.md) (all table/column names), [architecture.md](architecture.md), [security-privacy.md](security-privacy.md), [mobile-app.md](mobile-app.md), the specs in [docs/specs/](../specs/) |
 | **Schemas** | Request/response shapes are written as TypeScript types; each one is a Zod schema in `packages/shared/src/api/` with the same name, used by the app and the server. |
 
 ---
+
+> **Hosting note.** The synchronous API functions run on the API server (Bun + Hono, `apps/api`) at
+> `https://studify.vendua.com.br/api/<name>`, deployed on the owner's VPS. They were Supabase Edge Functions at
+> `/functions/v1/<name>`; the route names, bodies, responses and error envelopes did not change. See
+> [ADR 0008](adr/0008-vps-bun-hono-api.md) and [deployment.md](deployment.md).
+
 
 ## 1. Interface types
 
@@ -16,7 +22,7 @@ flowchart LR
   App["Android app"] -- "supabase-js (RLS)" --> PG[("Postgres")]
   App -- "rpc()" --> RPC["RPC functions<br/>security definer"]
   RPC --> PG
-  App -- "HTTPS / SSE" --> Edge["Edge Functions"]
+  App -- "HTTPS / SSE" --> Edge["API server (Bun + Hono)<br/>/api/name"]
   Edge --> PG
   Edge --> Claude["Claude API"]
   Edge -- "enqueue" --> Q[("pg-boss")]
@@ -33,7 +39,7 @@ flowchart LR
 |---|---|---|
 | **Direct table access** (PostgREST via supabase-js, RLS) | Reading anything the user may see; writing the user's own simple rows (goals, exams, settings, overrides, highlights) | Anything that calls Claude, changes another user's data, needs server timing, or must validate cross-row invariants |
 | **RPC functions** (`supabase.rpc`) | Transactional, AI-free operations with invariants: join a Turma, edit the outline, log a grade, resolve a flag, anonymized insights | Long work; AI calls |
-| **Edge Functions** (`/functions/v1/<name>`) | Synchronous AI (tutor, grading, explanations), privileged operations (sign-up gate, sync push, duels/battles), anything that enqueues jobs with budget reservation | Work > ~60 s (Edge wall-clock limits: 150 s free / 400 s paid — long work goes to the worker) |
+| **API functions** (`/api/<name>`) | Synchronous AI (tutor, grading, explanations), privileged operations (sign-up gate, sync push, duels/battles), anything that enqueues jobs with budget reservation | Work that runs for minutes — long work goes to the worker (the API server has no platform wall-clock cap, but the worker keeps retries and progress in `ai_jobs`) |
 | **Worker jobs** (pg-boss) | Ingestion, bulk generation (Batch API), audio, nightly recomputation, notifications | Anything the user waits on for < 15 s |
 | **Realtime** | Live progress, duels, battles, study rooms | Authoritative writes (clients only send presence) |
 
@@ -43,13 +49,13 @@ flowchart LR
 
 ### 2.1 Authentication and headers
 
-- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). Edge Functions call `supabase.auth.getUser(jwt)` first and authorize explicitly before any service-role query (security-privacy.md §3).
-- Client headers on every Edge call: `x-studify-version: <android versionCode>`, `x-studify-schema: <sync schema version>`, `x-device-id: <stable per-install id>`.
+- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). API functions call `supabase.auth.getUser(jwt)` first and authorize explicitly before any service-role query (security-privacy.md §3).
+- Client headers on every API call: `x-studify-version: <android versionCode>`, `x-studify-schema: <sync schema version>`, `x-device-id: <stable per-install id>`.
 - A client below `min_supported_version_code` ([data-model §5.11](data-model.md#511-ai-operations-and-platform) `app_versions`) or with an unknown future schema gets **`426 Upgrade Required`** with code `app_update_required`.
 
 ### 2.2 Error envelope
 
-All Edge Functions and RPC errors map to one shape. `message` is always a PT-BR string safe to show; `code` is stable for the app's logic.
+All API functions and RPC errors map to one shape. `message` is always a PT-BR string safe to show; `code` is stable for the app's logic.
 
 ```ts
 type ApiError = {
@@ -85,7 +91,7 @@ RPC functions raise Postgres exceptions with `errcode` `P0001` and a `HINT` cont
 
 ### 2.4 Idempotency
 
-- Every **mutating Edge call** requires an `Idempotency-Key: <uuid v7>` header. The server stores `(user_id, function, key) → response` in `private.idempotency_keys` for 24 h; a retry with the same key returns the stored response (same status and body) without re-running side effects or re-charging AI budget. Same key with a different body → `409 idempotency_mismatch`.
+- Every **mutating API call** requires an `Idempotency-Key: <uuid v7>` header. The server stores `(user_id, function, key) → response` in `private.idempotency_keys` for 24 h; a retry with the same key returns the stored response (same status and body) without re-running side effects or re-charging AI budget. Same key with a different body → `409 idempotency_mismatch`.
 - Rows created offline carry **client-generated UUIDs** (`review_logs.id`, `quiz_attempts.id`, `attempt_answers.id`, `study_sessions.id`, `xp_events.id`, `feed_impressions.id`); inserts are `on conflict (id) do nothing`, so the id itself is the idempotency key.
 
 ### 2.5 Rate limits and AI budget classes
@@ -117,7 +123,7 @@ type SseEvent =
 ```
 
 - Citations arrive as separate events so the UI can render 📄 chips progressively; `start`/`end` offsets refer to the final concatenated text.
-- A `refusal` ends the stream with `done.stop_reason = "refusal"` after the server-side fallback was tried; the app shows the spec's friendly refusal copy.
+- A `refusal` ends the stream with `done.stop_reason = "refusal"` after the server-side fallback was tried where the model has one (Haiku 5.5 has none, so it ends at once); the app shows the spec's friendly refusal copy.
 - If the connection drops mid-stream, the client re-requests with the same `Idempotency-Key`; the server returns the completed message (stored) instead of generating again.
 
 ### 2.7 Dates and times
@@ -158,7 +164,7 @@ Rows with `deleted_at` set are tombstones. Pull runs **after** push ([§4.1 `syn
 
 ---
 
-## 4. Edge Functions
+## 4. API functions
 
 Format per function: **name** — features · class · method. `Req` = request body, `Res` = response body. All mutating functions require `Idempotency-Key`.
 
@@ -513,7 +519,7 @@ All are `security definer`, `set search_path = ''`, check `auth.uid()` explicitl
 sequenceDiagram
   participant A as App
   participant S as Storage
-  participant E as Edge ingest-start
+  participant E as API ingest-start
   participant W as Worker
   participant R as Realtime
   A->>A: SHA-256 of file
@@ -588,12 +594,13 @@ Subscribed tables and filters are in [data-model §8.1](data-model.md#81-postgre
 
 ```ts
 // battle:{battle_id}  — sent by battle-control / battle.tick
-type BattleState  = { event: "state"; status: BattleStatus; index: number; total: number;
-                      opens_at?: string; closes_at?: string; question?: QuestionPublic };   // never contains the answer
-type BattleReveal = { event: "reveal"; index: number; correct_response: unknown;
-                      distribution?: Record<string, number>;   // only if ≥ 5 answered (SOC-03.10)
-                      top5: { nickname: string; score: number }[]; you?: never };      // own result via battle-answer history
-type BattlePodium = { event: "podium"; top: { nickname: string; score: number; rank: number }[] };
+type LeaderRow    = { user_id: string; nickname: string; score: number; rank: number };
+type BattleState  = { event: "state"; status: BattleStatus; current_index: number; total: number;
+                      opens_at?: string; closes_at?: string; question?: QuestionPublic; players?: number }; // never contains the answer
+type BattleReveal = { event: "reveal"; index: number; correct_response: unknown; explanation?: string;
+                      distribution: Record<string, number> | null;   // null unless ≥ 5 answered (SOC-03.10)
+                      leaderboard: LeaderRow[] };                     // top 5; own result via battle-answer history
+type BattlePodium = { event: "podium"; leaderboard: LeaderRow[] };     // top 3
 // presence payload (clients): { nickname: string; avatar_preset?: string }
 
 // room:{room_id}
@@ -648,7 +655,7 @@ Sent by `notify.dispatch` through the Expo Push API → FCM. Payload: `{ type, t
 
 ## 10. Deep links and App Links
 
-Custom scheme `studify://` for in-app links (notifications, widget); **HTTPS App Links** on `https://{BASE_URL}` for anything shared outside the app (WhatsApp does not linkify custom schemes). The domain is an open owner decision (mobile-app.md §20). The landing page opens the app when installed (App Links verified via `/.well-known/assetlinks.json`) or shows the install link and keeps the code for after install (00 §9).
+Custom scheme `studify://` for in-app links (notifications, widget); **HTTPS App Links** on `https://{BASE_URL}` for anything shared outside the app (WhatsApp does not linkify custom schemes). The domain is `studify.vendua.com.br` (D-05, decided 2026-10-27); `BASE_URL` defaults to it, and `{BASE_URL}` in the tables below stands for that host. The landing page opens the app when installed (App Links verified via `/.well-known/assetlinks.json`) or shows the install link and keeps the code for after install (00 §9).
 
 | HTTPS link | App route | Feature |
 |---|---|---|

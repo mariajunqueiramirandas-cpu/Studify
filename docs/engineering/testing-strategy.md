@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft v1 |
-| **Scope** | How every piece of Studify is tested: shared logic, database and RLS, Edge Functions, worker, offline sync, AI quality (evals), Android E2E, performance, accessibility, CI and per-phase quality gates. |
+| **Scope** | How every piece of Studify is tested: shared logic, database and RLS, API functions, worker, offline sync, AI quality (evals), Android E2E, performance, accessibility, CI and per-phase quality gates. |
 | **Related** | [Architecture](architecture.md) · [Mobile app](mobile-app.md) · [AI pipeline](ai-pipeline.md) · [Learning engine](learning-engine.md) · [Security & privacy](security-privacy.md) · [Roadmap](../product/roadmap.md) |
 
 ---
@@ -22,7 +22,7 @@
 flowchart TB
   E2E["Android E2E (Maestro)<br/>critical journeys · emulator on PR · real device before release"]
   EVAL["AI evals<br/>golden fixtures · schema · citations · quality rubric"]
-  INT["Integration<br/>Edge Functions · worker jobs · sync · RLS (local Supabase)"]
+  INT["Integration<br/>API functions · worker jobs · sync · RLS (local Supabase)"]
   UNIT["Unit<br/>packages/shared · app logic · prompt builders"]
   E2E --> EVAL --> INT --> UNIT
 ```
@@ -32,18 +32,18 @@ flowchart TB
 | `packages/shared` | **Heavy**: FSRS wrapper, grade math, planner, sync payloads, Zod schemas, citation mapping | — | Property-based tests |
 | `packages/prompts` | Prompt builders render deterministically; snapshot tests | — | AI evals (§6) |
 | `supabase/` migrations + RLS | — | **Every table**: RLS policy tests (§4) | Migration up/down on a copy of staging schema |
-| Edge Functions | Pure handlers with injected clients | Against local Supabase with a **mock Claude** server | Smoke against staging |
+| API functions | Pure handlers with injected clients | Against local Supabase with a **mock Claude** server | Smoke against staging |
 | Worker jobs | Job handlers with injected clients | pg-boss + local Supabase + mock Claude; recorded real responses for fixtures | Staging run on golden PDFs |
 | Mobile app | Hooks, stores, formatting, sync engine | Sync engine against local Supabase; SQLite migrations | Maestro flows (§7), perf (§8), a11y (§9) |
 
-Tooling: **Vitest** for TypeScript unit/integration tests (Node and shared packages), **Deno test** for Edge Functions, **Jest + React Native Testing Library** for app components (the Expo default), **pgTAP** for SQL/RLS tests, **fast-check** for property-based tests, **Maestro** for Android E2E.
+Tooling: **Vitest** for TypeScript unit/integration tests (Node and shared packages), **`bun test`** for the API server (`apps/api`), **Jest + React Native Testing Library** for app components (the Expo default), **pgTAP** for SQL/RLS tests, **fast-check** for property-based tests, **Maestro** for Android E2E.
 
 ## 3. Unit tests: `packages/shared`
 
 ### 3.1 FSRS wrapper (MEM-02)
 
 - **Golden schedules:** for fixed review sequences (e.g. `Good, Good, Again, Good`), the wrapper produces the same `due`, `stability`, `difficulty`, `reps`, `lapses` and `state` as the pinned `ts-fsrs` version. Fixtures are regenerated only on a deliberate version bump.
-- **Determinism:** same inputs → same outputs on Node, Deno and Hermes. The CI job runs the same fixture file in all three runtimes (Hermes via a small RN test harness, or by comparing against the Node output in a Maestro-driven debug screen).
+- **Determinism:** same inputs → same outputs on Node, Bun and Hermes. The CI job runs the same fixture file in all three runtimes (Hermes via a small RN test harness, or by comparing against the Node output in a Maestro-driven debug screen).
 - **Replay equivalence (ADR 0007):** replaying a shuffled-then-sorted log set yields the same state as live scheduling.
 - **Exam-aware rules** (from [learning-engine.md](learning-engine.md)), e.g. intervals capped so a card due after the exam date is pulled before it.
 - **Properties (fast-check):** due is always after the review time. Stability never goes negative. `Again` never yields a longer interval than `Good` on the same state.
@@ -88,7 +88,7 @@ Tooling: **Vitest** for TypeScript unit/integration tests (Node and shared packa
 
 ## 5. Integration tests
 
-### 5.1 Edge Functions
+### 5.1 API functions
 
 - Run against local Supabase (`supabase functions serve`) with a **mock Claude server**. The mock is a local HTTP server implementing the Messages API shapes used: streaming SSE, citations blocks, refusal stop reason, 429/529 errors.
 - Each function is tested for: auth required, scope authorization (e.g. a tutor request for a subject the caller can't read → 403), budget gate (budget exhausted → error code, no Claude call made), input validation, and the happy path. Error paths cover Claude timeouts, refusal and invalid output.
@@ -230,7 +230,7 @@ Flows in `apps/mobile/e2e/*.yaml`, run against a `preview`-profile build pointed
 
 - RLS suite (§4) is the primary control.
 - gitleaks on every PR. Dependency audit (`pnpm audit`, Dependabot) weekly.
-- Edge Function authorization tests (§5.1) for every endpoint, including **IDOR checks**: every id parameter is tested with another user's id.
+- API function authorization tests (§5.1) for every endpoint, including **IDOR checks**: every id parameter is tested with another user's id.
 - Upload abuse tests: oversized PDF, 1,001-page PDF, encrypted PDF, non-PDF with `.pdf` extension, image with GPS EXIF (assert stripped).
 - Injection and safety evals (§6.2).
 
@@ -244,7 +244,7 @@ flowchart LR
   L --> U[unit tests<br/>shared · prompts · app]
   T --> U
   U --> DB[Supabase CLI: db reset + db lint + pgTAP RLS suite]
-  DB --> I[integration: Edge Functions + worker + sync<br/>mock Claude, recorded responses]
+  DB --> I[integration: API functions + worker + sync<br/>mock Claude, recorded responses]
   I --> B[EAS preview build — Android APK<br/>only if apps/mobile or packages changed]
   B --> E[Maestro smoke on emulator]
   E --> C[comment: install link + QR + results]

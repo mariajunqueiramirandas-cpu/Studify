@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Draft v1 |
 | **Scope** | Every Claude API call Studify makes: models, request defaults, the task catalog, PDF/image inputs, citations vs structured outputs, prompt caching, the Batch API, prompt architecture, budgets and cost, errors, observability and non-Claude AI services. |
-| **Decisions** | [ADR 0003 — Claude API, Opus default](adr/0003-claude-api-opus-default.md) · [ADR 0005 — job worker](adr/0005-job-worker-pg-boss.md) · [ADR 0006 — retrieval without embeddings](adr/0006-retrieval-without-embeddings.md) |
+| **Decisions** | [ADR 0003 — Claude API (Haiku 5.5 default from 2026-10-27)](adr/0003-claude-api-opus-default.md) · [ADR 0005 — job worker](adr/0005-job-worker-pg-boss.md) · [ADR 0006 — retrieval without embeddings](adr/0006-retrieval-without-embeddings.md) |
 | **Related** | [Architecture](architecture.md) · [Security & privacy](security-privacy.md) (§7 budgets, §8 AI safety) · [Testing strategy](testing-strategy.md) (§6 AI evals) · [Learning engine](learning-engine.md) (all deterministic logic — no AI) |
 
 The source of truth for *what* each feature asks the model is the spec's §7. This document says *how* every call is made, so the same rules apply everywhere. Where a spec and this document disagree, §14 lists the reconciliation; the spec text should be updated to match.
@@ -13,7 +13,7 @@ The source of truth for *what* each feature asks the model is the spec's §7. Th
 
 ## 1. Principles
 
-1. **One provider, one default model.** Every task uses `claude-opus-5-5` unless the owner explicitly decides otherwise (ADR 0003). Engineering never downgrades a task for cost on its own.
+1. **One provider, one default model.** Every task uses `claude-haiku-5-5` at effort `high` (owner decision of 2026-10-27, ADR 0003 amendment). A per-task model or effort override needs an owner decision and eval evidence. Engineering never changes a task's model or effort for cost on its own.
 2. **Grounded or labeled.** Output either cites the student's material (Citations API or validated `source_pages`) or is explicitly labeled as general knowledge (TUT-04, INT-03 ENEM mode).
 3. **Validate everything.** Every structured output is re-validated with Zod before storage; nothing off-schema is stored ([architecture §5](architecture.md#5-cross-cutting-conventions)).
 4. **Material is data.** PDFs, photos, transcriptions, student answers, Turma names and peer questions never carry instructions ([security-privacy §8.1](security-privacy.md#81-prompt-injection-and-untrusted-content)).
@@ -27,24 +27,24 @@ The source of truth for *what* each feature asks the model is the spec's §7. Th
 
 | Setting | Value |
 |---|---|
-| Model | `claude-opus-5-5` for **every** task in §3 |
-| Pricing (first-party, 2026-10) | $4 / MTok input · $20 / MTok output · cache read $0.20 / MTok · cache write 1.25× input (5-min TTL) or 2× input (1-h TTL) · Batch API −50% |
-| Context / output | 1M context, up to 128K output tokens (large `max_tokens` requires streaming) |
-| Cheaper models | **Owner decision only.** Candidates the specs raised: bulk generation (cards, questions, feed items, notes — specs 02, 04, 05, 06), short-answer grading (05), moderation and classification (00, 10), page transcription (01). Decided with the eval scorecards from [testing-strategy §6](testing-strategy.md#6-ai-evals) and the cost data from §9.4. Until then: Opus 5.5 everywhere. |
+| Model | `claude-haiku-5-5` for **every** task in §3 (owner decision 2026-10-27; replaces `claude-opus-5-5`). The id has no date suffix. |
+| Pricing (first-party, 2026-10) | Two rate cards, chosen per request by **prompt length** (`input_tokens` + `cache_read_input_tokens` + cache-creation tokens). **Prompt ≤ 100,000 tokens:** $0.10 input / $0.50 output per MTok. **Prompt > 100,000 tokens:** $0.50 input / $2.50 output. Cache read 0.1× input · cache write 1.25× input (5-min TTL) or 2× input (1-h TTL) · Batch API −50%. Full table in §9.3. |
+| Context / output | 1M context, up to 128K output tokens (large `max_tokens` requires streaming, §2.3). Minimum cacheable prompt: 512 tokens. |
+| Other models | **Owner decision only.** Haiku 5.5 is the default for every task (decided 2026-10-27). Moving a task to another model, including back to Opus 5.5, needs an owner decision recorded in ADR 0003 and eval evidence from [testing-strategy §6](testing-strategy.md#6-ai-evals) and cost data from §9.4. |
 
 ### 2.2 Request defaults
 
 | Topic | Rule | Why |
 |---|---|---|
-| Thinking | Omit `thinking` (= adaptive). Never send `{type: "disabled"}` or `budget_tokens` — both 400 on Opus 5.5. | Thinking is always on for this model. |
+| Thinking | Omit `thinking` (adaptive is the default and the only mode on Haiku 5.5; `{type: "adaptive"}` is also accepted). Never send `budget_tokens`: it returns 400. | Thinking is adaptive on Haiku 5.5 and Opus 5.5. |
 | Thinking display | Default (`omitted`). Studify never shows the model's reasoning to students and never asks the model to write its reasoning into the answer. | Avoids `reasoning_extraction` refusals and keeps answers short. |
-| Effort | **Always set `output_config.effort` explicitly** (the model default is `medium`). Per-task values in §3; tuned by evals. | Effort is the only depth/latency/cost control. |
+| Effort | `output_config.effort` is **`high` for every task**, from `effortFor()` in `packages/ai` (owner decision 2026-10-27). The per-task `effort` values in §3 and in the prompt definitions are documented hints and are **not sent**. Per-task overrides need an owner decision and eval evidence. | One owner-set policy. Effort is part of the cache key (§6.2). |
 | `max_tokens` | Sized for **thinking + reply** by class (§2.3). Visible reply length is set in the prompt and checked by validation, never by `max_tokens`. | Thinking counts toward `max_tokens`; tight limits truncate. |
 | Streaming | Required for any call whose `max_tokens` class is L or XL and for every user-facing prose call. Use `.stream()` + `finalMessage()` when we don't forward deltas. | Avoids HTTP timeouts; low time-to-first-token in the app. |
-| Sampling params | Never send `temperature`, `top_p`, `top_k`. | Rejected on Opus 5.5 and on API version `2026-10-21` for every model. |
-| Prefill | Never end `messages` with an assistant turn. Use structured outputs or prompt instructions. | Prefill returns 400 on Opus 5.5. |
-| Tools | `tool_choice: {type: "auto"}` only; custom tools use `strict: true` + `additionalProperties: false`. The prompt says when to call; code checks whether the call happened (TUT-02 Me testa). | Forced `tool_choice` (`any` / `tool`) returns 400 on Opus 5.5. |
-| Refusal fallback | Every **synchronous** request (Edge Function or worker standard API) is sent on `client.beta.messages` with `betas: ["server-side-fallback-2026-07-01"]` and `fallbacks: "default"`. **Not on Batch requests** — the parameter is rejected there (§7.4). | Category-routed fallback on classifier declines. |
+| Sampling params | Never send `temperature`, `top_p`, `top_k`. | Rejected on every model on API version `2026-10-21`, Haiku 5.5 included. |
+| Prefill | Never end `messages` with an assistant turn. Use structured outputs or prompt instructions. | Prefill returns 400 on Haiku 5.5 and on Opus 5.5. |
+| Tools | `tool_choice: {type: "auto"}` only; custom tools use `strict: true` + `additionalProperties: false`. The prompt says when to call; code checks whether the call happened (TUT-02 Me testa). | Forced `tool_choice` (`any` / `tool`) is accepted by Haiku 5.5 but skips thinking, so the wrapper rejects it on every model. |
+| Refusal handling | **Haiku 5.5 has no server-side fallback.** Never send `fallbacks` or the `server-side-fallback-2026-07-01` beta to it: a `fallbacks` list returns 400 and `"default"` does nothing. Refusals arrive as HTTP 200 with `stop_reason: "refusal"` and `stop_details.category` in {`cyber`, `bio`, `frontier_llm`, `general_harms`}; the wrapper maps them to the `refused` outcome (`ai_refused`) without any fallback block. `syncRequestDefaults(model)` sends `fallbacks: "default"` and the beta only to `SERVER_FALLBACK_MODELS` (Opus 5.5, Sonnet 5.5, Fable 5.1), and only on synchronous requests. **Never on Batch requests** (§7.4). | Haiku 5.5 has no fallback chain, so `ai_usage.fallback_used` is always false for it. |
 | API version | The current SDK sends `anthropic-version: 2026-10-21`. Consequences for us: (1) no sampling params; (2) never put a `document` block in an `assistant` message; (3) never send a `text` block **with `citations`** inside a `user` message — when a cited answer is reused as input (LRN-03 on a tutor answer, TUT-01.6 tutor → card, INT-03), send its plain text. Citations on replayed **assistant** blocks are fine. | Each of these is a 400 on `2026-10-21`. |
 | Content order | Inside a user turn: `document`/`image` blocks first, then the instruction text. | Better grounding; stable cache prefix. |
 | Language | Instructions to the model may be English; every user-visible output is PT-BR (informal "você") or the material's `content_language` where the spec says so (ING-05, LRN-01). | |
@@ -71,9 +71,9 @@ Every response is checked **before** reading `content`. Content is read by block
 | `tool_use` | Only tutor tools (TUT-02) and nothing else in v1: record in `tutor_messages.tool_events`, send `tool_result` "ok" on the next turn (spec 03 §7). |
 | `max_tokens` | Structured: retry once with the next `max_tokens` class; then mark the item `failed`. Prose to a user: keep the text, end with "…" and show "Continuar" (TUT-01). |
 | `pause_turn` | Server tools only (web search in ENM-05.5 / ENM-09, code execution in CAM-02.6 / PRA-08): re-send the conversation including the paused assistant turn to let it continue; at most 3 continuations, then fail the step. |
-| `refusal` | The whole fallback chain declined. Log `stop_details.category` in `ai_usage.refusal_category`. Discard any partial streamed output (it is billed, but never stored or shown). Show the spec's PT-BR message (e.g. "Não consegui processar essa parte do material", "Não posso ajudar com isso aqui."). Ingestion marks the document/topic `ai_refused` with "Tentar de novo" / "Pular" (spec 01 §7). |
+| `refusal` | The model declined (Haiku 5.5 has no fallback chain; on a model that has one, the chain already declined). Log `stop_details.category` in `ai_usage.refusal_category`. Discard any partial streamed output (it is billed, but never stored or shown). Show the spec's PT-BR message (e.g. "Não consegui processar essa parte do material", "Não posso ajudar com isso aqui."). Ingestion marks the document/topic `ai_refused` with "Tentar de novo" / "Pular" (spec 01 §7). |
 
-**Classifier note.** Opus 5.5 declines in categories that include `bio`, `cyber` and `reasoning_extraction`. High-school **Biologia** (microbiology, viruses, genetics) is the most likely source of false-positive declines on benign material. Mitigations: the fallback chain; the AI eval set includes biology chapters ([testing-strategy §6.1](testing-strategy.md#61-golden-fixtures)); refusal rates per subject are a dashboard metric (§11).
+**Classifier note.** Refusals arrive in the categories `cyber`, `bio`, `frontier_llm` and `general_harms` (`stop_details.category`). High-school **Biologia** (microbiology, viruses, genetics) is the most likely source of false-positive declines on benign material. Mitigations: the AI eval set includes biology chapters ([testing-strategy §6.1](testing-strategy.md#61-golden-fixtures)); refusal rates per subject are a dashboard metric (§11).
 
 ### 2.5 The `callClaude` wrapper (`packages/ai`)
 
@@ -86,7 +86,7 @@ import type { z } from "zod";
 const client = new Anthropic(); // key from Edge Function / worker secrets only
 
 interface TaskCall<T> {
-  task: TaskDef<T>;                 // from packages/prompts (§8): id, version, effort, maxTokensClass, schema?
+  task: TaskDef<T>;                 // from packages/prompts (§8): id, version, effort (hint, not sent), maxTokensClass, schema?
   ctx: BudgetContext;               // user, class group, feature id, budget class (§9)
   system: Anthropic.Beta.BetaTextBlockParam[];
   messages: Anthropic.Beta.BetaMessageParam[];
@@ -98,12 +98,11 @@ export async function callClaude<T>(call: TaskCall<T>) {
   const reservation = await reserveBudget(call.ctx, estimateCost(call)); // throws BudgetExceeded (§9.1)
   try {
     const params = {
-      model: "claude-opus-5-5",
+      model: modelFor(call.task.id),       // claude-haiku-5-5 (DEFAULT_MODEL)
       max_tokens: MAX_TOKENS[call.task.maxTokensClass],
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default" as const,
+      ...syncRequestDefaults(modelFor(call.task.id)), // {} on Haiku 5.5; fallbacks + beta only on SERVER_FALLBACK_MODELS
       output_config: {
-        effort: call.task.effort,
+        effort: effortFor(call.task),        // owner policy: high (§2.2)
         // structured tasks only; citations tasks must not set a format (400)
         ...(call.task.outputFormat ? { format: call.task.outputFormat } : {}),
       },
@@ -132,6 +131,7 @@ export async function callClaude<T>(call: TaskCall<T>) {
 **Runs:** `Edge` = synchronous Edge Function (user waiting); `Edge·SSE` = streamed to the app; `Worker` = standard API from the worker; `Batch` = Message Batches API from the worker.
 **Output:** `S:Name` = structured output with Zod schema `Name` (key fields listed in the spec); `C` = prose with Citations API; `P` = plain prose (no citations).
 **Cache:** `SYS` = static system prompt; `TS` = topic slice document blocks ([spec 01 §7](../specs/01-ingestion-knowledge-map.md#7-ai-behavior)); `OL` = subject outline text block; `CTX` = tutor/thread history (top-level automatic caching); `ANCH` = calibration anchors; `—` = no cache.
+**Effort:** the Effort column is the prompt's hint. Every task is sent at `high` (§2.2), so the column documents intent only.
 **Budget:** `content` = subject owner (user day for personal subjects, Turma month for shared); `user` = the acting user's daily budget; `system` = global system budget (not charged to students). See §9.1.
 
 ### 3.1 Ingestion & knowledge map — [spec 01](../specs/01-ingestion-knowledge-map.md)
@@ -400,12 +400,12 @@ C. Outline-scoped classification (scope.match, enem.tagNodes, tutor.route, pastT
 | Rule | Detail |
 |---|---|
 | Breakpoints | Max 4 per request. Standard: SYS + TS (or OL) explicit, plus top-level automatic caching in threads. |
-| Minimum prefix | 512 tokens on Opus 5.5; shorter prefixes silently don't cache. Our SYS blocks are well above it once the safety + style fragments are included. |
+| Minimum prefix | 512 tokens on Haiku 5.5 and Opus 5.5; shorter prefixes silently don't cache. Our SYS blocks are well above it once the safety + style fragments are included. |
 | TTL | 5 minutes by default (write 1.25×). **1 hour** (write 2×) only where the start-to-start gap between requests sharing the prefix exceeds 5 minutes: Batch topic waves, the subject outline block for `scope.match` during exam setup, and essay-grading anchors (`ANCH`). Longer-TTL entries must come before shorter ones in the prefix. |
-| Reads | $0.20 / MTok on Opus 5.5 (0.05× input). A cache read refreshes the TTL. |
+| Reads | 0.1× the input rate: $0.01 / MTok on Haiku 5.5 for prompts ≤ 100K tokens, $0.05 / MTok above (§9.3). A cache read refreshes the TTL. |
 | Determinism | No timestamps, request ids, user names or random values in SYS or document labels. JSON in prompts uses a stable serializer (sorted keys). Tool lists and their order are fixed per task. Document blocks are ordered by `(document_id, first page)`. |
-| Effort is part of the cache key | Changing `output_config.effort` invalidates the messages cache. Each task has one effort; threads keep one effort for their lifetime (§6.6). |
-| Model switches | A server-side fallback runs on another model, which has its own cache; expect a cold read after a fallback. |
+| Effort is part of the cache key | Changing `output_config.effort` invalidates the messages cache. Effort is one owner-set value (`high`, §2.2); threads keep it for their lifetime (§6.6). |
+| Model switches | Haiku 5.5 never falls back to another model. On models that have a server-side fallback, the fallback runs on another model with its own cache, so expect a cold read after one. |
 | Verification | `ai_usage` stores `cache_creation_input_tokens` (split 5 m / 1 h) and `cache_read_input_tokens`. Dashboard alert: topic-family read ratio < 50% on a Batch wave, or tutor turn ≥ 2 with zero cache reads (§11). |
 
 ### 6.3 Mid-conversation system messages
@@ -428,14 +428,14 @@ For a topic wave of ~6 calls on the same 10K-token slice, caching turns 6 × 10K
 
 ### 6.6 Threads must be append-only (preserved thinking)
 
-Opus 5.5 binds thinking blocks to the conversation: for accounts created on or after 2026-08-31, replaying a thinking block after editing anything before it (system, tools or earlier messages) returns **400**. Studify's API account is new, so this is enforced. Rules for every multi-turn feature (tutor, Lucas, argumentation):
+Thinking blocks are bound to the conversation (documented for Opus 5.5; treat Haiku 5.5 the same until verified against the API): for accounts created on or after 2026-08-31, replaying a thinking block after editing anything before it (system, tools or earlier messages) returns **400**. Studify's API account is new, so this is enforced. Rules for every multi-turn feature (tutor, Lucas, argumentation):
 
 1. Store each assistant turn's **full** `content` (including `thinking` blocks, tool-use blocks and citations) in `raw_content` and replay it **verbatim**.
 2. Top-level `system` and `tools` are fixed at thread start. Mode changes and per-turn state go into appended mid-conversation system messages.
 3. Never delete or rewrite an earlier message, including old system messages. To drop context, start a continuation thread from a `tutor.summary` (TUT-01.8), which replays no earlier thinking.
 4. **Lucas (spec 12 §7.3) reconciliation:** the persona is the static system prompt; the session's hidden plan is the first user-turn content (or the first appended system message); the current `evaluation_state` is appended as a new system message after each student turn — never edited into the system prompt.
-5. Effort is constant per thread. Voice tutor threads (TUT-06) run at `low` for their lifetime. If a user switches an existing text thread to voice, either start a new thread or use the per-message effort system message (beta `mid-conversation-output-config-2026-07-01`) — never change top-level effort mid-thread.
-6. After a server-side fallback, later turns run without the Opus 5.5 thinking blocks the other model can't read; the API drops them (unbilled). Keep passing them back unchanged; don't strip them in code.
+5. Effort is constant per thread (`high` for every task since 2026-10-27, so voice tutor threads also run at `high`). If a user switches an existing text thread to voice, either start a new thread or use the per-message effort system message (beta `mid-conversation-output-config-2026-07-01`) — never change top-level effort mid-thread.
+6. After a server-side fallback (never on Haiku 5.5), later turns run without the thinking blocks the other model can't read; the API drops them (unbilled). Keep passing them back unchanged; don't strip them in code.
 
 ## 7. Batch API workflow
 
@@ -452,9 +452,9 @@ Synchronous paths stay synchronous: the outline (S1) fast path, the on-demand la
 const requests = wave.items.map((item) => ({
   custom_id: item.customId,        // short opaque id, see below
   params: {
-    model: "claude-opus-5-5",
+    model: modelFor(item.task.id), // claude-haiku-5-5
     max_tokens: MAX_TOKENS.L,
-    output_config: { effort: item.task.effort, ...(item.task.outputFormat ? { format: item.task.outputFormat } : {}) },
+    output_config: { effort: effortFor(item.task), ...(item.task.outputFormat ? { format: item.task.outputFormat } : {}) },
     system: item.system,           // SYS with cache_control ttl "1h"
     messages: item.messages,       // TS with cache_control ttl "1h"
     // NO fallbacks / betas here: server-side fallback is rejected on the Batches API
@@ -477,7 +477,7 @@ await db.aiBatches.insert({ id: batch.id, job_id: wave.jobId, submitted_at: now(
 | Result | Handling |
 |---|---|
 | `succeeded`, `stop_reason = end_turn` | Validate (Zod or citation mapping), store, record `ai_usage` (batch discount applied). |
-| `succeeded`, `stop_reason = refusal` | Re-run that one request on the **standard API with `fallbacks: "default"`** (the on-demand lane). Still refused → mark the topic/item `ai_refused`. |
+| `succeeded`, `stop_reason = refusal` | Re-run that one request on the **standard API** (the on-demand lane), without `fallbacks` (Haiku 5.5 has none). Still refused → mark the topic/item `ai_refused`. |
 | `succeeded`, `stop_reason = max_tokens` | Re-submit in the next wave with class XL (streamed on the standard API if urgent). |
 | `succeeded` but invalid output | Retry once (next wave or standard API), then `failed`. |
 | `errored`, `invalid_request` | Bug: log with request params hash, alert, mark `failed` (no blind retry). |
@@ -489,7 +489,7 @@ await db.aiBatches.insert({ id: batch.id, job_id: wave.jobId, submitted_at: now(
 
 ### 7.4 Why no fallbacks in Batch
 
-The `fallbacks` parameter is rejected on the Batches API. Refusals in batch results are therefore rescued individually on the standard API (above). Expect a small number of these, mostly in Biologia (§2.4).
+The `fallbacks` parameter is rejected on the Batches API. Refusals in batch results are therefore rescued individually on the standard API (above). Expect a small number of these, mostly in Biologia (§2.4). Haiku 5.5 has no fallback on either path (decision of 2026-10-27): the standard re-run retries the same model, and a refusal that stands marks the item `ai_refused`.
 
 ### 7.5 Outline-first fast path (spec 01 S0–S1)
 
@@ -529,7 +529,7 @@ export const cardsGenerate = defineTask({
   id: "cards.generate",
   version: 3,                         // bump on any prompt or schema change
   features: ["MEM-01.1"],
-  effort: "medium",
+  effort: "medium", // hint only: the request sends effortFor(task) = "high" (§2.2)
   maxTokensClass: "L",
   output: { mode: "structured", schema: TopicCardsSchema },
   system: [safety, untrustedData, ptbrStyle, grounding, format, cardRules], // order is fixed
@@ -643,7 +643,7 @@ sequenceDiagram
 | `budget_class` | `content` / `user` / `system` |
 | `mode` | `sync` / `stream` / `batch` |
 | `model_requested`, `model_served` | Served model differs after a server-side fallback |
-| `effort` | |
+| `effort` | The effort sent (owner policy, `high` for every task), not the prompt hint |
 | `input_tokens`, `output_tokens` | `output_tokens` includes thinking |
 | `cache_creation_5m_tokens`, `cache_creation_1h_tokens`, `cache_read_tokens` | From `usage.cache_creation` breakdown |
 | `server_tool_uses` | Web searches, code-execution time (from `usage`) |
@@ -659,12 +659,24 @@ No prompt or response content is stored in `ai_usage`.
 ### 9.3 Cost formula
 
 ```ts
-const PRICE = { // USD per million tokens, claude-opus-5-5, first-party (verify on the pricing page before launch)
-  input: 4.0, output: 20.0, cacheRead: 0.2,
-  cacheWrite5m: 4.0 * 1.25, cacheWrite1h: 4.0 * 2.0,
+// USD per million tokens, first-party, 2026-10 (verify on the pricing page before launch).
+// PRICE_VERSION = "2026-10.haiku-5-5.v1". Haiku 5.5 has two rate cards chosen by prompt length.
+const PRICES = {
+  "claude-haiku-5-5": {
+    standard:   { input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite5m: 0.125, cacheWrite1h: 0.20 }, // prompt <= 100,000 tokens
+    longPrompt: { input: 0.50, output: 2.50, cacheRead: 0.05, cacheWrite5m: 0.625, cacheWrite1h: 1.00 }, // prompt  > 100,000 tokens
+  },
+  // Kept for unknown and fallback models only (priced at the most expensive known rate).
+  "claude-opus-5-5": { input: 4.0, output: 20.0, cacheRead: 0.2, cacheWrite5m: 5.0, cacheWrite1h: 8.0 },
 };
-function costMicroUsd(u: Usage, batch: boolean, served = "claude-opus-5-5"): number {
-  const p = priceFor(served); // fallback model's own rates when a fallback served the request
+const LONG_PROMPT_THRESHOLD_TOKENS = 100_000;
+
+// Prompt length of one request: fresh input + cache reads + cache writes (both TTLs).
+const promptTokens = (u: Usage) =>
+  u.input_tokens + u.cache_read_tokens + u.cache_creation_5m_tokens + u.cache_creation_1h_tokens;
+
+function costMicroUsd(u: Usage, batch: boolean, model = DEFAULT_MODEL): number {
+  const p = priceFor(model, promptTokens(u)); // the card is chosen per request, not per call site
   const usd =
     (u.input_tokens * p.input +
      u.output_tokens * p.output +
@@ -675,6 +687,13 @@ function costMicroUsd(u: Usage, batch: boolean, served = "claude-opus-5-5"): num
   return Math.round(usd * (batch ? 0.5 : 1) * 1e6);
 }
 ```
+
+| Model | Prompt length | Input | Output | Cache read | Cache write 5 min | Cache write 1 h | Batch (−50%) |
+|---|---|---|---|---|---|---|---|
+| `claude-haiku-5-5` | ≤ 100,000 tokens | $0.10 | $0.50 | $0.01 | $0.125 | $0.20 | halved |
+| `claude-haiku-5-5` | > 100,000 tokens | $0.50 | $2.50 | $0.05 | $0.625 | $1.00 | halved |
+
+Budgets reserve with the same function: `estimateMicroUsd` in `packages/ai` prices the estimate through `priceFor`, so reservations use the Haiku card that matches the estimated prompt length.
 
 Refused requests: billing depends on when and why they were declined (see Anthropic's refusal billing docs); we record whatever `usage` reports.
 
@@ -696,17 +715,17 @@ Roadmap Phase 0 exit criterion: measure tokens and cost per page on real materia
 
 ### 9.5 Order-of-magnitude estimates (ESTIMATES — replace with §9.4 data)
 
-Assumptions, all unverified: ~1,500–3,000 input tokens per PDF page (text plus the page image); a 50-page PDF → 10 topics of ~5 pages (~11K tokens per topic slice); ~7 Batch tasks per topic in Phase 1 (T2, L1, L2, L5, cards, questions, + feed in Phase 2); ~5K output tokens per task including thinking.
+These estimates were recomputed on 2026-10-27 from the Haiku 5.5 rate card (previously Opus 5.5 at roughly 40× these rates on input and output) with the same token assumptions. Assumptions, all unverified: ~1,500–3,000 input tokens per PDF page (text plus the page image); a 50-page PDF → 10 topics of ~5 pages (~11K tokens per topic slice); ~7 Batch tasks per topic in Phase 1 (T2, L1, L2, L5, cards, questions, + feed in Phase 2); ~5K output tokens per task including thinking.
 
 | Item | Rough cost |
 |---|---|
-| Outline for 50 pages (≈ 110K input, ~5K output, standard API) | ≈ $0.55 |
-| One topic wave in Batch (1 cache write + 6 reads of 11K; ~35K output) | ≈ $0.40 (output ≈ 85% of it) |
-| All Phase 1 content for a 50-page PDF (10 topics + T3) | **≈ $4–5** |
-| One tutor turn (cached history, 10 new pages, ~1.5K output) | ≈ $0.05–0.15 |
-| One ENEM essay grade (anchors cached, ~6K output) | ≈ $0.15–0.25 |
+| Outline for 50 pages (≈ 110K input in slices of ~25K, ~5K output, standard card) | ≈ $0.01–0.02 (one 110K request would be ≈ $0.07 on the long-prompt card) |
+| One topic wave in Batch (1 cache write + 6 reads of 11K; ~35K output) | ≈ $0.01 (output ≈ 90% of it) |
+| All Phase 1 content for a 50-page PDF (10 topics + T3) | **≈ $0.10–0.15** |
+| One tutor turn (cached history, 10 new pages, ~1.5K output) | ≈ $0.003–0.005 (a thread whose prompt passes 100K tokens moves to the long-prompt card) |
+| One ENEM essay grade (anchors cached, ~6K output) | ≈ $0.005–0.01 |
 
-**Implications for the owner** (decisions, not engineering defaults): output tokens dominate, so the main levers are (1) fewer or shorter items per topic, (2) generating L3 notes, feed items and problem sets lazily on demand, (3) lower effort where evals allow, (4) a cheaper model for specific bulk tasks (§2.1). Sharing a subject in a Turma divides its content cost across the class.
+**Implications for the owner** (decisions, not engineering defaults): output tokens dominate, so the main levers are (1) fewer or shorter items per topic, (2) generating L3 notes, feed items and problem sets lazily on demand, (3) effort overrides where evals allow (every task is `high` today), (4) per-task model overrides, which need an owner decision (§2.1; Haiku 5.5 is already the default). Sharing a subject in a Turma divides its content cost across the class.
 
 ## 10. Errors, retries and timeouts
 
@@ -738,7 +757,7 @@ try {
 
 ### 10.2 Timeouts
 
-- Supabase Edge Functions: **150 s** (Free) / **400 s** (paid) wall-clock limit ([security-privacy](security-privacy.md), [mobile-app](mobile-app.md)). Synchronous tasks must finish well inside it: Edge tasks use classes XS–M (and L only when streamed, e.g. `notes.deep`, `camera.solveFull`). Anything that may run longer goes to the worker and reports progress through `ai_jobs` + Realtime (`podcast.script`, `essay.grade`, `predictedTest.generate`, `vespera.cheatsheet`).
+- The API server (Bun, VPS) has no platform wall-clock cap, but a synchronous request still holds a connection, and the server closes idle connections after 255 s. Synchronous tasks must finish well inside that (the former Supabase Edge limit was 150 s Free / 400 s paid): Edge tasks use classes XS–M (and L only when streamed, e.g. `notes.deep`, `camera.solveFull`). Anything that may run longer goes to the worker and reports progress through `ai_jobs` + Realtime (`podcast.script`, `essay.grade`, `predictedTest.generate`, `vespera.cheatsheet`).
 - SDK client timeout: Edge 120 s per attempt; worker 10 min per attempt (streamed).
 - SSE to the app: heartbeat comment every 15 s so mobile networks don't drop idle streams during thinking.
 
@@ -764,7 +783,7 @@ Worker jobs carry `ai_jobs.id`; a retried job checks which items already exist (
 
 ## 13. Open questions (owner)
 
-1. Cheaper models for any bulk or classification task (§2.1) — after Phase 0 cost data and evals.
+1. ~~Cheaper models for any bulk or classification task~~ Decided 2026-10-27: Haiku 5.5 is the default for every task. Open: whether any task should move to another model, which needs eval evidence (§2.1).
 2. Code execution on every quantitative solve (CAM-02.6, PRA-08).
 3. Dual correction for ENEM essays (spec 09 §7) — doubles `essay.grade` cost.
 4. Weekly essay-grading budget per student (spec 09).
@@ -786,3 +805,5 @@ Worker jobs carry `ai_jobs.id`; a retried job checks which items already exist (
 | R8 | Crisis resources differ: spec 03 §8.6 (CVV 188 + 192), security-privacy §8.2 (CVV 188 + Disque 100), spec 13 (`[[APOIO]]` marker). | One shared `distress` fragment with CVV 188, 192, Disque 100 and the `[[APOIO]]` marker for every conversational feature (§8.3). | 03 §8.6 string, security-privacy §8.2. |
 | R9 | Specs reuse cited answers as inputs (LRN-03 on tutor answers, TUT-01.6). | API `2026-10-21` rejects `text` blocks with `citations` in user messages; inputs are sent as plain text (§2.2, §5.2). | 02 §7 L6 and 03 §7 tutor→card "Input" cells. |
 | R10 | Specs list a single cached topic slice for both notes (citations on) and items (citations off). | Citations on/off is part of the prefix: two cached variants per topic; Batch waves group by variant (§6.1). | 01 §7 "Caching" paragraph. |
+| R11 | Owner decision 2026-10-27: default model `claude-haiku-5-5`, effort `high` for every task, no server-side fallback on Haiku 5.5. The specs still say `claude-opus-5-5`, `fallbacks: "default"` on all synchronous calls and per-task efforts. | This document and `packages/ai` (`DEFAULT_MODEL`, `effortFor`, `syncRequestDefaults`, `PRICES`) follow the decision. Spec model and fallback lines are superseded until updated. | Every spec that names `claude-opus-5-5` or `fallbacks` (`grep -rn "opus-5-5\|fallbacks" docs/specs`, specs 00 to 13): "model `claude-haiku-5-5`, effort `high`; fallbacks only on models that have one, never on Batch". |
+| R12 | ADR 0003 §5 per-task effort values (R2 above). | Superseded by the 2026-10-27 decision: every task runs at `high` (`effortFor`). Per-task values in §3 are hints. | ADR 0003 §5 (amendment added). |

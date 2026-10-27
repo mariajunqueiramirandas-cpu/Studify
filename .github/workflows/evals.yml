@@ -1,0 +1,56 @@
+name: AI evals
+
+# Manual only: evals call the Claude API and cost money (testing-strategy §6.7).
+on:
+  workflow_dispatch:
+    inputs:
+      size:
+        description: Eval size
+        type: choice
+        options: [smoke, standard, full]
+        default: standard
+      tasks:
+        description: Comma-separated task names, or "all"
+        type: string
+        default: all
+      approved_budget_usd:
+        description: Maximum spend approved for this run, in USD
+        type: string
+        default: "0"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    name: Run evals (${{ inputs.size }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EVAL_SIZE: ${{ inputs.size }}
+      EVAL_TASKS: ${{ inputs.tasks }}
+      EVAL_BUDGET_USD: ${{ inputs.approved_budget_usd }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check that the evals package exists
+        id: pkg
+        run: |
+          if [ -f evals/package.json ] && node -e "process.exit(require('./evals/package.json').name === '@studify/evals' ? 0 : 1)"; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run evals
+        if: steps.pkg.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_EVALS }}
+        run: pnpm --filter @studify/evals start -- --size "$EVAL_SIZE" --tasks "$EVAL_TASKS" --approved-budget-usd "$EVAL_BUDGET_USD"
+      - name: Report that evals are not set up
+        if: steps.pkg.outputs.present != 'true'
+        run: echo "::notice::Evals are not set up yet (no @studify/evals package in evals/). Nothing was run and nothing was spent."
