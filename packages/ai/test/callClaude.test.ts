@@ -145,24 +145,24 @@ describe("stop_reason handling (ai-pipeline §2.4)", () => {
 });
 
 describe("request shape sent to the API", () => {
-  it("sends Haiku 5.5 at effort high, a JSON format for structured tasks, no fallbacks or betas and no sampling params", async () => {
+  it("sends Haiku 5.5 at the declared effort, a JSON format for structured tasks, no fallbacks or betas and no sampling params", async () => {
     const { client, calls } = fakeClient(() => message({ text: GOOD_CARDS }));
     await callClaude(deps(client), structuredCall());
     const params = calls[0] as BetaCreateParams & Record<string, unknown>;
     expect(params.model).toBe("claude-haiku-5-5");
-    expect(params.output_config).toMatchObject({ effort: "high", format: { type: "json_schema" } });
+    expect(params.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
     expect("fallbacks" in params).toBe(false);
     expect("betas" in params).toBe(false);
     expect("temperature" in params).toBe(false);
     expect("thinking" in params).toBe(false);
   });
 
-  it("writes the owner-policy effort into the usage row, not the prompt hint", async () => {
-    // cards.generate's prompt hint is medium; the request and the usage row both say high.
+  it("writes the effort sent into the usage row", async () => {
+    // cards.generate declares medium; the request and the usage row both say medium.
     const d = deps(fakeClient(() => message({ text: GOOD_CARDS })).client);
     await callClaude(d, structuredCall());
     expect(cardsTask.effort).toBe("medium");
-    expect(d.usage.rows[0]).toMatchObject({ effort: "high", model_requested: "claude-haiku-5-5", price_version: expect.stringMatching(/haiku-5-5/) });
+    expect(d.usage.rows[0]).toMatchObject({ effort: "medium", model_requested: "claude-haiku-5-5", price_version: expect.stringMatching(/haiku-5-5/) });
   });
 
   it("uses no structured format for citation tasks", async () => {

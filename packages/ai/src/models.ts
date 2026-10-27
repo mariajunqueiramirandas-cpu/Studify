@@ -23,20 +23,28 @@ export function modelFor(taskId: string): string {
     : DEFAULT_MODEL;
 }
 
-/** Owner decision 2026-10-27: effort "high" for every task. The per-task `effort` in prompts is a hint and is not sent. */
-export const DEFAULT_EFFORT: Effort = "high";
+/**
+ * Owner decision 2026-10-27 (later the same day): each task runs at the effort its prompt declares, capped
+ * at "medium". "high" doubled the time of every call (hidden thinking) for the same visible output.
+ */
+export const MAX_EFFORT: Effort = "medium";
+
+/** Effort for a task that declares none. */
+export const DEFAULT_EFFORT: Effort = "medium";
+
+const EFFORT_RANK: Readonly<Record<Effort, number>> = { low: 0, medium: 1, high: 2 };
 
 /**
- * Per-task effort overrides. Empty by design; same rule as MODEL_OVERRIDES: owner decision plus
- * eval evidence (ai-pipeline §2.2).
+ * Per-task effort overrides, applied as is (above the cap too). Empty by design; same rule as
+ * MODEL_OVERRIDES: owner decision plus eval evidence (ai-pipeline §2.2).
  */
 export const EFFORT_OVERRIDES: Readonly<Record<string, Effort>> = {};
 
 /** The effort sent as output_config.effort for this task. Used by request.ts, callClaude.ts, batch.ts and usage rows. */
-export function effortFor(task: { id: string }): Effort {
-  return Object.prototype.hasOwnProperty.call(EFFORT_OVERRIDES, task.id)
-    ? (EFFORT_OVERRIDES[task.id] as Effort)
-    : DEFAULT_EFFORT;
+export function effortFor(task: { id: string; effort?: Effort }): Effort {
+  if (Object.prototype.hasOwnProperty.call(EFFORT_OVERRIDES, task.id)) return EFFORT_OVERRIDES[task.id] as Effort;
+  const declared = task.effort ?? DEFAULT_EFFORT;
+  return EFFORT_RANK[declared] > EFFORT_RANK[MAX_EFFORT] ? MAX_EFFORT : declared;
 }
 
 /** Beta header that enables server-side refusal fallback on synchronous requests (§2.2). */

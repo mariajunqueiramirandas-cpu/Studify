@@ -10,6 +10,7 @@ import {
   costMicroUsd,
   costUsd,
   effortFor,
+  MAX_EFFORT,
   hasServerFallback,
   modelFor,
   nextMaxTokensClass,
@@ -116,18 +117,20 @@ describe("model policy and request defaults", () => {
     expect(modelFor("ingest.outline")).toBe("claude-haiku-5-5");
   });
 
-  it("runs every task at effort high (owner decision 2026-10-27), whatever the prompt's hint says", () => {
-    expect(DEFAULT_EFFORT).toBe("high");
-    expect(effortFor({ id: "cards.generate" })).toBe("high");
-    expect(effortFor({ id: "tutor.route" })).toBe("high");
+  it("runs each task at its declared effort, capped at medium (owner decision 2026-10-27)", () => {
+    expect(MAX_EFFORT).toBe("medium");
+    expect(effortFor({ id: "glossary.define", effort: "low" })).toBe("low");
+    expect(effortFor({ id: "cards.generate", effort: "medium" })).toBe("medium");
+    expect(effortFor({ id: "problems.generate", effort: "high" })).toBe("medium");
+    expect(effortFor({ id: "tutor.route" })).toBe(DEFAULT_EFFORT);
   });
 
   it("applies a per-task effort override when one is recorded (owner decision and eval evidence)", () => {
     const overrides = EFFORT_OVERRIDES as Record<string, string>;
-    overrides["cards.generate"] = "low";
+    overrides["cards.generate"] = "high";
     try {
-      expect(effortFor({ id: "cards.generate" })).toBe("low");
-      expect(effortFor({ id: "tutor.route" })).toBe("high");
+      expect(effortFor({ id: "cards.generate", effort: "medium" })).toBe("high");
+      expect(effortFor({ id: "tutor.route", effort: "low" })).toBe("low");
     } finally {
       delete overrides["cards.generate"];
     }

@@ -54,6 +54,7 @@ export {
   MODEL_OVERRIDES,
   modelFor,
   DEFAULT_EFFORT,
+  MAX_EFFORT,
   EFFORT_OVERRIDES,
   effortFor,
   SERVER_FALLBACK_BETA,
