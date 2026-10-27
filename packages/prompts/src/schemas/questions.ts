@@ -170,7 +170,9 @@ export const ProblemPayload = z.strictObject({
 /** Fields every question carries (PRA-01.2). The payload is type-specific. */
 const common = {
   stem: z.string().min(1).max(2000),
-  stimulus_md: z.string().max(3000).nullable(),
+  // Empty when the question needs no figure or table. A plain string, not nullable: structured outputs accept
+  // at most 16 union-typed fields per request, and a nullable field here counts once per question type.
+  stimulus_md: z.string().max(3000),
   explanation: z.string().min(1).max(1200),
   bloom_level: BloomLevel,
   difficulty: Difficulty,

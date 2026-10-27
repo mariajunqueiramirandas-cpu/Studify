@@ -45,7 +45,7 @@ describe('mapQuestion (spec 05 §8.1)', () => {
   const base: QuestionDraft = {
     type: 'mcq_single',
     stem: 'Qual organela produz ATP?',
-    stimulus_md: null,
+    stimulus_md: '',
     explanation: 'A mitocôndria realiza a respiração celular.',
     bloom_level: 'remember',
     difficulty: 2,

@@ -6545,7 +6545,7 @@ Regras de qualidade:
 - Distratores plausíveis: cada um reflete um erro comum do material. Mesma forma gramatical e tamanho parecido. Sem "todas as anteriores" nem "nenhuma das anteriores".
 - Sem pistas: evite "sempre" e "nunca" só nos distratores; não repita palavras do enunciado só na alternativa certa.
 - Enunciado com uma tarefa clara. Negativas ("NÃO", "INCORRETA", "EXCETO") em caixa alta e em no máximo 1 de cada 5 múltiplas escolhas.
-- Autocontido: figura ou tabela necessária vai em stimulus_md (tabela Markdown). Nunca mencione figura que não está lá.
+- Autocontido: figura ou tabela necessária vai em stimulus_md (tabela Markdown); sem figura nem tabela, stimulus_md é "". Nunca mencione figura que não está lá.
 - Respondível pelo material. source_pages é obrigatório (páginas originais).
 - explanation: 1 a 3 frases. bloom_level e difficulty (1 a 5). concept_keys: chaves da lista de conceitos.
 - remediation_card: frente sobre o conceito do erro, verso com a ideia certa. Não é cópia da questão.
@@ -6697,7 +6697,7 @@ Regras de qualidade:
 - Distratores plausíveis: cada um reflete um erro comum do material. Mesma forma gramatical e tamanho parecido. Sem "todas as anteriores" nem "nenhuma das anteriores".
 - Sem pistas: evite "sempre" e "nunca" só nos distratores; não repita palavras do enunciado só na alternativa certa.
 - Enunciado com uma tarefa clara. Negativas ("NÃO", "INCORRETA", "EXCETO") em caixa alta e em no máximo 1 de cada 5 múltiplas escolhas.
-- Autocontido: figura ou tabela necessária vai em stimulus_md (tabela Markdown). Nunca mencione figura que não está lá.
+- Autocontido: figura ou tabela necessária vai em stimulus_md (tabela Markdown); sem figura nem tabela, stimulus_md é "". Nunca mencione figura que não está lá.
 - Respondível pelo material. source_pages é obrigatório (páginas originais).
 - explanation: 1 a 3 frases. bloom_level e difficulty (1 a 5). concept_keys: chaves da lista de conceitos.
 - remediation_card: frente sobre o conceito do erro, verso com a ideia certa. Não é cópia da questão.
@@ -6834,7 +6834,7 @@ Regras de qualidade:
 - Distratores plausíveis: cada um reflete um erro comum do material. Mesma forma gramatical e tamanho parecido. Sem "todas as anteriores" nem "nenhuma das anteriores".
 - Sem pistas: evite "sempre" e "nunca" só nos distratores; não repita palavras do enunciado só na alternativa certa.
 - Enunciado com uma tarefa clara. Negativas ("NÃO", "INCORRETA", "EXCETO") em caixa alta e em no máximo 1 de cada 5 múltiplas escolhas.
-- Autocontido: figura ou tabela necessária vai em stimulus_md (tabela Markdown). Nunca mencione figura que não está lá.
+- Autocontido: figura ou tabela necessária vai em stimulus_md (tabela Markdown); sem figura nem tabela, stimulus_md é "". Nunca mencione figura que não está lá.
 - Respondível pelo material. source_pages é obrigatório (páginas originais).
 - explanation: 1 a 3 frases. bloom_level e difficulty (1 a 5). concept_keys: chaves da lista de conceitos.
 - remediation_card: frente sobre o conceito do erro, verso com a ideia certa. Não é cópia da questão.

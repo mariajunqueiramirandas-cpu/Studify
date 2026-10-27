@@ -13,7 +13,7 @@ const ref = { doc: 'D1', page_start: 3, page_end: 4 };
 const remediation = { front: 'O que é fotossíntese?', back: 'Conversão de luz em energia química.' };
 const common = {
   stem: 'Qual organela produz ATP?',
-  stimulus_md: null,
+  stimulus_md: '',
   explanation: 'A mitocôndria realiza a respiração celular.',
   bloom_level: 'remember',
   difficulty: 2,

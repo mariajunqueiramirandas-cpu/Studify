@@ -169,7 +169,7 @@ function respond(req: MockRequest): MockResponse | undefined {
         {
           type: 'mcq_single',
           stem: isMembrana ? 'Qual é a função da membrana plasmática?' : 'Qual organela produz ATP?',
-          stimulus_md: null,
+          stimulus_md: '',
           explanation: 'A resposta correta é a alternativa C.',
           bloom_level: 'remember',
           difficulty: 2,

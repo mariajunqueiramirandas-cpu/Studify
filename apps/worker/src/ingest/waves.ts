@@ -205,7 +205,10 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
         if (err instanceof BudgetExceededError) {
           summary.budgetExceeded = true;
         } else {
-          env.ctx.log.warn({ customId: item.customId, attempt, err: err instanceof Error ? err.name : 'unknown' }, 'standard call failed');
+          env.ctx.log.warn(
+            { customId: item.customId, attempt, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
+            'standard call failed',
+          );
         }
       }
     }
