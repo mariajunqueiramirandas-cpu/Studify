@@ -25,7 +25,7 @@ export const handler = defineFunction<z.infer<typeof UploadPhotosReqSchema>>({
     const ownPrefix = `photos/${userId}/`;
     for (const path of input.image_paths) {
       if (!path.startsWith(ownPrefix)) throw new ApiFailure('forbidden');
-      if (!(await objectExists(deps.db, path))) throw new ApiFailure('not_found', { message: 'Uma das fotos não chegou no servidor. Tenta de novo.' });
+      if (!(await objectExists(deps.storage, path))) throw new ApiFailure('not_found', { message: 'Uma das fotos não chegou no servidor. Tenta de novo.' });
     }
 
     const documentId = deps.newId();

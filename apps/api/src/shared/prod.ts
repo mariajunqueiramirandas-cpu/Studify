@@ -7,6 +7,7 @@ import pg from 'pg';
 import { PgBoss } from 'pg-boss';
 import type { AnthropicLike } from '@studify/ai';
 import { uuidV7 } from '@studify/shared';
+import { createStorage } from '@studify/storage';
 import type { ApiConfig } from '../config.ts';
 import { log } from '../log.ts';
 import { makeBudgetStore, makeUsageSink } from './budget.ts';
@@ -81,6 +82,7 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
 
   const deps: Deps = {
     db,
+    storage: createStorage(config.storage, db),
     supabaseUrl: config.supabaseUrl,
     anonKey: config.anonKey,
     asUser: (jwt: string) =>

@@ -46,9 +46,11 @@ const ManifestSchema = z.object({
 });
 
 async function download(ctx: JobContext, path: string): Promise<Uint8Array> {
-  const res = await ctx.supabase.storage.from(BUCKET).download(path);
-  if (res.error || !res.data) throw new JobDataError(`enem storage: ${path} not found (${res.error?.message ?? 'empty'})`, 'missing_input');
-  return new Uint8Array(await res.data.arrayBuffer());
+  try {
+    return await ctx.storage.download(BUCKET, path);
+  } catch (err) {
+    throw new JobDataError(`enem storage: ${path} not found (${err instanceof Error ? err.message : String(err)})`, 'missing_input');
+  }
 }
 
 /** Text of an uploaded file: .pdf through its text layer, anything else as UTF-8 (Latin-1 when not valid UTF-8). */
@@ -189,8 +191,9 @@ export async function handleImportEdition(ctx: JobContext, data: Record<string, 
       const paths: string[] = [];
       for (const [n, img] of images.entries()) {
         const path = `${payload.year}/${group.coItem}/${n + 1}.${img.extension}`;
-        const up = await ctx.supabase.storage.from(BUCKET).upload(path, img.bytes, { contentType: img.contentType, upsert: true });
-        if (up.error) throw new JobDataError(`enem crop upload failed: ${up.error.message}`, 'storage');
+        await ctx.storage.upload(BUCKET, path, img.bytes, img.contentType).catch((err: unknown) => {
+          throw new JobDataError(`enem crop upload failed: ${err instanceof Error ? err.message : String(err)}`, 'storage');
+        });
         paths.push(path);
       }
       cropped++;

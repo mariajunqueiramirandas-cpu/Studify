@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AiUsageRow, AnthropicLike, BudgetReserveInput, BudgetReserveResult, BudgetScope, BudgetStore, UsageSink } from '@studify/ai';
 import { uuidV7 } from '@studify/shared';
+import { supabaseStorage } from '@studify/storage';
 import type { Deps, Enqueue } from '../src/shared/deps.ts';
 
 export type Row = Record<string, unknown>;
@@ -155,6 +156,10 @@ export class FakeDb {
           const key = `${bucket}/${object}`;
           return db.objects.has(key) ? { data: { signedUrl: `https://storage.test/${key}?ttl=${ttl}` }, error: null } : { data: null, error: { message: 'Object not found' } };
         },
+        createSignedUploadUrl: async (object: string) => ({
+          data: { signedUrl: `https://storage.test/upload/${bucket}/${object}?token=t`, token: 't', path: object },
+          error: null,
+        }),
       }),
     };
   }
@@ -539,6 +544,7 @@ export function makeHarness(reply: ReplyFn | FakeReply = { content: [{ type: 'te
   };
   const deps: Deps = {
     db: db.asClient(),
+    storage: supabaseStorage(db.asClient()),
     supabaseUrl: 'http://supabase.test',
     anonKey: 'anon-key',
     asUser: () => db.asClient(),

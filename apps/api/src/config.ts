@@ -2,6 +2,7 @@
 // process with the full list of problems, so a bad Dokploy environment fails on the first boot.
 import path from 'node:path';
 import { z } from 'zod';
+import { storageConfigFromEnv, StorageConfigError, type StorageConfig } from '@studify/storage';
 import { DEFAULT_APK_URL } from './site.ts';
 
 const Env = z.object({
@@ -48,6 +49,8 @@ export interface ApiConfig {
   mailFrom: string | undefined;
   /** TTS_PROVIDER, GOOGLE_TTS_API_KEY, TTS_VOICE_*, TTS_USD_PER_MILLION_CHARS (packages/speech ttsFromEnv). */
   ttsEnv: Record<string, string | undefined>;
+  /** STORAGE_PROVIDER and R2_* (packages/storage storageConfigFromEnv): R2 when R2_BUCKET is set, else Supabase Storage. */
+  storage: StorageConfig;
 }
 
 export class ConfigError extends Error {
@@ -71,14 +74,21 @@ function withoutEmpty(env: Record<string, string | undefined>): Record<string, s
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): ApiConfig {
   const parsed = Env.safeParse(withoutEmpty(env));
-  if (!parsed.success) {
-    const problems = parsed.error.issues.map((issue) => {
-      const key = String(issue.path[0] ?? '?');
-      const missing = issue.code === 'invalid_type' && issue.input === undefined;
-      return missing ? `${key} is missing` : `${key}: ${issue.message}`;
-    });
-    throw new ConfigError(problems);
+  const problems = parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => {
+        const key = String(issue.path[0] ?? '?');
+        const missing = issue.code === 'invalid_type' && issue.input === undefined;
+        return missing ? `${key} is missing` : `${key}: ${issue.message}`;
+      });
+  let storage: StorageConfig | undefined;
+  try {
+    storage = storageConfigFromEnv(env);
+  } catch (err) {
+    if (!(err instanceof StorageConfigError)) throw err;
+    problems.push(...err.problems);
   }
+  if (!parsed.success || !storage) throw new ConfigError(problems);
   const v = parsed.data;
   return {
     port: v.PORT,
@@ -95,5 +105,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     resendApiKey: v.RESEND_API_KEY,
     mailFrom: v.MAIL_FROM,
     ttsEnv: Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('TTS_') || key === 'GOOGLE_TTS_API_KEY')),
+    storage,
   };
 }

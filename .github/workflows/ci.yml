@@ -35,6 +35,8 @@ jobs:
         run: pnpm --filter @studify/ai test
       - name: Unit tests (speech)
         run: pnpm --filter @studify/speech test
+      - name: Unit tests (storage)
+        run: pnpm --filter @studify/storage test
       - name: Unit tests (worker)
         run: pnpm --filter @studify/worker test
       - name: Unit tests (mobile)

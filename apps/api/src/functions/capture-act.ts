@@ -98,7 +98,7 @@ async function ensureSolver(deps: Deps, userId: string, capture: CaptureRow, que
   const quantitative = isQuantitative(subject, questionText);
   const slices = await matchedSlices(deps, capture.node_id);
   const built = getTask('camera.solveLadder').build({
-    images: await captureImages(deps.db, capture.image_paths, 2),
+    images: await captureImages(deps.storage, capture.image_paths, 2),
     questionText,
     slices,
     quantitative,
@@ -137,7 +137,7 @@ async function explain(ctx: FnContext<CaptureActReq>, capture: CaptureRow, focus
   const subject = await captureSubject(deps, userId, capture);
   const slices = await matchedSlices(deps, capture.node_id);
   const built = getTask('camera.explain').build({
-    images: await captureImages(deps.db, capture.image_paths, 2),
+    images: await captureImages(deps.storage, capture.image_paths, 2),
     transcription: capture.transcription ?? '',
     focusText,
     slices,
@@ -175,7 +175,7 @@ async function solveFull(ctx: FnContext<CaptureActReq>, capture: CaptureRow, sol
   }
   const slices = await matchedSlices(deps, capture.node_id);
   const built = getTask('camera.solveFull').build({
-    images: await captureImages(deps.db, capture.image_paths, 2),
+    images: await captureImages(deps.storage, capture.image_paths, 2),
     questionText: solver.question_text,
     slices,
     quantitative: solver.quantitative,

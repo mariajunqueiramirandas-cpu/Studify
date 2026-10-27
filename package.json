@@ -12,7 +12,8 @@
     "db:test": "bash supabase/tests/run.sh",
     "db:rls-coverage": "node scripts/check-rls-coverage.mjs",
     "api:dev": "bun --watch apps/api/src/server.ts",
-    "api:test": "pnpm --filter @studify/api test"
+    "api:test": "pnpm --filter @studify/api test",
+    "storage:copy-to-r2": "bun packages/storage/scripts/copy-supabase-to-r2.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

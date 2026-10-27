@@ -1,6 +1,7 @@
 // Environment configuration for the worker. Secrets come only from the process environment
 // (ai-pipeline §1 "the Claude API key lives only in Edge Function and worker secrets").
 import { z } from 'zod';
+import { storageConfigFromEnv, StorageConfigError, type StorageConfig } from '@studify/storage';
 
 const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const;
 
@@ -38,6 +39,8 @@ export interface WorkerConfig {
   aiTimeoutMs: number;
   useBatch: boolean;
   waveConcurrency: number;
+  /** STORAGE_PROVIDER and R2_* (packages/storage): R2 when R2_BUCKET is set, else Supabase Storage. */
+  storage: StorageConfig;
 }
 
 /** Empty strings in the environment mean "unset". */
@@ -51,10 +54,15 @@ function cleaned(env: NodeJS.ProcessEnv | Record<string, string | undefined>): R
 
 export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): WorkerConfig {
   const parsed = EnvSchema.safeParse(cleaned(env));
-  if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    throw new Error(`invalid worker configuration: ${problems}`);
+  const problems = parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+  let storage: StorageConfig | undefined;
+  try {
+    storage = storageConfigFromEnv(env);
+  } catch (err) {
+    if (!(err instanceof StorageConfigError)) throw err;
+    problems.push(...err.problems);
   }
+  if (!parsed.success || !storage) throw new Error(`invalid worker configuration: ${problems.join('; ')}`);
   const v = parsed.data;
   return {
     databaseUrl: v.DATABASE_URL ?? null,
@@ -69,6 +77,7 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     aiTimeoutMs: v.AI_TIMEOUT_MS,
     useBatch: v.AI_USE_BATCH === 'true' || v.AI_USE_BATCH === '1',
     waveConcurrency: v.AI_WAVE_CONCURRENCY,
+    storage,
   };
 }
 

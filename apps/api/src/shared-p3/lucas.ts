@@ -35,7 +35,7 @@ export async function runLucasTurn(deps: Deps, session: TeachingRow, message: st
   const turn = session.turn_count + 1;
   const final = forceFinal || turn >= turnLimit;
   const plan = session.plan;
-  const history = await restoreTurns(deps.db, session.raw_turns, plan.slices);
+  const history = await restoreTurns(deps.storage, session.raw_turns, plan.slices);
   const slices = history.length === 0 ? await slicesFromStored(deps, plan.slices, new Map()) : [];
   const topic = await deps.db.from('knowledge_nodes').select('title').eq('id', session.node_id).maybeSingle();
   const built = getTask('lucas.turn').build({

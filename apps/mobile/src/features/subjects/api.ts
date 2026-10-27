@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { ApiError, callFunction } from '../../api/functions';
-import { uploadFile } from '../../api/storage';
+import { signedUrls, uploadFile } from '../../api/storage';
 import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
 import { row, rows, rpc } from '../common/query';
@@ -241,10 +241,14 @@ export async function shareSubject(subjectId: string, classGroupId: string) {
   return rpc<void>('share_subject', { subject_id: subjectId, class_group_id: classGroupId, copyright_ack: true });
 }
 
-/** Signed URL for a stored object (1 h TTL, data-model §7). */
+/** Signed URL for a stored object (1 h TTL, data-model §7); null when it cannot be signed (or offline). */
 export async function signedUrl(bucket: string, path: string): Promise<string | null> {
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
-  return data?.signedUrl ?? null;
+  try {
+    const [url] = await signedUrls([`${bucket}/${path}`]);
+    return url ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Signed URL of a stored `bucket/path` (refreshed before the 1 h TTL ends); null path → null. */

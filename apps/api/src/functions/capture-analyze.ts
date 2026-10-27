@@ -53,14 +53,14 @@ export const handler = defineFunction<CaptureAnalyzeReq>({
     await db.from('camera_captures').update({ status: 'processing' }).eq('id', capture.id);
 
     const fail = async (code: string, message: string): Promise<never> => {
-      await deleteCapturePhotos(db, capture.image_paths);
+      await deleteCapturePhotos(deps.storage, capture.image_paths);
       await db.from('camera_captures').update({ status: 'failed', error_code: code, deleted_at: ctx.now.toISOString() }).eq('id', capture.id);
       throw new ApiFailure('photo_unreadable', { message, details: { reason: code } });
     };
 
     // CAM-03: faithful transcription for grading. The question or theme is context only.
     if (capture.intent === 'grade_answer' || capture.intent === 'grade_essay') {
-      const images = await captureImages(db, capture.image_paths, 20);
+      const images = await captureImages(deps.storage, capture.image_paths, 20);
       const built = getTask('camera.transcribe').build({
         images,
         context: capture.intent === 'grade_essay' ? { kind: 'enem_redacao', theme: null } : { kind: 'school_answer', questionText: null },
@@ -95,7 +95,7 @@ export const handler = defineFunction<CaptureAnalyzeReq>({
     // Step A (camera.understand): one page for explain/solve (two when a question continues), all for add_to_subject.
     const subjects = await readableSubjects(db, userId);
     const keyed = subjects.map((s, i) => ({ key: `S${i + 1}`, name: s.name, enemArea: s.enem_area ?? null, id: s.id }));
-    const images = await captureImages(db, capture.image_paths, capture.intent === 'add_to_subject' ? 4 : 2);
+    const images = await captureImages(deps.storage, capture.image_paths, capture.intent === 'add_to_subject' ? 4 : 2);
     const built = getTask('camera.understand').build({ images, intent: capture.intent, subjects: keyed.map(({ id: _id, ...rest }) => rest) });
     const feature = capture.intent === 'solve' ? 'CAM-02' : 'CAM-01';
     const result = await callTask(claudeDepsFor(deps), { built, taskId: 'camera.understand', ctx: budgetCtxFor(null, userId, feature, 'user') });

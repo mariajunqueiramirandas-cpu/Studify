@@ -111,6 +111,36 @@ export const UploadPhotosResSchema = z.object({
   job_id: UuidSchema,
 });
 
+// ---------------------------------------------------------------- storage (data-model §7)
+
+/**
+ * `storage-upload`: a signed URL the app PUTs one file to (R2 or Supabase Storage). `path` is `<bucket>/<key>`,
+ * e.g. `documents/{subject_id}/{document_id}.pdf`. The body must have exactly `size` bytes and `content_type`.
+ */
+export const StorageUploadReqSchema = z.object({
+  path: StoragePathSchema,
+  content_type: z.string().min(3).max(100),
+  size: z.int().min(1).max(100 * 1024 * 1024),
+});
+export type StorageUploadReq = z.infer<typeof StorageUploadReqSchema>;
+export const StorageUploadResSchema = z.object({
+  method: z.literal('PUT'),
+  url: z.url(),
+  /** Sent unchanged with the upload: they are part of the signature. */
+  headers: z.record(z.string(), z.string()),
+  expires_at: IsoInstantSchema,
+});
+export type StorageUploadRes = z.infer<typeof StorageUploadResSchema>;
+
+/** `storage-sign`: signed download URLs (1 h), in request order; null for a path the caller may not read. */
+export const StorageSignReqSchema = z.object({ paths: z.array(StoragePathSchema).min(1).max(100) });
+export type StorageSignReq = z.infer<typeof StorageSignReqSchema>;
+export const StorageSignResSchema = z.object({
+  urls: z.array(z.url().nullable()),
+  expires_at: IsoInstantSchema,
+});
+export type StorageSignRes = z.infer<typeof StorageSignResSchema>;
+
 // ---------------------------------------------------------------- schedule-import (ING-07, Phase 2)
 
 export const ScheduleImportReqSchema = z.object({ document_id: UuidSchema });

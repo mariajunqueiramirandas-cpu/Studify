@@ -35,13 +35,11 @@ export function buildP2Runtime(config: ApiConfig): P2Runtime {
     tts: ttsFromEnv(config.ttsEnv),
     signedUrl: async (path: string, ttlSeconds: number) => {
       const slash = path.indexOf('/');
-      const { data, error } = await base.deps.db.storage.from(path.slice(0, slash)).createSignedUrl(path.slice(slash + 1), ttlSeconds);
-      return error || !data ? null : data.signedUrl;
+      return base.deps.storage.signedUrl(path.slice(0, slash), path.slice(slash + 1), ttlSeconds);
     },
     uploadObject: async (path: string, bytes: Uint8Array, contentType: string) => {
       const slash = path.indexOf('/');
-      const { error } = await base.deps.db.storage.from(path.slice(0, slash)).upload(path.slice(slash + 1), bytes, { contentType, upsert: true });
-      if (error) throw error;
+      await base.deps.storage.upload(path.slice(0, slash), path.slice(slash + 1), bytes, contentType);
     },
   };
   return { ...base, deps };

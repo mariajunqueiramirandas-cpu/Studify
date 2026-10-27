@@ -330,7 +330,7 @@ Performance rules:
 - Capture: `expo-camera` with a document-frame guide; gallery import via `expo-image-picker` (Android Photo Picker — no storage permission).
 - Processing on device: `expo-image-manipulator` to crop/rotate and downscale to ≤ 2048 px long edge, JPEG quality 0.8 (≈ 300–600 KB) before upload.
 - Multi-photo capture builds a `documents` row of kind `photo` (pages = photos).
-- Uploads > 6 MB use resumable (TUS) uploads to Supabase Storage; smaller files use standard upload. Uploads continue if the user leaves the screen and resume on next launch (queued in `outbox` as kind `upload`).
+- Every upload asks the API for a signed URL (`storage-upload`) and PUTs the file straight to storage (R2, or Supabase Storage without R2) with progress; a dropped connection retries the whole file with a fresh URL (twice). Uploads continue if the user leaves the screen and resume on next launch (queued in `outbox` as kind `upload`).
 - Photos are **personal by default** even inside a shared subject, unless the user explicitly adds them to the Turma's material (see security-privacy.md).
 
 ## 10. Audio (Phase 3 — INT-01 Podcast, WEL-04 read-aloud, TUT-06 voice)

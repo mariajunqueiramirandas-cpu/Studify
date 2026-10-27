@@ -2,7 +2,6 @@
 import { z } from 'zod';
 import type { JobDefinition, JobContext } from '../framework/types.ts';
 import { parsePayload } from '../framework/errors.ts';
-import { supabaseStore } from '../ingest/store.ts';
 import { runIngestDocument, runRenderPages, runTranscription } from '../ingest/pipeline.ts';
 import { runPhotosToPdf } from '../ingest/photos.ts';
 
@@ -34,7 +33,7 @@ const PhotoPayload = z.object({
   ai_job_id: aiJobId,
 });
 
-const store = (ctx: JobContext) => supabaseStore(ctx.supabase);
+const store = (ctx: JobContext) => ctx.storage;
 
 export const jobs: JobDefinition<any>[] = [
   {

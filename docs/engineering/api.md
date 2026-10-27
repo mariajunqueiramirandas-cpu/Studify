@@ -233,6 +233,12 @@ Checks: caller `can_upload_to_subject`, file exists, size/page limits, duplicate
 #### `ingest-retry` — ING-01 · class D · `POST`
 `Req { document_id: string; from_stage?: "S0" | "S1" | "S4" }` → `Res { job_id }`. Allowed when `documents.status in ('failed','waiting_budget')` or a topic's `content_status = 'failed'`.
 
+#### `storage-upload` — data-model §7 · no AI · `POST`
+`Req { path: "<bucket>/<key>", content_type, size }` → `Res { method: "PUT", url, headers, expires_at }`. A signed URL (1 h) the app PUTs one file to, sending `headers` unchanged; the app holds no storage credentials. Checks the storage policies of data-model §7 (`403 forbidden` for every path the caller may not write, whether or not the subject exists), the bucket's MIME types (`400`) and size limit (`422 file_too_large`). `documents` and `media` are write-once: `409 already_exists` when the object is there. With R2 the URL signs the content type and the exact byte length, so the upload cannot change either. Not mutating (no Idempotency-Key).
+
+#### `storage-sign` — data-model §7 · no AI · `POST`
+`Req { paths: string[] }` (1–100 `<bucket>/<key>` paths) → `Res { urls: (string | null)[], expires_at }`, in request order. Signed download URLs (1 h); `null` for a path the caller may not read (and, on Supabase Storage, for a missing object), so a batch never reveals what exists.
+
 #### `upload-photos` — ING-01 (photo material), CAM-01 · no AI · `POST`
 `Req { subject_id, image_paths: string[] }` → server builds a PDF from the photos (worker job `ingest.photos_to_pdf`) and creates the `documents` row with `kind = photo`; `Res { document_id, job_id }`.
 
@@ -582,10 +588,11 @@ sequenceDiagram
   participant E as API ingest-start
   participant W as Worker
   participant R as Realtime
-  A->>A: SHA-256 of file
-  A->>A: insert documents row (status uploaded)
-  A->>S: resumable upload documents/{subject}/{doc}.pdf
-  A->>E: POST ingest-start {document_id} + Idempotency-Key
+  participant U as API storage-upload
+  A->>U: POST storage-upload {path documents/{subject}/{doc}.pdf, size}
+  U-->>A: signed PUT URL (R2 or Supabase Storage)
+  A->>S: PUT the file to the signed URL
+  A->>E: POST ingest-start {document_id, subject_id} + Idempotency-Key
   E-->>A: {job_id, mode}
   W->>W: ingest.document (S0 preflight → S1 outline)
   W-->>R: ai_jobs progress (postgres_changes)

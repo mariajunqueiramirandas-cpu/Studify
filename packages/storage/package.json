@@ -1,0 +1,13 @@
+{
+  "name": "@studify/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "typecheck": "tsc -p tsconfig.json", "test": "vitest run" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "aws4fetch": "^1.0.20"
+  }
+}

@@ -5,6 +5,7 @@ import { PgBoss } from 'pg-boss';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ClaudeDeps } from '@studify/ai';
 import { ttsFromEnv, type TtsProvider } from '@studify/speech';
+import { createStorage, type ObjectStorage } from '@studify/storage';
 import type { WorkerConfig } from './env.ts';
 import { createBudgetStore } from './budget.ts';
 import { createPool, type Sql } from './db.ts';
@@ -29,6 +30,7 @@ export interface Runtime {
 export interface RuntimeOverrides {
   backend?: QueueBackend;
   supabase?: SupabaseClient;
+  storage?: ObjectStorage;
   claude?: ClaudeDeps;
   pool?: pg.Pool;
   now?: () => Date;
@@ -57,6 +59,7 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
   }
 
   const supabase = overrides.supabase ?? createSupabase(config);
+  const storage = overrides.storage ?? createStorage(config.storage, supabase);
   const claude =
     overrides.claude ??
     createClaudeDeps({
@@ -88,6 +91,7 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     backend,
     pool,
     supabase,
+    storage,
     claude,
     push,
     log,

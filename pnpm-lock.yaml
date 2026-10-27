@@ -41,6 +41,9 @@ importers:
       '@studify/speech':
         specifier: workspace:*
         version: link:../../packages/speech
+      '@studify/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0(@opentelemetry/api@1.10.0)
@@ -374,6 +377,9 @@ importers:
       '@studify/speech':
         specifier: workspace:*
         version: link:../../packages/speech
+      '@studify/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0(@opentelemetry/api@1.10.0)
@@ -441,6 +447,15 @@ importers:
         version: 4.10.2
 
   packages/speech: {}
+
+  packages/storage:
+    dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.118.0
+        version: 2.118.0(@opentelemetry/api@1.10.0)
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
 
 packages:
 
@@ -3031,6 +3046,9 @@ packages:
 
   await-lock@2.2.2:
     resolution: {integrity: sha512-aDczADvlvTGajTDjcjpJMqRkOF6Qdz3YbPZm/PyW6tKPkx2hlYBzxMhEywM/tU72HrVZjgl5VCdRuMlA7pZ8Gw==}
+
+  aws4fetch@1.0.20:
+    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
 
   babel-jest@29.7.0:
     resolution: {integrity: sha512-BrvGY3xZSwEcCzKvKsCi2GgHqDqsYkOP4/by5xCgIwGXQxIEh+8ew3gmrE1y7XRR6LHZIj6yLYnUi/mm2KXKBg==}
@@ -9655,6 +9673,8 @@ snapshots:
       possible-typed-array-names: 1.1.0
 
   await-lock@2.2.2: {}
+
+  aws4fetch@1.0.20: {}
 
   babel-jest@29.7.0(@babel/core@7.29.7):
     dependencies:

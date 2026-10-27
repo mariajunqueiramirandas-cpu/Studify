@@ -10,7 +10,8 @@
 
 | Piece | Where | Notes |
 |---|---|---|
-| Postgres, Auth, Storage, Realtime | **Supabase cloud**, free tier, region **sa-east-1 (São Paulo)** (SP-16) | Schema comes from `supabase/migrations`. |
+| Postgres, Auth, Realtime | **Supabase cloud**, free tier, region **sa-east-1 (São Paulo)** (SP-16) | Schema comes from `supabase/migrations`. |
+| Files (PDFs, page images, photos, audio, exports) | **Cloudflare R2**, one bucket (§9) | Without the `R2_*` variables the files stay in Supabase Storage. |
 | API server (`apps/api`, Bun + Hono) | **VPS**, Dokploy Compose app, service `api`, port 3000 | Serves `/api/<name>`, `/api/health`, the React link site (`apps/site`, built into the image) at `/`, `/c/*`, `/i/*`, `/q/*`, `/b/*`, `/assets/*`, `/.well-known/assetlinks.json`, and `/download` (302 to the newest release APK; `APK_URL` overrides it). |
 | Worker (`apps/worker`, Bun + pg-boss) | VPS, same Compose app, service `worker` | No domain. One replica. |
 | Public domain | `studify.vendua.com.br` (HTTPS, Let's Encrypt via Dokploy) | The API is under `https://studify.vendua.com.br/api`. |
@@ -48,6 +49,7 @@ Free-tier limits to keep in mind:
    real values. Dokploy writes them to `.env` next to the compose file, and both services read it (`env_file`).
    Required: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`, `DATABASE_URL`.
    Keep `PORT=3000` and `BASE_URL=studify.vendua.com.br`. Set `RESEND_API_KEY` too, or guardian mails are not sent.
+   Set the four `R2_*` variables (§9) to keep files in R2.
    Never commit real values.
 3. **Domain**: the Domains tab, add `studify.vendua.com.br`, service `api`, container port `3000`, HTTPS on
    (Let's Encrypt). Dokploy adds the Traefik routing; the compose file has the same labels commented out if you need
@@ -117,3 +119,39 @@ pnpm --filter @studify/worker dev
   from `/app`) was reproduced in a scratch copy and both servers started from it. The Dokploy domain and TLS steps
   follow Dokploy's documentation and have not run on the VPS.
 - The `oven/bun:1.4-slim` base image's `bun` user is assumed for `USER bun`; confirm on the first build.
+
+## 9. Files on Cloudflare R2
+
+The API and the worker keep every file in one R2 bucket when `R2_BUCKET` is set, and in Supabase Storage otherwise
+(1 GB on the free tier, `packages/storage`). Each logical bucket of data-model §7 is a key prefix in the R2 bucket,
+so the paths in the database (`documents/{subject_id}/{document_id}.pdf`) are the R2 keys unchanged. The app holds no
+storage credentials: it asks the API for a signed URL per upload (`storage-upload`) and download (`storage-sign`),
+and the API checks the storage policies before it signs.
+
+1. **Bucket.** Cloudflare dashboard > R2 > Create bucket, name `studify`, location automatic (or
+   `npx wrangler r2 bucket create studify`). Keep it private: no public access and no custom domain (presigned URLs
+   only work on the `r2.cloudflarestorage.com` endpoint).
+2. **API token.** R2 > Manage API tokens > Create API token: permission **Object Read & Write**, applied to the
+   `studify` bucket only. Note the Access Key ID and the Secret Access Key (shown once). The account id is on the R2
+   overview page.
+3. **Environment** (Dokploy Environment tab; both services read it):
+   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET=studify`. A partial set stops both
+   processes at startup with the missing names. `STORAGE_PROVIDER=supabase` switches back without removing them.
+4. **Existing files.** Before switching a project that already has files, copy them from the backend's environment:
+   ```bash
+   pnpm storage:copy-to-r2 --dry-run
+   pnpm storage:copy-to-r2
+   ```
+   It copies every object of the ten buckets and skips keys already in R2, so run it once more right after the
+   switch to pick up files uploaded in between.
+5. **App build.** The app must use `storage-upload` / `storage-sign` (this version and later). Older builds upload
+   straight to Supabase Storage, where an R2 deployment never looks. Ship the new build first, then block older
+   ones with `app_versions.blocks_older` when switching.
+6. **ENEM raw files.** The admin import reads `enem/{year}/raw/…` from storage. Upload them into the R2 bucket under
+   that prefix: the dashboard's upload, or
+   `npx wrangler r2 object put studify/enem/2023/raw/manifest.json --file manifest.json --remote`.
+7. **CORS.** Not needed: the Android app is not a browser. Add a CORS policy only for a web client that uploads
+   directly.
+
+R2 checks the signature of every upload URL, and the API signs the content type and the exact size into it, so the
+bucket limits of data-model §7 hold on R2 too. Unfinished uploads leave nothing behind (single PUT, no multipart).

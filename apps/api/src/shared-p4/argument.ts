@@ -82,7 +82,7 @@ export async function runArgumentRound(deps: Deps, session: ArgumentRow, message
   const stored = session.context.slices ?? [];
   const school = session.goal_mode === 'exam_week' && stored.length > 0;
   const taskId = school ? 'argument.reply' : 'argument.replyGeneral';
-  const history = await restoreTurns(deps.db, session.raw_turns, stored);
+  const history = await restoreTurns(deps.storage, session.raw_turns, stored);
   const slices = school && history.length === 0 ? await slicesFromStored(deps, stored, new Map()) : [];
   const built = getTask(taskId).build({ theme: session.theme, mode: session.mode, thesis: session.thesis, round, roundLimit: session.round_limit, history, message, slices });
   const lastOpponent = session.rounds[session.rounds.length - 1]?.opponent_text ?? null;

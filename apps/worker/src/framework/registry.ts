@@ -13,11 +13,14 @@ import type { PushService, PushMessage } from './push.ts';
 import { policyFor, type QueueBackend, type QueueJob, type QueueOptions, type SendOptions } from './queue.ts';
 import type { Logger } from './logger.ts';
 import type { TtsProvider } from '@studify/speech';
+import { supabaseStorage, type ObjectStorage } from '@studify/storage';
 
 export interface RuntimeDeps {
   backend: QueueBackend;
   pool: pg.Pool;
   supabase: SupabaseClient;
+  /** Default: Supabase Storage through `supabase` (tests that only fake supabase-js). */
+  storage?: ObjectStorage;
   claude: ClaudeDeps;
   push: PushService;
   log: Logger;
@@ -35,8 +38,11 @@ const DEFAULT_EXPIRE_SECONDS = 3600;
 export class JobRegistry {
   private readonly queues = new Set<string>();
   private readonly definitions = new Map<string, JobDefinition<any>>();
+  private readonly storage: ObjectStorage;
 
-  constructor(private readonly deps: RuntimeDeps) {}
+  constructor(private readonly deps: RuntimeDeps) {
+    this.storage = deps.storage ?? supabaseStorage(deps.supabase);
+  }
 
   /** Registers definitions and starts the workers. Duplicate names are a startup error. */
   async register(definitions: ReadonlyArray<JobDefinition<any>>): Promise<void> {
@@ -110,6 +116,7 @@ export class JobRegistry {
     const deps = this.deps;
     return {
       supabase: deps.supabase,
+      storage: this.storage,
       db: deps.pool,
       ai: deps.claude,
       log,

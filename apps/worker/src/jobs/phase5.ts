@@ -27,7 +27,6 @@ import { runPrompt, runText } from '../lib/ai-adapter.ts';
 import { IN_CHUNK, chunk, unwrap, unwrapRows, uniq } from '../lib/db.ts';
 import { addDays, localDateOf, safeTimeZone } from '../lib/time.ts';
 import { createEnv } from '../ingest/env.ts';
-import { supabaseStore } from '../ingest/store.ts';
 import { topicSliceRefs } from '../ingest/topics.ts';
 import { toPdfSlices } from '../ingest/tasks.ts';
 import { renderCitedBody, type CitationInput } from '../ingest/citations.ts';
@@ -148,7 +147,7 @@ export async function handleMaterialCheck(ctx: JobContext, data: { document_id: 
     otherDocuments.push({ key, title: others.find((o) => o.id === id)!.title, topics: ns.filter((n) => n.kind === 'topic').slice(0, 15).map((n) => ({ title: n.title, summary: n.summary ?? '' })) });
   }
 
-  const env = createEnv(ctx, supabaseStore(sb));
+  const env = createEnv(ctx, ctx.storage);
   const lastPage = Math.min(doc.page_count, MAX_CHECK_PAGES);
   const rows: FindingRow[] = [];
   for (let start = 1; start <= lastPage; start += CHECK_SLICE_PAGES) {
@@ -201,7 +200,7 @@ export async function handleDivideMerge(ctx: JobContext, data: { divide_plan_id:
   const byNode = new Map<string, Array<{ author: string; body: string }>>();
   for (const c of contributions) byNode.set(c.node_id, [...(byNode.get(c.node_id) ?? []), { author: c.author_id, body: c.body_md }]);
 
-  const env = createEnv(ctx, supabaseStore(sb));
+  const env = createEnv(ctx, ctx.storage);
   const task = getTask('divide.merge');
   let written = 0;
   for (const [nodeId, parts] of byNode) {
