@@ -196,17 +196,17 @@ export const ingestPrerequisites = defineTask<PrerequisitesInput, ReturnType<typ
 });
 
 // ---------------------------------------------------------------------------
-// T4 — ingest.transcribePages (Batch)
+// T4 — ingest.transcribePages: every page of an upload, read by the AI
 // ---------------------------------------------------------------------------
 
 export interface TranscribePagesInput {
-  /** At most 20 scanned pages. */
+  /** At most 20 pages. */
   slice: PdfSlice;
   contentLanguage: string;
 }
 
 const TRANSCRIBE_RULES = [
-  'Tarefa: transcreva fielmente as páginas escaneadas enviadas, para busca no app.',
+  'Tarefa: transcreva fielmente as páginas enviadas (digitais ou escaneadas), para leitura e busca no app.',
   '- Transcreva o texto como está, sem resumir, traduzir ou corrigir. Mantenha a ordem de leitura.',
   '- Fórmulas e símbolos matemáticos em LaTeX ($…$). Tabelas em Markdown simples.',
   '- Trecho ilegível: escreva [ilegível] no lugar e marque confidence = low. Use high só quando o texto estiver bem legível.',
@@ -217,7 +217,7 @@ const TRANSCRIBE_RULES = [
 
 export const ingestTranscribePages = defineTask<TranscribePagesInput, ReturnType<typeof PageTranscriptions.parse>>({
   id: 'ingest.transcribePages',
-  version: 1,
+  version: 2,
   features: ['ING-02.6'],
   effort: 'low',
   maxTokensClass: 'L',

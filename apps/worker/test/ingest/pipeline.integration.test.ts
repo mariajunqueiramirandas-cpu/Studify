@@ -53,6 +53,9 @@ function respond(req: MockRequest): MockResponse | undefined {
   const isMembrana = topic === TOPIC_MEMBRANA;
   const text = (value: unknown): MockResponse => ({ kind: 'message', message: { text: JSON.stringify(value) } });
 
+  if (body.includes('transcreva fielmente as páginas enviadas')) {
+    return text({ pages: [1, 2, 3].map((page) => ({ page, text: `Página ${page} lida pela IA.`, confidence: 'high' })) });
+  }
   if (body.includes('organize o material em um mapa de conhecimento') && body.includes('Slides Aula 2')) {
     return text({
       is_study_material: true,
@@ -325,8 +328,14 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     );
     expect(doc.rows[0]).toMatchObject({ status: 'ready', error_code: null, page_count: 3 });
 
-    const pages = await pool.query<{ n: string }>(`select count(*)::text as n from public.document_pages where document_id = $1 and text_source = 'pdf_text_layer'`, [docId]);
-    expect(Number(pages.rows[0]?.n)).toBe(3);
+    // Every page is read by the AI; the text layer's spans stay for the citation highlights.
+    const pages = await pool.query<{ text_source: string; text: string; text_items_path: string | null }>(
+      `select text_source, text, text_items_path from public.document_pages where document_id = $1 order by page_number`,
+      [docId],
+    );
+    expect(pages.rows.map((r) => r.text_source)).toEqual(['ai_transcription', 'ai_transcription', 'ai_transcription']);
+    expect(pages.rows[0]?.text).toBe('Página 1 lida pela IA.');
+    expect(pages.rows.every((r) => r.text_items_path !== null)).toBe(true);
 
     const nodes = await pool.query<{ kind: string; n: string }>(
       `select kind, count(*)::text as n from public.knowledge_nodes where subject_id = $1 group by kind`,
@@ -398,7 +407,8 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const requests = mock.requests.slice(requestsBefore);
     expect(requests.some((r) => r.path === '/v1/files' && r.method === 'POST')).toBe(true);
     expect(requests.some((r) => r.method === 'DELETE' && r.path.startsWith('/v1/files/'))).toBe(true);
-    expect(requests.filter((r) => r.path === '/v1/messages/batches' && r.method === 'POST').length).toBe(2);
+    // Concepts, content and the page transcription.
+    expect(requests.filter((r) => r.path === '/v1/messages/batches' && r.method === 'POST').length).toBe(3);
 
     expect(expo.sent.some((m) => m.data.type === 'material_ready')).toBe(true);
 

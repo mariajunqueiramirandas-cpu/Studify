@@ -4266,7 +4266,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "ingest.transcribePages@v1",
+  "promptVersion": "ingest.transcribePages@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -4295,7 +4295,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "ttl": "1h",
         "type": "ephemeral",
       },
-      "text": "Tarefa: transcreva fielmente as páginas escaneadas enviadas, para busca no app.
+      "text": "Tarefa: transcreva fielmente as páginas enviadas (digitais ou escaneadas), para leitura e busca no app.
 - Transcreva o texto como está, sem resumir, traduzir ou corrigir. Mantenha a ordem de leitura.
 - Fórmulas e símbolos matemáticos em LaTeX ($…$). Tabelas em Markdown simples.
 - Trecho ilegível: escreva [ilegível] no lugar e marque confidence = low. Use high só quando o texto estiver bem legível.

@@ -281,9 +281,12 @@ async function preflightAndExtract(
   await ctx.enqueue('ingest.render_pages', { document_id: doc.id, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
     singletonKey: `render:${doc.id}`,
   });
-  const scanned = pages.filter((p) => p.scanned).map((p) => p.pageNumber);
-  if (scanned.length > 0) {
-    await ctx.enqueue('ingest.transcribe_pages', { document_id: doc.id, pages: scanned, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
+  // Every page is read by the AI, not only scanned ones: the PDF's own text layer is often garbled (fonts,
+  // columns, formulas). Its text stays as the fallback until a transcription replaces it, and its positioned
+  // spans keep serving the citation highlights.
+  const all = pages.map((p) => p.pageNumber);
+  if (all.length > 0) {
+    await ctx.enqueue('ingest.transcribe_pages', { document_id: doc.id, pages: all, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
       singletonKey: `transcribe:${doc.id}`,
     });
   }
