@@ -137,3 +137,7 @@ export type { TextSpan, ExtractedContent, ParseResult } from "./interpret.ts";
 export type { UsageRowInput, MessageSummary } from "./usage.ts";
 export type { ModelPrice } from "./models.ts";
 export type { BuildParamsOptions, ShapeOptions } from "./request.ts";
+
+// Web search sources (ai-pipeline §12; ENM-05.5, ENM-09)
+export { webSourcesOf, normalizeUrl, isCitedUrl, isAllowedDomain } from "./web.ts";
+export type { WebSource } from "./web.ts";

@@ -11,6 +11,8 @@ import * as trust from './trust.ts';
 import * as camera from './camera.ts';
 import * as practice3 from './practice3.ts';
 import * as interactive from './interactive.ts';
+import * as enem from './enem.ts';
+import * as argument from './argument.ts';
 
 export * from './shared.ts';
 export * from './ingest.ts';
@@ -25,11 +27,13 @@ export * from './trust.ts';
 export * from './camera.ts';
 export * from './practice3.ts';
 export * from './interactive.ts';
+export * from './enem.ts';
+export * from './argument.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTaskDef = TaskDef<any, any>;
 
-/** Every task of Phases 0–3. Order is the registry order (stable, used by snapshots). */
+/** Every task of Phases 0–4. Order is the registry order (stable, used by snapshots). */
 export const TASKS: readonly AnyTaskDef[] = [
   ingest.ingestOutline,
   ingest.ingestOutlineMerge,
@@ -84,6 +88,25 @@ export const TASKS: readonly AnyTaskDef[] = [
   interactive.podcastHandAnswer,
   interactive.lucasPlan,
   interactive.lucasTurn,
+  // Phase 4
+  enem.enemTagNodes,
+  enem.enemBankTranscribe,
+  enem.enemBankExplain,
+  enem.enemBankTagTopics,
+  enem.enemQuestionGenerate,
+  enem.essayGrade,
+  enem.repertorioVerify,
+  enem.repertorioVerifyStructure,
+  enem.atualidadesResearch,
+  enem.atualidadesStructure,
+  enem.enemThemesPredict,
+  enem.essayThemePrompt,
+  argument.argumentReply,
+  argument.argumentReplyGeneral,
+  argument.argumentFeedback,
+  argument.argumentThesis,
+  argument.argumentSummary,
+  argument.argumentThemes,
 ];
 
 function buildIndex(tasks: readonly AnyTaskDef[]): ReadonlyMap<string, AnyTaskDef> {
