@@ -6,6 +6,7 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-goog
 import { Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
+import { ShareIntentProvider } from 'expo-share-intent';
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -18,6 +19,7 @@ import { Button, ErrorState, OverlayProvider, Text } from '../components';
 import { DatabaseProvider } from '../db/DatabaseProvider';
 import { startSync, useSyncStatus } from '../db/sync';
 import { SessionProvider, useSession } from '../features/auth/session';
+import { ShareIntentHandler } from '../features/subjects/share';
 import { initSentry } from '../lib/sentry';
 import { setupNotificationChannels } from '../platform/notifications';
 import { attachNotificationActions, registerReviewCategories } from '../platform/notification-actions';
@@ -87,7 +89,7 @@ function AuthGate() {
   }, [session, profile, db]);
 
   if (sync.updateRequired) return <UpdateRequired />;
-  return null;
+  return session && profile ? <ShareIntentHandler /> : null;
 }
 
 /** S-SYS-01 — blocks builds below min_supported_version; unsynced reviews stay on the phone (PLT-06.3). */
@@ -125,6 +127,7 @@ function Navigator() {
         <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
         <Stack.Screen name="tutor/[threadId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="session/[sessionId]" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="share" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
       <AuthGate />
     </>
@@ -147,15 +150,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <Themed>
-            <DatabaseProvider fallback={null}>
-              <OverlayProvider>
-                <SessionProvider>
-                  <Navigator />
-                </SessionProvider>
-              </OverlayProvider>
-            </DatabaseProvider>
-          </Themed>
+          <ShareIntentProvider options={{ resetOnBackground: true }}>
+            <Themed>
+              <DatabaseProvider fallback={null}>
+                <OverlayProvider>
+                  <SessionProvider>
+                    <Navigator />
+                  </SessionProvider>
+                </OverlayProvider>
+              </DatabaseProvider>
+            </Themed>
+          </ShareIntentProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

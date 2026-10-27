@@ -7,6 +7,7 @@ import { useSession } from '../../../../features/auth/session';
 import { formatBytes } from '../../../../features/common/format';
 import { askNotificationsAfterUpload } from '../../../../features/profile/permissions';
 import { UPLOAD_KINDS, uploadMaterial, useDocuments, useSubjectJobs, type DocumentKind } from '../../../../features/subjects/api';
+import { useSharedFile, type SharedFile } from '../../../../features/subjects/share';
 import { options, t } from '../../../../i18n';
 import { space } from '../../../../theme';
 
@@ -21,15 +22,15 @@ const ERROR_KEYS: Record<string, string> = {
   budget_exhausted: 'budget.upload_paused',
 };
 
-/** S-MAT-04 Adicionar material (ING-01): file picker + optional kind chip. */
+/** S-MAT-04 Adicionar material (ING-01): file picker (or a PDF shared from another app) + optional kind chip. */
 export default function Upload() {
-  const { subjectId } = useLocalSearchParams<{ subjectId: string }>();
+  const { subjectId, shared } = useLocalSearchParams<{ subjectId: string; shared?: string }>();
   const { userId } = useSession();
   const online = useOnline();
   const overlay = useOverlay();
   const docs = useDocuments(subjectId);
   const jobs = useSubjectJobs(subjectId);
-  const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [file, setFile] = useState<SharedFile | null>(() => (shared ? useSharedFile.getState().take() : null));
   const [kind, setKind] = useState<DocumentKind | null>(null);
   const [teacher, setTeacher] = useState('');
   const [pct, setPct] = useState<number | null>(null);
@@ -39,7 +40,8 @@ export default function Upload() {
   const pick = async () => {
     const res = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: false });
     if (!res.canceled && res.assets[0]) {
-      setFile(res.assets[0]);
+      const a = res.assets[0];
+      setFile({ uri: a.uri, name: a.name, size: a.size ?? 0, mimeType: a.mimeType ?? 'application/pdf' });
       setError(null);
     }
   };
@@ -54,8 +56,8 @@ export default function Upload() {
         subjectId,
         uri: file.uri,
         name: file.name,
-        size: file.size ?? 0,
-        mimeType: file.mimeType ?? 'application/pdf',
+        size: file.size,
+        mimeType: file.mimeType,
         kind: kind ?? 'other',
         teacherName: kind === 'past_test' ? teacher.trim() || null : null,
         onProgress: setPct,
@@ -106,7 +108,7 @@ export default function Upload() {
                 {file.name}
               </Text>
               <Text variant="bodySmall" tone="secondary">
-                {formatBytes(file.size ?? 0)}
+                {formatBytes(file.size)}
               </Text>
             </View>
             {pct === null ? <Button compact variant="text" label={t('global.edit')} onPress={pick} /> : null}

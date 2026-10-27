@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActionBar, Button, Screen, useOverlay } from '../../../components';
 import { useCreateSubject, useSubjects } from '../../../features/subjects/api';
@@ -7,6 +7,8 @@ import { t } from '../../../i18n';
 
 /** S-MAT-02 Nova matéria (PLT-03). */
 export default function NewSubject() {
+  // then=upload: came from the share sheet, so the shared PDF goes straight into the new subject.
+  const { then } = useLocalSearchParams<{ then?: string }>();
   const [draft, setDraft] = useState<SubjectDraft>({ name: '', color: 'indigo', icon: 'book-outline' });
   const create = useCreateSubject();
   const subjects = useSubjects();
@@ -17,7 +19,8 @@ export default function NewSubject() {
     if (dup && !(await overlay.confirm({ title: 'Já existe uma matéria com esse nome. Criar mesmo assim?' }))) return;
     try {
       const id = await create.mutateAsync(draft);
-      router.replace(`/subjects/${id}`);
+      if (then === 'upload') router.replace({ pathname: '/subjects/[subjectId]/upload', params: { subjectId: id, shared: '1' } });
+      else router.replace(`/subjects/${id}`);
     } catch {
       overlay.snack(t('error.generic'));
     }

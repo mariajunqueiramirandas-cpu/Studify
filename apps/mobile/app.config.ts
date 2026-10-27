@@ -68,6 +68,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     '@react-native-google-signin/google-signin',
     '@sentry/react-native',
     'expo-sharing',
+    // ING-01.3: PDFs shared from WhatsApp/Drive land on "Salvar em qual matéria?". Android only for now.
+    ['expo-share-intent', { androidIntentFilters: ['application/pdf'], disableIOS: true }],
     'expo-background-task',
     ['expo-notifications', { color: '#4F46E5', defaultChannel: 'reviews' }],
     ['expo-camera', { cameraPermission: 'Para escanear o QR da turma e tirar fotos da lista de conteúdo. As fotos ficam só com você.', recordAudioAndroid: false }],
