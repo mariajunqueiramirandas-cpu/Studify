@@ -281,7 +281,7 @@ function messageFor(value: unknown, n: number): Record<string, unknown> {
     id: `msg_fake_${n}`,
     type: 'message',
     role: 'assistant',
-    model: 'claude-opus-5-5',
+    model: 'claude-haiku-5-5',
     content: [{ type: 'text', text, citations: [] }],
     stop_reason: refusal ? 'refusal' : truncated ? 'max_tokens' : 'end_turn',
     stop_sequence: null,

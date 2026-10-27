@@ -474,7 +474,7 @@ Applies to Turma names, nicknames, room names, flag comments, SOC-06 contributio
 
 ## 12. Open questions
 
-1. **Domain for links (`{BASE_URL}`)** and hosting for the landing page + APK (owner's decision; needed for App Links `assetlinks.json`).
+1. ~~**Domain for links (`{BASE_URL}`)**~~ Decided 2026-10-27 (D-05): `studify.vendua.com.br`. Still open: hosting for the landing page + APK (needed for App Links `assetlinks.json`).
 2. **Default join policy:** spec chooses `approval`. Is the organizer OK approving ~40 classmates (with **Aprovar todos**), or prefer `open` + expiring links?
 3. **App admin moderation:** who handles reports escalated to the app admin (the owner of the project)? Need an admin screen or is a database view enough for v1?
 4. **Auto-apply of AI-confirmed fixes** when no moderator acts: spec keeps a human in the loop (items stay hidden "em revisão"). Should high-confidence fixes auto-apply after 72 h?

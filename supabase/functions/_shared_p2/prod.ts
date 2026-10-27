@@ -3,7 +3,7 @@
 import { prodDeps } from '../_shared/prod.ts';
 import type { P2Deps } from './deps.ts';
 import { makeRestBroadcaster } from './realtime.ts';
-import { normalizeBaseUrl } from './util.ts';
+import { publicBaseUrl } from './util.ts';
 
 let cached: P2Deps | undefined;
 
@@ -18,7 +18,8 @@ export function prodP2Deps(): P2Deps {
       return { data: res.data, error: res.error };
     },
     broadcast: makeRestBroadcaster(base.supabaseUrl, serviceKey),
-    baseUrl: normalizeBaseUrl(Deno.env.get('BASE_URL')),
+    // BASE_URL unset → studify.vendua.com.br (D-05); set to empty → custom-scheme links.
+    baseUrl: publicBaseUrl(Deno.env.get('BASE_URL')),
     randomInt: (maxExclusive: number) => {
       const buf = new Uint32Array(1);
       crypto.getRandomValues(buf);

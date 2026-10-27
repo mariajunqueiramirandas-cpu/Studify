@@ -5,7 +5,7 @@
 import type { z } from 'zod';
 import { ApiFailure, IngestStartReqSchema, } from '@studify/shared';
 import type { IngestStartRes } from '../_shared/responses.ts';
-import { costMicroUsd, zeroUsage } from '@studify/ai';
+import { DEFAULT_MODEL, costMicroUsd, zeroUsage } from '@studify/ai';
 import { defineFunction } from '../_shared/http.ts';
 import { requireSubject } from '../_shared/access.ts';
 import { objectExists } from '../_shared/storage.ts';
@@ -21,13 +21,13 @@ const MAX_CONCURRENT_JOBS = 3;
 
 /** Pre-check estimate in micro-USD (ai-pipeline §9.5 order of magnitude; replaced by §9.4 data). */
 export function estimateFullMicroUsd(pages: number): number {
-  return costMicroUsd({ ...zeroUsage(), input_tokens: pages * TOKENS_PER_PAGE, output_tokens: 5_000 + pages * 400 }, { model: 'claude-opus-5-5' });
+  return costMicroUsd({ ...zeroUsage(), input_tokens: pages * TOKENS_PER_PAGE, output_tokens: 5_000 + pages * 400 }, { model: DEFAULT_MODEL });
 }
 
 export function estimateOutlineMicroUsd(pages: number): number {
   return costMicroUsd(
     { ...zeroUsage(), input_tokens: Math.min(pages, OUTLINE_MAX_PAGES) * TOKENS_PER_PAGE, output_tokens: 5_000 },
-    { model: 'claude-opus-5-5' },
+    { model: DEFAULT_MODEL },
   );
 }
 

@@ -35,7 +35,7 @@ policy = "per_worker"
 enabled = true
 # Native app: the deep link is the redirect target for OTP and OAuth flows (mobile-app.md §2.3, §12).
 site_url = "studify://auth/callback"
-additional_redirect_urls = ["studify://auth/callback"]
+additional_redirect_urls = ["studify://auth/callback", "https://studify.vendua.com.br"]
 enable_signup = true
 
 [auth.email]

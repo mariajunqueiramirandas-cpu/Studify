@@ -79,6 +79,19 @@ describe("stop_reason handling (ai-pipeline §2.4)", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("maps a Haiku 5.5 refusal (HTTP 200, stop_reason refusal) to refused with no server-side fallback", async () => {
+    // Haiku 5.5 has no server-side fallback: the refusal arrives as a normal response, no fallback block.
+    const { client, calls } = fakeClient(() =>
+      message({ text: "", stop_reason: "refusal", refusal_category: "cyber" }),
+    );
+    const deps0 = deps(client);
+    const result = await callClaude(deps0, structuredCall());
+    expect(result).toMatchObject({ status: "refused", refusalCategory: "cyber", stopReason: "refusal", modelServed: "claude-haiku-5-5" });
+    expect(calls).toHaveLength(1);
+    expect("fallbacks" in calls[0]!).toBe(false);
+    expect(deps0.usage.rows[0]).toMatchObject({ stop_reason: "refusal", refusal_category: "cyber", fallback_used: false, model_requested: "claude-haiku-5-5" });
+  });
+
   it("retries a truncated structured output once with the next max_tokens class", async () => {
     const { client, calls } = fakeClient((_p, n) =>
       n === 1 ? message({ text: '{"cards": [', stop_reason: "max_tokens" }) : message({ text: GOOD_CARDS }),
@@ -132,15 +145,24 @@ describe("stop_reason handling (ai-pipeline §2.4)", () => {
 });
 
 describe("request shape sent to the API", () => {
-  it("always sets effort, the refusal fallback, a JSON format for structured tasks and no sampling params", async () => {
+  it("sends Haiku 5.5 at effort high, a JSON format for structured tasks, no fallbacks or betas and no sampling params", async () => {
     const { client, calls } = fakeClient(() => message({ text: GOOD_CARDS }));
     await callClaude(deps(client), structuredCall());
     const params = calls[0] as BetaCreateParams & Record<string, unknown>;
-    expect(params.model).toBe("claude-opus-5-5");
-    expect(params.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
-    expect(params.fallbacks).toBe("default");
-    expect(params.betas).toEqual(["server-side-fallback-2026-07-01"]);
+    expect(params.model).toBe("claude-haiku-5-5");
+    expect(params.output_config).toMatchObject({ effort: "high", format: { type: "json_schema" } });
+    expect("fallbacks" in params).toBe(false);
+    expect("betas" in params).toBe(false);
     expect("temperature" in params).toBe(false);
+    expect("thinking" in params).toBe(false);
+  });
+
+  it("writes the owner-policy effort into the usage row, not the prompt hint", async () => {
+    // cards.generate's prompt hint is medium; the request and the usage row both say high.
+    const d = deps(fakeClient(() => message({ text: GOOD_CARDS })).client);
+    await callClaude(d, structuredCall());
+    expect(cardsTask.effort).toBe("medium");
+    expect(d.usage.rows[0]).toMatchObject({ effort: "high", model_requested: "claude-haiku-5-5", price_version: expect.stringMatching(/haiku-5-5/) });
   });
 
   it("uses no structured format for citation tasks", async () => {
@@ -202,10 +224,11 @@ describe("budget gate (ai-pipeline §9.1)", () => {
     expect(d.usage.rows.map((r) => r.attempt)).toEqual([1, 2]);
     expect(d.usage.rows[1]).toMatchObject({ task_id: "cards.generate", prompt_version: "cards.generate@v3", mode: "sync", feature: "MEM-01" });
     expect(d.budget.settled).toHaveLength(1);
-    // response 1 (default usage 100 in, 50 out): 100 x $4 + 50 x $20 = $0.0014 = 1,400 micro-USD
-    // response 2 (1,000 in, 1,000 out): 1,000 x $4 + 1,000 x $20 = $0.024 = 24,000 micro-USD
-    // both are billed and settled together: 25,400
-    expect(d.budget.settled[0]?.micro).toBe(25_400);
+    // Haiku 5.5 standard card, prompt <= 100,000 tokens:
+    // response 1 (default usage 100 in, 50 out): 100 x $0.10 + 50 x $0.50 = $0.000035 = 35 micro-USD
+    // response 2 (1,000 in, 1,000 out): 1,000 x $0.10 + 1,000 x $0.50 = $0.0006 = 600 micro-USD
+    // both are billed and settled together: 635
+    expect(d.budget.settled[0]?.micro).toBe(635);
   });
 
   it("releases the reservation with 0 when the request fails before any response", async () => {

@@ -7,7 +7,7 @@ import { handler as joinClass } from '../join-class/index.ts';
 import { GUARDIAN_TOKEN_BYTES, handler as guardianLink } from '../guardian-link/index.ts';
 import { handler as provaProvavel } from '../prova-provavel-generate/index.ts';
 import { handler as scheduleImport } from '../schedule-import/index.ts';
-import { sha256Hex } from '../_shared_p2/util.ts';
+import { DEFAULT_PUBLIC_HOST, publicBaseUrl, sha256Hex, shareUrl } from '../_shared_p2/util.ts';
 import {
   ALICE,
   baseTables,
@@ -95,6 +95,15 @@ Deno.test('quiz-share: the snapshot has no answer keys, explanations, rationales
   assertEquals((row.snapshot as { questions: unknown[] }).questions.length, 5);
   assertEquals((body.token as string).length, 22);
   assertEquals(body.url, `https://studify.test/q/${body.token}`);
+});
+
+Deno.test('BASE_URL: unset defaults to studify.vendua.com.br (D-05); set overrides; empty keeps the custom scheme', () => {
+  assertEquals(DEFAULT_PUBLIC_HOST, 'studify.vendua.com.br');
+  assertEquals(publicBaseUrl(undefined), 'studify.vendua.com.br');
+  assertEquals(publicBaseUrl('https://staging.example.test/'), 'staging.example.test');
+  assertEquals(publicBaseUrl(''), null);
+  assertEquals(shareUrl(publicBaseUrl(undefined), 'tok'), 'https://studify.vendua.com.br/q/tok');
+  assertEquals(shareUrl(publicBaseUrl(''), 'tok'), 'studify://quiz/shared/tok');
 });
 
 Deno.test('quiz-share: without a BASE_URL the link is the studify:// route', async () => {

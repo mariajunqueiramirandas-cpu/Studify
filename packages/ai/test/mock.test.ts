@@ -23,8 +23,8 @@ beforeEach(() => {
   mock.setHandler(undefined);
 });
 
-const prompt = (text: string) => ({
-  model: "claude-opus-5-5",
+const prompt = (text: string, model = "claude-haiku-5-5") => ({
+  model,
   max_tokens: 1000,
   messages: [{ role: "user" as const, content: text }],
 });
@@ -63,11 +63,25 @@ describe("mock Claude server", () => {
 
   it("records each request body and headers for assertions", async () => {
     mock.setHandler(() => ({ kind: "message", message: { text: "ok" } }));
-    await sdk.beta.messages.create({ ...prompt("oi"), betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } as never);
+    // Opus has a server-side fallback, so the mock accepts the fallback fields on it.
+    await sdk.beta.messages.create({ ...prompt("oi", "claude-opus-5-5"), betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } as never);
     const [recorded] = mock.requests;
     expect(recorded?.path).toBe("/v1/messages");
     expect(recorded?.headers["anthropic-beta"]).toContain("server-side-fallback-2026-07-01");
     expect((recorded?.body as { fallbacks?: string }).fallbacks).toBe("default");
+  });
+
+  it("rejects fallbacks and betas on a synchronous Haiku 5.5 request (regression guard)", async () => {
+    mock.setHandler(() => ({ kind: "message", message: { text: "ok" } }));
+    const body = await sdk.beta.messages.create({ ...prompt("oi"), fallbacks: "default" } as never).catch((e: { status?: number }) => e);
+    expect((body as { status?: number }).status).toBe(400);
+    const withBeta = await sdk.beta.messages
+      .create(prompt("oi"), { headers: { "anthropic-beta": "server-side-fallback-2026-07-01" } })
+      .catch((e: { status?: number }) => e);
+    expect((withBeta as { status?: number }).status).toBe(400);
+    // A plain Haiku request goes through.
+    const ok = await sdk.beta.messages.create(prompt("oi"));
+    expect(ok.content[0]).toMatchObject({ text: "ok" });
   });
 
   it("streams a text message through the SDK stream helper", async () => {

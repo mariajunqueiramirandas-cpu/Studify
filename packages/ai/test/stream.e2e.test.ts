@@ -70,9 +70,10 @@ describe("streaming through the real SDK", () => {
     expect(result.text).toBe("A mitocôndria produz energia para a célula.");
     expect(result.citations).toEqual([expect.objectContaining({ valid: true, pageStart: 13, pageEnd: 14 })]);
 
-    const sent = mock.requests[0]?.body as { stream?: boolean; fallbacks?: string };
+    const sent = mock.requests[0]?.body as { stream?: boolean; model?: string; fallbacks?: string };
     expect(sent.stream).toBe(true);
-    expect(sent.fallbacks).toBe("default");
+    expect(sent.model).toBe("claude-haiku-5-5");
+    expect(sent.fallbacks).toBeUndefined();
   });
 
   it("reports refusals with the partial text marked for discard", async () => {

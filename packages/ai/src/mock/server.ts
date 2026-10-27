@@ -10,6 +10,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fixtureMatches, loadFixtures, type MockFixture } from "./fixtures.ts";
+import { DEFAULT_MODEL, hasServerFallback } from "../models.ts";
 import {
   blocksOf,
   defaultErrorType,
@@ -156,7 +157,14 @@ export async function startMockClaude(options: MockClaudeOptions = {}): Promise<
     }
     const model = typeof (req.body as { model?: unknown })?.model === "string"
       ? String((req.body as { model: string }).model)
-      : "claude-opus-5-5";
+      : DEFAULT_MODEL;
+    // Regression guard: models without a server-side fallback must not receive fallbacks or betas
+    // (the SDK sends `betas` as the anthropic-beta header, so check both places).
+    const sent = (req.body ?? {}) as Record<string, unknown>;
+    const sentBeta = req.headers["anthropic-beta"] !== undefined;
+    if (!hasServerFallback(model) && ("fallbacks" in sent || "betas" in sent || sentBeta)) {
+      return sendJson(res, 400, errorBody(400, "invalid_request_error", `fallbacks and betas are not accepted on ${model}`));
+    }
     const id = nextId("msg");
     if (req.stream) {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
@@ -196,7 +204,7 @@ export async function startMockClaude(options: MockClaudeOptions = {}): Promise<
         customId,
       };
       const spec = await resolve(itemReq);
-      const model = String((params as { model?: unknown }).model ?? "claude-opus-5-5");
+      const model = String((params as { model?: unknown }).model ?? DEFAULT_MODEL);
       items.push({ customId, result: batchResultOf(spec, model) });
     }
     const batch: BatchRecord = {

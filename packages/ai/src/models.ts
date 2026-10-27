@@ -1,29 +1,69 @@
 // Model policy, request defaults, max_tokens classes and the cost formula.
-// Source: docs/engineering/ai-pipeline.md §2.1–§2.3, §9.3; ADR 0003.
+// Source: docs/engineering/ai-pipeline.md §1, §2.1–§2.3, §9.3; ADR 0003 and its 2026-10-27 amendment.
 
-import type { MaxTokensClass, UsageTotals } from "./types.ts";
-
-/** ADR 0003: every task runs on this model unless the owner decides otherwise. */
-export const DEFAULT_MODEL = "claude-opus-5-5";
+import type { Effort, MaxTokensClass, UsageTotals } from "./types.ts";
 
 /**
- * Owner-approved per-task overrides. Empty by design: engineering never downgrades a task
- * on its own (ai-pipeline §1.1). Adding an entry needs the owner's decision and eval evidence.
+ * Owner decision 2026-10-27: every task runs on Claude Haiku 5.5 at effort "high". This replaces
+ * the Opus 5.5 default of ADR 0003. Haiku 5.5 has no server-side refusal fallback (see
+ * SERVER_FALLBACK_MODELS below).
+ */
+export const DEFAULT_MODEL = "claude-haiku-5-5";
+
+/**
+ * Owner-approved per-task model overrides. Empty by design: engineering never downgrades or
+ * upgrades a task on its own (ai-pipeline §1.1). Adding an entry needs the owner's decision and
+ * eval evidence.
  */
 export const MODEL_OVERRIDES: Readonly<Record<string, string>> = {};
 
 export function modelFor(taskId: string): string {
-  return MODEL_OVERRIDES[taskId] ?? DEFAULT_MODEL;
+  return Object.prototype.hasOwnProperty.call(MODEL_OVERRIDES, taskId)
+    ? (MODEL_OVERRIDES[taskId] as string)
+    : DEFAULT_MODEL;
+}
+
+/** Owner decision 2026-10-27: effort "high" for every task. The per-task `effort` in prompts is a hint and is not sent. */
+export const DEFAULT_EFFORT: Effort = "high";
+
+/**
+ * Per-task effort overrides. Empty by design; same rule as MODEL_OVERRIDES: owner decision plus
+ * eval evidence (ai-pipeline §2.2).
+ */
+export const EFFORT_OVERRIDES: Readonly<Record<string, Effort>> = {};
+
+/** The effort sent as output_config.effort for this task. Used by request.ts, callClaude.ts, batch.ts and usage rows. */
+export function effortFor(task: { id: string }): Effort {
+  return Object.prototype.hasOwnProperty.call(EFFORT_OVERRIDES, task.id)
+    ? (EFFORT_OVERRIDES[task.id] as Effort)
+    : DEFAULT_EFFORT;
 }
 
 /** Beta header that enables server-side refusal fallback on synchronous requests (§2.2). */
 export const SERVER_FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
-/** Sent on every synchronous request. Rejected on Batch requests (§7.4). */
-export const SYNC_REQUEST_DEFAULTS = {
-  fallbacks: "default" as const,
-  betas: [SERVER_FALLBACK_BETA],
-};
+/**
+ * Models that support the server-side refusal fallback (`fallbacks: "default"` plus the beta).
+ * Haiku 5.5 is not listed: it rejects `fallbacks` with 400, and refusals arrive as HTTP 200 with
+ * stop_reason "refusal" that the wrapper maps to ai_refused.
+ */
+export const SERVER_FALLBACK_MODELS: ReadonlySet<string> = new Set([
+  "claude-opus-5-5",
+  "claude-sonnet-5-5",
+  "claude-fable-5-1",
+]);
+
+export function hasServerFallback(model: string): boolean {
+  return SERVER_FALLBACK_MODELS.has(model);
+}
+
+/**
+ * Extra params for a synchronous (non-Batch) request to `model`. Batch requests never get them
+ * (§7.4). Models without a server-side fallback get nothing.
+ */
+export function syncRequestDefaults(model: string): { fallbacks?: "default"; betas?: string[] } {
+  return hasServerFallback(model) ? { fallbacks: "default", betas: [SERVER_FALLBACK_BETA] } : {};
+}
 
 /** Anthropic API version the SDK sends (informational; the SDK sets the header). */
 export const API_VERSION = "2026-10-21";
@@ -62,7 +102,7 @@ export const DEFAULT_OUTPUT_TOKENS: Readonly<Record<MaxTokensClass, number>> = {
 export const DEFAULT_TOKENS_PER_PAGE = 2_000;
 
 /** Bump when any price below changes (stored in ai_usage.price_version). */
-export const PRICE_VERSION = "2026-10.opus-5-5.v1";
+export const PRICE_VERSION = "2026-10.haiku-5-5.v1";
 
 /** USD per million tokens. Verify on the pricing page before launch (§9.3). */
 export interface ModelPrice {
@@ -73,6 +113,14 @@ export interface ModelPrice {
   cacheWrite1h: number;
 }
 
+/**
+ * Prompt length above which a model's long-prompt rate card applies. Prompt length is
+ * input_tokens + cache_read_tokens + cache_creation tokens of one request. A prompt of exactly
+ * 100,000 tokens is still billed at the standard card.
+ */
+export const LONG_PROMPT_THRESHOLD_TOKENS = 100_000;
+
+/** Standard rate card per model (prompt ≤ LONG_PROMPT_THRESHOLD_TOKENS where a second card exists). */
 export const PRICES: Readonly<Record<string, ModelPrice>> = {
   "claude-opus-5-5": {
     input: 4.0,
@@ -80,6 +128,25 @@ export const PRICES: Readonly<Record<string, ModelPrice>> = {
     cacheRead: 0.2,
     cacheWrite5m: 4.0 * 1.25,
     cacheWrite1h: 4.0 * 2.0,
+  },
+  // Owner decision 2026-10-27. Cache reads 0.1x input, 5-minute writes 1.25x, 1-hour writes 2x.
+  "claude-haiku-5-5": {
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.01,
+    cacheWrite5m: 0.125,
+    cacheWrite1h: 0.2,
+  },
+};
+
+/** Long-prompt rate cards (prompt > LONG_PROMPT_THRESHOLD_TOKENS). Models absent here have one card. */
+export const LONG_PROMPT_PRICES: Readonly<Record<string, ModelPrice>> = {
+  "claude-haiku-5-5": {
+    input: 0.5,
+    output: 2.5,
+    cacheRead: 0.05,
+    cacheWrite5m: 0.625,
+    cacheWrite1h: 1.0,
   },
 };
 
@@ -99,23 +166,35 @@ export function isPriceKnown(model: string): boolean {
   return Object.prototype.hasOwnProperty.call(PRICES, model);
 }
 
+function lookup(table: Readonly<Record<string, ModelPrice>>, model: string): ModelPrice | undefined {
+  return Object.prototype.hasOwnProperty.call(table, model) ? table[model] : undefined;
+}
+
+/** Most expensive known output rate across every card. Used for models with no price row. */
+const MOST_EXPENSIVE: ModelPrice = [...Object.values(PRICES), ...Object.values(LONG_PROMPT_PRICES)].reduce(
+  (max, p) => (p.output > max.output ? p : max),
+);
+
+/** Prompt length of one request: fresh input, cache reads and cache writes (both TTLs). */
+export function promptTokensOf(u: UsageTotals): number {
+  return u.input_tokens + u.cache_read_tokens + u.cache_creation_5m_tokens + u.cache_creation_1h_tokens;
+}
+
 /**
- * Unknown models (for example a server-side fallback model whose rates are not in the table)
- * are priced at the most expensive known rate so budgets are never under-counted.
+ * Rate card for one request. Unknown models are priced at the most expensive known rate so
+ * budgets are never under-counted.
  */
-export function priceFor(model: string): ModelPrice {
-  const known = PRICES[model];
-  if (known) return known;
-  let max = PRICES[DEFAULT_MODEL] as ModelPrice;
-  for (const p of Object.values(PRICES)) {
-    if (p.output > max.output) max = p;
+export function priceFor(model: string, promptTokens = 0): ModelPrice {
+  if (promptTokens > LONG_PROMPT_THRESHOLD_TOKENS) {
+    const long = lookup(LONG_PROMPT_PRICES, model);
+    if (long) return long;
   }
-  return max;
+  return lookup(PRICES, model) ?? MOST_EXPENSIVE;
 }
 
 /** Cost in USD before the batch discount (ai-pipeline §9.3). */
 export function costUsd(u: UsageTotals, model: string): number {
-  const p = priceFor(model);
+  const p = priceFor(model, promptTokensOf(u));
   const tokensUsd =
     (u.input_tokens * p.input +
       u.output_tokens * p.output +

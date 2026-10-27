@@ -64,7 +64,7 @@ export interface BatchCollectResult {
   batchCostMicroUsd: number;
 }
 
-/** Builds one Batch request. Same prompt and params as the standard path, minus fallbacks and betas. */
+/** Builds one Batch request. Same prompt and params as the standard path, minus fallbacks and betas (§7.4). */
 export function buildBatchRequest(item: BatchItem): { custom_id: string; params: BetaCreateParams } {
   assertCustomId(item.customId);
   const params = buildParams(item.call, {
@@ -238,7 +238,6 @@ async function collectOne(
           ctx: call.ctx,
           task: call.task,
           mode: "batch",
-          effort: call.task.effort,
           attempt: 1,
           latencyMs: 0,
           ttftMs: null,

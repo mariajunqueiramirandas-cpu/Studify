@@ -63,6 +63,7 @@ export interface DocumentMap {
 export interface BuiltPrompt {
   taskId: string;
   promptVersion: string;
+  /** Per-task hint only; the request sends the owner-policy effort (@studify/ai effortFor). */
   effort: Effort;
   maxTokensClass: MaxTokensClass;
   system: TextBlock[];

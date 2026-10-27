@@ -242,8 +242,9 @@ export async function transcriptionItem(
 }
 
 /**
- * Rebuilds the standard-API call for an item that failed in the batch. Same prompt, same slices, and no
- * fallbacks on Batch requests (ai-pipeline §7.4): the standard path is where the refusal fallback applies.
+ * Rebuilds the standard-API call for an item that failed in the batch. Same prompt, same slices. Batch
+ * requests never carry fallbacks (ai-pipeline §7.4); the standard re-run is the second attempt for refused
+ * items, and Haiku 5.5 has no server-side refusal fallback.
  */
 async function rerunStandard(env: PipelineEnv, item: PlanItem): Promise<CallResult<unknown>> {
   const refs = await refsFromBlocks(env, item.blocks, item.kind === 'transcription' ? 'transcription' : 'topic');

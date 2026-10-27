@@ -49,6 +49,17 @@ export function normalizeBaseUrl(raw: string | null | undefined): string | null 
   return host.length > 0 ? host : null;
 }
 
+/** Production public host for HTTPS links (D-05, owner decision 2026-10-27). */
+export const DEFAULT_PUBLIC_HOST = 'studify.vendua.com.br';
+
+/**
+ * BASE_URL resolution. Unset (undefined) uses DEFAULT_PUBLIC_HOST. An explicitly empty BASE_URL
+ * returns null, which keeps the custom-scheme (studify://) fallback in shareUrl and guardian links.
+ */
+export function publicBaseUrl(raw: string | null | undefined): string | null {
+  return normalizeBaseUrl(raw ?? DEFAULT_PUBLIC_HOST);
+}
+
 /** Quiz share link (SOC-09.4): https App Link when BASE_URL is set, else the custom-scheme route. */
 export function shareUrl(baseUrl: string | null, token: string): string {
   return baseUrl ? `https://${baseUrl}/q/${token}` : `studify://quiz/shared/${token}`;

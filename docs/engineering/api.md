@@ -117,7 +117,7 @@ type SseEvent =
 ```
 
 - Citations arrive as separate events so the UI can render 📄 chips progressively; `start`/`end` offsets refer to the final concatenated text.
-- A `refusal` ends the stream with `done.stop_reason = "refusal"` after the server-side fallback was tried; the app shows the spec's friendly refusal copy.
+- A `refusal` ends the stream with `done.stop_reason = "refusal"` after the server-side fallback was tried where the model has one (Haiku 5.5 has none, so it ends at once); the app shows the spec's friendly refusal copy.
 - If the connection drops mid-stream, the client re-requests with the same `Idempotency-Key`; the server returns the completed message (stored) instead of generating again.
 
 ### 2.7 Dates and times
@@ -649,7 +649,7 @@ Sent by `notify.dispatch` through the Expo Push API → FCM. Payload: `{ type, t
 
 ## 10. Deep links and App Links
 
-Custom scheme `studify://` for in-app links (notifications, widget); **HTTPS App Links** on `https://{BASE_URL}` for anything shared outside the app (WhatsApp does not linkify custom schemes). The domain is an open owner decision (mobile-app.md §20). The landing page opens the app when installed (App Links verified via `/.well-known/assetlinks.json`) or shows the install link and keeps the code for after install (00 §9).
+Custom scheme `studify://` for in-app links (notifications, widget); **HTTPS App Links** on `https://{BASE_URL}` for anything shared outside the app (WhatsApp does not linkify custom schemes). The domain is `studify.vendua.com.br` (D-05, decided 2026-10-27); `BASE_URL` defaults to it, and `{BASE_URL}` in the tables below stands for that host. The landing page opens the app when installed (App Links verified via `/.well-known/assetlinks.json`) or shows the install link and keeps the code for after install (00 §9).
 
 | HTTPS link | App route | Feature |
 |---|---|---|

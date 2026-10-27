@@ -296,4 +296,4 @@ Guardians of users under 16 can request deletion through the supervision panel (
 3. **Minimum age:** 12 (as proposed), or limit to 14+ (high-school only) to reduce risk?
 4. **Image hash-matching (SP-12):** which provider is feasible for a small project before photos can be shared to a Turma?
 5. **International transfer (SP-16):** confirm the Anthropic and Supabase DPA mechanisms under Res. 19/2024.
-6. **Website/domain** for the privacy notice, compliance statement and contact channel (also needed for invite links, see mobile-app.md).
+6. **Website** for the privacy notice, compliance statement and contact channel. The domain `studify.vendua.com.br` is decided (D-05, 2026-10-27) and hosts invite links too (see mobile-app.md); the privacy page on it is still to build.

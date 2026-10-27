@@ -6,9 +6,11 @@ import {
   DEFAULT_OUTPUT_TOKENS,
   DEFAULT_TOKENS_PER_PAGE,
   MAX_TOKENS,
-  SYNC_REQUEST_DEFAULTS,
   costMicroUsd,
+  effortFor,
+  hasServerFallback,
   modelFor,
+  syncRequestDefaults,
   zeroUsage,
 } from "./models.ts";
 import { AiBadRequestError } from "./errors.ts";
@@ -23,6 +25,7 @@ import type {
   UsageTotals,
 } from "./types.ts";
 
+/** Sampling and thinking params are rejected by the API on the default model (ai-pipeline §2.2). */
 const FORBIDDEN_PARAMS = ["temperature", "top_p", "top_k", "thinking", "stop_sequences"] as const;
 
 /** Keywords the API does not enforce for structured outputs. Zod still enforces them (§5.1). */
@@ -75,8 +78,10 @@ export interface BuildParamsOptions {
 }
 
 /**
- * Request params for one attempt. Synchronous requests get the refusal fallback (§2.2);
- * Batch requests never do (§7.4). Thinking is omitted: adaptive and always on for Opus 5.5.
+ * Request params for one attempt. Effort comes from the owner policy (effortFor), not from
+ * task.effort. Synchronous requests get the server-side refusal fallback only on models that
+ * have one (syncRequestDefaults); Batch requests never do (§7.4). Thinking is omitted: adaptive
+ * only on Haiku 5.5.
  */
 export function buildParams<T>(call: TaskCall<T>, opts: BuildParamsOptions): BetaCreateParams {
   const { task } = call;
@@ -84,11 +89,12 @@ export function buildParams<T>(call: TaskCall<T>, opts: BuildParamsOptions): Bet
     task.output.mode === "structured"
       ? { type: "json_schema" as const, schema: toJsonSchema(task.output.schema) }
       : undefined;
+  const model = modelFor(task.id);
   const params: BetaCreateParams = {
-    model: modelFor(task.id),
+    model,
     max_tokens: MAX_TOKENS[opts.maxTokensClass],
     output_config: {
-      effort: task.effort,
+      effort: effortFor(task),
       ...(format ? { format } : {}),
     },
     system: buildSystem(call.system),
@@ -98,7 +104,7 @@ export function buildParams<T>(call: TaskCall<T>, opts: BuildParamsOptions): Bet
     params.tools = call.tools;
     params.tool_choice = { type: "auto" };
   }
-  return opts.batch ? params : { ...params, ...SYNC_REQUEST_DEFAULTS };
+  return opts.batch ? params : { ...params, ...syncRequestDefaults(model) };
 }
 
 export interface ShapeOptions {
@@ -108,20 +114,24 @@ export interface ShapeOptions {
 }
 
 /**
- * Throws AiBadRequestError (a bug, never retried) when a request breaks the Opus 5.5 and API
- * rules in ai-pipeline §2.2, §5.2, §6.2 and §6.6. Runs before every API call.
+ * Throws AiBadRequestError (a bug, never retried) when a request breaks the rules of ai-pipeline
+ * §2.2, §5.2, §6.2 and §6.6 for the default model. Runs before every API call.
  */
 export function assertRequestShape(params: BetaCreateParams, opts: ShapeOptions): void {
   const bag = params as unknown as Record<string, unknown>;
+  const model = String(params.model);
   for (const key of FORBIDDEN_PARAMS) {
-    if (key in bag) fail(`${key} is not allowed on claude-opus-5-5 (ai-pipeline §2.2)`);
+    if (key in bag) fail(`${key} is not allowed on ${model} (ai-pipeline §2.2)`);
   }
   if (opts.batch && ("fallbacks" in bag || "betas" in bag)) {
     fail("fallbacks and betas are rejected on the Batches API (ai-pipeline §7.4)");
   }
+  if (!opts.batch && !hasServerFallback(model) && ("fallbacks" in bag || "betas" in bag)) {
+    fail(`fallbacks and betas are not accepted on ${model}: it has no server-side fallback (ai-pipeline §2.2)`);
+  }
   const choice = params.tool_choice as { type?: string } | undefined;
   if (choice && (choice.type === "any" || choice.type === "tool")) {
-    fail("forced tool_choice (any/tool) returns 400 on Opus 5.5 (ai-pipeline §2.2)");
+    fail(`forced tool_choice (any/tool) is not allowed on ${model}: it skips thinking (ai-pipeline §2.2)`);
   }
 
   const messages = params.messages;

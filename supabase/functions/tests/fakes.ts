@@ -374,7 +374,7 @@ function toMessage(reply: FakeReply, id: string): Record<string, unknown> {
     id,
     type: 'message',
     role: 'assistant',
-    model: 'claude-opus-5-5',
+    model: 'claude-haiku-5-5',
     content: reply.content,
     stop_reason: reply.stop_reason ?? 'end_turn',
     stop_details: reply.stop_details ?? null,

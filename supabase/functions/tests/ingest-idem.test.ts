@@ -3,6 +3,7 @@
 // deno-lint-ignore-file require-await
 import { assert, assertEquals } from '@std/assert';
 import { costMicroUsd, zeroUsage } from '@studify/ai';
+import { estimateFullMicroUsd, estimateOutlineMicroUsd } from '../ingest-start/index.ts';
 import { makeBudgetStore } from '../_shared/budget.ts';
 import { ALICE, makeHarness, makePdf, request, json } from './fakes.ts';
 import { IDS, seedWorld, v7 } from './world.ts';
@@ -74,13 +75,17 @@ Deno.test('ingest-start: a document in another student’s subject is not found'
 Deno.test('ingest-start: the full run does not fit today → outline_only with budget_note (PLT-04.4)', async () => {
   const h = await setupH();
   await seedUpload(h, UPLOADED, IDS.subject, 'f'.repeat(64));
-  // Full run ≈ 740k micro-USD, outline ≈ 420k. A budget that refuses anything above 500k forces the fallback.
-  const fullMicro = costMicroUsd({ ...zeroUsage(), input_tokens: 80_000, output_tokens: 21_000 }, { model: 'claude-opus-5-5' });
-  const outlineMicro = costMicroUsd({ ...zeroUsage(), input_tokens: 80_000, output_tokens: 5_000 }, { model: 'claude-opus-5-5' });
-  assert(fullMicro > 500_000 && outlineMicro < 500_000);
+  // 40 pages on Haiku 5.5: full run ≈ 18.5k micro-USD, outline ≈ 10.5k. A budget that refuses anything
+  // above the midpoint forces the fallback.
+  const fullMicro = estimateFullMicroUsd(40);
+  const outlineMicro = estimateOutlineMicroUsd(40);
+  const limit = Math.floor((fullMicro + outlineMicro) / 2);
+  assert(fullMicro > limit && outlineMicro < limit);
+  // The estimates price the default model: Haiku 5.5 standard card, 80,000 input tokens.
+  assertEquals(outlineMicro, costMicroUsd({ ...zeroUsage(), input_tokens: 80_000, output_tokens: 5_000 }, { model: 'claude-haiku-5-5' }));
   h.deps.ai.budget = {
     reserve: async (input: { estimateMicroUsd: number }) =>
-      input.estimateMicroUsd > 500_000
+      input.estimateMicroUsd > limit
         ? { ok: false, scope: 'user_day' as const, resetsAt: '2026-10-28T00:00:00-03:00' }
         : { ok: true, reservationId: v7(305) },
     settle: async () => {},

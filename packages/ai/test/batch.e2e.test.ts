@@ -113,10 +113,11 @@ describe("Message Batches lifecycle", () => {
     const { outcomes } = await collectBatch(d, submission, items(), { rerunRefused: true });
     expect(byId(outcomes).w1_refuse).toMatchObject({ status: "ok", source: "standard" });
 
+    // Haiku 5.5 has no server-side fallback: the standard re-run sends neither fallbacks nor the beta.
     const rerun = mock.requests.at(-1);
-    expect((rerun?.body as { fallbacks?: string }).fallbacks).toBe("default");
-    // the SDK sends `betas` as the anthropic-beta header, not in the body
-    expect(rerun?.headers["anthropic-beta"]).toContain("server-side-fallback-2026-07-01");
+    expect(rerun?.body).toMatchObject({ model: "claude-haiku-5-5" });
+    expect("fallbacks" in (rerun?.body as object)).toBe(false);
+    expect(rerun?.headers["anthropic-beta"]).toBeUndefined();
   });
 
   it("cancels a batch that runs past the wait limit and reports unfinished items as canceled", async () => {

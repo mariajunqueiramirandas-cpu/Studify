@@ -1,14 +1,13 @@
 // Normalizes API usage into pricing totals, computes per-response cost, and builds ai_usage rows.
 // Runtime-neutral.
 
-import { PRICE_VERSION, costMicroUsd, costUsd, zeroUsage, BATCH_DISCOUNT, modelFor } from "./models.ts";
+import { PRICE_VERSION, costMicroUsd, costUsd, zeroUsage, BATCH_DISCOUNT, effortFor, modelFor } from "./models.ts";
 import type {
   AiUsageRow,
   BetaMessage,
   BetaUsage,
   BudgetContext,
   CallMode,
-  Effort,
   UsageTotals,
 } from "./types.ts";
 
@@ -102,7 +101,6 @@ export interface UsageRowInput {
   ctx: BudgetContext;
   task: { id: string; version: number };
   mode: CallMode;
-  effort: Effort;
   attempt: number;
   latencyMs: number;
   ttftMs: number | null;
@@ -134,7 +132,7 @@ export function buildUsageRow(input: UsageRowInput): AiUsageRow {
     model_requested: modelFor(task.id),
     model_served: summary?.modelServed ?? modelFor(task.id),
     fallback_used: summary?.fallbackUsed ?? false,
-    effort: input.effort,
+    effort: effortFor(task),
     input_tokens: totals.input_tokens,
     output_tokens: totals.output_tokens,
     cache_creation_5m_tokens: totals.cache_creation_5m_tokens,

@@ -19,6 +19,7 @@ import type {
   UsageSink,
 } from "../src/types.ts";
 import { documentBlocks } from "../src/pdf.ts";
+import { DEFAULT_MODEL } from "../src/models.ts";
 
 export const CTX: BudgetContext = {
   userId: "00000000-0000-4000-8000-000000000001",
@@ -109,7 +110,7 @@ export function proseCall(task: TaskDef<string> = studyNotesTask, overrides: Par
 
 /** A BetaMessage built with the mock's own JSON encoder (same shape the SDK parses). */
 export function message(spec: MockMessage, id = "msg_test_1"): BetaMessage {
-  return messageJson(spec, { id, requestModel: "claude-opus-5-5" }) as unknown as BetaMessage;
+  return messageJson(spec, { id, requestModel: DEFAULT_MODEL }) as unknown as BetaMessage;
 }
 
 export interface FakeClient {

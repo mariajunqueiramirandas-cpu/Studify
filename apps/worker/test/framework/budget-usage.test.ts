@@ -77,8 +77,8 @@ describe('usageParams', () => {
     prompt_version: 'notes.tldr@v1',
     budget_class: 'content',
     mode: 'batch',
-    model_requested: 'claude-opus-5-5',
-    model_served: 'claude-opus-5-5',
+    model_requested: 'claude-haiku-5-5',
+    model_served: 'claude-haiku-5-5',
     fallback_used: false,
     effort: 'low',
     input_tokens: 10,
@@ -112,8 +112,10 @@ describe('usageParams', () => {
     expect(params[18]).toBe(99); // cost
   });
 
-  it('records the served model when a fallback answered', () => {
-    const params = usageParams({ ...row, model_served: 'claude-haiku-5-5' });
-    expect(params[9]).toBe('claude-haiku-5-5');
+  it('records the served model when it differs from the requested one', () => {
+    // Haiku 5.5 has no server-side fallback; the column still records any served model that differs.
+    const params = usageParams({ ...row, model_served: 'claude-opus-5-5' });
+    expect(params[9]).toBe('claude-opus-5-5');
+    expect(usageParams(row)[9]).toBeNull();
   });
 });

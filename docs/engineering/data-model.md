@@ -1152,7 +1152,7 @@ Published to Realtime (§8). Index `(subject_id, created_at desc)`, `(user_id, s
 | `class_group_id`, `subject_id` | uuid | N | Budget attribution |
 | `feature` | text | — | PRD feature ID (e.g. `TUT-01`) |
 | `task` | text | — | AI task id from [ai-pipeline.md](ai-pipeline.md) (e.g. `ing.outline`) |
-| `model` | text | — | e.g. `claude-opus-5-5` |
+| `model` | text | — | e.g. `claude-haiku-5-5` |
 | `fallback_model` | text | N | Set when a server-side fallback served the request |
 | `request_id` | text | N | Anthropic request id |
 | `batch` | bool | false | Batch API (50% price) |

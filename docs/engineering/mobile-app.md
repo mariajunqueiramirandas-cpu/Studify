@@ -145,7 +145,7 @@ The canonical route list (custom scheme and HTTPS App Links) is [api.md §10](ap
 | `studify://practice/review` | Review session (from notification / widget) |
 | `studify://goal/{goal_id}/eve/{exam_id}` | Modo Véspera (from reminder) |
 
-WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. This needs a domain (open question, §20).
+WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. The domain is `studify.vendua.com.br` (D-05, decided 2026-10-27), so links are `https://studify.vendua.com.br/…`; the `{BASE_URL}` placeholder in the route tables stands for that host.
 
 ## 3. State management
 
@@ -446,7 +446,7 @@ Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_
 
 ## 20. Open questions
 
-1. **Domain** for HTTPS invite links / App Links and the privacy-notice page (needed before Phase 2 Turma sharing; the privacy page is needed before inviting classmates).
+1. ~~**Domain** for HTTPS invite links / App Links~~ Decided 2026-10-27 (D-05): `studify.vendua.com.br`. Still open: the privacy-notice page on that domain (needed before inviting classmates).
 2. **Reference device** for performance budgets — which phone model is most common in the class?
 3. Notification-action handling with a killed process (spike in Phase 2, §6.2).
 4. `expo-audio` vs `react-native-track-player` for background podcast playback (decide at Phase 3).

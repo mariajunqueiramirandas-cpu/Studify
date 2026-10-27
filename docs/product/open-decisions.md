@@ -12,7 +12,7 @@ Answer them in any order. When you decide, the answer gets recorded here and the
 | D-02 🔴 | **Talk to a lawyer** before inviting classmates? (LGPD Art. 14, ECA Digital, international transfer to the Claude API in the US.) | Yes, one review of the privacy notice and the guardian rules | Inviting classmates | [security-privacy.md](../engineering/security-privacy.md) §2 |
 | D-03 | **Minimum age**: 12 (legal floor without parental consent) or 14? | 12 | Phase 0 | [00-platform](../specs/00-platform.md) PLT-02.3, SP-01 |
 | D-04 | **Guardian link for under-16 users**: mandatory before Turma features, or only recommended? | Mandatory before Turma social features | Phase 2 | SP-03, [00-platform](../specs/00-platform.md) PLT-02.4 |
-| D-05 🔴 | **Domain** for HTTPS invite links, the install landing page and the privacy notice. | None; one is needed because WhatsApp doesn't make `studify://` links clickable | Phase 2 (Turma invites); privacy page before inviting | [api.md §10](../engineering/api.md#10-deep-links-and-app-links), [mobile-app.md](../engineering/mobile-app.md) |
+| D-05 | **Domain** for HTTPS invite links, the install landing page and the privacy notice. | **Decided 2026-10-27: `studify.vendua.com.br`.** It is the default `BASE_URL` and an extra Supabase redirect URL; `site_url` stays `studify://auth/callback`. (Before: none; one was needed because WhatsApp doesn't make `studify://` links clickable.) | Phase 2 (Turma invites); privacy page before inviting | [api.md §10](../engineering/api.md#10-deep-links-and-app-links), [mobile-app.md](../engineering/mobile-app.md) |
 | D-06 | **Image hash-matching service** (child-safety detection) before photos can be shared to a Turma. | Photos stay private until one is integrated | Phase 3 | SP-12 |
 
 ## Infrastructure and cost
@@ -21,7 +21,7 @@ Answer them in any order. When you decide, the answer gets recorded here and the
 |---|---|---|---|---|
 | D-07 🔴 | **Anthropic API key and spending caps** per environment (dev/staging/prod). | Owner creates the keys and sets a global monthly cap | Phase 0 | [ai-pipeline.md](../engineering/ai-pipeline.md), PLT-04 |
 | D-08 | **AI limits**: per-user daily, per-Turma monthly, global monthly. | Set after Phase 0 measures cost per page | End of Phase 0 | PLT-04, [security-privacy.md §7](../engineering/security-privacy.md#7-rate-limiting-and-ai-budgets-plt-04) |
-| D-09 | **Cheaper model for bulk work** (card/question generation, short-answer grading, moderation)? | No: every task uses `claude-opus-5-5`; revisit with Phase 0 cost data | End of Phase 0 | [ADR 0003](../engineering/adr/0003-claude-api-opus-default.md), [ai-pipeline.md](../engineering/ai-pipeline.md) |
+| D-09 | **Cheaper model for bulk work** (card/question generation, short-answer grading, moderation)? | **Decided 2026-10-27: yes, for every task.** The default is `claude-haiku-5-5` at effort `high`, with no server-side fallback (it replaces `claude-opus-5-5`). Any per-task override needs an owner decision and eval evidence. Revisit with Phase 0 cost data | End of Phase 0 | [ADR 0003](../engineering/adr/0003-claude-api-opus-default.md), [ai-pipeline.md](../engineering/ai-pipeline.md) |
 | D-10 | **Where to host the job worker** (candidates in ADR 0005). | Pick during Phase 0 setup | Phase 0 | [ADR 0005](../engineering/adr/0005-job-worker-pg-boss.md) |
 | D-11 | **Reference phone** for performance budgets. | The cheapest Android phone in the class | Phase 0 | [mobile-app.md](../engineering/mobile-app.md) |
 | D-12 | **Text-to-speech provider** for the podcast (Google, Azure, Amazon Polly, ElevenLabs), and podcast length/cost caps. | Decide in Phase 3 after a voice-quality test in PT-BR | Phase 3 | [12-interactive-learning](../specs/12-interactive-learning.md) |
@@ -81,6 +81,13 @@ Answer them in any order. When you decide, the answer gets recorded here and the
 | D-41 | **Atualidades** news source allowlist. | Major Brazilian outlets and official sources; list to approve | [09](../specs/09-enem-mode.md) |
 | D-42 | **Redação**: grade each essay twice (like ENEM's two graders) and cap essays per week? | Single correction by default, dual correction as a per-essay option; 3 corrections per user per week | [09](../specs/09-enem-mode.md) |
 | D-43 | Include **PPL / reaplicação** exams in the question bank? | In the bank for practice (hidden by default), excluded from topic statistics | [09](../specs/09-enem-mode.md) |
+
+## Decided by the owner (2026-10-27)
+
+| Decision | Resolution | Where |
+|---|---|---|
+| D-05 Domain | `studify.vendua.com.br`. `BASE_URL` defaults to it (an explicitly empty `BASE_URL` keeps the `studify://` fallback); it is listed in the Supabase `additional_redirect_urls`. | [api.md §10](../engineering/api.md#10-deep-links-and-app-links), `supabase/functions/.env.example`, `supabase/config.toml` |
+| D-09 Default AI model | `claude-haiku-5-5` for every task at effort `high`. No server-side fallback on Haiku 5.5: refusals arrive as `stop_reason: "refusal"` and become `ai_refused`. Two price cards by prompt length (≤ 100K and > 100K tokens). | [ADR 0003 amendment](../engineering/adr/0003-claude-api-opus-default.md), [ai-pipeline §2 and §9.3](../engineering/ai-pipeline.md) |
 
 ## Decided during the docs pass
 
