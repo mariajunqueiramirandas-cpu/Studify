@@ -1,0 +1,296 @@
+name: Android release
+
+# Builds a release APK on the GitHub runner (not EAS cloud), signs it with the persistent release key and
+# publishes it as a GitHub Release. Every push to main is a release. Setup: apps/mobile/RELEASING.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false # every main commit gets a release; never cancel one that may be publishing
+
+env:
+  # versionCode = github.run_number + offset. The offset keeps new codes above builds made before this workflow.
+  ANDROID_VERSION_CODE_OFFSET: '100'
+  # SDK packages that Expo SDK 58 / RN 0.88 generate (expo-autolinking defaults and RN's libs.versions.toml).
+  # Update these when the Expo or React Native version changes.
+  ANDROID_COMPILE_SDK: '37'
+  ANDROID_BUILD_TOOLS: '37.0.0'
+  ANDROID_NDK: '27.1.12297006'
+
+jobs:
+  release:
+    name: Build and publish the signed Android APK
+    # ubuntu-latest is Ubuntu 24.04 at the time of writing; the Android SDK comes preinstalled.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      EXPO_PUBLIC_ENV: production
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
+      EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
+      EXPO_PUBLIC_BASE_URL: ${{ vars.EXPO_PUBLIC_BASE_URL || 'https://studify.vendua.com.br' }}
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://studify.vendua.com.br/api' }}
+      APP_VERSION_SUFFIX: ${{ vars.APP_VERSION_SUFFIX }}
+    steps:
+      - name: Only build releases from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error title=Wrong branch::Android releases are built from main only (this run is on $GITHUB_REF)."
+            exit 1
+          fi
+
+      - name: Check the release signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Release signing secret missing::$name is not set. Create the release keystore and add the secrets as described in apps/mobile/RELEASING.md. Nothing is published, and a debug-signed APK is never released."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Check the build-time configuration
+        run: |
+          if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ] || [ -z "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error title=Missing repository variables::Set the Actions variables EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (Settings > Secrets and variables > Actions > Variables)."
+            exit 1
+          fi
+          if [ -z "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" ]; then
+            echo "::warning title=Google sign-in not configured::EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is empty."
+          fi
+          if [ -z "$EXPO_PUBLIC_SENTRY_DSN" ]; then
+            echo "::warning title=Error reporting off::EXPO_PUBLIC_SENTRY_DSN is empty, so the app will not report errors."
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release notes read the previous release tag and the commit history
+      - uses: pnpm/action-setup@v4 # version comes from the packageManager field
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # RN 0.88's Gradle plugin compiles with a Java 17 toolchain and AGP 9 needs JDK 17 or newer, so 17 is the
+      # one JDK that satisfies every module without toolchain auto-provisioning.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sentry source map upload (optional)
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "SENTRY_DISABLE_AUTO_UPLOAD=true" >> "$GITHUB_ENV"
+            echo "::notice title=Sentry upload skipped::SENTRY_AUTH_TOKEN is not set, so source maps and native symbols are not uploaded."
+          fi
+
+      - name: Resolve version, tag and version code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (cd apps/mobile && npx expo config --type public --json > "$RUNNER_TEMP/expo-config.json")
+          version=$(node -p 'require(process.argv[1]).version' "$RUNNER_TEMP/expo-config.json")
+          build="$GITHUB_RUN_NUMBER"
+          tag="v${version}-build.${build}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "::error title=Release already exists::$tag is already published. Push a new commit to create the next build."
+            exit 1
+          fi
+          {
+            echo "APP_VERSION=$version"
+            echo "BUILD_NUMBER=$build"
+            echo "ANDROID_VERSION_CODE=$((build + ANDROID_VERSION_CODE_OFFSET))"
+            echo "RELEASE_TAG=$tag"
+            echo "APK_NAME=studify-${version}-build${build}.apk"
+          } >> "$GITHUB_ENV"
+
+      - name: Decode the release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/studify-release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          if ! keytool -list -storetype PKCS12 -keystore "$keystore" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" > /dev/null; then
+            echo "::error title=Keystore check failed::The keystore could not be opened as PKCS12 with ANDROID_KEYSTORE_PASSWORD, or ANDROID_KEY_ALIAS is not in it. See apps/mobile/RELEASING.md."
+            exit 1
+          fi
+          echo "ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+
+      - name: Generate the native Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Install the Android SDK packages the build needs
+        run: |
+          set -euo pipefail
+          sdkmanager=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          packages=()
+          [ -d "$ANDROID_HOME/platforms/android-$ANDROID_COMPILE_SDK" ] || packages+=("platforms;android-$ANDROID_COMPILE_SDK")
+          [ -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ] || packages+=("build-tools;$ANDROID_BUILD_TOOLS")
+          [ -d "$ANDROID_HOME/ndk/$ANDROID_NDK" ] || packages+=("ndk;$ANDROID_NDK")
+          if [ "${#packages[@]}" -gt 0 ]; then
+            echo "Installing missing SDK packages: ${packages[*]}"
+            (yes | "$sdkmanager" --licenses > /dev/null) || true
+            "$sdkmanager" --install "${packages[@]}"
+          else
+            echo "All required SDK packages are already installed."
+          fi
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the release APK
+        working-directory: apps/mobile/android
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --console=plain
+
+      # The Expo template signs release builds with the debug key. Re-sign with the release key so every
+      # build installs over the previous ones.
+      - name: Re-sign the APK with the release key
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Same build-tools version AGP built with (installed above if missing).
+          build_tools="$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS"
+          zipalign="$build_tools/zipalign"
+          apksigner="$build_tools/apksigner"
+
+          apk_dir=apps/mobile/android/app/build/outputs/apk/release
+          mapfile -t apks < <(find "$apk_dir" -maxdepth 1 -name '*.apk' | sort)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error title=Unexpected APK output::Expected one release APK in $apk_dir, found ${#apks[@]}."
+            exit 1
+          fi
+
+          out_dir="$RUNNER_TEMP/release"
+          mkdir -p "$out_dir"
+          aligned="$out_dir/aligned.apk"
+          signed="$out_dir/$APK_NAME"
+
+          "$zipalign" -p -f 4 "${apks[0]}" "$aligned"
+          "$apksigner" sign \
+            --ks "$ANDROID_KEYSTORE_PATH" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$signed" \
+            "$aligned"
+          rm -f "$aligned"
+          "$zipalign" -c 4 "$signed"
+
+          "$apksigner" verify --print-certs "$signed" | tee "$out_dir/verify.txt"
+          if grep -q 'CN=Android Debug' "$out_dir/verify.txt"; then
+            echo "::error title=Debug signature::The APK is still signed with the Android debug key. Not publishing it."
+            exit 1
+          fi
+
+          cert_sha256=$(grep 'certificate SHA-256 digest' "$out_dir/verify.txt" | head -n 1 | grep -oE '[0-9a-f]{64}' || true)
+          if [ "${#cert_sha256}" -ne 64 ]; then
+            echo "::error title=Certificate digest missing::apksigner did not print a SHA-256 certificate digest."
+            exit 1
+          fi
+          # assetlinks.json wants the uppercase, colon-separated form.
+          fingerprint=$(printf '%s' "$cert_sha256" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
+          apk_sha256=$(sha256sum "$signed" | cut -d' ' -f1)
+
+          {
+            echo "RELEASE_APK=$signed"
+            echo "CERT_SHA256_FINGERPRINT=$fingerprint"
+            echo "APK_SHA256=$apk_sha256"
+          } >> "$GITHUB_ENV"
+
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          prev_tag=$(git describe --tags --abbrev=0 --match 'v*-build.*' HEAD 2>/dev/null || true)
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "Built from commit \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`."
+            echo
+            echo "Updates install over earlier Studify builds signed with the same release key (applicationId com.studify.app)."
+            echo
+            if [ -n "$prev_tag" ]; then
+              echo "### Changes since \`$prev_tag\`"
+              echo
+              commits=$(git log --no-merges -n 100 --format='- %s (%h)' "$prev_tag..HEAD")
+            else
+              echo "### Recent commits"
+              echo
+              commits=$(git log --no-merges --format='- %s (%h)' -n 20 HEAD)
+            fi
+            if [ -n "$commits" ]; then echo "$commits"; else echo "No new commits."; fi
+          } > "$notes"
+          cat "$notes"
+
+      - name: Publish the GitHub Release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          url=$(gh release create "$RELEASE_TAG" "$RELEASE_APK" \
+            --target "$GITHUB_SHA" \
+            --title "Studify $APP_VERSION (build $BUILD_NUMBER)" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --latest)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Job summary
+        if: success()
+        env:
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+        run: |
+          {
+            echo "## Studify $APP_VERSION (build $BUILD_NUMBER)"
+            echo
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Release | $RELEASE_URL |"
+            echo "| Tag | \`$RELEASE_TAG\` |"
+            echo "| versionCode | \`$ANDROID_VERSION_CODE\` |"
+            echo "| APK | \`$APK_NAME\` |"
+            echo "| APK SHA-256 | \`$APK_SHA256\` |"
+            echo
+            echo "### Signing certificate SHA-256"
+            echo
+            echo "Add this to \`apps/site/public/.well-known/assetlinks.json\` (\`sha256_cert_fingerprints\`) if it is not there yet:"
+            echo
+            echo '```'
+            echo "$CERT_SHA256_FINGERPRINT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

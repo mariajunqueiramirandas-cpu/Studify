@@ -10,12 +10,29 @@ const appLinkHost = new URL(BASE_URL).host;
 const nameSuffix = ENV === 'production' ? '' : ENV === 'preview' ? ' (prévia)' : ' (dev)';
 const packageSuffix = ENV === 'production' ? '' : `.${ENV}`;
 
+// Android build numbering. The GitHub release workflow (.github/workflows/android-release.yml) sets
+// ANDROID_VERSION_CODE to run_number + offset and may set APP_VERSION_SUFFIX (e.g. "-beta.1").
+// Without them the version stays 0.1.0 and versionCode keeps Expo's default.
+const BASE_VERSION = '0.1.0';
+const APP_VERSION_SUFFIX = process.env.APP_VERSION_SUFFIX ?? '';
+
+function parseVersionCode(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const value = Number(raw);
+  // Google Play accepts versionCode values from 1 to 2100000000.
+  if (!/^\d+$/.test(raw) || value < 1 || value > 2_100_000_000) {
+    throw new Error(`ANDROID_VERSION_CODE must be an integer from 1 to 2100000000, got "${raw}".`);
+  }
+  return value;
+}
+const ANDROID_VERSION_CODE = parseVersionCode(process.env.ANDROID_VERSION_CODE);
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: `Studify${nameSuffix}`,
   slug: 'studify',
   scheme: 'studify',
-  version: '0.1.0',
+  version: `${BASE_VERSION}${APP_VERSION_SUFFIX}`,
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -26,6 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: { bundleIdentifier: `com.studify.app${packageSuffix}`, supportsTablet: false },
   android: {
     package: `com.studify.app${packageSuffix}`,
+    versionCode: ANDROID_VERSION_CODE,
     adaptiveIcon: {
       backgroundColor: '#4F46E5',
       foregroundImage: './assets/android-icon-foreground.png',
