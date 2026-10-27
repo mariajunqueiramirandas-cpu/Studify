@@ -87,6 +87,7 @@ export interface DiagnosticInput {
 const DIAGNOSTIC_RULES = [
   'Tarefa: monte um diagnóstico rápido: uma questão objetiva por tópico, na ordem da lista.',
   '- Tipos: mcq_single, true_false ou fill_blank. Dificuldade média (2 a 3).',
+  '- payload_json: o objeto payload do tipo escrito como JSON (uma string). mcq_single: options (4 ou 5, ids A, B, C… com text, rationale e misconception_concept_key) e correct; true_false: statement, correct e justification; fill_blank: text com {{1}}… e blanks com id e accepted.',
   '- A questão testa a ideia central do tópico, não detalhes raros. Distratores plausíveis, uma resposta certa.',
   '- concept_keys: use a chave do tópico. source_pages: páginas originais do tópico.',
   '- Cada questão traz explanation curta e remediation_card (frente e verso sobre a ideia central).',

@@ -94,7 +94,7 @@ export class JobRegistry {
   }
 
   private async resolveAiJobId(def: JobDefinition<any>, job: QueueJob, data: Record<string, unknown>): Promise<string | null> {
-    if (def.observesAiJob) return null;
+    if (def.tracksProgress === false) return null;
     if (isUuid(data.ai_job_id)) return data.ai_job_id;
     const subjectId = isUuid(data.subject_id) ? data.subject_id : null;
     const documentId = isUuid(data.document_id) ? data.document_id : null;

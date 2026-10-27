@@ -170,7 +170,7 @@ export const ProblemPayload = z.strictObject({
 /** Fields every question carries (PRA-01.2). The payload is type-specific. */
 const common = {
   stem: z.string().min(1).max(2000),
-  stimulus_md: z.string().max(3000).nullable(),
+  stimulus_md: z.string().max(3000), // empty when the question needs no figure or table
   explanation: z.string().min(1).max(1200),
   bloom_level: BloomLevel,
   difficulty: Difficulty,
@@ -210,9 +210,6 @@ export const QuestionSchema = z.union([
   QuestionVariants.problem,
 ]);
 
-// z.union (not discriminatedUnion) so the JSON Schema uses anyOf, which structured outputs accept.
-// Each variant pins its `type` with z.literal, so validation is equivalent.
-
 /** Objective types only: used by the Modo Desespero diagnostic (spec 07 §8.10.4). */
 export const ObjectiveQuestionSchema = z.union([
   QuestionVariants.mcq_single,
@@ -220,13 +217,87 @@ export const ObjectiveQuestionSchema = z.union([
   QuestionVariants.fill_blank,
 ]);
 
+export type Question = z.infer<typeof QuestionSchema>;
+
+// What the model writes. A union of the question variants is too large for structured outputs (the API
+// answers "The compiled grammar is too large" even for three variants), so the model output has the
+// shared fields once and the type-specific payload as a JSON string. decodeQuestion parses and checks
+// it against the variant schema; a question that fails is dropped on its own, not the whole response.
+
+function questionDraft<const T extends readonly [QuestionType, ...QuestionType[]]>(types: T) {
+  return z.strictObject({
+    type: z.enum(types),
+    ...common,
+    payload_json: z.string().min(2).max(8000), // the payload object of `type`, serialized as JSON
+  });
+}
+
+export const QuestionDraftSchema = questionDraft(QUESTION_TYPES as [QuestionType, ...QuestionType[]]);
+export type QuestionDraft = z.infer<typeof QuestionDraftSchema>;
+
 export const TopicQuestions = z.strictObject({
-  questions: z.array(QuestionSchema).min(1).max(20),
+  questions: z.array(QuestionDraftSchema).min(1).max(20),
 });
 
-export const SingleQuestion = z.strictObject({ question: QuestionSchema });
+export const SingleQuestion = z.strictObject({ question: QuestionDraftSchema });
 
 export const DiagnosticQuestions = z.strictObject({
-  questions: z.array(ObjectiveQuestionSchema).min(1).max(12),
+  questions: z.array(questionDraft(['mcq_single', 'true_false', 'fill_blank'])).min(1).max(12),
 });
 
+export type DecodedQuestion = { ok: true; question: Question } | { ok: false; reason: 'payload_not_json' | 'payload_invalid' };
+
+type JsonNode = { type?: string | string[]; anyOf?: JsonNode[]; properties?: Record<string, JsonNode>; items?: JsonNode };
+
+const payloadSchemas = new Map<QuestionType, JsonNode>();
+
+function payloadSchema(type: QuestionType): JsonNode {
+  let schema = payloadSchemas.get(type);
+  if (!schema) {
+    const shape = QuestionVariants[type].shape.payload;
+    schema = z.toJSONSchema(shape, { io: 'output', unrepresentable: 'any' }) as JsonNode;
+    payloadSchemas.set(type, schema);
+  }
+  return schema;
+}
+
+function allowsNull(node: JsonNode): boolean {
+  return node.type === 'null' || (Array.isArray(node.type) && node.type.includes('null')) || (node.anyOf ?? []).some(allowsNull);
+}
+
+/**
+ * Repairs what free-form JSON loses against the schema: an omitted nullable key becomes null and a numeric
+ * string becomes a number where the schema wants one. Anything else is left for the variant schema to judge.
+ */
+function normalizePayload(node: JsonNode, value: unknown): unknown {
+  const branch = node.anyOf?.find((b) => b.type !== 'null') ?? node;
+  if (branch.properties && value && typeof value === 'object' && !Array.isArray(value)) {
+    const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+    for (const [key, child] of Object.entries(branch.properties)) {
+      if (out[key] === undefined) {
+        if (allowsNull(child)) out[key] = null;
+      } else {
+        out[key] = normalizePayload(child, out[key]);
+      }
+    }
+    return out;
+  }
+  if (branch.items && Array.isArray(value)) return value.map((item) => normalizePayload(branch.items as JsonNode, item));
+  if ((branch.type === 'number' || branch.type === 'integer') && typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return value;
+}
+
+/** The checked question for a model draft: payload_json parsed and validated against the variant of `type`. */
+export function decodeQuestion(draft: QuestionDraft): DecodedQuestion {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(draft.payload_json);
+  } catch {
+    return { ok: false, reason: 'payload_not_json' };
+  }
+  const { payload_json: _json, ...rest } = draft;
+  const parsed = QuestionVariants[draft.type].safeParse({ ...rest, payload: normalizePayload(payloadSchema(draft.type), payload) });
+  return parsed.success ? { ok: true, question: parsed.data as Question } : { ok: false, reason: 'payload_invalid' };
+}

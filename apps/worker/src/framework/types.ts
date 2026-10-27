@@ -41,8 +41,9 @@ export interface JobDefinition<T = Record<string, unknown>> {
   /** Max concurrent handlers of this queue in one worker process. */
   concurrency?: number;
   /**
-   * The job only reads the ai_jobs row named by its ai_job_id (notify.live) and is not part of that job: the runner
-   * does not mark the row running or failed for its attempts.
+   * False: the runner keeps this job out of ai_jobs (no row of its own, no status written to the ai_job_id in its
+   * data). For jobs that only read a job's progress (notify.live) and for side jobs that must not show up as a
+   * material's progress (ingest.material_check).
    */
-  observesAiJob?: boolean;
+  tracksProgress?: boolean;
 }

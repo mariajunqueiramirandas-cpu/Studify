@@ -208,11 +208,14 @@ export function parseRichNotification(raw: unknown): RichNotification | null {
 
 /** Steps shown for each kind of long job (the same labels on the phone, the server and the inbox). */
 export const LIVE_JOB_STEPS = {
+  // The app's processing screen, its subject card and the live notification all show these steps (labels fit the
+  // notification's 24 characters). Weights are each step's share of the bar, roughly its share of the time: the
+  // content step does most of the AI work.
   'ingest.document': [
-    { stages: ['S0'], label: 'Lendo o PDF' },
-    { stages: ['S1'], label: 'Mapa de tópicos' },
-    { stages: ['S2'], label: 'Resumos' },
-    { stages: ['S4', 'done'], label: 'Cartões e questões' },
+    { stages: ['S0', 'transcription'], label: 'Lendo o material', weight: 0.1 },
+    { stages: ['S1', 'S1_merge'], label: 'Montando o mapa', weight: 0.15 },
+    { stages: ['S2', 'S3'], label: 'Encontrando conceitos', weight: 0.25 },
+    { stages: ['S4', 'done'], label: 'Resumos e cartões', weight: 0.5 },
   ],
   'podcast.generate': [
     { stages: ['script'], label: 'Roteiro' },
@@ -229,18 +232,21 @@ export const LIVE_JOB_STEPS = {
     { stages: ['generate'], label: 'Questões' },
     { stages: ['done'], label: 'Prova pronta' },
   ],
-} as const satisfies Record<string, ReadonlyArray<{ stages: readonly string[]; label: string }>>;
+} as const satisfies Record<string, ReadonlyArray<{ stages: readonly string[]; label: string; weight?: number }>>;
 export type LiveJobType = keyof typeof LIVE_JOB_STEPS;
 
 export function isLiveJobType(type: string): type is LiveJobType {
   return Object.hasOwn(LIVE_JOB_STEPS, type);
 }
 
+/** Jobs whose ai_jobs.progress is the share of the current stage (the worker counts items per stage). */
+const STAGE_LOCAL_PROGRESS: ReadonlySet<string> = new Set(['ingest.document']);
+
 /**
  * The progress block for a job at `stage` (ai_jobs.stage) with `status`. A stage the table does not know
- * keeps the first step active, so a new pipeline stage never breaks the notification. ai_jobs.progress is
- * kept inside the current step's band: some jobs report it per stage, others overall, and the bar must
- * never run ahead of the step it shows.
+ * keeps the first step active, so a new pipeline stage never breaks the notification. Each step owns a band
+ * of the bar (its weight, equal when none is given) and the fraction never leaves the current band, so the bar
+ * only moves forward: a stage-local progress fills the band; an overall one is clamped to it.
  */
 export function liveJobProgress(
   type: LiveJobType,
@@ -261,9 +267,14 @@ export function liveJobProgress(
   }));
   let fraction = 1;
   if (!succeeded) {
-    const start = current / n;
-    const end = (current + 1) / n;
-    fraction = progress === null ? start + (end - start) / 2 : Math.min(end, Math.max(start, progress));
+    const weights = steps.map((s) => ('weight' in s ? s.weight : 1 / n));
+    const total = weights.reduce((a, b) => a + b, 0);
+    const start = weights.slice(0, Math.min(current, n)).reduce((a, b) => a + b, 0) / total;
+    const width = (weights[Math.min(current, n - 1)] ?? 0) / total;
+    const end = start + width;
+    if (progress === null) fraction = start + width * 0.1;
+    else if (STAGE_LOCAL_PROGRESS.has(type)) fraction = start + width * Math.min(1, Math.max(0, progress));
+    else fraction = Math.min(end, Math.max(start, progress));
     fraction = Math.min(0.99, fraction);
   }
   return { steps: out, fraction: Math.round(fraction * 100) / 100, state: succeeded ? 'done' : failed ? 'failed' : 'running' };

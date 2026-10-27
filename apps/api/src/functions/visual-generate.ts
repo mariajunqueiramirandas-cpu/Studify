@@ -1,7 +1,7 @@
 // visual-generate (LRN-05, "Ver em diagrama"; class A). One cached visual per topic and type (LRN-05.5), shared
 // in Turma subjects. Without a type the model picks one or answers that none fits, and that answer is cached as
 // type 'none' so the topic is not sent again. The spec is data, rendered natively by the app (LRN-05.3).
-import { getTask, type VisualOutput } from '@studify/prompts';
+import { decodeVisual, getTask, type VisualDraftOutput } from '@studify/prompts';
 import { ApiFailure, VisualGenerateReqSchema, type VisualGenerateReq, type VisualGenerateRes, type VisualRow } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { callTask, unwrapResult } from '../shared/ai.ts';
@@ -60,9 +60,11 @@ export const handler = defineFunction<VisualGenerateReq>({
       slices,
       contentLanguage: bundle.contentLanguage,
     });
-    const out = unwrapResult(
+    const draft = unwrapResult(
       await callTask(claudeDepsFor(deps), { built, taskId: 'visual.generate', ctx: budgetCtxFor(bundle.subject, userId, 'LRN-05', 'user', { nodeId: input.node_id }) }),
-    ) as VisualOutput;
+    ) as VisualDraftOutput;
+    const out = decodeVisual(draft);
+    if (!out) throw new ApiFailure('ai_unavailable', { message: 'Não consegui montar esse diagrama agora. Tenta de novo.' });
 
     if (!out.fits || !out.visual || (input.type && out.visual.type !== input.type)) {
       const reason = out.reason ?? NO_FIT;

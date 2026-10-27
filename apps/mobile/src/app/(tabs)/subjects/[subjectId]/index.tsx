@@ -22,7 +22,7 @@ import { useSession } from '../../../../features/auth/session';
 import { colorKeyFromHex, setSubjectArchived, useDocuments, useSubject, useSubjectJobs, useSubjects } from '../../../../features/subjects/api';
 import { OutlineTree } from '../../../../features/subjects/OutlineTree';
 import { useCanEditSubject, useMastery, useOutline } from '../../../../features/subjects/outline';
-import { ProcessingCard } from '../../../../features/subjects/ProcessingCard';
+import { ProcessingCard, ingestionJob } from '../../../../features/subjects/ProcessingCard';
 import { openTutor } from '../../../../features/tutor/open';
 import { t } from '../../../../i18n';
 import { space } from '../../../../theme';
@@ -84,7 +84,7 @@ export default function SubjectHome() {
         </Row>
       ) : null}
 
-      <ProcessingCard subjectId={subjectId} job={jobs.data?.[0]} documents={docs.data ?? []} />
+      <ProcessingCard subjectId={subjectId} job={ingestionJob(jobs.data)} documents={docs.data ?? []} />
 
       {outline.isLoading ? <SkeletonList rows={4} height={56} /> : null}
       {outline.data && outline.data.roots.length === 0 && !(docs.data ?? []).length ? (

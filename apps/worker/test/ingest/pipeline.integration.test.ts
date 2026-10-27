@@ -22,6 +22,7 @@ import { jobs as batchJobs } from '../../src/jobs/batch.ts';
 import { jobs as filesJobs } from '../../src/jobs/files.ts';
 import { FakeObjectStore, InMemoryQueue, fakeSupabase } from './support/fakes.ts';
 import { loadTopicBundle, writeNote } from '../../src/ingest/topics.ts';
+import { setProgressListener } from '../../src/framework/progress.ts';
 import { encryptedPdfBytes, textPdf } from './support/pdf.ts';
 import type pg from 'pg';
 
@@ -168,14 +169,14 @@ function respond(req: MockRequest): MockResponse | undefined {
         {
           type: 'mcq_single',
           stem: isMembrana ? 'Qual é a função da membrana plasmática?' : 'Qual organela produz ATP?',
-          stimulus_md: null,
+          stimulus_md: '',
           explanation: 'A resposta correta é a alternativa C.',
           bloom_level: 'remember',
           difficulty: 2,
           concept_keys: ['c1'],
           source_pages: [{ doc: 'D1', page_start: isMembrana ? 3 : 1, page_end: isMembrana ? 3 : 2 }],
           remediation_card: { front: 'Onde se produz ATP?', back: 'Na mitocôndria.' },
-          payload: { options, correct: 'C' },
+          payload_json: JSON.stringify({ options, correct: 'C' }),
         },
       ],
     });
@@ -430,10 +431,19 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { backend, registry, expo, push } = runtime(store);
     await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
     const requestsBefore = mock.requests.length;
+    // Every stage the material's job reports, in order (the app shows the latest one).
+    const stages: string[] = [];
+    setProgressListener((_id, patch) => {
+      if (patch.stage) stages.push(patch.stage);
+    });
 
     await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
     await backend.drain(4000);
+    setProgressListener(null);
     expect(backend.failedJobs).toEqual([]);
+    // The page transcription runs beside the other stages and must not overwrite the material's stage.
+    expect(stages).not.toContain('transcription');
+    expect(stages).toEqual(expect.arrayContaining(['S1', 'S2', 'S4']));
 
     const doc = await pool.query<{ status: string; error_code: string | null }>(`select status, error_code from public.documents where id = $1`, [docId]);
     expect(doc.rows[0]).toMatchObject({ status: 'ready', error_code: null });

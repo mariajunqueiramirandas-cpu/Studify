@@ -28,7 +28,7 @@ export const handler = defineFunction<z.infer<typeof ArgumentThemesReqSchema>>({
       themes: Array<{ question: string; node_keys: string[]; why: string }>;
     };
     const body: ArgumentThemesRes = {
-      themes: out.themes.map((t) => ({ question: t.question, node_ids: t.node_keys.map((k) => idByKey.get(k)).filter((id): id is string => !!id), why: t.why })),
+      themes: out.themes.map((t) => ({ question: t.question, node_ids: t.node_keys.map((k) => idByKey.get(k)).filter((id): id is string => !!id).slice(0, 3), why: t.why })),
     };
     return ctx.json(body);
   },

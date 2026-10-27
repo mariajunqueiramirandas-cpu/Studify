@@ -6,11 +6,10 @@ import { ActionBar, Banner, Button, Card, ProgressBar, Row, Screen, Section, Tex
 import { DOCUMENT_ERROR_KEYS } from '../../../../features/subjects/errors';
 import { retryIngestion, useDocuments, useSubjectJobs } from '../../../../features/subjects/api';
 import { useOutline } from '../../../../features/subjects/outline';
-import { isJobActive, stageLabel } from '../../../../features/subjects/ProcessingCard';
+import { ingestionJob, ingestionView, isJobActive } from '../../../../features/subjects/ProcessingCard';
 import { t } from '../../../../i18n';
 import { space, useTheme } from '../../../../theme';
 
-const STAGES = ['S0', 'S1', 'S4'] as const;
 
 /** S-MAT-05 Processamento — per-stage progress and errors (ING-03.8). */
 export default function Processing() {
@@ -20,7 +19,7 @@ export default function Processing() {
   const outline = useOutline(subjectId);
   const overlay = useOverlay();
   const { colors } = useTheme();
-  const job = jobs.data?.[0];
+  const job = ingestionJob(jobs.data);
   const outlineReady = (outline.data?.roots.length ?? 0) > 0;
   const redirected = useRef(false);
 
@@ -32,8 +31,7 @@ export default function Processing() {
     }
   }, [firstUpload, outlineReady, subjectId]);
 
-  const stageIndex = !job ? 0 : job.stage === 'S0' || job.stage === 'transcription' ? 0 : job.stage?.startsWith('S1') ? 1 : 2;
-  const done = job?.status === 'succeeded';
+  const view = ingestionView(job, docs.data?.find((d) => d.id === job?.document_id) ?? docs.data?.[docs.data.length - 1]);
 
   return (
     <Screen
@@ -46,24 +44,20 @@ export default function Processing() {
       }
     >
       <Card tone="soft">
-        <Text variant="heading">{stageLabel(job, docs.data?.[docs.data.length - 1])}</Text>
-        {isJobActive(job) ? <ProgressBar value={job?.items_total ? (job.items_done ?? 0) / job.items_total : (job?.progress ?? 0.05)} /> : null}
+        <Text variant="heading">{view.label}</Text>
+        {isJobActive(job) ? <ProgressBar value={view.fraction} label={view.label} /> : null}
       </Card>
       <Section>
-        {STAGES.map((s, i) => {
-          const state = done || i < stageIndex ? 'done' : i === stageIndex && isJobActive(job) ? 'active' : 'todo';
-          const label = i === 0 ? t('ingest.reading') : i === 1 ? t('ingest.mapping') : t('ingest.stages.content');
-          return (
-            <Row key={s} gap={space.md}>
-              <Ionicons
-                name={state === 'done' ? 'checkmark-circle' : state === 'active' ? 'ellipsis-horizontal-circle' : 'ellipse-outline'}
-                size={24}
-                color={state === 'done' ? colors.success : state === 'active' ? colors.primary : colors.textSecondary}
-              />
-              <Text tone={state === 'todo' ? 'secondary' : 'primary'}>{label}</Text>
-            </Row>
-          );
-        })}
+        {view.steps.map(({ label, state }) => (
+          <Row key={label} gap={space.md}>
+            <Ionicons
+              name={state === 'done' ? 'checkmark-circle' : state === 'active' ? 'ellipsis-horizontal-circle' : state === 'failed' ? 'alert-circle' : 'ellipse-outline'}
+              size={24}
+              color={state === 'done' ? colors.success : state === 'active' ? colors.primary : state === 'failed' ? colors.danger : colors.textSecondary}
+            />
+            <Text tone={state === 'pending' ? 'secondary' : 'primary'}>{label}</Text>
+          </Row>
+        ))}
       </Section>
       <Section title={t('subjects.materials')}>
         {(docs.data ?? []).map((d) => (
@@ -96,7 +90,7 @@ export default function Processing() {
               <Banner kind="warning" message={t('ingest.waiting_budget')} />
             ) : (
               <Text variant="bodySmall" tone="secondary">
-                {d.status === 'ready' ? t('ingest.ready') : t(`ingest.stages.${d.status === 'uploaded' ? 'uploaded' : 'extracting'}`)}
+                {d.status === 'ready' ? t('ingest.ready') : ingestionView(ingestionJob(jobs.data, d.id), d).label}
               </Text>
             )}
           </View>

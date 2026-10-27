@@ -39,6 +39,51 @@ describe('task registry', () => {
     }
   });
 
+  // Structured outputs reject a request whose schemas have more than 16 fields with anyOf or type arrays,
+  // or more than 24 optional fields ("Schema is too complex for compilation", a 400 on every call).
+  it('keeps every output schema within the structured-output complexity limits', () => {
+    for (const task of TASKS) {
+      if (!task.jsonSchema) continue;
+      let unions = 0;
+      let optional = 0;
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) return node.forEach(walk);
+        if (!node || typeof node !== 'object') return;
+        const obj = node as Record<string, unknown>;
+        if (obj.anyOf || Array.isArray(obj.type)) unions++;
+        if (obj.properties && typeof obj.properties === 'object') {
+          const required = new Set((obj.required as string[] | undefined) ?? []);
+          optional += Object.keys(obj.properties).filter((key) => !required.has(key)).length;
+        }
+        Object.values(obj).forEach(walk);
+      };
+      walk(task.jsonSchema);
+      expect(unions, `${task.id} union-typed fields`).toBeLessThanOrEqual(16);
+      expect(optional, `${task.id} optional fields`).toBeLessThanOrEqual(24);
+    }
+  });
+
+  // A union of object types blows the compiled grammar ("The compiled grammar is too large", a 400 on every
+  // call) well before the 16-union limit: three question variants were enough. Nullable fields are fine.
+  it('has no union of object types in any output schema', () => {
+    for (const task of TASKS) {
+      if (!task.jsonSchema) continue;
+      const offenders: number[] = [];
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) return node.forEach(walk);
+        if (!node || typeof node !== 'object') return;
+        const obj = node as Record<string, unknown>;
+        if (Array.isArray(obj.anyOf)) {
+          const objects = (obj.anyOf as Array<Record<string, unknown>>).filter((branch) => branch.type === 'object').length;
+          if (objects > 1) offenders.push(objects);
+        }
+        Object.values(obj).forEach(walk);
+      };
+      walk(task.jsonSchema);
+      expect(offenders, `${task.id} object unions`).toEqual([]);
+    }
+  });
+
   it('uses citations output only for prose with page citations', () => {
     const citations = TASKS.filter((t) => t.outputMode === 'citations').map((t) => t.id).sort();
     expect(citations).toEqual([

@@ -13,13 +13,18 @@ const ref = { doc: 'D1', page_start: 3, page_end: 4 };
 const remediation = { front: 'O que é fotossíntese?', back: 'Conversão de luz em energia química.' };
 const common = {
   stem: 'Qual organela produz ATP?',
-  stimulus_md: null,
+  stimulus_md: '',
   explanation: 'A mitocôndria realiza a respiração celular.',
   bloom_level: 'remember',
   difficulty: 2,
   concept_keys: ['c1'],
   source_pages: [ref],
   remediation_card: remediation,
+};
+/** Model output shape of the question tasks: the payload travels as a JSON string. */
+const asDraft = (type: string, payload: unknown) => {
+  const { payload: _payload, ...rest } = withPayload(type, payload) as Record<string, unknown>;
+  return { ...rest, payload_json: JSON.stringify(payload) };
 };
 const withPayload = (type: string, payload: unknown, overrides: Record<string, unknown> = {}) => ({
   ...common,
@@ -275,6 +280,7 @@ const finding = {
 const mnemonicOption = (type: string) => ({ type, title: 'PMAT', text: 'P-M-A-T', how_to_use: 'Lembre da sigla antes de virar o cartão.', loci: null });
 
 const PHASE5_CASES: SchemaCase[] = [
+  { name: 'VisualDraft', schema: S.VisualDraft, valid: { fits: true, reason: null, ...flowVisual, nodes: flowVisual.nodes.map((n) => ({ ...n, parent_id: null })), events: [], columns: [], rows: [] }, invalid: { fits: true, reason: null, visual: flowVisual } },
   { name: 'VisualOut', schema: S.VisualOut, valid: { fits: true, reason: null, visual: flowVisual }, invalid: { fits: true, reason: null, visual: null } },
   { name: 'MaterialFindings', schema: S.MaterialFindings, valid: { findings: [finding] }, invalid: { findings: [{ ...finding, related: null }] } },
   { name: 'MnemonicOptions', schema: S.MnemonicOptions, valid: { options: ['acronym', 'phrase', 'rhyme'].map(mnemonicOption) }, invalid: { options: [mnemonicOption('acronym')] } },
@@ -319,9 +325,10 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'TutorCard', schema: S.TutorCard, valid: { type: 'cloze', front: 'Frase.', back: 'termo', cloze_text: 'Frase com {{c1::termo}}.' }, invalid: { type: 'reverse', front: 'a', back: 'b', cloze_text: null } },
   { name: 'QuestionSchema', schema: S.QuestionSchema, valid: withPayload('true_false', payloads.true_false), invalid: withPayload('true_false', { ...payloads.true_false, correct: 'x' }) },
   ...questionCases,
-  { name: 'TopicQuestions', schema: S.TopicQuestions, valid: { questions: [withPayload('true_false', payloads.true_false)] }, invalid: { questions: [] } },
-  { name: 'SingleQuestion', schema: S.SingleQuestion, valid: { question: withPayload('true_false', payloads.true_false) }, invalid: { question: withPayload('numeric', payloads.numeric, { payload: { answer: 'x' } }) } },
-  { name: 'DiagnosticQuestions', schema: S.DiagnosticQuestions, valid: { questions: [withPayload('mcq_single', payloads.mcq_single)] }, invalid: { questions: [withPayload('essay_question', payloads.essay_question)] } },
+  { name: 'QuestionDraftSchema', schema: S.QuestionDraftSchema, valid: asDraft('numeric', payloads.numeric), invalid: withPayload('numeric', payloads.numeric) },
+  { name: 'TopicQuestions', schema: S.TopicQuestions, valid: { questions: [asDraft('true_false', payloads.true_false)] }, invalid: { questions: [] } },
+  { name: 'SingleQuestion', schema: S.SingleQuestion, valid: { question: asDraft('true_false', payloads.true_false) }, invalid: { question: withPayload('numeric', payloads.numeric) } },
+  { name: 'DiagnosticQuestions', schema: S.DiagnosticQuestions, valid: { questions: [asDraft('mcq_single', payloads.mcq_single)] }, invalid: { questions: [asDraft('essay_question', payloads.essay_question)] } },
   { name: 'Outline', schema: S.Outline, valid: outline, invalid: { ...outline, is_study_material: false } },
   { name: 'TopicConcepts', schema: S.TopicConcepts, valid: { concepts: [{ key: 'c1', title: 'ATP', summary: 'Energia.', page_start: 3, page_end: 3, key_terms: ['ATP'], formulas: [] }] }, invalid: { concepts: [] } },
   { name: 'PrereqEdges', schema: S.PrereqEdges, valid: { edges: [{ node_key: 't2', prerequisite_key: 't1', reason: 'Precisa da glicólise.' }] }, invalid: { edges: [{ node_key: 't1', prerequisite_key: 't1', reason: 'x' }] } },

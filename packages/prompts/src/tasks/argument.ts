@@ -191,7 +191,7 @@ export const argumentThemes = defineTask<ArgumentThemesInput, ReturnType<typeof 
     SAFETY,
     UNTRUSTED_DATA,
     PTBR_STYLE,
-    'Tarefa: sugira 5 perguntas debatíveis (com dois lados legítimos) ligadas ao mapa da matéria, adequadas a adolescentes. Cada uma indica os nós (chaves) e por que é boa para debate. Nada que exija defender violação de direitos humanos.',
+    'Tarefa: sugira 5 perguntas debatíveis (com dois lados legítimos) ligadas ao mapa da matéria, adequadas a adolescentes. Cada uma indica de 1 a 3 nós (chaves), os mais ligados à pergunta, e por que é boa para debate. Nada que exija defender violação de direitos humanos.',
   ],
   cache: '5m',
   build: (input) => ({

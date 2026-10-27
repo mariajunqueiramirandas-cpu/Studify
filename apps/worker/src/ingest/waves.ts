@@ -171,14 +171,19 @@ export const STANDARD_WAVE_CONCURRENCY = 6;
 
 /**
  * Runs a wave now on the standard API (AI_USE_BATCH off): every item is called, written by the same writers as a
- * collected batch, and tried twice like a batch item and its standard rerun. Progress counts items as they finish.
+ * collected batch, and tried twice like a batch item and its standard rerun. Progress counts topics (the unit the
+ * student sees, "12 de 20 tópicos"): a topic is done when all of its items are; waves without topics count items.
  */
 export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<PollOutcomeSummary> {
   const summary: PollOutcomeSummary = { done: true, topicsOk: new Set(), topicsFailed: new Set(), budgetExceeded: false };
   const stage = input.purpose === 'concepts' ? 'S2' : input.purpose === 'content' ? 'S4' : 'transcription';
+  const left = new Map<string, number>();
+  for (const { item } of input.items) if (item.topicId) left.set(item.topicId, (left.get(item.topicId) ?? 0) + 1);
+  const byTopic = left.size > 0;
+  const total = byTopic ? left.size : input.items.length;
   let finished = 0;
   if (input.aiJobId) {
-    await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: input.items.length, items_done: 0 });
+    await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
   }
   await mapLimit(input.items, STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
     let handled = false;
@@ -200,7 +205,10 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
         if (err instanceof BudgetExceededError) {
           summary.budgetExceeded = true;
         } else {
-          env.ctx.log.warn({ customId: item.customId, attempt, err: err instanceof Error ? err.name : 'unknown' }, 'standard call failed');
+          env.ctx.log.warn(
+            { customId: item.customId, attempt, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
+            'standard call failed',
+          );
         }
       }
     }
@@ -208,8 +216,11 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
       if (handled) summary.topicsOk.add(item.topicId);
       else summary.topicsFailed.add(item.topicId);
     }
+    const remaining = item.topicId ? (left.get(item.topicId) ?? 1) - 1 : 0;
+    if (item.topicId) left.set(item.topicId, remaining);
+    if (byTopic && remaining > 0) return;
     finished += 1;
-    if (input.aiJobId) await applyProgress(env.ctx.db, input.aiJobId, { items_done: finished });
+    if (input.aiJobId) await applyProgress(env.ctx.db, input.aiJobId, { items_total: total, items_done: finished });
   });
   return summary;
 }
@@ -454,7 +465,7 @@ export async function writeOutcome(
     }
     case 'questions': {
       const result = await writeQuestions(ctx, data as Parameters<typeof writeQuestions>[1]);
-      env.ctx.log.info({ written: result.written, dropped: result.dropped }, 'questions written');
+      env.ctx.log.info({ written: result.written, dropped: result.dropped, reasons: result.reasons }, 'questions written');
       return true;
     }
     case 'feed':
