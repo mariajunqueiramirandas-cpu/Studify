@@ -76,16 +76,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'react-native-android-widget',
       {
-        // MEM-04: "Revisão rápida" 4×2 (mobile-app.md §6.1). The 2×2 "Hoje" widget is not built yet.
+        // MEM-04.1: "Revisão rápida", resizable between 2×2 and 4×2 (the view goes compact under 200 dp).
         widgets: [
           {
             name: 'ReviewWidget',
             label: 'Revisão rápida',
             description: 'Revise um cartão direto da tela inicial',
-            minWidth: '250dp',
+            minWidth: '110dp',
             minHeight: '110dp',
             targetCellWidth: 4,
             targetCellHeight: 2,
+            resizeMode: 'horizontal|vertical',
             previewImage: './assets/icon.png',
             updatePeriodMillis: 1800000,
           },
