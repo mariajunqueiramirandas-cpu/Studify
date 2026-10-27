@@ -75,6 +75,14 @@ Specs were written in parallel; these are the choices this document makes. Spec 
 | R23 | Invites | One `invites` table for owner (pilot) invites and Turma invites (`class_group_id` set). Rotating a Turma link revokes the old row and inserts a new one. | 10 `class_groups.invite_code`, `invite_expires_at`, `invite_max_uses`, `invite_uses`; security §9 |
 | R24 | App-level admin | `profiles.app_role ∈ {user, app_admin}`; helper `private.is_app_admin()`. Column is `app_role` (not `role`) to avoid confusion with Turma roles. | 00 `profiles.role` |
 | R25 | Push tokens | Columns `token`, `platform`, `invalidated_at` (00 PLT-05.6). | — |
+| R26 | Material finding types | `material_findings.type` follows the feature spec ING-06.1: `contradiction`, `numeric_or_formula_typo`, `skipped_step`, `unclear` (Phase 5 migration). | older list `typo`, `outdated`, `other` |
+| R27 | Mnemonic types | `acronym`, `phrase`, `rhyme`, `story`, `palace`, `keyword` (MEM-06.2). A `palace` mnemonic needs `palace_id`. | older list `image`, `palace_locus` |
+| R28 | Energy windows | `performance_windows.bucket` (0–11), since `window` is reserved in Postgres. | `performance_windows.window` |
+| R29 | Visual cache | `visuals.subject_id` is denormalized for RLS, and `type = none` caches "no diagram fits" (LRN-05.2). | — |
+| R30 | Peer questions | Pending peer questions are readable by the Turma (voting needs them); quizzes and the Feed only use approved ones. | 10 SOC-07.3 |
+| R31 | Contributions | Private to the author and the Turma moderators; progress through `divide_progress()`. Material check and the divisão merge use the standard API, not Batch (they are short and the student is waiting). | 10 SOC-06 |
+| R32 | Yearly Retrospectiva | Generated on December 20, covering January 1 to December 19 (before the holidays). | 13 MOT-04.1 "in December" |
+| R33 | Calendar availability | Clients may only write `availability_exceptions` with `source = user`. Calendar rows go through RPC `set_calendar_availability(days)`; the student's own and Modo Desespero rows win; a cleared day is soft-deleted. | 07 GOL-09.2 |
 | R22 | Teacher identity | Stored as free text (`exams.teacher_name`, `documents.teacher_name`) and normalized into `teacher_profiles.teacher_key`. Whether real names or aliases are stored is an **open owner decision** (spec 08). | — |
 
 ---
@@ -662,8 +670,8 @@ PK `(user_id, node_id)`; `excluded bool not null default false`; `updated_at`. E
 `user_id`, `document_id`, `extracted jsonb` (`[{subject_name, title, local_date, starts_at?, content_items[]}]`), `status` (`draft` · `applied` · `discarded`), `goal_id N`. Applying creates `exams` with `status = draft` (spec 07 contract).
 
 #### `material_findings`, `material_finding_votes` — ING-06 (Phase 5)
-`material_findings`: `document_id`, `node_id N`, `type` (`contradiction` · `typo` · `skipped_step` · `outdated` · `other`), `severity` (`low` · `medium` · `high`), `page_start`, `page_end`, `description`, `suggested_fix N`, `status` (`open` · `dismissed` · `confirmed`), `confirmations int default 0`.
-`material_finding_votes`: PK `(finding_id, user_id)`, `vote` (`not_error` · `is_error`).
+`material_findings`: `document_id`, `subject_id`, `node_id N`, `related_document_id N` + `related_page N` (the other side of a contradiction), `type` (`contradiction` · `numeric_or_formula_typo` · `skipped_step` · `unclear`, R26), `severity` (`low` · `medium` · `high`), `page_start`, `page_end`, `description` (≤ 600), `suggested_fix N`, `status` (`open` · `dismissed` · `confirmed`), `confirmations`, `dismissals`, `prompt_version`. Read with the subject; written by the worker (`ingest.material_check`).
+`material_finding_votes`: PK `(finding_id, user_id)`, `vote` (`not_error` · `is_error`). Votes go through RPC `vote_material_finding(finding, vote)`, which keeps the counters and the status consistent (ING-06.3).
 
 ### 5.3 Content items
 
@@ -726,7 +734,7 @@ Cache key: unique `(target_type, target_id, coalesce(paragraph_index,-1), style,
 `user_id`, `explanation_id`, `helpful bool`.
 
 #### `visuals` — LRN-05 (Phase 5)
-`node_id`, `type` (`flowchart` · `timeline` · `comparison_table` · `cycle` · `hierarchy`), `spec jsonb`, `alt_text`, `source_pages jsonb`, `status`, `prompt_version`.
+`subject_id` (denormalized from the node so RLS reads the subject directly, R29), `node_id`, `type` (`flowchart` · `timeline` · `comparison_table` · `cycle` · `hierarchy` · `none`), `title N`, `spec jsonb`, `alt_text`, `source_pages jsonb`, `status` (`ready` · `failed`), `prompt_version`, `created_by N`. Unique `(node_id, type)`. A `none` row caches "no diagram fits this topic" (LRN-05.2) so the AI is not asked again. Written by the API (`visual-generate`).
 
 #### `card_overrides` [sync] — MEM-01, architecture §3.2 rule 3
 PK `(user_id, card_id)`; `front text N`, `back text N`, `media jsonb N`; `updated_at` (LWW, clamped).
@@ -749,8 +757,9 @@ PK `(user_id, card_id)`; `front text N`, `back text N`, `media jsonb N`; `update
 | `prompt_version`, `gen_batch_id` | | | |
 
 #### `mnemonics`, `memory_palaces` [sync] — MEM-06 (Phase 5)
-`mnemonics`: `user_id`, `card_id N`, `node_id N` (check at least one), `type` (`acronym` · `rhyme` · `story` · `image` · `palace_locus`), `content jsonb`, `palace_id N`.
-`memory_palaces`: `user_id`, `name`, `loci jsonb` (ordered strings).
+`mnemonics`: `user_id`, `card_id N`, `node_id N` (check at least one), `type` (`acronym` · `phrase` · `rhyme` · `story` · `palace` · `keyword`, R27), `title`, `content jsonb` (`{text, items?, how_to_use?, loci?}`), `palace_id N` (required for `palace`). One live mnemonic per card. Soft-deleted with `deleted_at`.
+`memory_palaces`: `user_id`, `name` (≤ 60), `loci jsonb` (2–20 ordered strings), `deleted_at`.
+Both are written by the owner directly under RLS (creating one needs the network anyway: the options come from the AI) and pulled to the phone for offline reviews.
 
 #### `item_revisions` [append] — TRU-02.9
 `item_type` (R19 list), `item_id`, `version int`, `content jsonb` (full snapshot), `changed_by uuid N`, `flag_id uuid N`, `answer_changed bool`. Unique `(item_type, item_id, version)`.
@@ -923,7 +932,7 @@ PK `(user_id, local_date)`; `minutes int` (0 = blocked), `source` (`user` · `ca
 PK `(user_id, exam_id, local_date)`; `readiness real`, `readiness_proj real`, `pred_low`, `pred_mid`, `pred_high numeric N`, `evidence jsonb`.
 
 #### `performance_windows` [svc] — GOL-10 (Phase 5)
-PK `(user_id, window)` (`window` = 2-hour bucket 0–11); `n_events`, `mean_residual`, `ci_low`, `ci_high`, `updated_at`.
+PK `(user_id, bucket)` (2-hour local bucket 0–11; `window` is a reserved word in Postgres, R28); `n_events`, `mean_residual`, `ci_low N`, `ci_high N`, `good bool`, `updated_at`. Written nightly by the worker (`energy.windows`); the expected value for a card review is the student's own pass rate for that card state (learning-engine §11.10).
 
 #### `teacher_profiles` [svc] — PRA-09.4
 `subject_id`, `teacher_key text N` (null = subject aggregate), `teacher_display`, `source_document_ids uuid[]`, `n_tests int`, `profile jsonb` (spec 08 §8.1), `confidence` (`low` · `mid` · `high`), `computed_at`, `version`. Unique `(subject_id, coalesce(teacher_key, ''))`.
@@ -998,14 +1007,14 @@ PK `(quiz_attempt_id, question_id)`; `served_at`, `deadline_at`. Answers arrivin
 `class_group_id`, `host_id`, `name`, `timer_config jsonb`, `timer_state jsonb` (`{phase, started_at, paused_at}`), `group_goal jsonb`, `status` (`open` · `closed`), `closed_at`.
 
 #### `divide_plans`, `contributions` — SOC-06 (Phase 5)
-`divide_plans`: `class_group_id`, `subject_id`, `exam_id N`, `node_ids uuid[]`, `assignments jsonb` (`{node_id: user_id}`), `status` (`open` · `merging` · `done` · `cancelled`), `created_by`.
-`contributions`: `divide_plan_id`, `node_id`, `author_id`, `body_md`, `ai_feedback jsonb`, `status` (`draft` · `submitted` · `approved` · `rejected`).
+`divide_plans`: `class_group_id`, `subject_id`, `exam_id N`, `title`, `node_ids uuid[]` (1–60), `assignments jsonb` (`{node_id: user_id}`), `max_claims` (1–10, default 3), `status` (`open` · `merging` · `done` · `cancelled`), `created_by`. Claims go through RPC `claim_divide_topic(plan, node, claim)` (one claimer per topic, at most `max_claims` per member).
+`contributions`: `divide_plan_id`, `node_id`, `author_id`, `body_md` (≤ 20 000), `input_mode` (`typed` · `photo`), `capture_id N`, `ai_feedback jsonb` (private review, SOC-06.3), `status` (`draft` · `submitted` · `approved` · `rejected`), `submitted_at`. Unique `(divide_plan_id, node_id, author_id)`. **Private** to the author and the Turma moderators (R31); members see who claimed what and how far it is through RPC `divide_progress(plan)` (no text, no feedback). The merged result is a `class_summary` note with credits.
 
 #### `question_votes` — SOC-07 (Phase 5)
-PK `(question_id, user_id)`; `vote smallint` (+1).
+PK `(question_id, user_id)`; `vote smallint` (+1). Through RPC `vote_peer_question(question)`; moderators approve or reject with `review_peer_question(question, approve)`. Pending peer questions (`questions.review_status = pending`) are readable by the Turma so members can vote (R30); quizzes only take approved ones. `questions.stem_tsv` (generated, unaccented) backs the duplicate check.
 
 #### `league_entries` [svc] — SOC-08 (Phase 5)
-PK `(class_group_id, user_id, week_start)`; `league_xp int`, `rank int`, `badges text[]`.
+PK `(class_group_id, user_id, week_start)` (`week_start` is a Monday); `league_xp int`, `rank int N`, `badges text[]`, `reached_at`. Opt-in per member (`class_group_members.league_opt_in`); the board is read through RPC `league_board(group, week)` (top 10 + the caller, blocked pairs hidden, live week computed from `xp_events` until the weekly close job writes the rows).
 
 #### `quiz_shares` — SOC-09
 `token text unique` (22-char random), `quiz_id`, `created_by`, `snapshot jsonb` (question stems/options without answers), `expires_at` (default +7 days), `revoked_at`, `uses int`.
@@ -1093,15 +1102,15 @@ PK `user_id`; `current_length`, `longest_length`, `last_counted_date`, `shields_
 PK `(user_id, code)`; `progress int`, `unlocked_at N`, `show_in_turma bool default false`. Definitions (`code` → rule) live in `packages/shared`; deterministic, no random rewards (SP-07).
 
 #### `boss_attempts` — MOT-02 (Phase 5)
-`user_id`, `unit_node_id`, `quiz_attempt_id`, `passed bool`, `score real`.
+`user_id`, `unit_node_id`, `quiz_attempt_id` (unique), `passed bool`, `score real 0–1`. Written by `quiz-submit` for `quizzes.kind = boss`; a retry draws unseen questions first.
 
 #### `retrospectives` [svc] — MOT-04 (Phase 5)
-`user_id`, `period_type` (`goal` · `semester` · `year`), `goal_id N`, `period_start`, `period_end`, `stats jsonb`, `title`, `generated_at`, `seen_at N`.
+`user_id`, `period_type` (`goal` · `semester` · `year`), `goal_id N` (required for `goal`), `period_start`, `period_end`, `stats jsonb` (`RetroStats` in `packages/shared`), `title` (≤ 60), `subtitle N`, `generated_at`, `seen_at N` (the only column the owner may update). One per `(user, type, period, goal)`. Generated by the worker (`retro.generate`): the day after a goal's last exam, after each semester end (`profiles.settings.semester_ends`, default 06-30 and 11-30) and on **December 20** for the year (R32).
 
 #### `nudge_events` — LRN-04.7, WEL-03 (R10)
 `user_id`, `kind` (`prerequisite_detective` · `long_session` · `daily_load` · `late_night` · `performance_drop` · `overload_trend` · `checkin_low`), `node_id N`, `related_node_id N`, `surface text`, `shown_at`, `action` (`acted` · `dismissed` · `accepted` · `disabled`) N, `action_at N`.
 
-**Device-only (never uploaded):** focus blocklist and installed-app list, foreground-app events (WEL-02), weekly check-in answers (WEL-03), calendar event ids (GOL-09). See [§9](#9-local-sqlite-schema).
+**Device-only (never uploaded):** focus blocklist and installed-app list, foreground-app events (WEL-02), weekly check-in answers (WEL-03), calendar event ids and busy calendars (GOL-09). Only aggregates leave the phone: focus counts in `study_sessions` and free minutes per date in `availability_exceptions` (source `calendar`, R33). See [§9](#9-local-sqlite-schema).
 
 ### 5.10 ENEM
 
@@ -1439,6 +1448,7 @@ Drizzle tables in `apps/mobile/src/db/schema.ts` mirror server tables **with the
 | 1 | `profiles` (self, pull), `study_preferences` (pull + outbox), `subjects`, `subject_user_settings` (pull + outbox), `knowledge_nodes`, `node_sources`, `glossary_terms` (pull), `node_user_settings` (pull + outbox), `notes` (pull on open / prefetch for next 3 exams), `cards` (pull), `card_overrides` (pull + outbox), `card_states` (pull; local prediction updated on review), `review_logs` (local copy of the last 30 days + outbox), `goals`, `exams`, `exam_scope_nodes`, `plan_items` (pull ±7 days + outbox for status), `mistakes` (open entries, pull + outbox), `study_sessions` (outbox) |
 | 2 | `questions` (in-scope topics of the next 3 exams), `quizzes`, `quiz_attempts`, `attempt_answers` (pull + outbox), `feed_items` (prefetched batch), `mastery`, `daily_activity`, `streaks`, `achievements` (pull), `note_highlights` (pull + outbox) |
 | 3+ | `podcast_plays`, `essays` drafts, `repertorio_items` |
+| 5 | `mnemonics`, `memory_palaces` (pull; written online under RLS, shown as review hints offline) |
 
 ### 9.2 Local-only tables
 
@@ -1455,10 +1465,12 @@ outbox: {
 sync_cursors: { table_name: text /* PK */, updated_at: text /* ISO */, last_id: text }
 file_cache:   { path: text /* PK */, kind: text, bytes: integer, last_access: integer, pinned: integer /* "Baixar para offline" */ }
 queue_cache:  { card_id: text /* PK */, effective_due: integer, priority: real, boost_exam_id: text | null }   // MEM-02 / MEM-04, read by the widget
-calendar_events: { plan_item_id: text /* PK */, calendar_id: text, event_id: text }                          // GOL-09, device-only
+calendar_events: { plan_item_id: text /* PK; tests are keyed "exam:<id>" */, calendar_id: text, event_id: text } // GOL-09, device-only
 focus_blocklist: { package_name: text /* PK */, label: text }                                                // WEL-02, device-only
 wellbeing_checkins: { week_start: text /* PK */, answers: text /* JSON */ }                                  // WEL-03, device-only
 ```
+
+Small device settings live in MMKV rather than SQLite: the running Modo foco session (`studify.focus.v1`, so a killed app resumes it), the calendar choices (`calendar.*`: on/off, busy calendar ids, the Studify calendar id), the burnout guard's per-day caps (`wellbeing.caps`) and the continuous-use tracker (`wellbeing.activity`). The Android focus service keeps the actions taken from its notification or the Bloqueio overlay in its own SharedPreferences until the app replays them.
 
 Rules: push before pull; outbox rows are idempotent on their UUID; tombstones (`deleted_at`) delete local rows and drop pending outbox edits for them; LWW fields clamped to server time ± 5 min ([mobile-app.md §4.3](mobile-app.md#43-sync-protocol)). A local `schema_version` mismatch with the server returns `426` and forces an update (`app_versions`).
 
@@ -1475,7 +1487,7 @@ Each phase lands as a group of numbered migrations (`supabase/migrations/NNNN_<n
 | **2** | Turma columns + RPCs (`join_class_group`, …), `user_blocks`, `avatars` bucket; `duels`, `battles`, `battle_players`, `private.question_served`, `private.class_insights`, `quiz_shares`; `feed_items`, `feed_impressions`; `node_relations`, `nudge_events`; `schedule_imports`; `teacher_profiles`, `topic_predictions`, `exam_outcome_topics`; `xp_events`, `daily_activity`, `streaks`, `achievements`; `guardian_links`, `guardian_settings`; view `calibration_stats`; Realtime channel policies |
 | **3** | `camera_captures` (+ FK from `questions.source_capture_id`, `essays.capture_id`), `photos` bucket; `essays`; `podcast_episodes`, `podcast_plays`, `podcast_interactions`, `audio` bucket; `teaching_sessions`; `study_rooms` |
 | **4** | `enem_editions`, `enem_skills`, `enem_topics`, `knowledge_node_enem_topics`, `enem_items`, `enem_item_params`, `enem_topic_stats`, `enem_topic_trends`, `enem_redacao_themes`, `essay_themes`, `repertorio_items`, `sisu_offers`, `sisu_targets`, `atualidades_digests`, `atualidades_items`, `enem` bucket; `argument_sessions` |
-| **5** | `material_findings`, `material_finding_votes`, `visuals`, `mnemonics`, `memory_palaces`, `divide_plans`, `contributions`, `question_votes`, `league_entries`, `boss_attempts`, `retrospectives`, `performance_windows` |
+| **5** | `material_findings`, `material_finding_votes`, `visuals`, `mnemonics`, `memory_palaces`, `divide_plans`, `contributions`, `question_votes`, `league_entries`, `boss_attempts`, `retrospectives`, `performance_windows`; `questions.stem_tsv`; RPCs `vote_material_finding`, `claim_divide_topic`, `divide_progress`, `vote_peer_question`, `review_peer_question`, `league_board`, `set_calendar_availability` (`20260107000000_phase5.sql`, pgTAP `rls_phase5.test.sql`) |
 
 ---
 

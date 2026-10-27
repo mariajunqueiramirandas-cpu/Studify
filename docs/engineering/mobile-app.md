@@ -395,9 +395,12 @@ Request each permission **in context**, with a PT-BR rationale shown before the 
 | `CAMERA` | 3 | "Para fotografar páginas, exercícios e suas respostas escritas à mão. As fotos ficam só com você, a menos que você compartilhe." |
 | `RECORD_AUDIO` | 3 | "Para você falar com o tutor. O áudio é usado só para transcrever sua fala e não é guardado." |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | 3 | — (podcast background playback) |
-| `PACKAGE_USAGE_STATS` / Accessibility service (WEL-02 app blocking) | 5 | "Para bloquear apps que distraem durante o seu tempo de foco. A Studify não lê o que você faz nesses apps." — **sensitive; opt-in only; design review required** |
+| `PACKAGE_USAGE_STATS` + `SYSTEM_ALERT_WINDOW` (WEL-02 app blocking; no Accessibility service, spec 13 §8.9) | 5 | "Para bloquear apps que distraem durante o seu tempo de foco. A Studify não lê o que você faz nesses apps." — **sensitive; opt-in only; design review required**. Both are special access granted in system settings from the Modo foco screen; without them focus works as soft focus |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` (WEL-01 focus countdown) | 5 | — (install-time; the service runs only while a focus session the student started is on) |
+| `ACCESS_NOTIFICATION_POLICY` (WEL-01.4 Não perturbe) | 5 | "Para silenciar notificações só durante os blocos de foco." — policy access granted in system settings |
+| `READ_CALENDAR`, `WRITE_CALENDAR` (GOL-09, opt-in) | 5 | "Para ver seus horários ocupados e colocar provas e blocos de estudo na agenda "Studify". Os títulos dos seus compromissos não saem do celular." |
 
-Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_MEDIA_*` — the Photo Picker and Storage Access Framework are used instead), exact alarms, phone state.
+Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_MEDIA_*` — the Photo Picker and Storage Access Framework are used instead), exact alarms (the focus end-of-phase alert uses an inexact alarm that may fire while idle, backed by the foreground service timer), phone state. The focus module lists installed apps through a launcher `<queries>` filter, not `QUERY_ALL_PACKAGES`.
 
 ## 17. Builds, distribution and updates
 

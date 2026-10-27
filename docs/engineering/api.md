@@ -271,6 +271,28 @@ Cache hit (shared `explanations` row) streams the stored body immediately at no 
 #### `questions-generate-more` — PRA-01.4, ENM-03.5 · class C · `POST`
 `Req { node_id, count?: 10, enem_style?: boolean }` → `Res { question_ids: string[] }` (ENEM style defaults to 5).
 
+#### `visual-generate` — LRN-05 (Phase 5) · class A · `POST`
+```ts
+type VisualGenerateReq = { node_id: string; type?: "flowchart" | "timeline" | "comparison_table" | "hierarchy" | "cycle" };
+type VisualGenerateRes =
+  | { fits: true; visual: { id: string; node_id: string; type: VisualType; title: string; spec: VisualSpec; alt_text: string; source_pages: SourcePages }; cached: boolean }
+  | { fits: false; reason: string };
+```
+Without `type` the AI picks the best diagram or says none fits; the answer is cached per `(node_id, type)` in `visuals` (a `none` row for "nothing fits", R29), so a second open costs nothing. The server re-checks the spec limits (LRN-05.6) and maps document labels to ids before saving. The app renders the spec natively (boxes as views, lines in SVG) with the alt text for TalkBack.
+
+#### `mnemonic-suggest` — MEM-06 (Phase 5) · class A · `POST`
+```ts
+type MnemonicSuggestReq = {
+  card_id?: string; node_id?: string;                // at least one
+  type?: MnemonicType | "any";                       // acronym · phrase · rhyme · story · palace · keyword
+  palace_id?: string;                                // required for "palace"
+  items?: string[];                                  // an ordered list to encode (2–20)
+  exclude_titles?: string[];                         // "Outras ideias"
+};
+type MnemonicSuggestRes = { options: { type: MnemonicType; title: string; content: { text: string; items?: string[]; how_to_use?: string; loci?: { locus: string; item: string; image: string }[] } }[] };  // 1–3
+```
+Nothing is stored: the app saves the chosen (and possibly edited) option into `mnemonics` under RLS. Acronyms are re-checked on the server (the letters must spell the items) and options unsuitable for minors are dropped.
+
 ### 4.4 Tutor
 
 #### `tutor-chat` — TUT-01…06, CAM-01.4 · class B · `POST` · SSE
@@ -304,6 +326,8 @@ type QuizCreateReq = {
 type QuizCreateRes = { quiz_id: string; attempt_id: string; question_ids: string[]; generated: number };
 ```
 Practice quizzes over already-cached questions can also be assembled **on device** (offline) and inserted directly; `quiz-create` is required when the bank must be topped up, for simulados with adaptive composition (spec 05 §8.7), and for predicted tests.
+
+**Chefões (MOT-02, Phase 5):** `kind = "boss"` takes `scope: { subject_id, unit_node_id }`; the count is 10 for units with ≤ 4 topics and 15 above. Every topic gets one question first (weakest first), the rest are drawn with weight `1.2 − mastery`, and questions from earlier attempts are used only when the unseen ones run out. Other members' personal questions are never drawn (R8). `quiz-submit` writes `boss_attempts` (pass at 70%); the app awards the `boss_defeated` XP event once per unit.
 
 #### `quiz-submit` — PRA-01.6, PRA-02, PRA-03, PRA-04, PRA-05, ENM-04 · class A per AI-graded answer · `POST`
 ```ts
@@ -408,6 +432,30 @@ Host-only except `create` (any member unless the Turma restricts hosting). State
 #### `room-control` — SOC-05 (Phase 3) · `POST`
 `Req { action: "create" | "start" | "pause" | "resume" | "skip" | "close" | "react"; room_id?; class_group_id?; timer_config?; group_goal?; reaction?: "👏" | "🔥" | "💪" }` → `Res { room_id, timer_state }`. Reactions are rate-limited (1 per 5 s).
 
+#### `divide-review` / `divide-submit` / `divide-merge` — SOC-06 (Phase 5) · class A (review), class C (merge) · `POST`
+```ts
+type ContributionReviewReq = { contribution_id: string };
+type ContributionReviewRes = { feedback: { errors: { quote: string; correction: string; page: number | null; document_id: string | null }[]; missing_concepts: string[]; ok_to_merge: boolean; summary: string } };
+type ContributionSubmitReq = { contribution_id: string };
+type ContributionSubmitRes = { status: "submitted" | "approved"; merge_started: boolean };
+type DivideMergeReq = { divide_plan_id: string };
+type DivideMergeRes = { job_id: string | null; status: "merging" | "done" };
+```
+The members claim topics with RPC `claim_divide_topic` and write their contribution (typed, or text from a Câmera Mágica capture) directly under RLS while it is a draft. `divide-review` gives the author a **private** AI review against the material (SOC-06.3); `divide-submit` locks it (auto-approved when the last review had no errors). When every topic has a submitted contribution, or a moderator calls `divide-merge`, the job `divide.merge` builds one `class_summary` note per topic with credits and pushes `divide_merged`.
+
+#### `peer-question-create` — SOC-07 (Phase 5) · class A · `POST`
+```ts
+type PeerQuestionCreateReq = { subject_id: string; node_id: string; type: "mcq_single" | "true_false" | "short_answer";
+                               stem: string; payload: Record<string, unknown>; explanation?: string; anonymous?: boolean; dry_run?: boolean };
+type PeerQuestionCreateRes = {
+  status: "pending" | "needs_changes" | "ok"; question_id: string | null;
+  validation: { grounded: boolean; evidence_pages: { document_id: string; page: number }[]; single_correct_answer: boolean;
+                clarity_issues: string[]; appropriate: boolean; suggested_fix: { stem: string; payload: object; explanation: string | null } | null };
+  blocking: ("not_grounded" | "not_single_answer" | "inappropriate" | "duplicate")[];
+};
+```
+The AI checks the question against the subject's material and the near-duplicates found through `questions.stem_tsv`. `dry_run` only returns the check; otherwise a question without blocking issues enters the pool as `origin = peer`, `review_status = pending` (readable by the Turma for voting, R30). It is approved after 3 votes (`vote_peer_question`) or by a moderator (`review_peer_question`); only approved questions are used in quizzes. Limit: 20 per member per day.
+
 #### `quiz-share` — SOC-09 · `POST`
 `Req { quiz_id }` → `Res { token, url: "https://{BASE_URL}/q/{token}", expires_at }`. Opening the link requires sign-in and Turma membership of the quiz's subject (whether quizzes may be shared outside the Turma is an open owner decision).
 
@@ -426,6 +474,9 @@ Host-only except `create` (any member unless the Turma restricts hosting). State
 
 #### `argument-start` / `argument-turn` / `argument-finish` — INT-03 · class B · `POST`
 `argument-start Req { goal_mode, theme?, theme_source, mode: "debate" | "build", subject_id? } → Res { session_id, theme, opening }`; `argument-turn` SSE; `argument-finish → Res { rubric, summary, outline?, essay_id? }`.
+
+#### `argument-themes` — INT-03.2 "Sugerir temas" (Phase 4) · class A · `POST`
+`Req { subject_id }` → `Res { themes: { question: string; node_ids: string[]; why: string }[] }` (5 debatable questions grounded in the subject's topics). Nothing is stored.
 
 #### `capture-analyze` — CAM-01, CAM-02, CAM-03 · class A · `POST`
 Called after the images are uploaded to `photos/{user_id}/{capture_id}/…` and the `camera_captures` row is inserted.
@@ -474,9 +525,11 @@ Scored by `quiz-submit` (TRI estimate in `area_results`).
 #### `enem-questions-generate` — ENM-03 · class C · `POST`
 Alias of `questions-generate-more` with `enem_style = true` (kept as one function).
 
+**Phase 4 notes.** Meta SISU (ENM-06) needs no function: the app computes the per-area targets with the shared solver from `sisu_offers` and writes `sisu_targets` under RLS (owner only, never the Turma), then asks for a replan. ENEM goals tag the student's topics with the global taxonomy through the job `enem.tag_nodes`.
+
 ### 4.10 Admin (app admin only)
 
-`admin-budgets` (PLT-04.6: read spend by day/feature/Turma, set limits), `admin-enem-import` (enqueue `enem.import_edition`), `admin-atualidades-publish` (ENM-09), `admin-moderation` (escalated reports, takedowns). All check `private.is_app_admin()`.
+`admin-budgets` (PLT-04.6: read spend by day/feature/Turma, set limits), `admin-enem-import` (`Req { year, application? }`; enqueue `enem.import_edition` after the admin uploads `enem/{year}/raw/` with a `manifest.json`, the ITENS_PROVA microdata CSV and one booklet PDF + answer key per day; nothing is published unless every check passes), `admin-atualidades-publish` (ENM-09), `admin-moderation` (escalated reports, takedowns). All check `private.is_app_admin()`.
 
 ---
 
@@ -510,6 +563,13 @@ All are `security definer`, `set search_path = ''`, check `auth.uid()` explicitl
 | `handle_report(report_id, action)` | SP-09 | `action ∈ dismiss, warn, remove_content, remove_member, escalate` → `void` | |
 | `block_user(user_id)` / `unblock_user(user_id)` | SOC-X.3 | → `void` | Also cancels open duels between the pair |
 | `sync_snapshot(table, subject_ids uuid[])` | PLT-07 | → `{url}` | Large first sync |
+| `vote_material_finding(finding_id, vote)` | ING-06.3 (Phase 5) | `vote ∈ not_error, is_error` → `{status, confirmations, dismissals}` | One vote per reader (changeable). On a personal subject the owner's vote decides; on a Turma subject 2 confirmations confirm and ≥ 2 dismissals (more than the confirmations) dismiss |
+| `claim_divide_topic(plan_id, node_id, claim = true)` | SOC-06.1 | → `assignments jsonb` | One claimer per topic, ≤ `max_claims` per member; a submitted topic cannot be released |
+| `divide_progress(plan_id)` | SOC-06 | → `[{node_id, user_id, nickname, status}]` | Claim and contribution state only (no text, no feedback, R31) |
+| `vote_peer_question(question_id)` | SOC-07.3 | → `review_status` | Approved after 3 votes; the author cannot vote |
+| `review_peer_question(question_id, approve)` | SOC-07.3 | → `review_status` | Moderators only |
+| `league_board(class_group_id, week_start?)` | SOC-08 | → `[{user_id, nickname, league_xp, rank, badges, is_me}]` | Opted-in members only; top 10 + the caller; blocked pairs hidden; the live week is computed from `xp_events` |
+| `set_calendar_availability(days jsonb)` | GOL-09.2 | `[{local_date, minutes \| null}]` (≤ 62 days) → `int` | Writes `availability_exceptions` with source `calendar` (R33); the student's own rows win; `null` clears a day |
 
 ---
 
@@ -570,7 +630,7 @@ Queue: pg-boss on the main Postgres. Every job: payload validated with Zod; `ret
 | `streaks.rollover` | MOT-01 | hourly (users whose `day_rollover_hour` passed) | `{user_ids}` | 2 | `daily_activity`, `streaks`, shields |
 | `xp.award` | MOT-01 | `sync-push` XP events, server events | `{user_id, events}` | 3 | Unique key prevents double award |
 | `podcast.generate` | INT-01 | `podcast-create` | `{episode_id}` | 2 | Script (streamed, standard API) → TTS → mp3; push `podcast_ready` |
-| `enem.tagNodes` | ENM-01.4 | ENEM goal created / new material | `{subject_id}` | 2 | Batch API |
+| `enem.tag_nodes` | ENM-01.4 | ENEM goal created / new material | `{subject_id}` | 2 | Links topics to `enem_topics` (`knowledge_node_enem_topics`) |
 | `enem.import_edition` | ENM-02 | admin | `{year, application}` | 1 | Fan-out: `enem.bank.transcribe`, `.explain`, `.tagTopics` (Batch API) |
 | `enem.topic_stats` | ENM-08.1–2 | monthly (1st Monday) / admin | `{}` | 1 | Global |
 | `atualidades.weekly` | ENM-09 | weekly (Monday 06:00) | `{week_start}` | 1 | `web_search` server tool; draft → admin publish |
@@ -578,9 +638,11 @@ Queue: pg-boss on the main Postgres. Every job: payload validated with Zod; `ret
 | `account.delete` | SP-14 | `account-delete` | `{deletion_id}` | 5 | ≤ 15 days; anonymizes `ai_usage` |
 | `files.sweep` | R14, security §10 | hourly | `{}` | 1 | Deletes expired Anthropic Files API uploads |
 | `storage.purge` | data-model §1.1 | nightly | `{}` | 1 | Hard-deletes tombstones > 30 days, expired captures/exports |
-| `material.check` | ING-06 (Phase 5) | after ingestion (opt-in) | `{document_id}` | 1 | Batch API |
-| `retrospective.generate` | MOT-04 (Phase 5) | goal completed / semester end | `{user_id, period}` | 1 | |
-| `league.weekly` | SOC-08 (Phase 5) | Monday 00:05 | `{class_group_id}` | 1 | |
+| `ingest.material_check` | ING-06 (Phase 5) | after ingestion | `{document_id}` | 1 | Standard API (R31); writes `material_findings` (possible errors, never applied by themselves) |
+| `energy.windows` | GOL-10 (Phase 5) | nightly | `{user_ids}` | 1 | Per 2-hour bucket: mean residual (observed − expected) with a 90% interval; `good` once ≥ 14 active days and ≥ 300 events |
+| `divide.merge` | SOC-06 (Phase 5) | `divide-submit` (last topic) / `divide-merge` | `{divide_plan_id}` | 2 | Standard API; one `class_summary` note per topic with credits; push `divide_merged` |
+| `league.weekly` | SOC-08 (Phase 5) | Monday 00:05 (São Paulo) | `{}` | 1 | Closes last week: `league_entries` with rank and badges for opted-in members |
+| `retro.generate` | MOT-04 (Phase 5) | daily | `{}` | 1 | Goal (day after the last exam), semester (after each `semester_ends`) and year (December 20, R32) periods; AI title with a fixed fallback; push `retro_ready` |
 
 ---
 
@@ -650,6 +712,13 @@ Sent by `notify.dispatch` through the Expo Push API → FCM. Payload: `{ type, t
 | `join_request` | SOC-01.5 | class | push (moderators) | yes | `studify://class/{class_group_id}?tab=members` |
 | `content_fixed` | TRU-02 | processing | push | no | item deep link |
 | `streak_at_risk` | MOT-01 | plan | local, opt-in, never in quiet hours | yes | `studify://today` |
+| `atualidades_published` | ENM-09.5 (Phase 4) | plan | push | yes | `studify://enem/atualidades/{digest_id}` |
+| `reta_final_start`, `enem_eve`, `enem_between_days`, `enem_exam_day` | ENM-10 (Phase 4) | plan | push | no | `studify://enem/reta-final` |
+| `content_flag_review` | TRU-02 | class | push (moderators) | yes | `studify://class/{class_group_id}?tab=review` |
+| `divide_merged` | SOC-06 (Phase 5) | class | push | yes | `studify://class/{class_group_id}/divide/{divide_plan_id}` |
+| `retro_ready` | MOT-04 (Phase 5) | plan | push | yes | `studify://retro` |
+
+Tapping a notification opens its `data.deep_link` (`src/platform/notification-links.ts`); duel and battle links are opened at their top-level routes (`/duel/{id}`, `/battle/{id}`). The Modo foco countdown and its end-of-phase alerts are not push notifications: the Android focus service posts them on its own channels (`focus_ongoing`, `focus_alert`).
 
 ---
 
@@ -677,6 +746,10 @@ Custom scheme `studify://` for in-app links (notifications, widget); **HTTPS App
 | `studify://podcast/{episode_id}` | Player |
 | `studify://enem/essay/{essay_id}` | Redação result |
 | `studify://profile/privacy` | Privacy (export/deletion) |
+| `studify://enem/atualidades/{digest_id}`, `studify://enem/reta-final` | ENEM screens (Phase 4) |
+| `studify://class/{class_group_id}/divide/{plan_id}` | Divisão (Phase 5) |
+| `studify://retro[/{retro_id}]` | Retrospectivas / one story (Phase 5) |
+| `studify://focus` | Modo foco (opened from the countdown notification, Phase 5) |
 
 Every deep link re-checks authorization on load; an unauthorized or deleted target opens Hoje with a toast ("Esse conteúdo não está mais disponível").
 
