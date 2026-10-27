@@ -3,9 +3,8 @@
 // §4.2). A document with more than one slice gets one text-only merge call (T1b). The nodes are written in
 // one transaction under an advisory lock on the subject, so two concurrent uploads cannot double-merge.
 import { AiRetryLaterError, callClaude, deleteFile, uploadSliceFile, type CallResult } from '@studify/ai';
-import { getTask } from '@studify/prompts';
+import { getTask, type ExistingNode, type OutlineInput } from '@studify/prompts';
 import { uuidV7 } from '@studify/shared';
-import type { ExistingNode, OutlineInput } from '@studify/prompts';
 import type pg from 'pg';
 import { withTransaction, type Sql } from '../framework/db.ts';
 import { mapLimit } from './concurrency.ts';

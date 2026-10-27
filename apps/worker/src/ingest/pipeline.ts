@@ -5,7 +5,7 @@
 // Budget refusals park the document as waiting_budget and re-enqueue the same job for the next local midnight.
 import { BudgetExceededError } from '@studify/ai';
 import type { JobContext } from '../framework/types.ts';
-import type { Sql } from '../framework/db.ts';
+import { tableExists, type Sql } from '../framework/db.ts';
 import { applyProgress } from '../framework/progress.ts';
 import { PermanentJobError } from '../framework/errors.ts';
 import { nextLocalMidnight, zonedToInstant } from '../framework/timeutil.ts';
@@ -23,7 +23,6 @@ import { expandKinds, type TopicKind } from './custom-id.ts';
 import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
 import { mapLimit } from './concurrency.ts';
-import { tableExists } from '../framework/db.ts';
 import { uuidV7 } from '@studify/shared';
 
 export const FAILURE_BODY: Readonly<Record<string, string>> = {
