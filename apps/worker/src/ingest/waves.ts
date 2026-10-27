@@ -355,6 +355,7 @@ export async function writeOutcome(
   const ctx: WriteContext = {
     pool: env.ctx.db,
     bundle,
+    createdBy: item.budget.userId ?? bundle.subject.createdBy,
     labels,
     promptVersion: item.promptVersion,
     genBatchId: item.genBatchId,

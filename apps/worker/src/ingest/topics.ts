@@ -326,6 +326,8 @@ export function featureOf(kind: TopicKind): string {
 export interface WriteContext {
   pool: pg.Pool;
   bundle: TopicBundle;
+  /** Requester (notes.created_by is not null). */
+  createdBy: string;
   labels: LabelMap;
   promptVersion: string;
   genBatchId: string;
@@ -438,8 +440,8 @@ export async function writeNote(
     await client.query(
       `insert into public.notes
          (subject_id, node_id, scope_kind, depth, body, citations, language, word_count, has_math, status,
-          low_citation_coverage, version, prompt_version, gen_batch_id)
-       values ($1, $2, 'topic', $3, $4, $5::jsonb, $6, $7, $8, 'ready', $9, 1, $10, $11)`,
+          low_citation_coverage, version, prompt_version, gen_batch_id, created_by)
+       values ($1, $2, 'topic', $3, $4, $5::jsonb, $6, $7, $8, 'ready', $9, 1, $10, $11, $12)`,
       [
         ctx.bundle.subjectId,
         ctx.bundle.topicId,
@@ -452,6 +454,7 @@ export async function writeNote(
         rendered.citations.length === 0,
         ctx.promptVersion,
         ctx.genBatchId,
+        ctx.createdBy,
       ],
     );
   });
@@ -482,12 +485,13 @@ export async function writeGlossary(
         continue;
       }
       const row = mapped.value;
+      // normalized_term is a generated column in the table; the unique index on it gives the conflict target.
       const result = await client.query(
         `insert into public.glossary_terms
-           (subject_id, node_id, term, normalized_term, aliases, definition, example, source_pages, prompt_version)
-         values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+           (subject_id, node_id, term, aliases, definition, example, source_pages, prompt_version)
+         values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
          on conflict (subject_id, normalized_term) where deleted_at is null do nothing`,
-        [ctx.bundle.subjectId, row.node_id, row.term, row.normalized_term, row.aliases, row.definition, row.example, JSON.stringify(row.source_pages), ctx.promptVersion],
+        [ctx.bundle.subjectId, row.node_id, row.term, row.aliases, row.definition, row.example, JSON.stringify(row.source_pages), ctx.promptVersion],
       );
       written += result.rowCount ?? 0;
     }

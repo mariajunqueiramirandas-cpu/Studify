@@ -1,7 +1,6 @@
 // Shared fixture: two students (Alice owns the subject under test, Bob owns a private subject), a topic with
 // one concept, a 40-page PDF in Storage and its page text. Ids are fixed so tests read clearly.
-import { uuidV7 } from '@studify/shared';
-import { ALICE, BOB, NOW_MS, makePdf, withUsers, type Harness } from './fakes.ts';
+import { ALICE, BOB, makePdf, withUsers, type Harness } from './fakes.ts';
 
 export const IDS = {
   subject: '5a000000-0000-4000-8000-000000000001',
@@ -24,9 +23,9 @@ export const IDS = {
   note: 'a7000000-0000-4000-8000-000000000001',
 } as const;
 
-/** Deterministic UUID v7 for client-generated ids (outbox rows, answers, idempotency keys). */
+/** Deterministic UUID v7-shaped id for client-generated rows (outbox ids, answers): same n, same id. */
 export function v7(n: number): string {
-  return uuidV7(NOW_MS + n);
+  return `0190a000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 }
 
 export async function seedWorld(h: Harness): Promise<void> {

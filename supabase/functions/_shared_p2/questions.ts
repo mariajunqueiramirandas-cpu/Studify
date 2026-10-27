@@ -73,6 +73,7 @@ export interface GradeOutcome {
 }
 
 export function gradeQuestion(q: QuestionRow, response: QuestionResponse): GradeOutcome {
+  // gradeAnswer is generic over the question type; the payload and response were validated for q.type just above.
   const result = gradeAnswer(q.type, payloadOf(q) as never, response as never);
   return { correct: result.correct === true, score: result.score ?? 0 };
 }

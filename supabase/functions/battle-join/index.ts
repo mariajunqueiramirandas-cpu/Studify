@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ApiFailure } from '@studify/shared';
 import { defineP2 } from '../_shared_p2/http.ts';
 import { displayNameOf, nicknameOrName, requireActiveMember } from '../_shared_p2/turma.ts';
-import { canJoinNow, LIVE_BATTLE_STATUSES, MAX_BATTLE_PLAYERS } from '../_shared_p2/battle.ts';
+import { LIVE_BATTLE_STATUSES, MAX_BATTLE_PLAYERS, canJoinNow, type BattleStatus } from '../_shared_p2/battle.ts';
 import { rosterOf } from '../_shared_p2/battle-ops.ts';
 
 export const BattleJoinInput = z.object({ pin: z.string().regex(/^\d{4}$/, 'PIN de 4 dígitos') });

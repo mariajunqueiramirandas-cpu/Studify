@@ -101,6 +101,7 @@ export interface ExportOutcome {
   status: 'ready' | 'skipped';
   path?: string;
   files?: number;
+  signedUrl?: string | null;
 }
 
 /** account.export (SP-14): builds the archive, uploads it and records a 7-day window. */
@@ -131,8 +132,10 @@ export async function handleAccountExport(ctx: JobContext, raw: Record<string, u
       'data_exports',
     );
     await ctx.enqueue('notify.dispatch', { user_id: row.user_id, type: 'export_ready', data: { export_id: row.id } }, { singletonKey: `export_ready:${row.id}` });
+    // The link is handed out for the download window only; it is not stored (the row keeps the path).
+    const signed = await ctx.supabase.storage.from('exports').createSignedUrl(path, Math.floor(EXPORT_TTL_MS / 1000));
     await ctx.progress({ stage: 'done', status: 'succeeded', progress: 1 });
-    return { status: 'ready', path, files: Object.keys(manifest.files).length };
+    return { status: 'ready', path, files: Object.keys(manifest.files).length, signedUrl: signed.data?.signedUrl ?? null };
   } catch (err) {
     unwrap(await ctx.supabase.from('data_exports').update({ status: 'failed' }).eq('id', row.id), 'data_exports');
     throw err;

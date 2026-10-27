@@ -10,7 +10,7 @@ import { runPrompt, type AiScope } from '../lib/ai-adapter.ts';
 import { IN_CHUNK, JobDataError, chunk, unwrap, unwrapRows } from '../lib/db.ts';
 import { createRemediationCard, ensureOpenMistake } from '../lib/mistakes.ts';
 import { createsMistake, round2, scoreFromCriteria } from '../lib/grading.ts';
-import { localDateOf } from '../lib/time.ts';
+import { safeTimeZone, studyDayFor, DEFAULT_ROLLOVER_HOUR } from '../lib/time.ts';
 
 const GradingPayload = z.object({ attempt_answer_id: z.string().min(1) });
 
@@ -181,7 +181,8 @@ export async function handleGradingAnswer(ctx: JobContext, data: Record<string, 
 
   let mistakeCreated = false;
   if (createsMistake(score)) {
-    const today = localDateOf(ctx.now(), 'America/Sao_Paulo');
+    const owner = unwrap(await ctx.supabase.from('profiles').select('timezone').eq('id', answer.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
+    const today = studyDayFor(ctx.now(), safeTimeZone(owner?.timezone), DEFAULT_ROLLOVER_HOUR);
     let remediationId: string | null = null;
     const shared = unwrap(
       await ctx.supabase.from('subjects').select('owner_class_group_id').eq('id', question.subject_id).maybeSingle(),

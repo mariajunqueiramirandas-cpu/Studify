@@ -22,7 +22,7 @@ import { useDb } from '../../../db/DatabaseProvider';
 import { useLive } from '../../../db/hooks';
 import { useSession } from '../../../features/auth/session';
 import { daysBetween, greeting, parseDate } from '../../../features/common/format';
-import { updatePlanItem, useGoals, useUpcomingExams, type Exam } from '../../../features/goals/api';
+import { updatePlanItem, useGoalExams, useGoals, useUpcomingExams, type Exam } from '../../../features/goals/api';
 import { useTodayPlan, type TodayItem } from '../../../features/goals/today';
 import { dueCount } from '../../../features/memory/local';
 import { useMotivation } from '../../../features/motivation/api';
@@ -37,6 +37,7 @@ export default function Today() {
   const plan = useTodayPlan();
   const goals = useGoals();
   const exams = useUpcomingExams();
+  const pastExams = useGoalExams(goals.data?.[0]?.id);
   const subjects = useSubjects();
   const motivation = useMotivation();
   const overlay = useOverlay();
@@ -81,8 +82,35 @@ export default function Today() {
         ),
       });
     }
-    const graded = (exams.data ?? []).length;
-    void graded;
+    // Exam day: only "Boa prova! 🍀" in the morning, no study content (GOL-07.7).
+    const todayExam = (exams.data ?? []).find((e) => daysBetween(now, parseDate(e.local_date)) === 0);
+    if (todayExam && now.getHours() < 12) {
+      out.unshift({
+        key: 'luck',
+        node: (
+          <Card key="luck" tone="soft">
+            <Text variant="title" align="center">
+              {t('exam.good_luck')}
+            </Text>
+          </Card>
+        ),
+      });
+    }
+    // GOL-02.4: ask for the grade once after the test date (the exam's status turns "done" when logged).
+    const ungraded = (pastExams.data ?? []).find((e) => e.grade == null && e.status !== 'cancelled' && daysBetween(parseDate(e.local_date), now) >= 1);
+    if (ungraded) {
+      out.push({
+        key: 'grade',
+        node: (
+          <Card key="grade" onPress={() => router.push({ pathname: '/goal/[goalId]/exam/[examId]', params: { goalId: ungraded.goal_id, examId: ungraded.id } })}>
+            <Text variant="heading">{t('grade.ask', { subject: subjectName.get(ungraded.subject_id ?? '') ?? ungraded.title })}</Text>
+            <Text variant="label" tone="accent">
+              {t('exam.log_grade')}
+            </Text>
+          </Card>
+        ),
+      });
+    }
     if (!hasSubjects) {
       out.push({
         key: 'upload',
@@ -95,7 +123,7 @@ export default function Today() {
       });
     }
     return out.slice(0, 3);
-  }, [exams.data, activeGoal, hasSubjects, subjectName]);
+  }, [exams.data, pastExams.data, activeGoal, hasSubjects, subjectName]);
 
   const startSession = (minutes?: number) => router.push({ pathname: '/session/[sessionId]', params: { sessionId: 'new', ...(minutes ? { minutes: String(minutes) } : {}) } });
 

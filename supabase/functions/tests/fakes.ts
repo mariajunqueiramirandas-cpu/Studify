@@ -300,7 +300,9 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
       const list = Array.isArray(this.#payload) ? this.#payload : [this.#payload as Row];
       const out: Row[] = [];
       for (const raw of list) {
-        const row = { ...raw };
+        const row: Row = { ...raw };
+        // Column defaults the database would fill in: receipt time for created_at.
+        if (row.created_at === undefined) row.created_at = new Date(NOW_MS).toISOString();
         const hit = this.#findConflict(row);
         if (hit) {
           if (this.#op === 'upsert' && this.#ignoreDuplicates) continue;

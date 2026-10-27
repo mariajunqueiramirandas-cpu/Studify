@@ -159,7 +159,7 @@ describe('account.export (SP-14)', () => {
 
   it('writes a ZIP with the JSON tables and cards CSV, marks the export ready and pushes export_ready', async () => {
     const result = await handleAccountExport(env.ctx, { export_id: 'exp-1' });
-    expect(result).toMatchObject({ status: 'ready', path: `${USER}/exp-1.zip` });
+    expect(result).toMatchObject({ status: 'ready', path: `${USER}/exp-1.zip`, signedUrl: expect.stringContaining('ttl=604800') });
     const zip = env.storage.objects.get(`exports/${USER}/exp-1.zip`);
     expect(zip && String.fromCharCode(zip[0]!, zip[1]!)).toBe('PK');
     expect(new TextDecoder().decode(zip!)).toContain('cards.csv');
