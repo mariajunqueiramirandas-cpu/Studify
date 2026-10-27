@@ -6,7 +6,7 @@ import type { PdfSlice } from '@studify/prompts';
 import { uuidV7 } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
 import type pg from 'pg';
-import { withTransaction, type Sql } from '../framework/db.ts';
+import { tableExists, withTransaction, type Sql } from '../framework/db.ts';
 import { budgetFor, getDocument, type PipelineEnv } from './env.ts';
 import { TASK_FOR_KIND, type TopicKind } from './custom-id.ts';
 import { splitSpan } from './slice-plan.ts';
@@ -14,7 +14,6 @@ import { TOPIC_SLICE_PAGES } from './limits.ts';
 import { prepareCall, toPdfSlices, type SliceRef } from './tasks.ts';
 import { mapCard, mapGlossaryTerm, mapQuestion, cardFrontKey, toSourcePages, type CardDraftInput, type GlossaryDraftInput, type LabelMap, type QuestionDraft } from './mappers.ts';
 import { renderCitedBody, type CitationInput } from './citations.ts';
-import { tableExists, type Sql as SqlT } from '../framework/db.ts';
 import { loadSubject, type SubjectRecord } from './repo.ts';
 import { normalizeTerm } from './text.ts';
 
@@ -182,7 +181,7 @@ export async function buildKindCall(
 ): Promise<BuiltKindCall> {
   const slices: PdfSlice[] = toPdfSlices(refs);
   const languageSubject = bundle.subject.isLanguageSubject;
-  const sqlDb: SqlT = env.ctx.db;
+  const sqlDb: Sql = env.ctx.db;
   const existing = await existingItems(sqlDb, bundle, kind);
   const quantitative = bundle.concepts.some((c) => c.formulas.length > 0);
   const contentLanguage = languageOf;
@@ -257,7 +256,7 @@ export async function buildKindCall(
   return { kind, taskId, call: prepared.call, refs: [...refs], promptVersion: built.promptVersion };
 }
 
-async function existingItems(sql: SqlT, bundle: TopicBundle, kind: TopicKind): Promise<string[]> {
+async function existingItems(sql: Sql, bundle: TopicBundle, kind: TopicKind): Promise<string[]> {
   if (kind === 'cards') {
     const { rows } = await sql.query<{ front: string }>(
       `select front from public.cards where subject_id = $1 and deleted_at is null and status = 'active' limit 300`,
@@ -278,7 +277,7 @@ async function existingItems(sql: SqlT, bundle: TopicBundle, kind: TopicKind): P
   return [];
 }
 
-async function figurePagesOf(sql: SqlT, bundle: TopicBundle): Promise<number[]> {
+async function figurePagesOf(sql: Sql, bundle: TopicBundle): Promise<number[]> {
   const pages = new Set<number>();
   for (const source of bundle.sources) {
     const { rows } = await sql.query<{ page_number: number }>(

@@ -21,7 +21,7 @@ import { jobs as contentJobs } from '../../src/jobs/content.ts';
 import { jobs as batchJobs } from '../../src/jobs/batch.ts';
 import { jobs as filesJobs } from '../../src/jobs/files.ts';
 import { FakeObjectStore, InMemoryQueue, fakeSupabase } from './support/fakes.ts';
-import { textPdf } from './support/pdf.ts';
+import { encryptedPdfBytes, textPdf } from './support/pdf.ts';
 import type pg from 'pg';
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/studify_test_worker';
@@ -208,7 +208,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     await pool?.end();
   });
 
-  async function seed(opts: { budgetLimit?: number; title?: string; subjectId?: string; userId?: string } = {}) {
+  async function seed(opts: { budgetLimit?: number; title?: string; subjectId?: string; userId?: string; bytes?: Uint8Array } = {}) {
     let userId = opts.userId ?? '';
     let subjectId = opts.subjectId ?? '';
     if (!userId) {
@@ -229,7 +229,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       subjectId = subjectRows[0]!.id;
     }
     const docId = randomUUID();
-    const bytes = await textPdf(
+    const bytes = opts.bytes ?? await textPdf(
       opts.title
         ? [['Ribossomos sintetizam proteínas.'], ['O núcleo guarda o DNA.']]
         : [
@@ -414,6 +414,28 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       mock.setHandler(respond);
     }
   }, 180_000);
+
+  it('fails a password-protected PDF in S0 with the password message and makes no AI call', async () => {
+    const store = new FakeObjectStore();
+    const locked = await seed({ bytes: encryptedPdfBytes() });
+    store.put('documents', locked.storagePath, locked.bytes, 'application/pdf');
+    const { backend, registry, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+    const requestsBefore = mock.requests.length;
+    await registry.enqueue('ingest.document', { document_id: locked.docId, mode: 'full', user_id: locked.userId });
+    await backend.drain(200);
+    expect(backend.failedJobs).toEqual([]);
+    const doc = await pool.query<{ status: string; error_code: string | null }>(`select status, error_code from public.documents where id = $1`, [locked.docId]);
+    expect(doc.rows[0]).toEqual({ status: 'failed', error_code: 'password_protected' });
+    expect(mock.requests.length).toBe(requestsBefore);
+    const usage = await pool.query<{ n: string }>(`select count(*)::text as n from public.ai_usage where document_id = $1`, [locked.docId]);
+    expect(Number(usage.rows[0]?.n)).toBe(0);
+    const job = await pool.query<{ status: string; error_message_key: string | null }>(
+      `select status, error_message_key from public.ai_jobs where document_id = $1 and type = 'ingest.document'`,
+      [locked.docId],
+    );
+    expect(job.rows[0]).toEqual({ status: 'failed', error_message_key: 'ingest.error.password_protected' });
+  }, 120_000);
 
   it('merges a second document into the existing map without changing existing nodes', async () => {
     const store = new FakeObjectStore();
