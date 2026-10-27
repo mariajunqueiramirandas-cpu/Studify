@@ -120,6 +120,8 @@ export default function SubjectHome() {
           <ListItem icon="git-network-outline" title={t('subjects.concept_map')} onPress={() => router.push(`/subjects/${subjectId}/concept-map`)} />
           <ListItem icon="sparkles-outline" title={t('memory_map.title')} onPress={() => router.push({ pathname: '/practice/memory-map', params: { subjectId } })} />
           <ListItem icon="newspaper-outline" title={t('subjects.past_tests')} onPress={() => router.push(`/subjects/${subjectId}/past-tests`)} />
+          <ListItem icon="headset-outline" title={t('podcast.episodes')} onPress={() => router.push({ pathname: '/podcast/list', params: { subjectId } })} />
+          <ListItem icon="camera-outline" title={t('cam.title')} subtitle={t('cam.add_photos_hint')} onPress={() => router.push({ pathname: '/camera', params: { subjectId } })} />
         </Card>
       </Section>
 

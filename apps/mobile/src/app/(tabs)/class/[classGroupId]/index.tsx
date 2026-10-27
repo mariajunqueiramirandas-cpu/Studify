@@ -87,6 +87,7 @@ export default function ClassHome() {
       </Section>
 
       <Card>
+        <ListItem icon="cafe-outline" title={t('rooms.title')} subtitle={t('rooms.entry_hint')} onPress={() => router.push(`/class/${classGroupId}/rooms`)} />
         <ListItem icon="people-outline" title={t('class.members')} subtitle={String(active.length)} onPress={() => router.push(`/class/${classGroupId}/members`)} />
         {cg.data?.isMod ? <ListItem icon="flag-outline" title={t('class.review_queue')} onPress={() => router.push(`/class/${classGroupId}/review-queue`)} /> : null}
       </Card>

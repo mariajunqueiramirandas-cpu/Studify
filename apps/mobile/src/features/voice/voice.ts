@@ -3,7 +3,7 @@
 // keeps the audio. Read-aloud speaks one utterance at a time so a long note can be stopped mid-way.
 import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useUiStore } from '../../stores/ui';
 import { speechChunks } from './speech-text';
@@ -85,7 +85,9 @@ export function useVoiceInput(onFinal: (text: string) => void) {
   const [partial, setPartial] = useState('');
   const [error, setError] = useState<VoiceError | null>(null);
   const finalRef = useRef(onFinal);
-  finalRef.current = onFinal;
+  useLayoutEffect(() => {
+    finalRef.current = onFinal;
+  });
   const active = useRef(false);
 
   // Recognition events are global: every hook instance hears them, so each acts only on its own session.

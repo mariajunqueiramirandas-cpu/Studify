@@ -94,12 +94,7 @@ export function ExplainPanel({ capture }: { capture: CaptureRow }) {
   const [focus, setFocus] = useState<string | null>(null);
   const handle = useRef<StreamHandle | null>(null);
 
-  const run = (focusText: string | null) => {
-    handle.current?.cancel();
-    setText('');
-    setCitations([]);
-    setState('streaming');
-    setError(null);
+  const open = (focusText: string | null) => {
     handle.current = streamCaptureExplain(capture.id, focusText, {
       onDelta: (d) => setText((x) => x + d),
       onCitation: (c) => setCitations((x) => [...x, c]),
@@ -115,8 +110,16 @@ export function ExplainPanel({ capture }: { capture: CaptureRow }) {
       setError(errorMessage(e.code));
     });
   };
+  const run = (focusText: string | null) => {
+    handle.current?.cancel();
+    setText('');
+    setCitations([]);
+    setState('streaming');
+    setError(null);
+    open(focusText);
+  };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => (run(null), () => handle.current?.cancel()), [capture.id]);
+  useEffect(() => (open(null), () => handle.current?.cancel()), [capture.id]);
 
   const paragraphs = (capture.transcription ?? '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   return (

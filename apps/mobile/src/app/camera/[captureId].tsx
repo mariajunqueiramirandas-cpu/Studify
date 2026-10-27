@@ -22,8 +22,7 @@ export default function CaptureResult() {
   const [showText, setShowText] = useState(false);
   const started = useRef(false);
 
-  const run = async () => {
-    setFailure(null);
+  const analyze = async () => {
     try {
       const res = await analyzeCapture(captureId);
       setAnalysis({ issues: res.quality.issues });
@@ -33,11 +32,17 @@ export default function CaptureResult() {
     }
   };
 
+  const retry = () => {
+    setFailure(null);
+    void analyze();
+  };
+
+  // A capture analyzed before (reopened from history) shows its stored result without a new call.
+  const analyzed = capture.data?.status === 'ready' && !!capture.data.content_type;
   useEffect(() => {
-    if (!capture.data || started.current) return;
+    if (!capture.data || started.current || analyzed) return;
     started.current = true;
-    if (capture.data.status === 'ready' && capture.data.content_type) setAnalysis({ issues: ((capture.data.quality_flags.model as string[] | undefined) ?? []) });
-    else void run();
+    void analyze();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [capture.data?.id]);
 
@@ -57,13 +62,14 @@ export default function CaptureResult() {
         {unreadable ? (
           <Button label={t('cam.retake')} icon="camera" onPress={() => router.replace({ pathname: '/camera', params: c ? { intent: c.intent } : {} })} />
         ) : (
-          <Button label={t('global.retry')} onPress={() => void run()} />
+          <Button label={t('global.retry')} onPress={retry} />
         )}
       </Screen>
     );
   }
 
-  if (!c || !analysis || c.status !== 'ready') {
+  const result = analysis ?? (analyzed && c ? { issues: (c.quality_flags.model as string[] | undefined) ?? [] } : null);
+  if (!c || !result || c.status !== 'ready') {
     return (
       <Screen title={t('cam.title')} closeIcon onBack={() => router.back()}>
         <Text tone="secondary">{c?.intent === 'grade_answer' || c?.intent === 'grade_essay' ? t('cam.reading_handwriting') : t('cam.reading')}</Text>
@@ -72,7 +78,7 @@ export default function CaptureResult() {
     );
   }
 
-  const issues = analysis.issues.filter((i): i is (typeof MODEL_ISSUES)[number] => (MODEL_ISSUES as readonly string[]).includes(i) && i !== 'multiple_questions');
+  const issues = result.issues.filter((i): i is (typeof MODEL_ISSUES)[number] => (MODEL_ISSUES as readonly string[]).includes(i) && i !== 'multiple_questions');
   const grading = c.intent === 'grade_answer' || c.intent === 'grade_essay';
   return (
     <Screen title={t('cam.title')} closeIcon onBack={() => void leave()}>

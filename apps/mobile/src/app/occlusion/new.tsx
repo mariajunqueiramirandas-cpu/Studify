@@ -1,7 +1,7 @@
 import type { OcclusionMask, OcclusionMode } from '@studify/shared';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PanResponder, View, type LayoutRectangle } from 'react-native';
 import { ActionBar, Banner, Button, Card, EmptyState, IconButton, OcclusionEditorImage, Row, Screen, SegmentedControl, SkeletonList, SwitchRow, Text, TextField, useOverlay } from '../../components';
 import { useSession } from '../../features/auth/session';
@@ -28,15 +28,14 @@ export default function NewOcclusion() {
   const [mode, setMode] = useState<OcclusionMode>('hide_all');
   const [drawing, setDrawing] = useState(false);
   const [draft, setDraft] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [preparing, setPreparing] = useState(false);
+  const [preparing, setPreparing] = useState(!!params.uri);
   const [saving, setSaving] = useState(false);
   const [share, setShare] = useState(false);
-  const layout = useRef<LayoutRectangle | null>(null);
+  const [box, setBox] = useState<LayoutRectangle | null>(null);
   const modeLabels = options('occlusion.modes');
   const sharedSubject = !!subject.data?.owner_class_group_id;
 
   const load = async (source: OcclusionSource) => {
-    setPreparing(true);
     try {
       const prepared = await prepareOcclusionImage(source);
       setImage(prepared);
@@ -49,48 +48,63 @@ export default function NewOcclusion() {
   };
 
   const pick = async (camera: boolean) => {
+    setPreparing(true);
     const res = camera
       ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1, exif: false })
       : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, exif: false });
     if (!res.canceled && res.assets[0]) await load({ uri: res.assets[0].uri, width: res.assets[0].width, height: res.assets[0].height });
+    else setPreparing(false);
   };
 
   // A figure or PDF crop handed over by another screen (MEM-03.1) is loaded once.
   useEffect(() => {
-    if (params.uri) void load({ uri: params.uri, width: Number(params.width ?? 1000), height: Number(params.height ?? 1000) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.uri]);
+    if (!params.uri) return undefined;
+    let alive = true;
+    prepareOcclusionImage({ uri: params.uri, width: Number(params.width ?? 1000), height: Number(params.height ?? 1000) })
+      .then((prepared) => {
+        if (!alive) return;
+        setImage(prepared);
+        setMasks(prepared.masks);
+      })
+      .catch(() => overlay.snack(t('cam.prepare_failed')))
+      .finally(() => alive && setPreparing(false));
+    return () => {
+      alive = false;
+    };
+  }, [params.uri, params.width, params.height, overlay]);
 
   // Draw mode: drag a rectangle on the image (normalized to the image box).
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        const l = layout.current;
-        if (!l) return;
-        setDraft({ x: e.nativeEvent.locationX / l.width, y: e.nativeEvent.locationY / l.height, w: 0, h: 0 });
-      },
-      onPanResponderMove: (_e, g) => {
-        const l = layout.current;
-        if (!l) return;
-        setDraft((d) => (d ? { ...d, w: g.dx / l.width, h: g.dy / l.height } : d));
-      },
-      onPanResponderRelease: () => {
-        setDraft((d) => {
-          if (d) {
-            const box = { x: Math.min(d.x, d.x + d.w), y: Math.min(d.y, d.y + d.h), w: Math.abs(d.w), h: Math.abs(d.h) };
-            if (box.w > 0.01 && box.h > 0.01) {
-              const id = `m${Date.now().toString(36)}`;
-              setMasks((all) => [...all, { id, label: '', ...box }]);
-              setSelected(id);
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: (e) => {
+          const l = box;
+          if (!l) return;
+          setDraft({ x: e.nativeEvent.locationX / l.width, y: e.nativeEvent.locationY / l.height, w: 0, h: 0 });
+        },
+        onPanResponderMove: (_e, g) => {
+          const l = box;
+          if (!l) return;
+          setDraft((d) => (d ? { ...d, w: g.dx / l.width, h: g.dy / l.height } : d));
+        },
+        onPanResponderRelease: () => {
+          setDraft((d) => {
+            if (d) {
+              const box = { x: Math.min(d.x, d.x + d.w), y: Math.min(d.y, d.y + d.h), w: Math.abs(d.w), h: Math.abs(d.h) };
+              if (box.w > 0.01 && box.h > 0.01) {
+                const id = `m${Date.now().toString(36)}`;
+                setMasks((all) => [...all, { id, label: '', ...box }]);
+                setSelected(id);
+              }
             }
-          }
-          return null;
-        });
-        setDrawing(false);
-      },
-    }),
-  ).current;
+            return null;
+          });
+          setDrawing(false);
+        },
+      }),
+    [box],
+  );
 
   const current = masks.find((m) => m.id === selected) ?? null;
   const update = (patch: Partial<OcclusionMask>) => setMasks((all) => all.map((m) => (m.id === selected ? { ...m, ...patch } : m)));
@@ -133,7 +147,7 @@ export default function NewOcclusion() {
           <Text variant="bodySmall" tone="secondary">
             {masks.length ? t('occlusion.suggested', { n: masks.length }) : t('occlusion.none_suggested')}
           </Text>
-          <View onLayout={(e) => (layout.current = e.nativeEvent.layout)} {...(drawing ? pan.panHandlers : {})}>
+          <View onLayout={(e) => setBox(e.nativeEvent.layout)} {...(drawing ? pan.panHandlers : {})}>
             <OcclusionEditorImage uri={image.uri} width={image.width} height={image.height} masks={masks} selectedId={selected} onSelect={(id) => !drawing && setSelected(id)}>
               {draft ? (
                 <View

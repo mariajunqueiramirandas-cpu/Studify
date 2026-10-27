@@ -140,7 +140,12 @@ export default function Today() {
     <Screen
       root
       title={greeting(profile?.display_name ?? '')}
-      actions={<IconButton icon="trophy-outline" label={t('progress.title')} onPress={() => router.push('/profile/progress')} />}
+      actions={
+        <>
+          <IconButton icon="camera-outline" label={t('cam.title')} onPress={() => router.push('/camera')} />
+          <IconButton icon="trophy-outline" label={t('progress.title')} onPress={() => router.push('/profile/progress')} />
+        </>
+      }
       context={
         motivation.data ? (
           <Row gap={space.md}>

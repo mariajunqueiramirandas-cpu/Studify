@@ -58,9 +58,12 @@ export default function TutorThread() {
   // TUT-06 Conversa por voz: answers are spoken, then the app listens again; Me testa is text-only (TUT-06.5).
   const [voiceMode, setVoiceMode] = useState(false);
   const voiceModeRef = useRef(false);
-  voiceModeRef.current = voiceMode;
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
   const speech = useReadAloud('tutor.answer');
-  const handsFree = useVoiceInput((text) => send(text, false, true));
+  const sendRef = useRef<(text: string, allowGeneral?: boolean, spoken?: boolean) => void>(() => undefined);
+  const handsFree = useVoiceInput((text) => sendRef.current(text, false, true));
   const modeLabels = options('tutor.modes');
   const followups = options('tutor.followups');
 
@@ -132,6 +135,10 @@ export default function TutorThread() {
     );
     handle.current = h;
   };
+
+  useEffect(() => {
+    sendRef.current = send;
+  });
 
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
 

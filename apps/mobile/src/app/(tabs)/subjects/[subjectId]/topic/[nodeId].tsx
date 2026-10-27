@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
+  Section,
   ActionBar,
   AiBadge,
   Banner,
@@ -127,6 +128,15 @@ export default function TopicScreen() {
         </View>
       ) : null}
       {tab === 'glossary' ? <GlossaryTab subjectId={subjectId} nodeId={nodeId} /> : null}
+      {node && tab === 'notes' ? (
+        <Section title={t('topic.interactive')}>
+          <Card>
+            <ListItem icon="school-outline" title={t('lucas.title')} subtitle={t('lucas.entry_hint')} onPress={() => router.push({ pathname: '/lucas/[nodeId]', params: { nodeId, subjectId } })} />
+            <ListItem icon="headset-outline" title={t('podcast.title')} subtitle={t('podcast.entry_hint')} onPress={() => router.push({ pathname: '/podcast/new', params: { subjectId, nodeIds: nodeId } })} />
+            <ListItem icon="camera-outline" title={t('cam.title')} subtitle={t('cam.entry_hint')} onPress={() => router.push({ pathname: '/camera', params: { subjectId, nodeId } })} />
+          </Card>
+        </Section>
+      ) : null}
       {node && tab === 'notes' ? <TopicFacts objectives={node.learning_objectives} formulas={node.formulas} sources={node.sources} subjectId={subjectId} /> : null}
     </Screen>
   );
@@ -276,6 +286,7 @@ function CardsTab({ subjectId, nodeId, shared }: { subjectId: string; nodeId: st
       ))}
       <Row wrap>
         <Button compact variant="tonal" icon="add" label={t('topic.new_card')} onPress={() => router.push({ pathname: '/subjects/[subjectId]/card/[cardId]', params: { subjectId, cardId: 'new', nodeId, shared: shared ? '1' : '' } })} />
+        <Button compact variant="tonal" icon="image-outline" label={t('occlusion.new')} onPress={() => router.push({ pathname: '/occlusion/new', params: { subjectId, nodeId } })} />
         <Button
           compact
           variant="text"
