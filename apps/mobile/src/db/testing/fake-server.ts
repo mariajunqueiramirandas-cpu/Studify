@@ -293,6 +293,7 @@ export function createFakeServer(options: { serverNow?: () => number; userId?: s
 
 function matches(row: Row, filter: PullFilter): boolean {
   const value = row[filter.column];
+  if (filter.op === 'is_null') return value === null || value === undefined;
   switch (filter.op) {
     case 'in':
       return (filter.value as string[]).includes(String(value));

@@ -443,7 +443,7 @@ export function filterSignature(filters: PullFilter[]): string {
     filters.map((f) => ({
       column: f.column,
       op: f.op,
-      value: Array.isArray(f.value) ? [...f.value].sort() : f.value,
+      value: !('value' in f) ? null : Array.isArray(f.value) ? [...f.value].sort() : f.value,
     })),
   );
 }

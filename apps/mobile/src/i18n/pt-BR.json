@@ -391,7 +391,11 @@
     "start": "Começar simulado",
     "mode": {
       "exam": "Modo prova",
-      "relaxed": "Modo tranquilo"
+      "relaxed": "Modo tranquilo",
+      "day1": "Dia 1 completo",
+      "day2": "Dia 2 completo",
+      "area": "Área (45 questões)",
+      "mini": "Mini (15 ou 30)"
     },
     "mode_exam_hint": "Com tempo e sem correção até o fim.",
     "mode_relaxed_hint": "Sem pressa. Você vê a correção ao final.",
@@ -401,7 +405,73 @@
     "result": "Você acertou {k} de {n} — nota estimada **{grade}**",
     "navigator": "Questões",
     "time_up": "O tempo acabou. Entreguei seu simulado.",
-    "extra_time": "Tempo extra ativado (+50%)"
+    "extra_time": "Tempo extra ativado (+50%)",
+    "mode_hint": {
+      "day1": "45 de Linguagens + 45 de Humanas + redação, com o tempo do edital.",
+      "day2": "45 de Natureza + 45 de Matemática, com o tempo do edital.",
+      "area": "45 questões de uma área, 3 min por questão.",
+      "mini": "Treino rápido de uma área."
+    },
+    "source": {
+      "replica": "Réplica de uma edição",
+      "misto": "Misto (várias edições)",
+      "provavel": "Provável (o que mais cai)"
+    },
+    "source_hint": {
+      "replica": "A prova exatamente como foi aplicada.",
+      "misto": "Questões de várias edições, com a mistura de dificuldade de uma prova real.",
+      "provavel": "Assuntos na proporção em que mais caem. Só questões oficiais."
+    },
+    "cartao": "Cartão-resposta",
+    "mark": "Marcar pra revisar",
+    "time": {
+      "warning": "Faltam {min} minutos"
+    },
+    "paused": "Simulado com pausa",
+    "score": {
+      "label": "Nota estimada (TRI)",
+      "footnote": "Estimativa do Studify. A nota oficial do Inep pode ser diferente."
+    },
+    "easy_misses": "Você errou {n} questões fáceis pro seu nível — elas pesam mais na TRI.",
+    "lucky_hits": "{n} acertos parecem chute. Na TRI, eles valem menos.",
+    "blank": "Nunca deixe em branco: em branco conta como erro.",
+    "blanks": "{n} em branco = {n} erros.",
+    "stuck": "Você travou aqui ({min} min). Na prova, pule e volte depois.",
+    "stuck_count": "Você travou em {n} questões (mais de {min} min).",
+    "new": {
+      "title": "Novo simulado",
+      "mode": "Formato",
+      "source": "Questões",
+      "edition": "Edição",
+      "mini_size": "Quantas questões?",
+      "language": "Língua estrangeira",
+      "create": "Montar simulado",
+      "offline": "Precisa de internet pra montar o simulado."
+    },
+    "shortfall": "Faltaram {n} questões oficiais com parâmetros pra completar esse simulado.",
+    "coherence": {
+      "label": "Coerência das respostas",
+      "alta": "alta",
+      "media": "média",
+      "baixa": "baixa",
+      "hint": "Na TRI, errar fácil e acertar difícil derruba a nota."
+    },
+    "pace": "Ritmo sugerido: {min} min por questão",
+    "blocks": "Acerto por bloco de 15 questões",
+    "block": "Questões {from}–{to}: {pct}%",
+    "review_errors": "Revisar erros",
+    "sisu": "Nota SISU estimada: {n}",
+    "essay_day1": "Escrever a redação do Dia 1",
+    "history": {
+      "title": "Histórico de simulados",
+      "empty": "Faça seu primeiro simulado pra ver a evolução."
+    },
+    "tri_result": {
+      "title": "Resultado do simulado",
+      "waiting": "Calculando sua nota estimada…",
+      "correct": "{k} de {n} acertos",
+      "interval": "Intervalo provável: {low} a {high}"
+    }
   },
   "result": {
     "title": "Resultado",
@@ -664,7 +734,8 @@
       "practice": "Praticar",
       "mock": "Simulado",
       "upload": "Enviar material",
-      "vespera": "Modo Véspera"
+      "vespera": "Modo Véspera",
+      "essay": "Redação"
     },
     "recompute": "Reorganizar plano",
     "status": {
@@ -1507,5 +1578,352 @@
     "react": "Reagir com {emoji}",
     "react_wait": "Espera uns segundinhos pra reagir de novo.",
     "study_cards": "Revisar cartões"
+  },
+  "enem": {
+    "title": "ENEM",
+    "goal": {
+      "title": "ENEM {ano}"
+    },
+    "dates": {
+      "provisional": "Datas ainda não divulgadas pelo Inep — usando {data} como previsão.",
+      "day1": "1º dia: {date}",
+      "day2": "2º dia: {date}"
+    },
+    "language": "Qual língua estrangeira você vai fazer?",
+    "lang": {
+      "en": "Inglês",
+      "es": "Espanhol"
+    },
+    "area": {
+      "LC": "Linguagens",
+      "CH": "Humanas",
+      "CN": "Natureza",
+      "MT": "Matemática",
+      "RED": "Redação"
+    },
+    "skill": {
+      "practice": "Praticar essa habilidade",
+      "no_description": "Descrição oficial em breve."
+    },
+    "score_a11y": "Nota {score}, intervalo de {low} a {high}",
+    "no_essay_yet": "Corrija uma redação pra ver sua nota.",
+    "no_simulado_yet": "Faça um simulado de {area} pra calcular.",
+    "target": "Meta: {n}",
+    "competency": "Competência {n}",
+    "skill_a11y": "{code}: {pct}% de acerto em {n} questões",
+    "skill_a11y_none": "{code}: sem respostas ainda",
+    "countdown": {
+      "day1": "Faltam {n} dias pro 1º dia",
+      "day2": "Faltam {n} dias pro 2º dia",
+      "today1": "Hoje é o 1º dia. Boa prova! 🍀",
+      "today2": "Hoje é o 2º dia. Boa prova! 🍀",
+      "done": "As provas já passaram."
+    },
+    "home": {
+      "areas": "Suas notas estimadas",
+      "week": "Plano da semana",
+      "no_week": "Seu plano do ENEM aparece aqui depois de montado.",
+      "tools": "Ferramentas",
+      "next_simulado": "Próximo simulado: {date}",
+      "next_essay": "Próxima redação: {date}"
+    },
+    "tile": {
+      "bank": "Banco de Questões",
+      "simulado": "Simulado com TRI",
+      "essay": "Correção de Redação",
+      "sisu": "Meta SISU",
+      "atualidades": "Atualidades",
+      "argument": "Treino de Argumentação",
+      "reta_final": "Reta Final",
+      "repertorio": "Meu repertório"
+    },
+    "wizard": {
+      "title": "Novo objetivo: ENEM",
+      "edition": "Qual edição?",
+      "edition_hint": "Vamos montar seu plano até o 2º dia de prova.",
+      "provisional": "Se o Inep ainda não divulgou as datas, use uma previsão. Você pode mudar depois.",
+      "date": "Data prevista do 1º dia",
+      "time": "Quanto tempo por dia você tem pra estudar?",
+      "create": "Criar meu plano do ENEM",
+      "name": "ENEM {ano}"
+    },
+    "areaScreen": {
+      "skills": "Habilidades",
+      "topics": "Assuntos",
+      "most": "Mais cobrados",
+      "trending": "Em alta",
+      "for_you": "Pra você agora",
+      "appeared": "Apareceu em {n} das últimas {m} edições",
+      "share": "{pct}% das questões da área",
+      "practice_bank": "Praticar com questões do ENEM",
+      "generate": "Gerar mais 5 questões estilo ENEM",
+      "explainer_title": "Como calculamos",
+      "explainer": "Contamos as questões oficiais de cada assunto nas últimas edições. \"Em alta\" é o que cresceu nas 5 edições mais recentes em relação às 5 anteriores. É estatística do passado: ninguém sabe o que vai cair.",
+      "no_topics": "A lista de assuntos do ENEM ainda está sendo montada. Pratique por habilidade enquanto isso."
+    },
+    "trend": {
+      "up": "em alta",
+      "flat": "estável",
+      "down": "em baixa"
+    },
+    "plan": {
+      "essay": "Redação da semana",
+      "essay_review": "Rever a correção da redação",
+      "mock_day1": "Simulado do 1º dia",
+      "mock_day2": "Simulado do 2º dia",
+      "mock_area": "Simulado de {area}",
+      "learn": "Estudar um assunto que cai muito",
+      "practice": "Lista de questões de {area}",
+      "practice2": "Mais uma lista: ainda abaixo de 60%",
+      "vespera": "Revisão leve de véspera",
+      "rollover": "Ficou da semana passada"
+    }
+  },
+  "bank": {
+    "title": "Banco de Questões ENEM",
+    "source": "ENEM {ano} · {dia}º dia · Questão {n} · Fonte: Inep",
+    "annulled": "Questão anulada pelo Inep",
+    "solution": {
+      "label": "Resolução comentada pelo Studify"
+    },
+    "show_transcription": "Ver transcrição",
+    "show_original": "Ver como no caderno",
+    "crop_a11y": "Recorte {n} da questão",
+    "filters": "Filtros",
+    "edition": "Edição",
+    "any": "Todas",
+    "band": {
+      "facil": "Fácil",
+      "media": "Média",
+      "dificil": "Difícil",
+      "muito_dificil": "Muito difícil"
+    },
+    "not_answered": "Não respondidas",
+    "wrong": "Que errei",
+    "practice_list": "Praticar em lista",
+    "practice_timed": "Cronometrado (3 min/questão)",
+    "empty": "Ainda não há questões publicadas com esses filtros.",
+    "count": "{n} questões",
+    "key": "Gabarito: {key}",
+    "skill": "Habilidade {code}",
+    "wrong_why": "Por que as outras estão erradas"
+  },
+  "gen": {
+    "text": {
+      "written": "Texto elaborado pelo Studify"
+    }
+  },
+  "red": {
+    "title": "Redação ENEM",
+    "theme": {
+      "pick": "Me dá um tema",
+      "title": "Tema",
+      "predicted": "Temas de treino",
+      "predicted_note": "Tema de treino — ninguém sabe o tema real.",
+      "past": "Temas que já caíram",
+      "atualidades": "Das Atualidades",
+      "custom": "Digitar um tema",
+      "custom_placeholder": "Ex.: Desafios da mobilidade urbana no Brasil",
+      "use": "Usar este tema",
+      "none": "Os temas de treino deste mês ainda não saíram."
+    },
+    "instruction": "Proposta",
+    "motivating": "Textos motivadores",
+    "lines": "{n} de 30 linhas",
+    "too_short": "Com até 7 linhas, a redação leva nota zero.",
+    "too_long": "Na folha oficial só cabem 30 linhas.",
+    "write": "Escrever no app",
+    "photo": "Fotografar a redação",
+    "submit": "Corrigir redação",
+    "draft_saved": "Rascunho salvo",
+    "grading": "Corrigindo sua redação… te aviso quando ficar pronta.",
+    "score": {
+      "label": "Nota estimada"
+    },
+    "total": "{n} de 1000",
+    "competencia": "Competência {n}",
+    "comp": {
+      "1": "Norma padrão",
+      "2": "Tema e tipo de texto",
+      "3": "Argumentação",
+      "4": "Coesão",
+      "5": "Proposta de intervenção"
+    },
+    "zero": {
+      "title": "Nota zero",
+      "how": "Como evitar",
+      "fuga_tema": "Fuga total ao tema.",
+      "tipo_textual": "O texto não é dissertativo-argumentativo.",
+      "em_branco": "Texto em branco.",
+      "texto_insuficiente": "Até 7 linhas: texto insuficiente.",
+      "anulacao": "Partes que anulam a redação (impropérios, desenhos).",
+      "parte_desconectada": "Parte desconectada do tema.",
+      "identificacao": "Identificação fora do lugar.",
+      "lingua_estrangeira": "Texto em língua estrangeira.",
+      "ilegivel": "Texto ilegível."
+    },
+    "proposta": {
+      "title": "Proposta de intervenção",
+      "checklist": "Agente · Ação · Meio/modo · Finalidade · Detalhamento",
+      "agente": "Agente",
+      "acao": "Ação",
+      "meio": "Meio/modo",
+      "finalidade": "Finalidade",
+      "detalhamento": "Detalhamento"
+    },
+    "hr": {
+      "zero": "Essa proposta desrespeita os direitos humanos: a Competência 5 fica com zero."
+    },
+    "repertorio": {
+      "title": "Repertório",
+      "confirmed": "Confirmado.",
+      "contradicted": "A fonte diz outra coisa.",
+      "unverified": "Não consegui confirmar essa referência. Confira antes de usar."
+    },
+    "issues": "Pontos a corrigir",
+    "strengths": "Pontos fortes",
+    "top_actions": "O que mais aumenta sua nota",
+    "rewrites": "Reescrevendo os parágrafos mais fracos",
+    "why_better": "Por que ficou melhor",
+    "calibration_pending": "A correção ainda está em calibração: use como orientação.",
+    "history": "Suas redações",
+    "most_improved": "Competência que mais evoluiu: C{n}",
+    "weekly_left": "{n} de 3 correções disponíveis nesta semana",
+    "new_version": "Reescrever esta redação"
+  },
+  "sisu": {
+    "title": "Meta SISU",
+    "cutoff": {
+      "note": "Nota de corte é só referência — ela muda a cada edição."
+    },
+    "gap": "Você está a {x} pontos da meta.",
+    "above": "Você já está acima da nota de corte de referência.",
+    "impossible": "Meta muito alta pro tempo que falta — que tal uma segunda opção?",
+    "manual": "Não achou? Digite os pesos e a nota de corte do edital.",
+    "search": "Buscar curso ou instituição",
+    "weights": "Pesos",
+    "min_scores": "Notas mínimas (se houver)",
+    "cutoff_label": "Nota de corte de referência",
+    "margin": "Margem de segurança",
+    "modality": "Rótulo da modalidade (opcional)",
+    "modality_hint": "Só um nome pra você lembrar. A Studify nunca pergunta o motivo.",
+    "label": "Curso e instituição",
+    "priority": "Opção {n}",
+    "save": "Salvar meta",
+    "targets": "Metas por área",
+    "missing": "Faça simulado de {areas} e corrija uma redação pra calcular as metas.",
+    "current": "Nota SISU atual estimada: {n}",
+    "private": "Sua meta é só sua: ninguém da turma vê.",
+    "remove": "Remover meta",
+    "add": "Adicionar opção",
+    "cutoffs": "Notas de corte publicadas",
+    "informed": "informada por você"
+  },
+  "atual": {
+    "title": "Atualidades da semana",
+    "save": "Salvar como repertório",
+    "saved": "Salvo no seu repertório",
+    "empty": "O primeiro resumo sai na segunda-feira.",
+    "week": "Semana de {date}",
+    "why": "Por que importa pro ENEM",
+    "sources": "Fontes",
+    "practice": "Praticar as questões",
+    "notify": "Avisar quando sair um resumo novo",
+    "theme": "Treinar redação com esse assunto",
+    "archive": "Resumos anteriores"
+  },
+  "repertorio": {
+    "title": "Meu repertório",
+    "empty": "Salve dados, citações e leis das Atualidades pra usar nas redações.",
+    "kind": {
+      "quote": "Citação",
+      "data": "Dado",
+      "law": "Lei",
+      "work": "Obra",
+      "event": "Acontecimento"
+    },
+    "add": "Adicionar",
+    "text": "Texto",
+    "source": "Fonte (link)",
+    "verified": {
+      "yes": "verificado",
+      "no": "não verificado",
+      "contradicted": "contradito"
+    },
+    "remove": "Remover"
+  },
+  "final": {
+    "title": "Reta Final",
+    "start": "Começou a Reta Final! 🏁",
+    "checklist": {
+      "title": "Checklist do dia da prova",
+      "note": "Confira sempre o edital oficial do Inep."
+    },
+    "good_luck": "Boa prova! Documento e caneta preta transparente na mochila? 🍀",
+    "days": "Faltam {n} dias pro 1º dia",
+    "starts_on": "A Reta Final começa em {date}",
+    "gates": "Portões: {open} às {close} · Início: {start} (horário de Brasília)",
+    "edital": "Abrir o edital",
+    "schedule": "Como ficam as últimas semanas",
+    "tips": {
+      "focus": "Foco no que mais cai e no que você ainda erra; nada de assunto pesado novo na última semana.",
+      "mocks": "Dois simulados completos nos domingos antes da prova, no horário real.",
+      "eve": "Véspera: revisão leve, separe documento e caneta, durma cedo.",
+      "between": "Entre os dias: descanse, revise Natureza e Matemática de leve e evite gabaritos extraoficiais."
+    },
+    "no_checklist": "O checklist aparece aqui quando o edital deste ano for publicado."
+  },
+  "arg": {
+    "title": "Treino de Argumentação",
+    "mode": {
+      "debate": "Debate",
+      "build": "Construir argumento"
+    },
+    "mode_hint": {
+      "debate": "O Advogado do Diabo defende o outro lado por algumas rodadas.",
+      "build": "Passo a passo: tese, argumentos, refutação e conclusão."
+    },
+    "theme": "Tema",
+    "suggest": "Sugerir temas do meu material",
+    "custom": "Digitar um tema",
+    "custom_placeholder": "Ex.: A escola deve proibir celulares?",
+    "start": "Começar",
+    "thesis_prompt": "Escreva sua tese em 1–2 frases",
+    "placeholder": "Escreva seu argumento",
+    "round": "Rodada {n} de {m}",
+    "send": "Enviar",
+    "finish": "Terminar e ver o resumo",
+    "rubric": {
+      "tese": "Tese",
+      "fundamentacao": "Fundamentação",
+      "repertorio": "Repertório",
+      "coerencia": "Coerência",
+      "refutacao": "Refutação",
+      "falacias": "Sem falácias"
+    },
+    "fallacies": "Falácias encontradas",
+    "tip": "Dica",
+    "summary": "Resumo do treino",
+    "strongest": "Seu melhor argumento",
+    "weakest": "Ponto a melhorar",
+    "outline": "Esqueleto de redação",
+    "write_essay": "Escrever redação com este esqueleto",
+    "role_note": "O Advogado do Diabo está interpretando um papel — não é a opinião da Studify.",
+    "total": "Nota do treino: {n}%",
+    "thesis_ok": "Tese registrada. Agora, seu primeiro argumento!",
+    "repertorio_geral": "Repertório geral",
+    "repertorio_material": "Do seu material",
+    "suggestions": "Repertório sugerido",
+    "thesis_check": {
+      "clear": "clara",
+      "position": "com posição",
+      "specific": "específica"
+    },
+    "outline_parts": {
+      "intro": "Introdução",
+      "dev": "Desenvolvimento {n}",
+      "concl": "Conclusão"
+    },
+    "entry_hint": "Debata um tema com o Advogado do Diabo"
   }
 }

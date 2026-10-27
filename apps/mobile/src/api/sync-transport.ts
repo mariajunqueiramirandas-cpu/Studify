@@ -35,6 +35,8 @@ function applyFilter(query: any, filter: PullFilter): any {
       return query.gte(filter.column, filter.value);
     case 'lte':
       return query.lte(filter.column, filter.value);
+    case 'is_null':
+      return query.is(filter.column, null);
   }
 }
 

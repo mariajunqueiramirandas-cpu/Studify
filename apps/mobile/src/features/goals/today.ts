@@ -17,6 +17,9 @@ export interface TodayItem {
   status: string;
   pinned: boolean;
   reason: string | null;
+  goalId: string | null;
+  reasonKey: string | null;
+  reasonParams: Record<string, unknown> | null;
 }
 
 /** Today's plan from SQLite (works offline; GOL-05.5). The study day rolls over at 04:00. */
@@ -54,6 +57,9 @@ export function useTodayPlan(localDate?: string) {
           status: i.status,
           pinned: !!i.pinned,
           reason: i.reasonKey ? t(i.reasonKey, { ...((i.reasonParams as Record<string, unknown> | null) ?? {}), defaultValue: '' }) || null : null,
+          goalId: i.goalId ?? null,
+          reasonKey: i.reasonKey ?? null,
+          reasonParams: (i.reasonParams as Record<string, unknown> | null) ?? null,
         };
       });
     },

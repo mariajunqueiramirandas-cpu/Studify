@@ -43,6 +43,8 @@ export const PULL_TABLES: readonly PullTableDef[] = [
     name: 'subjects',
     table: s.subjects,
     pk: ['id'],
+    // System subjects (ENEM bank, Atualidades) are read online, never mirrored (thousands of global rows).
+    filters: () => [{ column: 'system_kind', op: 'is_null' }],
     cascade: [
       { child: s.knowledgeNodes, column: 'subjectId' },
       { child: s.cards, column: 'subjectId' },

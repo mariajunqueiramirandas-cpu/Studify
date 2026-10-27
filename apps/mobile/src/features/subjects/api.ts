@@ -77,7 +77,7 @@ export function useSubjects() {
     enabled: !!userId,
     queryFn: async () => {
       const [subjects, settings] = await Promise.all([
-        rows<Subject>(supabase.from('subjects').select('*').is('deleted_at', null).order('created_at')),
+        rows<Subject>(supabase.from('subjects').select('*').is('deleted_at', null).is('system_kind', null).order('created_at')),
         rows<SubjectUserSettings>(supabase.from('subject_user_settings').select('*').eq('user_id', userId!)),
       ]);
       const byId = new Map(settings.map((s) => [s.subject_id, s]));

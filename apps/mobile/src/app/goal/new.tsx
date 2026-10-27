@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { ActionBar, Banner, Button, Card, Chip, ChipGroup, DateField, ListItem, RadioList, Screen, Stepper, Text, TextField, useOverlay } from '../../components';
@@ -20,13 +20,14 @@ function bimestreDefault(now = new Date()) {
 
 /** S-OBJ-01…08 + S-OBJ-14 entry: the Semana de Provas wizard (GOL-01.2). The plan exists after 1 test. */
 export default function NewGoal() {
+  const params = useLocalSearchParams<{ mode?: 'enem' | 'exam_week' }>();
   const { userId } = useSession();
   const overlay = useOverlay();
   const subjects = useSubjects();
   const createSubject = useCreateSubject();
   const invalidate = useInvalidateGoal();
   const [step, setStep] = useState<Step>('mode');
-  const [mode, setMode] = useState<'exam_week' | 'enem' | null>(null);
+  const [mode, setMode] = useState<'exam_week' | 'enem' | null>(params.mode ?? null);
   const [name, setName] = useState(bimestreDefault());
   const [start, setStart] = useState<Date | null>(new Date());
   const [end, setEnd] = useState<Date | null>(addDays(new Date(), 14));
@@ -62,7 +63,7 @@ export default function NewGoal() {
   const footer = (() => {
     switch (step) {
       case 'mode':
-        return <Button label={t('global.continue')} disabled={mode !== 'exam_week'} onPress={() => setStep('name')} />;
+        return <Button label={t('global.continue')} disabled={!mode} onPress={() => (mode === 'enem' ? router.replace('/enem/new') : setStep('name'))} />;
       case 'name':
         return (
           <Button
@@ -121,7 +122,7 @@ export default function NewGoal() {
             onChange={setMode}
             options={[
               { value: 'exam_week', label: t('onb.intent.exam_week'), hint: t('onb.intent.exam_week_hint') },
-              { value: 'enem', label: `${t('onb.intent.enem')} · ${t('global.coming_soon')}`, hint: t('goal.enem_soon') },
+              { value: 'enem', label: t('onb.intent.enem'), hint: t('enem.wizard.edition_hint') },
             ]}
           />
         </>

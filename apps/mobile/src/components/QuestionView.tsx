@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { t } from '../i18n';
 import type { Option, QuestionResponse, QuestionRow } from '../features/practice/types';
@@ -22,14 +22,18 @@ interface Props {
   /** problem (PRA-08.3): hints revealed so far and the "Dica" action; omitted where hints are not offered. */
   hintsUsed?: number;
   onHint?: () => void;
+  /** Shown above the question: an ENEM texto-base, or the official item (crops) that already includes the stem. */
+  header?: ReactNode;
+  stemInHeader?: boolean;
 }
 
-export function QuestionView({ question, response, onChange, revealed, submitOnTap, distribution, hintsUsed, onHint }: Props) {
+export function QuestionView({ question, response, onChange, revealed, submitOnTap, distribution, hintsUsed, onHint, header, stemInHeader }: Props) {
   return (
     <View style={{ gap: space.lg }}>
+      {header}
       {question.stimulus?.markdown ? <Stimulus text={question.stimulus.markdown} /> : null}
       {question.stimulus?.table_markdown ? <Stimulus text={question.stimulus.table_markdown} /> : null}
-      {question.type !== 'fill_blank' && question.type !== 'true_false' ? <RichContent text={question.stem} /> : null}
+      {question.type !== 'fill_blank' && question.type !== 'true_false' && !stemInHeader ? <RichContent text={question.stem} /> : null}
       <Body question={question} response={response} onChange={onChange} revealed={revealed} submitOnTap={submitOnTap} distribution={distribution} hintsUsed={hintsUsed} onHint={onHint} />
     </View>
   );

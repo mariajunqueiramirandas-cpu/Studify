@@ -23,6 +23,7 @@ import {
 import { useDb } from '../../db/DatabaseProvider';
 import { useSession } from '../../features/auth/session';
 import { formatClock } from '../../features/common/format';
+import { EnemItemHeader, TextoBaseView } from '../../features/enem/components';
 import { ExplainSheet } from '../../features/learn/ExplainSheet';
 import { useQuizBundle } from '../../features/practice/api';
 import { usePickedCauses } from '../../features/practice/causes';
@@ -49,6 +50,7 @@ export default function QuizRunner() {
   const quiz = bundle.data?.quiz;
   const questions = bundle.data?.questions ?? [];
   const exam = quiz?.mode === 'exam_conditions' || quiz?.mode === 'relaxed';
+  const enemSim = quiz?.kind === 'enem_simulado';
   const confidenceOn = (profile?.settings as { confidence_enabled?: boolean } | undefined)?.confidence_enabled !== false;
 
   const [response, setResponse] = useState<QuestionResponse | null>(null);
@@ -64,6 +66,7 @@ export default function QuizRunner() {
   const [now, setNow] = useState(Date.now());
   const shownAt = useRef(Date.now());
   const submitted = useRef(false);
+  const warned = useRef<Set<number>>(new Set());
 
   // Start or resume the persisted runner for this attempt.
   useEffect(() => {
@@ -96,6 +99,16 @@ export default function QuizRunner() {
     if (remaining !== null && remaining <= 0 && !submitted.current) {
       overlay.snack(t('sim.time_up'));
       void submit();
+      return;
+    }
+    // ENEM simulado: warnings at 60, 30 and 15 minutes left (ENM-04.3), once each.
+    if (enemSim && remaining !== null) {
+      for (const min of [60, 30, 15]) {
+        if (remaining <= min * 60 && remaining > (min - 1) * 60 && !warned.current.has(min)) {
+          warned.current.add(min);
+          overlay.snack(t('sim.time.warning', { min }));
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remaining]);
@@ -151,13 +164,16 @@ export default function QuizRunner() {
       if (g.correct) correct++;
     }
     const id = await runner.submit(db);
-    router.replace({ pathname: '/practice/result/[attemptId]', params: { attemptId: id ?? attemptId ?? '', k: String(correct), n: String(questions.length), quizId } });
+    // ENEM simulado: per-area TRI estimate instead of a single score (ENM-04.5).
+    if (enemSim && (id ?? attemptId)) router.replace({ pathname: '/enem/simulado/[attemptId]', params: { attemptId: (id ?? attemptId)! } });
+    else router.replace({ pathname: '/practice/result/[attemptId]', params: { attemptId: id ?? attemptId ?? '', k: String(correct), n: String(questions.length), quizId } });
   };
 
   if (bundle.isError) return <Screen title="" immersive><ErrorState onRetry={bundle.refetch} /></Screen>;
   if (!quiz || !q) return <Screen title="" immersive><SkeletonList rows={4} height={64} /></Screen>;
 
   const answered = isAnswered(q.type, response);
+  const enemMeta = bundle.data?.enem.get(q.id);
   const needsConfidence = confidenceOn && !exam && answered && !result;
   const subjectShared = false;
 
@@ -210,6 +226,8 @@ export default function QuizRunner() {
     >
       <QuestionView
         question={q}
+        header={enemMeta ? <EnemItemHeader meta={enemMeta} transcription={q.stem} /> : q.texto_base ? <TextoBaseView value={q.texto_base} /> : null}
+        stemInHeader={!!enemMeta}
         response={response}
         onChange={(r) => (setResponse(r), exam && persist(r, null))}
         revealed={!!result && !result.pending}

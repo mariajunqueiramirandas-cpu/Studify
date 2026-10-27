@@ -3,7 +3,8 @@
 
 export type PullFilter =
   | { column: string; op: 'in'; value: string[] }
-  | { column: string; op: 'eq' | 'gte' | 'lte'; value: string | number };
+  | { column: string; op: 'eq' | 'gte' | 'lte'; value: string | number }
+  | { column: string; op: 'is_null' };
 
 export interface PullCursor {
   /** Raw server `updated_at` of the last row seen (keeps microseconds). `null` = from the start. */

@@ -8,6 +8,7 @@ import { useDb } from '../../db/DatabaseProvider';
 import { enqueueOutbox } from '../../db/outbox';
 import { useSession } from '../../features/auth/session';
 import { updatePlanItem } from '../../features/goals/api';
+import { enemRoute } from '../../features/enem/format';
 import { useTodayPlan, type TodayItem } from '../../features/goals/today';
 import { buildLocalQueue } from '../../features/memory/local';
 import { createQuiz } from '../../features/practice/api';
@@ -86,6 +87,11 @@ export default function SessionRunner() {
       return;
     }
     const item = b.item!;
+    const enem = enemRoute(item);
+    if (enem) {
+      router.push(enem);
+      return;
+    }
     if (b.kind === 'learn' && item.subjectId && item.nodeIds[0]) {
       router.push({ pathname: '/subjects/[subjectId]/topic/[nodeId]', params: { subjectId: item.subjectId, nodeId: item.nodeIds[0] } });
       return;

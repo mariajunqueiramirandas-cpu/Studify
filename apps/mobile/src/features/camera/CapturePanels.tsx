@@ -323,7 +323,8 @@ export function AddToSubjectPanel({ capture }: { capture: CaptureRow }) {
 
 // ---------------------------------------------------------------- CAM-03 transcription review + grading
 
-export function TranscriptionReview({ capture, questionId, onGraded }: { capture: CaptureRow; questionId?: string; onGraded: (essayId: string, feedback: SchoolEssayFeedback | null) => void }) {
+/** themeId: the ENEM redação theme picked in the editor (grade_essay from S-ENEM Redação). */
+export function TranscriptionReview({ capture, questionId, themeId, onGraded }: { capture: CaptureRow; questionId?: string; themeId?: string; onGraded: (essayId: string, feedback: SchoolEssayFeedback | null) => void }) {
   const { colors: c, type } = useTheme();
   const overlay = useOverlay();
   const online = useOnline();
@@ -345,6 +346,7 @@ export function TranscriptionReview({ capture, questionId, onGraded }: { capture
         ...(questionId ? { question_id: questionId } : {}),
         ...(!questionId && questionText.trim() ? { question_text: questionText.trim(), max_points: Number(maxPoints.replace(',', '.')) || 10 } : {}),
         ...(capture.subject_id ? { subject_id: capture.subject_id } : {}),
+        ...(themeId && capture.intent === 'grade_essay' ? { theme_id: themeId } : {}),
       });
       const graded = await gradeEssay(res.essay_id);
       onGraded(res.essay_id, graded.mode === 'sync' ? graded.essay.feedback : null);

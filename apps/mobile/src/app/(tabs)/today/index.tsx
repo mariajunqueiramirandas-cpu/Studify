@@ -23,6 +23,7 @@ import { useLive } from '../../../db/hooks';
 import { useSession } from '../../../features/auth/session';
 import { daysBetween, greeting, parseDate } from '../../../features/common/format';
 import { updatePlanItem, useGoalExams, useGoals, useUpcomingExams, type Exam } from '../../../features/goals/api';
+import { enemRoute } from '../../../features/enem/format';
 import { useTodayPlan, type TodayItem } from '../../../features/goals/today';
 import { dueCount } from '../../../features/memory/local';
 import { useMotivation } from '../../../features/motivation/api';
@@ -222,8 +223,10 @@ export default function Today() {
 function PlanRow({ item, onDone, onSkip }: { item: TodayItem; onDone: () => void; onSkip: () => void }) {
   const { colors } = useTheme();
   const done = item.status !== 'planned';
+  // ENEM units open their own screen (simulado setup, redação, bank, Reta Final).
+  const enem = enemRoute(item);
   return (
-    <Card accent={item.subjectColor} style={done ? { opacity: 0.6 } : undefined}>
+    <Card accent={item.subjectColor} style={done ? { opacity: 0.6 } : undefined} onPress={!done && enem ? () => router.push(enem) : undefined}>
       <Row>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="label" style={done ? { textDecorationLine: 'line-through' } : undefined}>

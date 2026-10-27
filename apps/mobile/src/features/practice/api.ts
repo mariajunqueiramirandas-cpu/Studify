@@ -6,7 +6,7 @@ import { useSession } from '../auth/session';
 import { row, rows } from '../common/query';
 import type { MistakeCause, QuestionRow, QuestionType } from './types';
 
-export type QuizKind = 'practice' | 'mock_exam' | 'mistake_retry' | 'predicted_test' | 'boss' | 'feed' | 'duel' | 'battle';
+export type QuizKind = 'practice' | 'mock_exam' | 'mistake_retry' | 'predicted_test' | 'boss' | 'feed' | 'duel' | 'battle' | 'enem_simulado';
 export type QuizMode = 'practice' | 'exam_conditions' | 'relaxed';
 
 export interface QuizScope {
@@ -15,6 +15,17 @@ export interface QuizScope {
   subject_id?: string;
   node_ids?: string[];
   weak_only?: boolean;
+}
+
+/** An official ENEM item behind a question (features/enem EnemItemMeta). */
+export interface EnemQuestionMeta {
+  item_id: string;
+  edition_year: number;
+  day: number;
+  position: number | null;
+  annulled: boolean;
+  crop_paths: string[];
+  alt_text: string | null;
 }
 
 export interface Quiz {
@@ -79,7 +90,15 @@ export function useQuizBundle(quizId: string | undefined) {
       if (!quiz) return null;
       const qs = await rows<QuestionRow>(supabase.from('questions').select('*').in('id', quiz.question_ids));
       const byId = new Map(qs.map((q) => [q.id, q]));
-      return { quiz, questions: quiz.question_ids.map((id) => byId.get(id)).filter((q): q is QuestionRow => !!q) };
+      // Official ENEM items carry their printed crops, edition and position (ENM-02.7).
+      const official = quiz.kind === 'enem_simulado' || qs.some((q) => q.origin === 'enem_official');
+      const enem = official
+        ? await rows<Omit<EnemQuestionMeta, 'item_id' | 'position'> & { id: string; question_id: string; positions: Array<{ position: number }> }>(
+            supabase.from('enem_items').select('id,question_id,edition_year,day,positions,annulled,crop_paths,alt_text').in('question_id', quiz.question_ids),
+          )
+        : [];
+      const meta = new Map<string, EnemQuestionMeta>(enem.map((e) => [e.question_id, { item_id: e.id, edition_year: e.edition_year, day: e.day, position: e.positions[0]?.position ?? null, annulled: e.annulled, crop_paths: e.crop_paths, alt_text: e.alt_text }]));
+      return { quiz, questions: quiz.question_ids.map((id) => byId.get(id)).filter((q): q is QuestionRow => !!q), enem: meta };
     },
   });
 }

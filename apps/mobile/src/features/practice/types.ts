@@ -45,6 +45,14 @@ export interface QuestionRow {
   difficulty?: number | null;
   version?: number;
   hidden_reason?: string | null;
+  origin?: string;
+  /** ENEM-style generated items (ENM-03): the texto-base shown above the comando. */
+  texto_base?: {
+    kind: 'excerpt' | 'written' | 'chart' | 'table';
+    content_md: string;
+    chart_data?: { type: 'bar' | 'line' | 'pie'; title: string; x_label: string | null; y_label: string | null; series: Array<{ name: string; points: Array<{ x: string; y: number }> }> } | null;
+    label?: string | null;
+  } | null;
 }
 
 export type QuestionResponse =

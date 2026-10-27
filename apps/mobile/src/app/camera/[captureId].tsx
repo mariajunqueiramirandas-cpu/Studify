@@ -15,7 +15,7 @@ const MODEL_ISSUES = ['blur', 'glare', 'partial', 'dark', 'handwriting', 'multip
  * before grading. A photo without study content is deleted by the server and offers a retake.
  */
 export default function CaptureResult() {
-  const { captureId, questionId } = useLocalSearchParams<{ captureId: string; questionId?: string }>();
+  const { captureId, questionId, themeId } = useLocalSearchParams<{ captureId: string; questionId?: string; themeId?: string }>();
   const capture = useCapture(captureId);
   const [analysis, setAnalysis] = useState<{ issues: string[] } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function CaptureResult() {
       <Screen title={t('cam.title')} closeIcon onBack={() => router.back()}>
         <Banner kind={unreadable ? 'warning' : 'danger'} message={unreadable ? t('cam.no_content') : failure === 'budget_exhausted' || failure === 'rate_limited' ? t('budget.user_daily') : failure === 'offline' ? t('cam.offline') : t('error.generation')} />
         {unreadable ? (
-          <Button label={t('cam.retake')} icon="camera" onPress={() => router.replace({ pathname: '/camera', params: c ? { intent: c.intent } : {} })} />
+          <Button label={t('cam.retake')} icon="camera" onPress={() => router.replace({ pathname: '/camera', params: c ? { intent: c.intent, ...(themeId ? { themeId } : {}) } : {} })} />
         ) : (
           <Button label={t('global.retry')} onPress={retry} />
         )}
@@ -101,7 +101,9 @@ export default function CaptureResult() {
           <TranscriptionReview
             capture={c}
             questionId={questionId}
-            onGraded={(essayId) => router.replace({ pathname: '/essay/[essayId]', params: { essayId } })}
+            themeId={themeId}
+            // ENEM redação (grade_essay) has its own result screen with C1–C5 (ENM-05.2).
+            onGraded={(essayId) => router.replace({ pathname: c.intent === 'grade_essay' ? '/enem/essay/[essayId]' : '/essay/[essayId]', params: { essayId } })}
           />
         ) : null}
       </View>
