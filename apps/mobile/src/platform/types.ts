@@ -97,6 +97,8 @@ export interface RichNotifier {
   activeKeys(): string[];
   consumeActions(): RichNotifyAction[];
   capabilities(): RichNotifyCapabilities;
+  /** Why the last show() posted nothing (the native exception), or null. */
+  lastError(): string | null;
   openSettings(): void;
   /** Called when the native side showed a notification or queued an action. Returns the unsubscribe function. */
   onEvent(listener: (e: { type: 'shown' | 'received' | 'action'; key: string }) => void): () => void;

@@ -23,6 +23,7 @@ interface NativeNotify {
   consumeActions(): { kind: string; key: string; at: number; cardId: string | null }[];
   capabilities(): RichNotifyCapabilities;
   openSettings(): void;
+  lastError(): string | null;
   addListener(event: 'onNotifyEvent', listener: (e: { type: string; key: string }) => void): EventSubscription;
 }
 
@@ -118,6 +119,13 @@ export const richNotifier: RichNotifier = {
       return (native?.consumeActions() ?? []).filter((a): a is RichNotifyAction => KINDS.has(a.kind));
     } catch {
       return [];
+    }
+  },
+  lastError() {
+    try {
+      return native?.lastError() ?? null;
+    } catch {
+      return null;
     }
   },
   capabilities() {

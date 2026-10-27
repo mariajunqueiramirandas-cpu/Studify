@@ -20,7 +20,16 @@ export default function NotificationPreview() {
       return;
     }
     await requestNotificationPermission().catch(() => false);
-    overlay.snack((await richNotifier.show(n)) ? t('notif.preview_sent') : t('notif.disabled'));
+    if (await richNotifier.show(n)) {
+      overlay.snack(t('notif.preview_sent'));
+      return;
+    }
+    // "Off" only when Android says so; anything else is a failure to post, with the reason for support.
+    if (!richNotifier.capabilities().enabled) {
+      overlay.snack(t('notif.disabled'));
+      return;
+    }
+    overlay.snack(t('notif.preview_failed', { reason: richNotifier.lastError() ?? '' }).trim());
   };
   return (
     <Screen title={t('notif.preview_title')}>
