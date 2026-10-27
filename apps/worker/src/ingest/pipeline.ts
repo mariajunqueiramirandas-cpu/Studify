@@ -423,6 +423,10 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
       ai_job_id: payload.aiJobId,
     }, { singletonKey: `prereq:${payload.subjectId}:${payload.documentId}` });
   }
+  // ING-06: the material checker runs once per document after S2; it never blocks generation (ING-06.4).
+  if (payload.documentId) {
+    await ctx.enqueue('ingest.material_check', { document_id: payload.documentId }, { singletonKey: `material-check:${payload.documentId}` });
+  }
   await ctx.enqueue('ingest.topic_content', {
     stage: 'S4',
     subject_id: payload.subjectId,

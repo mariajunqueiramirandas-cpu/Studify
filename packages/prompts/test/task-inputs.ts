@@ -552,6 +552,49 @@ export const TASK_INPUTS: Record<string, unknown> = {
       { key: 'n2', title: 'Movimentos sociais' },
     ],
   },
+  // Phase 5
+  'visual.generate': {
+    topic: { title: 'Respiração celular', summary: 'Como a célula obtém energia.' },
+    resumo: '## Ideia central\nGlicólise, ciclo de Krebs e cadeia respiratória.',
+    requestedType: null,
+    slices: [bio],
+    contentLanguage: 'pt-BR',
+  },
+  'material.check': {
+    documentTitle: 'Biologia — Apostila',
+    slices: [bio],
+    topics: [{ key: 't1', title: 'Respiração celular' }],
+    otherDocuments: [{ key: 'O1', title: 'Slides da aula 3', topics: [{ title: 'Glicólise', summary: 'Produz 2 ATP líquidos.' }] }],
+    contentLanguage: 'pt-BR',
+  },
+  'mnemonics.suggest': {
+    target: { kind: 'card', front: 'Fases da mitose, em ordem', back: 'Prófase, metáfase, anáfase, telófase' },
+    items: ['Prófase', 'Metáfase', 'Anáfase', 'Telófase'],
+    type: 'any',
+    loci: [],
+    excludeTitles: ['PMAT'],
+    contentLanguage: 'pt-BR',
+  },
+  'divide.review': {
+    topic: { title: 'Respiração celular', summary: 'Como a célula obtém energia.', key_concepts: ['Glicólise', 'Ciclo de Krebs'] },
+    contribution: 'A glicólise acontece na mitocôndria e gera 38 ATP.',
+    slices: [bio],
+    contentLanguage: 'pt-BR',
+  },
+  'divide.merge': {
+    topic: { title: 'Respiração celular', summary: 'Como a célula obtém energia.' },
+    contributions: ['A glicólise ocorre no citoplasma.', 'O ciclo de Krebs ocorre na matriz mitocondrial.'],
+    slices: [bio],
+    contentLanguage: 'pt-BR',
+  },
+  'peer.validate': {
+    topic: { title: 'Respiração celular', summary: 'Como a célula obtém energia.' },
+    question: { type: 'true_false', stem: 'A glicólise ocorre no citoplasma.', payload: { statement: 'A glicólise ocorre no citoplasma.', correct: true }, explanation: null },
+    candidates: [{ key: 'Q1', stem: 'Onde ocorre a glicólise?' }],
+    slices: [bio],
+    contentLanguage: 'pt-BR',
+  },
+  'retro.title': { period: 'semester', stats: { active_hours: 42, cards_reviewed: 900, questions_answered: 300, longest_streak: 12 } },
 };
 
 export { questionRecord };

@@ -346,8 +346,8 @@ select test_helpers.check_err('nobody can DELETE review logs: service role is re
   $$delete from public.review_logs$$);
 select test_helpers.check_rows('bob reads the approved Turma question and his pending peer question', 'authenticated', pg_temp.u('bob'),
   $$select id from public.questions$$, 2);
-select test_helpers.check_rows('alice does not see bob pending peer question', 'authenticated', pg_temp.u('alice'),
-  $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000002'$$, 0);
+select test_helpers.check_rows('alice (Turma member) sees bob pending peer question to vote on it (SOC-07.3)', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000002'$$, 1);
 select test_helpers.check_rows('alice sees the approved Turma question', 'authenticated', pg_temp.u('alice'),
   $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000001'$$, 1);
 select test_helpers.check_rows('carol (moderator) sees the pending peer question', 'authenticated', pg_temp.u('carol'),

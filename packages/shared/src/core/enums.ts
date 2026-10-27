@@ -774,6 +774,49 @@ export const ArgumentModeSchema = z.enum(ARGUMENT_MODE);
 export const ARGUMENT_STATUS = ['active', 'finished', 'abandoned'] as const;
 export type ArgumentStatus = (typeof ARGUMENT_STATUS)[number];
 
+// ---------------------------------------------------------------- Phase 5
+
+/** LRN-05.1 visual types; `none` caches "Esse tópico não fica bom em diagrama" (LRN-05.2). */
+export const VISUAL_TYPE = ['flowchart', 'timeline', 'comparison_table', 'hierarchy', 'cycle', 'none'] as const;
+export type VisualType = (typeof VISUAL_TYPE)[number];
+export const VisualTypeSchema = z.enum(VISUAL_TYPE);
+
+export const VISUAL_STATUS = ['ready', 'failed'] as const;
+export type VisualStatus = (typeof VISUAL_STATUS)[number];
+
+/** ING-06.1 finding types. */
+export const FINDING_TYPE = ['contradiction', 'numeric_or_formula_typo', 'skipped_step', 'unclear'] as const;
+export type FindingType = (typeof FINDING_TYPE)[number];
+export const FindingTypeSchema = z.enum(FINDING_TYPE);
+
+export const FINDING_SEVERITY = ['low', 'medium', 'high'] as const;
+export type FindingSeverity = (typeof FINDING_SEVERITY)[number];
+export const FindingSeveritySchema = z.enum(FINDING_SEVERITY);
+
+export const FINDING_STATUS = ['open', 'dismissed', 'confirmed'] as const;
+export type FindingStatus = (typeof FINDING_STATUS)[number];
+
+export const FINDING_VOTE = ['not_error', 'is_error'] as const;
+export type FindingVote = (typeof FINDING_VOTE)[number];
+
+/** MEM-06.2 mnemonic types. */
+export const MNEMONIC_TYPE = ['acronym', 'phrase', 'rhyme', 'story', 'palace', 'keyword'] as const;
+export type MnemonicType = (typeof MNEMONIC_TYPE)[number];
+export const MnemonicTypeSchema = z.enum(MNEMONIC_TYPE);
+
+export const DIVIDE_STATUS = ['open', 'merging', 'done', 'cancelled'] as const;
+export type DivideStatus = (typeof DIVIDE_STATUS)[number];
+
+export const CONTRIBUTION_STATUS = ['draft', 'submitted', 'approved', 'rejected'] as const;
+export type ContributionStatus = (typeof CONTRIBUTION_STATUS)[number];
+
+export const CONTRIBUTION_INPUT_MODE = ['typed', 'photo'] as const;
+export type ContributionInputMode = (typeof CONTRIBUTION_INPUT_MODE)[number];
+
+/** MOT-04.1 Retrospectiva periods. */
+export const RETRO_PERIOD = ['goal', 'semester', 'year'] as const;
+export type RetroPeriodKind = (typeof RETRO_PERIOD)[number];
+
 // ---------------------------------------------------------------- feature IDs (PRD §5 catalog)
 
 // Every PRD feature ID. `ai_usage.feature` and `xp_events.source_feature` store these (data-model §1.1).
@@ -948,4 +991,16 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'argument_sessions.theme_source': ARGUMENT_THEME_SOURCE,
   'argument_sessions.mode': ARGUMENT_MODE,
   'argument_sessions.status': ARGUMENT_STATUS,
+  // Phase 5
+  'visuals.type': VISUAL_TYPE,
+  'visuals.status': VISUAL_STATUS,
+  'material_findings.type': FINDING_TYPE,
+  'material_findings.severity': FINDING_SEVERITY,
+  'material_findings.status': FINDING_STATUS,
+  'material_finding_votes.vote': FINDING_VOTE,
+  'mnemonics.type': MNEMONIC_TYPE,
+  'divide_plans.status': DIVIDE_STATUS,
+  'contributions.input_mode': CONTRIBUTION_INPUT_MODE,
+  'contributions.status': CONTRIBUTION_STATUS,
+  'retrospectives.period_type': RETRO_PERIOD,
 };

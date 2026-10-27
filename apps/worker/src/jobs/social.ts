@@ -14,6 +14,7 @@ import {
   isBattleAnswerRejected,
   LEADERBOARD_SIZE,
   leaderboardTop,
+  PEER_INSIGHT_MIN_ANSWERERS,
   PODIUM_SIZE,
   type BattlePlayerScore,
 } from '@studify/shared';
@@ -297,10 +298,11 @@ export async function handleInsightsRecompute(ctx: JobContext, raw: Record<strin
   const optedOut = new Set(members.filter((m) => !m.contribute_insights).map((m) => m.user_id));
   const memberIds = members.map((m) => m.user_id);
   const subjects = unwrapRows<{ id: string }>(await ctx.supabase.from('subjects').select('id').eq('owner_class_group_id', classId).is('deleted_at', null), 'subjects');
-  const questions: Array<{ id: string; node_id: string }> = [];
+  const questions: Array<{ id: string; node_id: string; origin?: string }> = [];
   for (const part of chunk(subjects.map((s) => s.id), IN_CHUNK)) {
-    questions.push(...unwrapRows(await ctx.supabase.from('questions').select('id,node_id').in('subject_id', part).is('deleted_at', null), 'questions'));
+    questions.push(...unwrapRows(await ctx.supabase.from('questions').select('id,node_id,origin').in('subject_id', part).is('deleted_at', null), 'questions'));
   }
+  const peer = new Set(questions.filter((q) => q.origin === 'peer').map((q) => q.id));
   const nodeOf = new Map(questions.map((q) => [q.id, q.node_id] as const));
   const rows: AnswerRow[] = [];
   for (const part of chunk(uniq(questions.map((q) => q.id)), IN_CHUNK)) {
@@ -313,7 +315,8 @@ export async function handleInsightsRecompute(ctx: JobContext, raw: Record<strin
       );
     }
   }
-  const aggregates = aggregateInsights(rows, optedOut, INSIGHT_K);
+  // SOC-07.5: a peer question joins the insights only once it has 10 answerers.
+  const aggregates = aggregateInsights(rows, optedOut, INSIGHT_K).filter((agg) => !peer.has(agg.questionId) || agg.answerers >= PEER_INSIGHT_MIN_ANSWERERS);
   await ctx.db.query('delete from private.class_insights where class_group_id = $1', [classId]);
   for (const agg of aggregates) {
     await ctx.db.query(

@@ -210,6 +210,9 @@ function captureExpo(): ExpoLike & { sent: ExpoPushMessage[] } {
   };
 }
 
+// ING-06 runs as its own job after S2; these tests cover S0–S4 only, so the checker is a no-op here.
+const materialCheckStub = [{ name: 'ingest.material_check', handler: async () => undefined }];
+
 describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)', () => {
   let pool: pg.Pool;
   let mock: MockClaude;
@@ -308,7 +311,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
     const { backend, registry, expo, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
     const requestsBefore = mock.requests.length;
 
     await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
@@ -422,7 +425,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     });
     try {
       const { backend, registry, push } = runtime(store);
-      await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+      await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
       await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
       await backend.drain(4000);
       expect(backend.failedJobs).toEqual([]);
@@ -446,7 +449,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const locked = await seed({ bytes: encryptedPdfBytes() });
     store.put('documents', locked.storagePath, locked.bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
     const requestsBefore = mock.requests.length;
     await registry.enqueue('ingest.document', { document_id: locked.docId, mode: 'full', user_id: locked.userId });
     await backend.drain(200);
@@ -468,7 +471,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const first = await seed();
     store.put('documents', first.storagePath, first.bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
     await registry.enqueue('ingest.document', { document_id: first.docId, mode: 'full', user_id: first.userId });
     await backend.drain(4000);
     const before = await pool.query<{ id: string; title: string; position: number; parent_id: string | null }>(
@@ -515,7 +518,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { userId, docId, storagePath, bytes } = await seed({ budgetLimit: 0 });
     store.put('documents', storagePath, bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
 
     await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
     await backend.drain(200);

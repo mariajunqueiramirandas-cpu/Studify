@@ -7,10 +7,16 @@ import { budgetCtxFor } from '../shared/ctx.ts';
 import { claudeDepsFor, type Deps } from '../shared/deps.ts';
 
 /** Throws invalid_request when the text is not allowed (offensive, personal data, hate…). */
-export async function requireAllowedText(deps: Deps, userId: string, text: string, feature: string): Promise<void> {
+export async function requireAllowedText(
+  deps: Deps,
+  userId: string,
+  text: string,
+  feature: string,
+  message = 'Esse tema não dá pra usar aqui. Tenta outro tema, sem ofensas nem dados pessoais.',
+): Promise<void> {
   const built = getTask('moderation.classify').build({ subject: 'shared_text', text });
   const verdict = unwrapResult(await callTask(claudeDepsFor(deps), { built, taskId: 'moderation.classify', ctx: budgetCtxFor(null, userId, feature, 'system') })) as { allowed: boolean; category: string };
   if (!verdict.allowed) {
-    throw new ApiFailure('invalid_request', { message: 'Esse tema não dá pra usar aqui. Tenta outro tema, sem ofensas nem dados pessoais.' });
+    throw new ApiFailure('invalid_request', { message });
   }
 }

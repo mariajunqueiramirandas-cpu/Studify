@@ -32,6 +32,10 @@ import {
   ThesisFeedback,
   ArgumentSummary,
   ArgumentThemes,
+  VisualOut,
+  MnemonicOptions,
+  ContributionReview,
+  PeerQuestionValidation,
   type AnyTaskDef,
   type BuiltPrompt,
   type PromptMessage,
@@ -68,6 +72,11 @@ export const OUTPUT_SCHEMAS: Readonly<Record<string, ZodType>> = {
   'argument.thesis': ThesisFeedback,
   'argument.summary': ArgumentSummary,
   'argument.themes': ArgumentThemes,
+  // Phase 5
+  'visual.generate': VisualOut,
+  'mnemonics.suggest': MnemonicOptions,
+  'divide.review': ContributionReview,
+  'peer.validate': PeerQuestionValidation,
 };
 
 export function taskDef(id: string): AnyTaskDef {

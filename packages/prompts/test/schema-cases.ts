@@ -251,6 +251,38 @@ const PHASE4_CASES: SchemaCase[] = [
   { name: 'ArgumentThemes', schema: S.ArgumentThemes, valid: { themes: Array.from({ length: 5 }, (_, i) => ({ question: `A escola deve proibir celulares ${i}?`, node_keys: ['n1'], why: 'Dois lados legítimos.' })) }, invalid: { themes: [{ question: 'A escola deve proibir celulares?', node_keys: ['n1'], why: 'x' }] } },
 ];
 
+const flowVisual = {
+  type: 'flowchart',
+  title: 'Respiração celular',
+  alt_text: 'Fluxo da glicose até o ATP, passando pela glicólise e pelo ciclo de Krebs.',
+  nodes: [
+    { id: 'n1', label: 'Glicose', detail: null, source: ref },
+    { id: 'n2', label: 'Glicólise', detail: null, source: null },
+  ],
+  edges: [{ from: 'n1', to: 'n2', label: null }],
+};
+const finding = {
+  type: 'contradiction',
+  severity: 'high',
+  doc: 'D1',
+  page_start: 4,
+  page_end: 4,
+  related: { doc: 'D1', page: 9 },
+  node_key: 't1',
+  description: 'Possível erro: a p. 4 diz 38 ATP e a p. 9 diz 30–32 ATP.',
+  suggested_fix: null,
+};
+const mnemonicOption = (type: string) => ({ type, title: 'PMAT', text: 'P-M-A-T', how_to_use: 'Lembre da sigla antes de virar o cartão.', loci: null });
+
+const PHASE5_CASES: SchemaCase[] = [
+  { name: 'VisualOut', schema: S.VisualOut, valid: { fits: true, reason: null, visual: flowVisual }, invalid: { fits: true, reason: null, visual: null } },
+  { name: 'MaterialFindings', schema: S.MaterialFindings, valid: { findings: [finding] }, invalid: { findings: [{ ...finding, related: null }] } },
+  { name: 'MnemonicOptions', schema: S.MnemonicOptions, valid: { options: ['acronym', 'phrase', 'rhyme'].map(mnemonicOption) }, invalid: { options: [mnemonicOption('acronym')] } },
+  { name: 'ContributionReview', schema: S.ContributionReview, valid: { errors: [{ quote: '38 ATP', correction: 'O material diz 30–32 ATP.', source: ref }], missing_concepts: ['Cadeia respiratória'], ok_to_merge: false, summary: 'Bom começo!' }, invalid: { errors: [], missing_concepts: [], ok_to_merge: true } },
+  { name: 'PeerQuestionValidation', schema: S.PeerQuestionValidation, valid: { grounded: true, evidence: [ref], single_correct_answer: true, clarity_issues: [], appropriate: true, duplicate_of: null, suggested_fix: null }, invalid: { grounded: true, evidence: [], single_correct_answer: true, clarity_issues: [], appropriate: true, duplicate_of: 'question-1', suggested_fix: null } },
+  { name: 'RetroTitle', schema: S.RetroTitle, valid: { title_pt: 'Seu semestre foi brabo! ✨', subtitle_pt: '42 horas de estudo bem aproveitadas.' }, invalid: { title_pt: 'x'.repeat(61), subtitle_pt: 'ok ok' } },
+];
+
 export const PAYLOAD_ALIASES: Record<string, string> = {
   McqSinglePayload: 'question variant mcq_single',
   MultiSelectPayload: 'question variant multi_select',
@@ -313,4 +345,5 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'ModerationVerdict', schema: S.ModerationVerdict, valid: { allowed: true, category: 'ok' }, invalid: { allowed: true, category: 'offensive' } },
   ...PHASE3_CASES,
   ...PHASE4_CASES,
+  ...PHASE5_CASES,
 ];

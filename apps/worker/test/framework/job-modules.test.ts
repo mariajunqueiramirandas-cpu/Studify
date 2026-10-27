@@ -11,7 +11,7 @@ const JOBS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 
 /** The job modules of api §7 that must be picked up (one file each). */
 const EXPECTED_MODULES = [
-  'account', 'atualidades', 'batch', 'content', 'enem', 'enem-bank', 'files', 'grading', 'ingest', 'learning', 'motivation', 'notify', 'planning', 'podcast', 'prova', 'rooms', 'social',
+  'account', 'atualidades', 'batch', 'content', 'enem', 'enem-bank', 'files', 'grading', 'ingest', 'learning', 'motivation', 'notify', 'phase5', 'planning', 'podcast', 'prova', 'rooms', 'social',
   'trust',
 ];
 

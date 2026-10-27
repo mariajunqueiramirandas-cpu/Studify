@@ -93,6 +93,26 @@ export async function loadAchievementMetrics(ctx: JobContext, userId: string): P
     'daily_activity',
   ).map((d) => ({ day: d.local_date, goalMet: d.goal_met }));
 
+  // Phase 5 achievements (spec 13 §8.5 "Later").
+  const bosses = unwrapRows<{ unit_node_id: string }>(
+    await sb.from('boss_attempts').select('unit_node_id').eq('user_id', userId).eq('passed', true).limit(50),
+    'boss_attempts',
+  );
+  const lucas = unwrapRows<{ score: number | null }>(
+    await sb.from('teaching_sessions').select('score').eq('user_id', userId).not('score', 'is', null).order('score', { ascending: false }).limit(1),
+    'teaching_sessions',
+  );
+  const debates = unwrapRows(await sb.from('argument_sessions').select('id').eq('user_id', userId).eq('status', 'finished').limit(5), 'argument_sessions').length;
+  const contributions = unwrapRows(await sb.from('contributions').select('id').eq('author_id', userId).eq('status', 'approved').limit(10), 'contributions').length;
+  const peerQuestions = unwrapRows(
+    await sb.from('questions').select('id').eq('author_id', userId).eq('origin', 'peer').eq('review_status', 'approved').is('deleted_at', null).limit(10),
+    'questions',
+  ).length;
+  const focus = unwrapRows<{ cycles_done: number | null }>(
+    await sb.from('study_sessions').select('cycles_done').eq('user_id', userId).eq('kind', 'focus').limit(200),
+    'study_sessions',
+  );
+
   return {
     documents,
     reviews,
@@ -105,6 +125,11 @@ export async function loadAchievementMetrics(ctx: JobContext, userId: string): P
     rematchWins,
     errorReportsAccepted,
     bestWeekGoalDays: bestWeekGoalDays(goalDays),
+    bossesDefeated: new Set(bosses.map((b) => b.unit_node_id)).size,
+    bestLucasScore: Number(lucas[0]?.score ?? 0),
+    debatesFinished: debates,
+    turmaContributions: contributions + peerQuestions,
+    focusCycles: focus.reduce((s, f) => s + Number(f.cycles_done ?? 0), 0),
   };
 }
 

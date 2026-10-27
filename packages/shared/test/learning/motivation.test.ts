@@ -159,13 +159,15 @@ describe('achievement catalog (MOT-01.8, spec 13 §8.5)', () => {
   const codes = [
     'first_material', 'first_review', 'streak_7', 'streak_30', 'streak_100', 'cards_100', 'cards_1000', 'questions_500',
     'first_mock', 'clean_notebook', 'calibrated', 'duelist', 'rematch', 'bug_hunter', 'week_won', 'consistent_week',
+    'boss_first', 'lucas_90', 'debate_5', 'turma_10', 'focus_10',
   ];
   const zero = {
     documents: 0, reviews: 0, longestStreak: 0, questions: 0, mockExams: 0, mistakesResolved: 0, calibrated: false,
     duelsFinished: 0, rematchWins: 0, errorReportsAccepted: 0, bestWeekGoalDays: 0,
+    bossesDefeated: 0, bestLucasScore: 0, debatesFinished: 0, turmaContributions: 0, focusCycles: 0,
   };
 
-  it('has exactly the 16 canonical codes, unique, matching the achievements.code check, with PT-BR names', () => {
+  it('has exactly the 21 canonical codes (16 v1 + 5 Phase 5), unique, matching the achievements.code check, with PT-BR names', () => {
     expect(ACHIEVEMENTS.map((a) => a.code)).toEqual(codes);
     expect(new Set(codes).size).toBe(codes.length);
     for (const a of ACHIEVEMENTS) {
@@ -204,6 +206,17 @@ describe('achievement catalog (MOT-01.8, spec 13 §8.5)', () => {
     expect(progress.bug_hunter?.progress).toBe(2);
     expect(progress.consistent_week?.unlocked).toBe(true);
     expect(progress.clean_notebook?.unlocked).toBe(true);
+  });
+
+  it('Phase 5 achievements: boss, Lucas, debates, Turma contributions and focus cycles', () => {
+    const progress = Object.fromEntries(
+      achievementProgress({ ...zero, bossesDefeated: 1, bestLucasScore: 92, debatesFinished: 4, turmaContributions: 10, focusCycles: 12 }).map((p) => [p.code, p]),
+    );
+    expect(progress.boss_first?.unlocked).toBe(true);
+    expect(progress.lucas_90).toMatchObject({ unlocked: true, progress: 90 });
+    expect(progress.debate_5).toMatchObject({ unlocked: false, progress: 4 });
+    expect(progress.turma_10?.unlocked).toBe(true);
+    expect(progress.focus_10).toMatchObject({ unlocked: true, progress: 10 });
   });
 
   it('bestWeekGoalDays counts goal days per Monday-start week', () => {

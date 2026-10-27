@@ -19,6 +19,7 @@ export interface TopicBundle {
   nodeId: string;
   subject: SubjectRow;
   title: string;
+  summary: string | null;
   objectives: string[];
   keyTerms: string[];
   formulas: Array<{ latex: string; description: string }>;
@@ -65,6 +66,7 @@ export async function loadTopic(db: SupabaseClient, userId: string, nodeId: stri
     nodeId,
     subject,
     title: node.title as string,
+    summary: (node.summary as string | null) ?? null,
     objectives: (node.learning_objectives as string[] | null) ?? [],
     keyTerms: (node.key_terms as string[] | null) ?? [],
     formulas: (node.formulas as Array<{ latex: string; description: string }> | null) ?? [],

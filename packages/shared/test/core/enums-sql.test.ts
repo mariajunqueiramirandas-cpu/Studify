@@ -56,18 +56,6 @@ const KNOWN_DIFFERENCES: KnownDifference[] = [
     onlyInEnums: [],
     reason: 'CHECK in 20260102000000_phase1.sql mirrors TUTOR_MODE; ENUMS only registers tutor_threads.mode',
   },
-  {
-    key: 'nudge_events.kind',
-    onlyInSql: [],
-    onlyInEnums: ['prerequisite_detective', 'long_session', 'daily_load', 'late_night', 'performance_drop', 'overload_trend', 'checkin_low'],
-    reason: 'nudge_events has no CREATE TABLE in supabase/migrations yet (data-model Phase 2 list); ENUMS is ahead of the schema',
-  },
-  {
-    key: 'nudge_events.action',
-    onlyInSql: [],
-    onlyInEnums: ['acted', 'dismissed', 'accepted', 'disabled'],
-    reason: 'nudge_events has no CREATE TABLE in supabase/migrations yet; ENUMS is ahead of the schema',
-  },
 ];
 
 /** Strips `-- line` and `/* block *\/` comments, leaving quoted string literals untouched. */

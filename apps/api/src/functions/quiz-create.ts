@@ -1,7 +1,9 @@
 // quiz-create (PRA-01, PRA-03, PRA-04, PRA-09.7). Assembles a quiz from the student's bank:
 //  - practice / mistake_retry / boss: adaptive pick (selectAdaptiveQuiz, learning-engine §6.3);
 //  - mock_exam: simulado composition (composeSimulado, §6.4), topics weighted equally;
-//  - predicted_test: reuses the Prova Provável already generated for the exam (PRA-09.7).
+//  - predicted_test: reuses the Prova Provável already generated for the exam (PRA-09.7);
+//  - boss (MOT-02.4): 10 or 15 auto-graded questions mixing a unit's topics, weighted toward weak topics, preferring
+//    questions the student has not met in earlier boss attempts of that unit.
 // When the bank is short, one top-up call (questions.more) runs for the topic with the fewest questions.
 import { z } from 'zod';
 import {
@@ -9,13 +11,15 @@ import {
   DEFAULT_TIME_ZONE,
   QuizCreateReqSchema,
   type QuestionType,
+  bossQuestionCount,
   composeSimulado,
   localDateOf,
   selectAdaptiveQuiz,
+  selectBossQuestions,
 } from '@studify/shared';
 import type { QuizCreateRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
-import { loadSubject, requireSubject, canReadSubject } from '../shared/access.ts';
+import { loadSubject, requireNode, requireSubject, canReadSubject } from '../shared/access.ts';
 import { generateQuestionsForNode } from '../shared/questions.ts';
 import type { Deps } from '../shared/deps.ts';
 
@@ -70,6 +74,12 @@ async function resolveScope(deps: Deps, userId: string, req: Req): Promise<{ sub
     subjectIds = (exams.data as Array<{ subject_id: string | null }>).map((e) => e.subject_id).filter((v): v is string => !!v);
   }
   if (req.scope.subject_id) subjectIds.push(req.scope.subject_id);
+  if (req.kind === 'boss') {
+    if (!req.scope.unit_node_id) throw new ApiFailure('invalid_request', { message: 'Escolhe a unidade do chefão.' });
+    const { node, subject } = await requireNode(db, userId, req.scope.unit_node_id);
+    if (node.kind !== 'unit') throw new ApiFailure('invalid_request', { message: 'O chefão é de uma unidade.' });
+    return { subjectIds: [subject.id], nodeIds: null, goalId: null, examId: null };
+  }
   if (nodeIds && nodeIds.length > 0 && subjectIds.length === 0) {
     const nodes = await db.from('knowledge_nodes').select('subject_id').in('id', nodeIds).is('deleted_at', null);
     if (nodes.error) throw nodes.error;
@@ -91,7 +101,9 @@ async function loadCandidates(deps: Deps, userId: string, subjectIds: string[], 
     .in('subject_id', subjectIds)
     .eq('status', 'active')
     .eq('review_status', 'approved')
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    // R8: another member's personal question in a shared subject is never served.
+    .or(`personal_for_user_id.is.null,personal_for_user_id.eq.${userId}`);
   if (nodeIds && nodeIds.length > 0) query = query.in('node_id', nodeIds);
   const questions = await query;
   if (questions.error) throw questions.error;
@@ -186,6 +198,67 @@ export function selectQuestionIds(kind: Req['kind'], candidates: Candidate[], co
   );
 }
 
+/** Question types graded on the device, so the boss "vida" drops right after each answer (MOT-02.4). */
+const BOSS_TYPES: readonly QuestionType[] = ['mcq_single', 'multi_select', 'true_false', 'fill_blank', 'numeric', 'matching', 'ordering'];
+const BOSS_MIN_QUESTIONS = 5;
+
+async function createBoss(ctx: { now: Date; json(body: unknown, status?: number): Response }, deps: Deps, userId: string, input: Req, today: string): Promise<Response> {
+  const unitId = input.scope.unit_node_id!;
+  const unit = await deps.db.from('knowledge_nodes').select('id, subject_id, title').eq('id', unitId).maybeSingle();
+  if (unit.error) throw unit.error;
+  const topics = await deps.db.from('knowledge_nodes').select('id').eq('parent_id', unitId).eq('kind', 'topic').is('deleted_at', null);
+  if (topics.error) throw topics.error;
+  const topicIds = (topics.data as Array<{ id: string }>).map((t) => t.id);
+  if (topicIds.length === 0) throw new ApiFailure('invalid_request', { message: 'Essa unidade ainda não tem tópicos.' });
+  const subjectId = unit.data!.subject_id as string;
+
+  const candidates = (await loadCandidates(deps, userId, [subjectId], topicIds, today)).filter((c) => BOSS_TYPES.includes(c.type));
+  const mastery = await deps.db.from('mastery').select('node_id, mastery').eq('user_id', userId).in('node_id', topicIds);
+  if (mastery.error) throw mastery.error;
+  const masteryOf = new Map((mastery.data as Array<{ node_id: string; mastery: number }>).map((m) => [m.node_id, Number(m.mastery)]));
+  const earlier = await deps.db.from('quizzes').select('question_ids, scope').eq('owner_id', userId).eq('kind', 'boss').is('deleted_at', null);
+  if (earlier.error) throw earlier.error;
+  const seen = new Set(
+    (earlier.data as Array<{ question_ids: string[]; scope: { unit_node_id?: string } | null }>)
+      .filter((q) => q.scope?.unit_node_id === unitId)
+      .flatMap((q) => q.question_ids),
+  );
+
+  const quizId = deps.newId();
+  const count = bossQuestionCount(topicIds.length);
+  const questionIds = selectBossQuestions(
+    candidates.map((c) => ({ id: c.id, nodeId: c.node_id })),
+    (nodeId) => masteryOf.get(nodeId) ?? null,
+    count,
+    `${userId}|${quizId}`,
+    seen,
+  );
+  if (questionIds.length < BOSS_MIN_QUESTIONS) {
+    throw new ApiFailure('invalid_request', { message: 'Essa unidade ainda não tem questões suficientes pro chefão. Pratique os tópicos primeiro.' });
+  }
+  const quiz = await deps.db.from('quizzes').insert({
+    id: quizId,
+    owner_id: userId,
+    subject_id: subjectId,
+    goal_id: null,
+    exam_id: null,
+    kind: 'boss',
+    mode: input.mode,
+    title: `Chefão: ${unit.data!.title as string}`.slice(0, 120),
+    question_ids: questionIds,
+    time_limit_s: input.time_limit_s ?? null,
+    scope: { subject_id: subjectId, unit_node_id: unitId },
+    config: { boss_total: questionIds.length },
+    seed: Math.floor(Math.random() * 2 ** 31),
+  });
+  if (quiz.error) throw quiz.error;
+  const attemptId = deps.newId();
+  const attempt = await deps.db.from('quiz_attempts').insert({ id: attemptId, user_id: userId, quiz_id: quizId, status: 'in_progress', started_at: ctx.now.toISOString(), device_id: 'server' });
+  if (attempt.error) throw attempt.error;
+  const body: QuizCreateRes = { quiz_id: quizId, attempt_id: attemptId, question_ids: questionIds, generated: 0 };
+  return ctx.json(body, 201);
+}
+
 export const handler = defineFunction<Req>({
   name: 'quiz-create',
   mutating: true,
@@ -217,6 +290,8 @@ export const handler = defineFunction<Req>({
       const body: QuizCreateRes = { quiz_id: existing.data.id as string, attempt_id: attemptId, question_ids: existing.data.question_ids as string[], generated: 0 };
       return ctx.json(body, 201);
     }
+
+    if (input.kind === 'boss') return createBoss(ctx, deps, userId, input, today);
 
     let candidates = await loadCandidates(deps, userId, scope.subjectIds, scope.nodeIds, today);
     if (input.kind === 'mistake_retry') candidates = candidates.filter((c) => c.hasOpenMistake);

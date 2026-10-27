@@ -28,6 +28,8 @@ const UNIQUE: Record<string, string[][]> = {
   invites: [['id']],
   profiles: [['id']],
   study_preferences: [['user_id']],
+  visuals: [['id'], ['node_id', 'type']],
+  boss_attempts: [['id'], ['quiz_attempt_id']],
 };
 
 function normalize(text: string): string {
@@ -257,6 +259,18 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
   not(col: string, op: string, value: unknown) {
     if (op !== 'is' || value !== null) throw new Error(`fake: unsupported not(${col}, ${op})`);
     this.#filters.push((r) => r[col] !== null && r[col] !== undefined);
+    return this;
+  }
+  /** PostgREST `or` with `col.is.null` / `col.eq.value` terms (what the handlers use). */
+  or(expr: string) {
+    const terms = expr.split(',').map((t) => {
+      const [col, op, ...rest] = t.split('.');
+      const value = rest.join('.');
+      if (op === 'is' && value === 'null') return (r: Row) => r[col!] === null || r[col!] === undefined;
+      if (op === 'eq') return (r: Row) => String(r[col!]) === value;
+      throw new Error(`fake: unsupported or term ${t}`);
+    });
+    this.#filters.push((r) => terms.some((f) => f(r)));
     return this;
   }
   textSearch(col: string, query: string) {

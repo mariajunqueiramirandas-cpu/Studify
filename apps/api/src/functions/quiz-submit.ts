@@ -11,6 +11,7 @@ import {
   evidenceWeight,
   simuladoGrade,
   type EvidenceQuestionType,
+  bossPassed,
 } from '@studify/shared';
 import type { QuizSubmitRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
@@ -43,7 +44,7 @@ export const handler = defineFunction<Req>({
     if (!attempt.data || attempt.data.user_id !== userId) throw new ApiFailure('not_found');
     if (attempt.data.status !== 'in_progress') throw new ApiFailure('already_exists', { message: 'Esse simulado já foi entregue.' });
 
-    const quiz = await db.from('quizzes').select('id, question_ids, goal_id, kind, config').eq('id', attempt.data.quiz_id as string).maybeSingle();
+    const quiz = await db.from('quizzes').select('id, question_ids, goal_id, kind, config, scope').eq('id', attempt.data.quiz_id as string).maybeSingle();
     if (quiz.error) throw quiz.error;
     if (!quiz.data) throw new ApiFailure('not_found');
     const questionIds = quiz.data.question_ids as string[];
@@ -214,6 +215,17 @@ export const handler = defineFunction<Req>({
       .update({ status: 'submitted', finished_at: input.finished_at, score, grade, ...(areaResults ? { area_results: areaResults } : {}) })
       .eq('id', input.attempt_id);
     if (finished.error) throw finished.error;
+
+    // MOT-02.4: a boss attempt is recorded once with its score; ≥ 70% defeats the boss.
+    if (quiz.data.kind === 'boss') {
+      const unitId = ((quiz.data as { scope?: { unit_node_id?: string } | null }).scope ?? {}).unit_node_id;
+      if (unitId) {
+        const boss = await db
+          .from('boss_attempts')
+          .upsert({ id: deps.newId(), user_id: userId, unit_node_id: unitId, quiz_attempt_id: input.attempt_id, passed: bossPassed(score), score }, { onConflict: 'quiz_attempt_id', ignoreDuplicates: true });
+        if (boss.error) throw boss.error;
+      }
+    }
 
     for (const g of pending) {
       await deps.enqueue('grading.answer', { attempt_answer_id: g.answerId }, { singletonKey: g.answerId, retryLimit: 2 });

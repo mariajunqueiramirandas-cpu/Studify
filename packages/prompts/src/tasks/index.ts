@@ -13,6 +13,7 @@ import * as practice3 from './practice3.ts';
 import * as interactive from './interactive.ts';
 import * as enem from './enem.ts';
 import * as argument from './argument.ts';
+import * as phase5 from './phase5.ts';
 
 export * from './shared.ts';
 export * from './ingest.ts';
@@ -29,11 +30,12 @@ export * from './practice3.ts';
 export * from './interactive.ts';
 export * from './enem.ts';
 export * from './argument.ts';
+export * from './phase5.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTaskDef = TaskDef<any, any>;
 
-/** Every task of Phases 0–4. Order is the registry order (stable, used by snapshots). */
+/** Every task of Phases 0–5. Order is the registry order (stable, used by snapshots). */
 export const TASKS: readonly AnyTaskDef[] = [
   ingest.ingestOutline,
   ingest.ingestOutlineMerge,
@@ -107,6 +109,14 @@ export const TASKS: readonly AnyTaskDef[] = [
   argument.argumentThesis,
   argument.argumentSummary,
   argument.argumentThemes,
+  // Phase 5
+  phase5.visualGenerate,
+  phase5.materialCheck,
+  phase5.mnemonicsSuggest,
+  phase5.divideReview,
+  phase5.divideMerge,
+  phase5.peerValidate,
+  phase5.retroTitle,
 ];
 
 function buildIndex(tasks: readonly AnyTaskDef[]): ReadonlyMap<string, AnyTaskDef> {

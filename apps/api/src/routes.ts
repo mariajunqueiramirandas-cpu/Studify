@@ -18,6 +18,9 @@ import { handler as cardDraft } from './functions/card-draft.ts';
 import { handler as cardsGenerateMore } from './functions/cards-generate-more.ts';
 import { handler as captureAct } from './functions/capture-act.ts';
 import { handler as captureAnalyze } from './functions/capture-analyze.ts';
+import { handler as divideMerge } from './functions/divide-merge.ts';
+import { handler as divideReview } from './functions/divide-review.ts';
+import { handler as divideSubmit } from './functions/divide-submit.ts';
 import { handler as duelAnswer } from './functions/duel-answer.ts';
 import { handler as duelCreate } from './functions/duel-create.ts';
 import { handler as duelNext } from './functions/duel-next.ts';
@@ -33,7 +36,9 @@ import { handler as ingestRetry } from './functions/ingest-retry.ts';
 import { handler as ingestStart } from './functions/ingest-start.ts';
 import { handler as joinClass } from './functions/join-class.ts';
 import { handler as noteGenerate } from './functions/note-generate.ts';
+import { handler as mnemonicSuggest } from './functions/mnemonic-suggest.ts';
 import { handler as outlineEdit } from './functions/outline-edit.ts';
+import { handler as peerQuestionCreate } from './functions/peer-question-create.ts';
 import { handler as planRecompute } from './functions/plan-recompute.ts';
 import { handler as podcastAsk } from './functions/podcast-ask.ts';
 import { handler as podcastCreate } from './functions/podcast-create.ts';
@@ -56,6 +61,7 @@ import { handler as teachingTurn } from './functions/teaching-turn.ts';
 import { handler as tutorChat } from './functions/tutor-chat.ts';
 import { handler as uploadPhotos } from './functions/upload-photos.ts';
 import { handler as vesperaPrepare } from './functions/vespera-prepare.ts';
+import { handler as visualGenerate } from './functions/visual-generate.ts';
 
 export type Handler = (req: Request, deps: P2Deps) => Promise<Response>;
 
@@ -75,6 +81,9 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['capture-analyze', captureAnalyze],
   ['card-draft', cardDraft],
   ['cards-generate-more', cardsGenerateMore],
+  ['divide-merge', divideMerge],
+  ['divide-review', divideReview],
+  ['divide-submit', divideSubmit],
   ['duel-answer', duelAnswer],
   ['duel-create', duelCreate],
   ['duel-next', duelNext],
@@ -90,8 +99,10 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['ingest-retry', ingestRetry],
   ['ingest-start', ingestStart],
   ['join-class', joinClass],
+  ['mnemonic-suggest', mnemonicSuggest],
   ['note-generate', noteGenerate],
   ['outline-edit', outlineEdit],
+  ['peer-question-create', peerQuestionCreate],
   ['plan-recompute', planRecompute],
   ['podcast-ask', podcastAsk],
   ['podcast-create', podcastCreate],
@@ -114,4 +125,5 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['tutor-chat', tutorChat],
   ['upload-photos', uploadPhotos],
   ['vespera-prepare', vesperaPrepare],
+  ['visual-generate', visualGenerate],
 ]);
