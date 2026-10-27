@@ -480,7 +480,8 @@ class FocusService : Service() {
         }
         lastRender = "$style|${snap.renderKey(view.night)}"
         return
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
+        // Throwable: OEM builds that report SDK 36 but lack the Live Update API throw linkage errors.
         // Not a style problem: the system does not let this service run in the foreground now.
         if (start && Build.VERSION.SDK_INT >= 31 && e is android.app.ForegroundServiceStartNotAllowedException) throw e
         Log.w(TAG, "focus notification style $style not posted", e)

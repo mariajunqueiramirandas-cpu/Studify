@@ -40,6 +40,8 @@ const native = load();
 const PLAIN = 'studify-plain:';
 const KINDS = new Set(['snooze', 'rate_again', 'rate_good']);
 const NONE: RichNotifyCapabilities = { sdk: 0, enabled: false, liveUpdates: false, promoted: false };
+/** What the native show() threw, when it threw instead of returning false. */
+let thrown: string | null = null;
 
 function plainContent(p: RichNotification) {
   // Live progress has no plain equivalent worth a sound: it updates silently on the live channel.
@@ -50,9 +52,11 @@ export const richNotifier: RichNotifier = {
   native: !!native,
   async show(p) {
     if (native) {
+      thrown = null;
       try {
         return native.show(JSON.stringify(p));
-      } catch {
+      } catch (e) {
+        thrown = e instanceof Error ? e.message : String(e);
         return false;
       }
     }
@@ -123,9 +127,9 @@ export const richNotifier: RichNotifier = {
   },
   lastError() {
     try {
-      return native?.lastError() ?? null;
+      return native?.lastError() ?? thrown;
     } catch {
-      return null;
+      return thrown;
     }
   },
   capabilities() {
