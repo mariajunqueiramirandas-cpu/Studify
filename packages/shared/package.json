@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
     "./learning": "./src/learning/index.ts",
-    "./planning": "./src/planning/index.ts"
+    "./planning": "./src/planning/index.ts",
+    "./practice": "./src/practice/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

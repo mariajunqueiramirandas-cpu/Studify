@@ -1,0 +1,15 @@
+[
+  {
+    "match": { "contains": "Gere cartões" },
+    "respond": {
+      "kind": "message",
+      "message": { "text": "{\"cards\":[{\"front\":\"Pergunta?\",\"back\":\"Resposta.\",\"source_pages\":[1]}]}" }
+    },
+    "once": true
+  },
+  {
+    "match": { "contains": "Gere cartões" },
+    "respond": { "kind": "error", "status": 529, "retryAfterSeconds": 0, "message": "Overloaded" },
+    "once": true
+  }
+]

@@ -1,0 +1,94 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GOL-04 snapshots per scenario > a subject already mastered gets no learn unit 1`] = `
+[
+  "2026-10-26 learn:B1 20",
+  "2026-10-26 learn:B2 20",
+  "2026-10-26 mock:hist 18",
+  "2026-10-27 mock:bio 21",
+  "2026-10-27 practice:bio:B1 10",
+  "2026-10-28 practice:bio:B2 10",
+  "2026-10-28 vespera:2026-10-29 25",
+  "2026-10-29 vespera:2026-10-30 25",
+]
+`;
+
+exports[`GOL-04 snapshots per scenario > five subjects on consecutive days, a missed day and a test added mid-week 1`] = `
+{
+  "first": [
+    "2026-05-04 mock:ex-bio 20",
+    "2026-05-04 practice:ex-bio:bio-2 10",
+    "2026-05-04 practice:ex-hist:hist-2 10",
+    "2026-05-04 practice:ex-mat:mat-2 10",
+    "2026-05-05 practice:ex-bio:bio-1 10",
+    "2026-05-05 practice:ex-hist:hist-1 10",
+    "2026-05-05 vespera:2026-05-06 25",
+    "2026-05-06 vespera:2026-05-07 25",
+    "2026-05-07 practice:ex-mat:mat-1 10",
+    "2026-05-07 vespera:2026-05-08 25",
+    "2026-05-08 practice:ex-geo:geo-2 10",
+    "2026-05-08 vespera:2026-05-09 25",
+    "2026-05-09 mock:ex-fis 20",
+    "2026-05-09 practice:ex-fis:fis-2 10",
+    "2026-05-09 vespera:2026-05-10 25",
+  ],
+  "moved": 0,
+  "replanned": [
+    "2026-05-04 mock:ex-bio 20",
+    "2026-05-04 practice:ex-bio:bio-2 10",
+    "2026-05-04 practice:ex-hist:hist-2 10",
+    "2026-05-04 practice:ex-mat:mat-2 10",
+    "2026-05-05 practice:ex-bio:bio-1 10",
+    "2026-05-05 practice:ex-hist:hist-1 10",
+    "2026-05-05 vespera:2026-05-06 25",
+    "2026-05-06 vespera:2026-05-07 25",
+    "2026-05-07 practice:ex-extra:bio-1 10",
+    "2026-05-07 vespera:2026-05-08 35",
+    "2026-05-08 practice:ex-geo:geo-2 10",
+    "2026-05-08 vespera:2026-05-09 25",
+    "2026-05-09 mock:ex-fis 20",
+    "2026-05-09 practice:ex-fis:fis-2 10",
+    "2026-05-09 vespera:2026-05-10 25",
+  ],
+}
+`;
+
+exports[`GOL-04 snapshots per scenario > triage variant (A = 60) 1`] = `
+{
+  "feasible": false,
+  "items": [
+    "2026-10-26 learn:B1 20",
+    "2026-10-26 learn:B2 10",
+    "2026-10-26 learn:H1 20",
+    "2026-10-27 mock:bio 21",
+    "2026-10-27 mock:hist 18",
+    "2026-10-27 practice:hist:H1 10",
+    "2026-10-28 practice:bio:B1 10",
+    "2026-10-28 practice:bio:B2 10",
+    "2026-10-28 vespera:2026-10-29 25",
+    "2026-10-29 vespera:2026-10-30 25",
+  ],
+  "triage": [
+    {
+      "step": "downgrade_learn",
+      "topicId": "B2",
+      "unitKey": "learn:B2",
+    },
+  ],
+}
+`;
+
+exports[`GOL-04 snapshots per scenario > worked example (§11.11) 1`] = `
+[
+  "2026-10-26 learn:B1 20",
+  "2026-10-26 learn:B2 20",
+  "2026-10-26 learn:H1 20",
+  "2026-10-27 mock:bio 21",
+  "2026-10-27 mock:hist 18",
+  "2026-10-27 practice:bio:B1 10",
+  "2026-10-27 practice:hist:H1 10",
+  "2026-10-28 practice:bio:B2 10",
+  "2026-10-28 vespera:2026-10-29 25",
+  "2026-10-29 vespera:2026-10-30 25",
+]
+`;
