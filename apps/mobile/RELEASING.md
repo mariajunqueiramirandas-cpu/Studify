@@ -146,8 +146,9 @@ Do not edit them by hand.
 
 ## EAS (optional)
 
-`.github/workflows/mobile-preview.yml` still builds preview APKs with EAS on pull requests when `EXPO_TOKEN` is set.
-That path is optional and separate from the release workflow, with two things to keep in mind:
+No workflow builds with EAS: the release workflow builds on the GitHub runner, and a dry run (above) tests a branch.
+EAS builds (`npx eas-cli@latest build --profile preview --platform android`) are optional and run by hand, with two
+things to keep in mind:
 
 - EAS signs with its own credentials. An EAS build can update a GitHub release build only if both use the same key.
   Upload this keystore to EAS (`npx eas-cli@latest credentials`, Android, production profile), or accept that EAS
