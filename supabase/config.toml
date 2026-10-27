@@ -63,7 +63,7 @@ host = "smtp.resend.com"
 port = 465
 user = "resend"
 pass = "env(RESEND_API_KEY)"
-admin_email = "nao-responda@studify.vendua.com.br"
+admin_email = "studify@auto.vendua.com.br"
 sender_name = "Studify"
 
 # The built-in sender allows 2 e-mails per hour; with custom SMTP the limit is ours to set.

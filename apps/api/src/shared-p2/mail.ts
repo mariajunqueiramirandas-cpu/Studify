@@ -3,7 +3,7 @@
 // A failed send throws, so guardian-link answers 5xx and the student can ask again; a repeat call rotates the token.
 import type { GuardianMail } from './deps.ts';
 
-export const DEFAULT_MAIL_FROM = 'Studify <nao-responda@studify.vendua.com.br>';
+export const DEFAULT_MAIL_FROM = 'Studify <studify@auto.vendua.com.br>';
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
