@@ -41,12 +41,34 @@ otp_length = 6
 otp_expiry = 3600
 
 # The app asks for the 6-digit code, so both e-mails must show {{ .Token }}; Supabase's default templates only
-# carry a link. A new address gets "confirmation", a known one gets "magic_link". The hosted project does not
-# read this file: push it with `supabase config push` or paste the templates under Auth > Email Templates.
+# carry a link. A new address gets "confirmation", a known one gets "magic_link" (sign-in, and the re-auth before
+# Recomeçar do zero and account deletion). The subject carries the code too, so it shows in the notification.
+# The e-mails have no sign-in link on purpose: link scanners (Outlook Safe Links, antivirus) open it and burn the
+# code before the student types it. The hosted project does not read this file: push it with
+# `supabase config push` or paste the templates under Auth > Email Templates.
 [auth.email.template.confirmation]
-subject = "Seu código do Studify"
+subject = "{{ .Token }} é seu código do Studify"
 content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.magic_link]
-subject = "Seu código do Studify"
+subject = "{{ .Token }} é seu código do Studify"
 content_path = "./supabase/templates/magic_link.html"
+
+# Hosted project only (`supabase link --project-ref pwigsfpkyxdtorxvwpnt`, then `supabase config push`). Local runs
+# keep the CLI's built-in mail catcher. Supabase still generates the codes and renders the templates above; Resend
+# only delivers them. RESEND_API_KEY must be set in the shell that runs `config push` (RELEASING.md §8).
+[remotes.production]
+project_id = "pwigsfpkyxdtorxvwpnt"
+
+[remotes.production.auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "studify@auto.vendua.com.br"
+sender_name = "Studify"
+
+# The built-in sender allows 2 e-mails per hour; with custom SMTP the limit is ours to set.
+[remotes.production.auth.rate_limit]
+email_sent = 100
