@@ -9,6 +9,11 @@ import { buildZip, toCsv, type ZipEntry } from '../lib/zip.ts';
 const ExportPayload = z.object({ export_id: z.string().min(1) });
 const DeletePayload = z.object({ deletion_id: z.string().min(1) });
 const PurgePayload = z.object({}).passthrough();
+const ResetFilesPayload = z.object({
+  user_id: z.string().min(1),
+  documents: z.array(z.object({ id: z.string().min(1), storage_path: z.string().min(1) })).max(20_000).default([]),
+  exports: z.array(z.string().min(1)).max(1000).default([]),
+});
 
 export const EXPORT_TTL_MS = 7 * 24 * 3600 * 1000;
 /** Tombstones older than this are hard-deleted (data-model §1.1). */
@@ -207,6 +212,48 @@ export async function handleAccountDelete(ctx: JobContext, raw: Record<string, u
   }
 }
 
+/**
+ * account.reset_files: after account-reset (private.reset_account) removed the rows, removes their files: the
+ * personal materials with their page images, page text and slices, the student's photos and the data exports.
+ * Removing what is already gone is a no-op, so the job is safe to retry.
+ */
+export async function handleAccountResetFiles(ctx: JobContext, raw: Record<string, unknown>): Promise<{ removed: number }> {
+  const payload = ResetFilesPayload.parse(raw);
+  let removed = 0;
+  // documents.storage_path is relative to the bucket; older rows may carry the bucket prefix.
+  removed += await removeObjects(ctx, 'documents', payload.documents.map((d) => d.storage_path.replace(/^documents\//, '')));
+  for (const doc of payload.documents) {
+    for (const bucket of ['page-images', 'page-text', 'slices']) removed += await removeFolder(ctx, bucket, doc.id);
+  }
+  removed += await removeFolder(ctx, 'photos', payload.user_id);
+  removed += await removeObjects(ctx, 'exports', payload.exports);
+  return { removed };
+}
+
+async function removeObjects(ctx: JobContext, bucket: string, paths: string[]): Promise<number> {
+  for (const part of chunk(paths, 100)) {
+    const res = await ctx.supabase.storage.from(bucket).remove(part);
+    if (res.error) throw new JobDataError(`storage remove ${bucket}: ${res.error.message}`, 'storage');
+  }
+  return paths.length;
+}
+
+/** Removes every object under `prefix/`, sub-folders included (Storage lists one level at a time). */
+async function removeFolder(ctx: JobContext, bucket: string, prefix: string): Promise<number> {
+  const files: string[] = [];
+  const folders = [prefix];
+  while (folders.length > 0) {
+    const folder = folders.pop() as string;
+    const res = await ctx.supabase.storage.from(bucket).list(folder, { limit: 1000 });
+    if (res.error) throw new JobDataError(`storage list ${bucket}: ${res.error.message}`, 'storage');
+    for (const entry of res.data ?? []) {
+      if (entry.id === null) folders.push(`${folder}/${entry.name}`);
+      else files.push(`${folder}/${entry.name}`);
+    }
+  }
+  return removeObjects(ctx, bucket, files);
+}
+
 /** Tables whose tombstones (deleted_at) are hard-deleted after 30 days (data-model §1.1). */
 export const PURGE_TABLES = [
   'cards', 'questions', 'subjects', 'documents', 'knowledge_nodes', 'notes', 'glossary_terms', 'goals', 'exams', 'plan_items',
@@ -269,5 +316,6 @@ export async function purgeCaptures(ctx: JobContext, now: Date): Promise<number>
 export const jobs: JobDefinition[] = [
   { name: 'account.export', retryLimit: 3, handler: async (ctx, data) => void (await handleAccountExport(ctx, data)) },
   { name: 'account.delete', retryLimit: 5, handler: async (ctx, data) => void (await handleAccountDelete(ctx, data)) },
+  { name: 'account.reset_files', retryLimit: 5, handler: async (ctx, data) => void (await handleAccountResetFiles(ctx, data)) },
   { name: 'storage.purge', retryLimit: 1, schedule: '15 6 * * *', handler: async (ctx, data) => void (await handleStoragePurge(ctx, data)) },
 ];

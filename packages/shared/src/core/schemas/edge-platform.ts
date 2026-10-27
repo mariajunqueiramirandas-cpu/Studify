@@ -43,6 +43,16 @@ export const AccountDeleteReqSchema = z.object({
 });
 export type AccountDeleteReq = z.infer<typeof AccountDeleteReqSchema>;
 
+/** account-reset: wipes everything the student owns, keeps the login and profile identity. */
+export const AccountResetReqSchema = z.object({
+  otp_code: z.string().regex(/^\d{6}$/, 'six-digit email code'), // fresh re-authentication, as for deletion
+});
+export type AccountResetReq = z.infer<typeof AccountResetReqSchema>;
+
+export const AccountResetResSchema = z.object({
+  reset: z.literal(true),
+});
+
 export const AccountDeleteResSchema = z.object({
   deletion_id: UuidSchema,
   completes_by: IsoInstantSchema, // at most 15 days

@@ -4,7 +4,7 @@ import { useSession } from '../../../features/auth/session';
 import { requestExport } from '../../../features/profile/api';
 import { t } from '../../../i18n';
 
-/** S-PERF-11 Privacidade: visibility, guardian, export, delete (SP-14). */
+/** S-PERF-11 Privacidade: visibility, guardian, export, reset, delete (SP-14). */
 export default function Privacy() {
   const { signOut } = useSession();
   const overlay = useOverlay();
@@ -28,6 +28,7 @@ export default function Privacy() {
         />
         <ListItem icon="people-outline" title={t('privacy.guardian')} onPress={() => router.push('/onboarding/guardian')} />
         <ListItem icon="phone-portrait-outline" title={t('profile.sign_out_all')} onPress={async () => (await overlay.confirm({ title: t('profile.sign_out_all') })) && signOut('global')} />
+        <ListItem icon="refresh-outline" destructive title={t('privacy.reset')} onPress={() => router.push('/profile/reset-account')} />
         <ListItem icon="trash-outline" destructive title={t('privacy.delete')} onPress={() => router.push('/profile/delete-account')} />
       </Card>
       <Banner kind="neutral" message={t('global.ai_generated')} />

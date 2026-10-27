@@ -9,6 +9,14 @@ export function getKv(): MMKV {
   return instance;
 }
 
+/** Removes every key except the ones `keep` accepts (account reset). */
+export function clearKv(keep: (key: string) => boolean): void {
+  const kv = getKv();
+  for (const key of kv.getAllKeys()) {
+    if (!keep(key)) kv.remove(key);
+  }
+}
+
 /** Storage adapter shaped for zustand's `createJSONStorage`. Writes are synchronous and never throw. */
 export const kvStateStorage = {
   getItem: (name: string): string | null => {

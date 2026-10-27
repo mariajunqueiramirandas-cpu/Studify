@@ -19,6 +19,7 @@ import { Button, ErrorState, OverlayProvider, Text } from '../components';
 import { DatabaseProvider } from '../db/DatabaseProvider';
 import { startSync, useSyncStatus } from '../db/sync';
 import { SessionProvider, useSession } from '../features/auth/session';
+import { takeOnboardingRestart } from '../features/profile/reset';
 import { ShareIntentHandler } from '../features/subjects/share';
 import { useCalendarAutoSync } from '../features/calendar/useCalendarAutoSync';
 import { FocusRuntime } from '../features/focus/FocusRuntime';
@@ -68,6 +69,11 @@ function AuthGate() {
     }
     if (!profile) {
       if (!inAuth || segments[1] !== 'onboarding') router.replace('/onboarding/invite');
+      return;
+    }
+    // After Recomeçar do zero: the profile stays, so start again at the onboarding's first step after it.
+    if (takeOnboardingRestart()) {
+      router.replace('/onboarding/intent');
       return;
     }
     if (inAuth && !(segments[1] === 'onboarding' && (segments[2] === 'guardian' || segments[2] === 'intent' || segments[2] === 'first-subject'))) {

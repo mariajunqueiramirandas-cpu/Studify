@@ -4,6 +4,7 @@
 import type { P2Deps } from './shared-p2/deps.ts';
 
 import { handler as accountDelete } from './functions/account-delete.ts';
+import { handler as accountReset } from './functions/account-reset.ts';
 import { handler as accountExport } from './functions/account-export.ts';
 import { handler as adminAtualidadesPublish } from './functions/admin-atualidades-publish.ts';
 import { handler as adminEnemImport } from './functions/admin-enem-import.ts';
@@ -67,6 +68,7 @@ export type Handler = (req: Request, deps: P2Deps) => Promise<Response>;
 
 export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['account-delete', accountDelete],
+  ['account-reset', accountReset],
   ['account-export', accountExport],
   ['admin-atualidades-publish', adminAtualidadesPublish],
   ['admin-enem-import', adminEnemImport],

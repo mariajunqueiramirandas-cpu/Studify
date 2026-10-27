@@ -2,7 +2,8 @@
 import { uuidv7 } from 'uuidv7';
 import { getKv } from './kv';
 
-const KEY = 'device.id';
+export const DEVICE_ID_KEY = 'device.id';
+const KEY = DEVICE_ID_KEY;
 let cached: string | null = null;
 
 export function getDeviceId(): string {

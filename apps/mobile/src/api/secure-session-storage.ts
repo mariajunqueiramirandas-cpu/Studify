@@ -76,6 +76,11 @@ export const LargeSecureStore = {
   },
 };
 
+/** True for the keys that hold the encrypted login session. */
+export function isSessionKey(key: string): boolean {
+  return key.startsWith(PREFIX);
+}
+
 /** Forgets every stored session (sign-out when supabase-js could not finish its own). */
 export function clearStoredSessions(): void {
   for (const key of getKv().getAllKeys()) {

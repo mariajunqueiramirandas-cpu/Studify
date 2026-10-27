@@ -7,6 +7,7 @@ import { handler as signupComplete } from '../src/functions/signup-complete.ts';
 import { handler as syncPush } from '../src/functions/sync-push.ts';
 import { handler as accountExport } from '../src/functions/account-export.ts';
 import { handler as accountDelete } from '../src/functions/account-delete.ts';
+import { handler as accountReset } from '../src/functions/account-reset.ts';
 import { handler as ingestStart } from '../src/functions/ingest-start.ts';
 import { handler as ingestRetry } from '../src/functions/ingest-retry.ts';
 import { handler as uploadPhotos } from '../src/functions/upload-photos.ts';
@@ -35,6 +36,7 @@ const FUNCTIONS: Array<[string, Handler, boolean, unknown]> = [
   ['sync-push', syncPush, true, { schema_version: 1, device_id: 'd', items: [] }],
   ['account-export', accountExport, true, undefined],
   ['account-delete', accountDelete, true, {}],
+  ['account-reset', accountReset, true, {}],
   ['ingest-start', ingestStart, true, {}],
   ['ingest-retry', ingestRetry, true, {}],
   ['upload-photos', uploadPhotos, true, {}],

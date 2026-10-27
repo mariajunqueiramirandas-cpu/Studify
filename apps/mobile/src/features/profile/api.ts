@@ -63,6 +63,11 @@ export async function deleteAccount(otpCode: string, deleteSharedUploads: boolea
   return callFunction<{ otp_code: string; delete_shared_uploads: boolean }, { deletion_id: string; completes_by: string }>('account-delete', { otp_code: otpCode, delete_shared_uploads: deleteSharedUploads }, { idempotencyKey: uuidv7() });
 }
 
+/** Recomeçar do zero: wipes everything on the server, keeps the login (account-reset). */
+export async function resetAccount(otpCode: string) {
+  return callFunction<{ otp_code: string }, { reset: true }>('account-reset', { otp_code: otpCode }, { idempotencyKey: uuidv7() });
+}
+
 export async function sendFeedback(userId: string, body: string) {
   const { error } = await supabase.from('app_feedback').insert({ id: uuidv7(), user_id: userId, body });
   if (error) throw error;
