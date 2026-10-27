@@ -1,11 +1,24 @@
 name: Android release
 
 # Builds a release APK on the GitHub runner (not EAS cloud), signs it with the persistent release key and
-# publishes it as a GitHub Release. Every push to main is a release. Setup: apps/mobile/RELEASING.md.
+# publishes it as a GitHub Release. Every push to main that changes the app is a release; pushes that only touch
+# the server (apps/api, apps/worker, apps/site, supabase, docs, other packages) build nothing.
+# Setup: apps/mobile/RELEASING.md.
 
 on:
   push:
     branches: [main]
+    # What ends up in the APK: the app, the one workspace package it bundles (@studify/shared), and the
+    # dependency/workspace config. Add a package here if apps/mobile starts depending on it.
+    paths:
+      - apps/mobile/**
+      - packages/shared/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .npmrc
+      - tsconfig.base.json
+      - .github/workflows/android-release.yml
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,7 +31,7 @@ permissions:
 
 concurrency:
   group: android-release-${{ github.ref }}
-  cancel-in-progress: false # every main commit gets a release; never cancel one that may be publishing
+  cancel-in-progress: false # every app-changing main commit gets a release; never cancel one that may be publishing
 
 env:
   # versionCode = github.run_number + offset. The offset keeps new codes above builds made before this workflow.

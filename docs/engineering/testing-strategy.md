@@ -253,7 +253,7 @@ flowchart LR
 | Workflow | Trigger | Jobs |
 |---|---|---|
 | `ci.yml` | every PR + push to `main` | lint (ESLint + Prettier), typecheck (`tsc -b`), gitleaks, unit, Supabase (`supabase start`, `db reset`, `db lint`, pgTAP), integration |
-| `android-release.yml` | push to `main`; manual, with `dry_run` for any branch | Release APK built and signed on the runner, published as a GitHub Release (dry run: uploaded as an artifact) |
+| `android-release.yml` | push to `main` touching the app (`apps/mobile`, `packages/shared`, root dependency files); manual, with `dry_run` for any branch | Release APK built and signed on the runner, published as a GitHub Release (dry run: uploaded as an artifact) |
 | `evals.yml` | manual (`workflow_dispatch`) with inputs (`size`, `tasks`, `approved_budget_usd`) | Runs evals with the eval API key, refuses to start if the estimate exceeds `approved_budget_usd`, uploads scorecard as an artifact |
 | `release.yml` | tag `v*` | production build, EAS Update to `production` channel (staged), release notes with E2E results |
 | `deps.yml` | weekly | `pnpm audit`, Dependabot PRs |

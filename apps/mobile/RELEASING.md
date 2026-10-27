@@ -1,7 +1,8 @@
 # Android releases
 
-`.github/workflows/android-release.yml` builds a signed release APK on every push to `main` (and on manual
-runs from `main`), then publishes it as a GitHub Release. The build runs on a GitHub-hosted runner: `expo prebuild`
+`.github/workflows/android-release.yml` builds a signed release APK on every push to `main` that changes the
+app (`apps/mobile`, `packages/shared`, or the root dependency files; the list is the workflow's `paths` filter) and
+on manual runs from `main`, then publishes it as a GitHub Release. Server-only pushes build nothing. The build runs on a GitHub-hosted runner: `expo prebuild`
 generates `android/`, Gradle builds the APK, and the APK is re-signed with the release key. EAS is not used for
 this path.
 

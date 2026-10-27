@@ -13,7 +13,7 @@ import { handler as noteGenerate } from '../src/functions/note-generate.ts';
 import { handler as scopeResolve } from '../src/functions/scope-resolve.ts';
 import { handler as flagCreate } from '../src/functions/flag-create.ts';
 import { handler as accountDelete } from '../src/functions/account-delete.ts';
-import { handler as signupComplete } from '../src/functions/signup-complete.ts';
+import { BOOTSTRAP_INVITE_CODE, handler as signupComplete } from '../src/functions/signup-complete.ts';
 
 const json_reply = (value: unknown): FakeReply => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
 
@@ -210,6 +210,21 @@ test('signup-complete: a valid pilot invite creates the profile and uses one inv
   assertEquals(h.db.rows('invites')[0]?.uses_left, 2);
   const again = await signupComplete(request('signup-complete', { token: 'jwt-carla', body: { invite_code: 'ABCDEFGH', birth_month: 5, birth_year: 2010, display_name: 'Carla', school_year: 'em1', privacy_notice_version: 'v1' } }), h.deps);
   assertEquals((await json(again)).error.code, 'already_completed');
+});
+
+test('signup-complete: the bootstrap code makes the first account the owner, then stops working', async () => {
+  const h = makeHarness();
+  withUser(h, 'carla');
+  withUser(h, 'davi');
+  const body = { invite_code: BOOTSTRAP_INVITE_CODE, birth_month: 5, birth_year: 1990, display_name: 'Carla', school_year: 'em1', privacy_notice_version: 'v1' };
+  const res = await signupComplete(request('signup-complete', { token: 'jwt-carla', body }), h.deps);
+  assertEquals(res.status, 200);
+  const owner = h.db.rows('profiles').find((p) => p.id === 'carla-id');
+  assertEquals(owner?.app_role, 'app_admin');
+  assertEquals(owner?.invite_id, null);
+  const second = await signupComplete(request('signup-complete', { token: 'jwt-davi', body: { ...body, display_name: 'Davi' } }), h.deps);
+  assertEquals((await json(second)).error.code, 'invite_invalid');
+  assertEquals(h.db.rows('profiles').length, 1);
 });
 
 function withUser(h: ReturnType<typeof makeHarness>, name: string) {
