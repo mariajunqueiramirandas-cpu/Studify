@@ -63,7 +63,7 @@ Studify generates flashcards from every topic of the knowledge map, schedules th
   - On a **personal** subject, the edit changes the card. If the user marks "Mudou o sentido do cartão", the card's FSRS state is reset to New; otherwise the state is kept.
   - On a **shared** (Turma) subject, the edit creates a per-user `card_overrides` row; the user is offered "Sugerir correção pra turma", which files a TRU-02 flag with the proposed text.
   - Only the uploader, the Turma owner or moderators can edit shared cards for everyone.
-- **MEM-01.10** Per-user actions on any card: **Suspender** (stop scheduling; reversible), **Excluir pra mim** (hidden; reversible from "Cartões ocultos"), **Avisar erro** (TRU-02 flag). Deleting a personal card the user created is a real delete (review history kept for stats).
+- **MEM-01.10** Per-user actions on any card: **Suspender** (stop scheduling; reversible), **Excluir pra mim** (hidden; reversible from "Cartões ocultos"), **Reportar erro** (TRU-02 flag). Deleting a personal card the user created is a real delete (review history kept for stats).
 - **MEM-01.11** Cards of topics marked `excluded` ("não cai na prova") are never introduced as new. Already-introduced cards keep their schedule; the user is offered "Pausar cartões desse tópico" (bulk suspend).
 - **MEM-01.12** Card content is Markdown with KaTeX math. Cards may embed one image (a crop of a PDF page, stored in Storage).
 - **MEM-01.13** Card browser per subject: list by topic, search (front/back text), filters (novo / aprendendo / revisão / suspenso / oculto / com erro avisado), counts per state.
@@ -166,7 +166,7 @@ stateDiagram-v2
 | Edit shared | "Essa edição vale só pra você. Quer sugerir a correção pra turma?" · "Sugerir correção" |
 | Meaning changed | "Mudou o sentido do cartão? (o progresso dele recomeça)" |
 | Suspend / hide | "Suspender" · "Excluir pra mim" · "Cartões ocultos" |
-| Flag | "Esse cartão tem erro? Avisar" |
+| Flag | "Achou um erro nesse cartão? ⚑ Reportar erro" |
 | Generate more | "Gerar mais cartões" · "Gerando… isso leva uns segundos" |
 | Leech | "Esse cartão tá difícil de fixar. Quer reescrever, criar um macete ou ver uma explicação diferente?" |
 | Excluded topic | "Esse tópico não cai na prova. Pausar os cartões dele?" |
@@ -261,15 +261,15 @@ Siblings of a card reviewed today are excluded (MEM-02.7). Suspended/hidden card
 
 ### 8.4 New-card limit (tied to the plan)
 
+Canonical formula: `newCardQuota` in [learning-engine.md §4](../engineering/learning-engine.md#4-new-card-quota-newcardquota) (merges this section with spec 07 §8.3). Summary:
+
 For each upcoming exam `E` in the next 30 days:
-- `N_E` = new (never introduced) cards in `E.scope` (scope nodes + descendants, not `excluded`, not suspended/hidden).
-- `days_E = max(1, days_until(E) − 2)` (the last 2 days are review-only).
+- `N_E` = new (never introduced) cards in the exam's scope (scope nodes + descendants, not marked "não cai na prova" by the user, not suspended/hidden).
+- `days_E = max(1, days_until(E) − 1)`: new cards can be introduced from today until `D_E − 2`; the eve (`D_E − 1`) and the exam day are review-only.
 
-`required = Σ_E ceil(N_E / days_E)` (a card in the scope of several exams counts for the earliest one only).
+`required = Σ_E ceil(N_E / days_E)` (a card in the scope of several exams counts for the earliest one only). The planner also computes a time-driven amount from today's planned learn minutes; the quota is the larger of the two, **capped at 50**, then reduced so the review forecast for the next 7 days stays manageable. Cards created from mistakes (`origin = from_mistake`) are always allowed, including on the eve.
 
-`new_limit_today = min(60, max(settings.new_per_day, required))`.
-
-If `required > 60`, the planner (GOL-04) shows the "too much content" warning and introduces cards by exam date, then exam weight. The planner reads `required` to size `plan_items` of activity `learn`; cards introduced via the Feed (FED-01) count against the same limit.
+If `required` exceeds the cap, the planner (GOL-04) shows the "muito conteúdo" warning and introduces cards by exam date, then exam weight. The planner reads `required` to size `plan_items` of type learn; cards introduced via the Feed (FED-01) count against the same quota. Without an active plan, the quota is `settings.new_per_day` (default 20).
 
 ### 8.5 Exam boost (exam-aware overlay)
 

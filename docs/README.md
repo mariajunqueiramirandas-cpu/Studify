@@ -9,6 +9,7 @@ Studify turns class PDFs into a complete study system (notes, flashcards, quizze
 | [Product requirements (PRD)](product/PRD.md) | Vision, principles, users, modes, **full feature catalog with IDs**, non-goals, glossary |
 | [Roadmap](product/roadmap.md) | Phases 0–5, scope and exit criteria |
 | [User flows](product/user-flows.md) | End-to-end journeys (onboarding, upload, exam week, daily session, Turma) |
+| [Open decisions](product/open-decisions.md) | Every decision waiting on the owner, with the default used until decided |
 
 ## Feature specifications
 

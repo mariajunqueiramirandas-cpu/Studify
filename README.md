@@ -11,7 +11,7 @@ Android app (Expo / React Native), interface in Portuguese (Brazil), built for a
 
 ## Status
 
-Planning complete — implementation starts with **Phase 0 (Foundation)**. See the [roadmap](docs/product/roadmap.md).
+Planning docs complete — implementation starts with **Phase 0 (Foundation)**. See the [roadmap](docs/product/roadmap.md).
 
 ## Documentation
 
@@ -19,5 +19,6 @@ All product, feature and engineering documents live in [`docs/`](docs/README.md)
 
 - [Product requirements (PRD)](docs/product/PRD.md) — vision, users, full feature catalog with IDs
 - [Roadmap](docs/product/roadmap.md) — phases and exit criteria
+- [Open decisions](docs/product/open-decisions.md) — choices waiting on the owner, with defaults
 - [Feature specs](docs/specs/) — one per feature area
 - [Architecture](docs/engineering/architecture.md) — system design and domain model

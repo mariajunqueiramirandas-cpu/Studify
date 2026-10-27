@@ -74,7 +74,7 @@ This spec also defines **TRU-01**, the rule that every generated item carries pa
 | ING-02.5 | **Slicing:** the original PDF is split into **slices** (pdf-lib) that respect the Claude limits — ≤ 32 MB request size (raw slice ≤ 20 MB to leave room for base64 overhead and prompt), ≤ 600 pages — **and** a token budget (default ≤ 150 pages per outline slice, tuned in Phase 0 with `count_tokens`). Algorithm in §8.1. |
 | ING-02.6 | **Transcription of scanned pages** (background, Batch): Claude transcribes scanned pages to plain text for search and tutor retrieval; stored with `text_source = 'ai_transcription'` and a confidence level. Pages with `low` confidence (e.g. messy handwriting) are flagged in the viewer. |
 | ING-02.7 | Claude reads diagrams, charts, tables and handwriting natively from the PDF; no separate OCR engine is used for understanding. |
-| ING-02.8 | Slices are uploaded once to the Claude **Files API** and referenced by `file_id` in later requests (fallback: base64). File IDs are stored on `document_slices`. |
+| ING-02.8 | Worker jobs upload the slices they need to the Claude **Files API** and reference them by `file_id` for the duration of the job (fallback: base64). File IDs on `document_slices` are ephemeral: deleted when the job finishes and swept after 48 h at most ([ai-pipeline.md §4.2](../engineering/ai-pipeline.md#42-files-api)). Synchronous calls send slices as base64. |
 
 ### ING-03 — Knowledge map
 
@@ -149,7 +149,7 @@ This spec also defines **TRU-01**, the rule that every generated item carries pa
 | ING-08.2 | PDFs are cached on the device file system after first open; "Baixar para offline" pins a document (PLT-07, Phase 2). |
 | ING-08.3 | **Highlight:** the viewer loads the page's positioned text items and locates `cited_text` (algorithm §8.7), drawing translucent rectangles over the matched spans and scrolling them into view. If no match is found, or the page is scanned, the page opens with a "Trecho citado" card showing the quote. |
 | ING-08.4 | **Search in document:** substring search over `document_pages.text` (accent- and case-insensitive), results list with page numbers; tapping highlights the occurrence. |
-| ING-08.5 | **Region select:** "Perguntar sobre isto" lets the user drag a rectangle on a page. The app collects text items inside the rectangle (or, for scanned pages, crops the page image) and opens the tutor with passage scope (TUT-03). Also offers "Criar flashcard daqui" (MEM-01). |
+| ING-08.5 | **Region select:** "Perguntar sobre isto" lets the user drag a rectangle on a page. The app collects text items inside the rectangle (or, for scanned pages, crops the page image) and opens the tutor with passage scope (TUT-03). Also offers "Criar cartão daqui" (MEM-01). |
 | ING-08.6 | Source chips (`SourceChip` component) render as "📄 p. 14" (single page), "📄 p. 14–16" (range), or "📄 Slides Aula 3 · p. 14" when the subject has more than one document. Multiple sources → tapping opens a bottom sheet listing them. |
 | ING-08.7 | A chip pointing to an archived/deleted document renders disabled: "Material removido". |
 
@@ -174,7 +174,7 @@ flowchart LR
   C --> D[Lendo seu material…]
   D --> E[Revisar mapa]
   E --> F[Matéria com mapa]
-  F -->|background| G[Gerando resumos e flashcards… 12/30]
+  F -->|background| G[Gerando resumos e cartões… 12/30]
   F -->|📄 chip| V[Visualizador de PDF]
 ```
 
@@ -196,7 +196,7 @@ flowchart LR
 | Uploading | Enviando… {pct}% |
 | S0/S1 | Lendo seu material… · Montando o mapa da matéria… |
 | S1 done | Pronto! Esse é o mapa da sua matéria. Deu certo? Você pode ajustar. |
-| Background progress | Gerando resumos e flashcards… {done} de {total} tópicos |
+| Background progress | Gerando resumos e cartões… {done} de {total} tópicos |
 | Merge result | Juntei o novo material ao mapa: {n_new} tópicos novos, {n_updated} atualizados. |
 | Kind confirm | Isso parece ser **{kind}**. Tá certo? · Sim · Mudar |
 | Not study material | Hmm, isso não parece material de estudo. Quer usar mesmo assim? |
@@ -210,7 +210,7 @@ flowchart LR
 | Review actions | Renomear · Juntar com… · Dividir aqui · Mover para… · Nova unidade · Apagar · Não cai na prova |
 | Undo | {Ação} feita. · Desfazer |
 | Shared read-only | Só quem organiza a turma pode mudar o mapa. Você ainda pode marcar o que não cai na sua prova. |
-| Viewer | Trecho citado · Perguntar sobre isto · Criar flashcard daqui · Buscar no material · Baixar para offline |
+| Viewer | Trecho citado · Perguntar sobre isto · Criar cartão daqui · Buscar no material · Baixar para offline |
 | Scanned page | Página escaneada — o destaque pode não aparecer. |
 | Low-confidence page | Não consegui ler essa página direito. |
 | Removed source | Material removido |
@@ -238,7 +238,7 @@ flowchart LR
 | `document_pages` | `text_items_path` | text | Storage path of positioned text JSON (highlighting). |
 | `document_pages` | `char_count` | int | Scanned detection. |
 | `document_pages` | `transcription_confidence` | text | `high` · `medium` · `low` (AI transcription only). |
-| `document_slices` (new) | `id`, `document_id`, `purpose`, `page_start`, `page_end`, `storage_path`, `size_bytes`, `est_tokens`, `anthropic_file_id`, `created_at` | — | Slices sent to Claude. `purpose`: `outline` · `topic` · `transcription` · `tutor`. `anthropic_file_id` from the Files API. |
+| `document_slices` (new) | `id`, `document_id`, `purpose`, `page_start`, `page_end`, `storage_path`, `size_bytes`, `est_tokens`, `anthropic_file_id`, `anthropic_file_expires_at`, `created_at` | — | Slices sent to Claude. `purpose`: `outline` · `topic` · `transcription` · `tutor`. `anthropic_file_id` from the Files API. |
 | `knowledge_nodes` | `key_terms` | text[] | Concept key terms (glossary seed). |
 | `knowledge_nodes` | `formulas` | jsonb | `[{latex, description}]`. |
 | `knowledge_nodes` | `edited_by_user` | boolean | Protects user edits during merges. |

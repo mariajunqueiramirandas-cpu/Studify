@@ -27,7 +27,7 @@ Trust (PRD principle 3, TRU-01) depends on reliable page citations. The owner wa
 6. **Cost controls:**
    - **Prompt caching** of document blocks and stable system prompts, since every generation for a subject re-reads the same slices.
    - **Message Batches API** (50% price) for non-urgent bulk generation after the outline.
-   - **Files API** to upload each PDF slice once and reference it across requests. Because Files API objects persist until deleted (beyond the API's default 30-day retention), files are kept only while in use and deleted by the worker when idle or when the document is deleted ([ai-pipeline.md §4.2](../ai-pipeline.md#42-files-api)).
+   - **Files API** to upload each PDF slice once and reference it across requests. Because Files API objects persist until deleted (beyond the API's default 30-day retention), file ids are ephemeral: deleted when the uploading job finishes, swept after 48 h at most, and deleted immediately with the document. Synchronous calls send slices as base64 instead ([ai-pipeline.md §4.2](../ai-pipeline.md#42-files-api)).
    - Per-user, per-Turma and global budgets (PLT-04).
 7. **Refusals:**
    - Every **synchronous** request uses the **server-side fallback**: beta header `server-side-fallback-2026-07-01` with `fallbacks: "default"`, which routes refusals by category. Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md §7.4](../ai-pipeline.md#74-why-no-fallbacks-in-batch)).

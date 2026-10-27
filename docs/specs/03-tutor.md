@@ -51,8 +51,8 @@ It has three modes — **Responder** (direct answer), **Socrático** (guides wit
 | TUT-01.2 | Each user message triggers **retrieval** (§8.1) inside the thread's scope, builds/extends the thread's **context pack** of page slices (§8.2), and calls Claude with citations enabled and streaming. |
 | TUT-01.3 | The answer streams into the chat; citation chips appear inline after the sentence they support ("📄 21"); tapping opens the PDF viewer with the cited passage highlighted (ING-08.3). |
 | TUT-01.4 | Answer style: phone-first, ≤ 180 words by default (Markdown, bullets, KaTeX); longer only when the student asks ("explica mais"). |
-| TUT-01.5 | Static follow-up chips under each answer: **Explica mais simples**, **Me dá um exemplo**, **Me testa sobre isso**, **Criar flashcard**. The first two re-ask in the same thread with the LRN-03 style instruction; "Me testa sobre isso" switches the thread to Me testa scoped to the topic(s) cited in the last answer. |
-| TUT-01.6 | **Criar flashcard** turns the last question/answer pair into a draft card (structured call), shown for edit before saving; `cards.origin = 'from_tutor'`, source pages = the answer's citations. |
+| TUT-01.5 | Static follow-up chips under each answer: **Explica mais simples**, **Me dá um exemplo**, **Me testa sobre isso**, **Criar cartão**. The first two re-ask in the same thread with the LRN-03 style instruction; "Me testa sobre isso" switches the thread to Me testa scoped to the topic(s) cited in the last answer. |
+| TUT-01.6 | **Criar cartão** turns the last question/answer pair into a draft card (structured call), shown for edit before saving; `cards.origin = 'from_tutor'`, source pages = the answer's citations. |
 | TUT-01.7 | Threads: list ("Conversas") with title (first message truncated to 40 chars; no AI call), scope badge, last activity; rename, delete (hard delete of messages after 30 days), archive. Threads are always private, also in shared subjects. |
 | TUT-01.8 | Thread length: soft cap at 40 messages or ~150K context tokens. Beyond it, the app offers "Continuar numa nova conversa" — a new thread is created with a short summary of the old one (text-only call) as its first context block. |
 | TUT-01.9 | Per-request limits: ≤ 4,000 characters per user message; ≤ 30 pages added to the context pack per turn; ≤ 120 pages per thread context pack; output `max_tokens` per mode (§7). |
@@ -69,7 +69,7 @@ It has three modes — **Responder** (direct answer), **Socrático** (guides wit
 | TUT-02.2 | **Responder:** direct, cited answer. |
 | TUT-02.3 | **Socrático:** the tutor does not give the final answer right away. It asks **one** guiding question per turn, building on what the student said, and confirms correct steps. After 3 student attempts on the same question, or when the student taps **Desisto, me mostra**, it gives the full answer with citations. The tutor never fakes agreement with a wrong step. |
 | TUT-02.4 | **Me testa:** the tutor asks one question at a time about the scope (mix of recall, understanding, application; open answer), then grades the student's reply, gives cited feedback and asks the next one. Question selection in §8.4. |
-| TUT-02.5 | Me testa grading is reported through the `registrar_avaliacao` tool (§7): verdict `correct` · `partial` · `incorrect`, score 0–1, the node it tested, and an optional misconception. The app shows **Certo! ✅** / **Quase!** / **Não foi dessa vez** and records mastery evidence (source `tutor_quiz`, weight 0.5 relative to a quiz answer — see learning-engine). |
+| TUT-02.5 | Me testa grading is reported through the `registrar_avaliacao` tool (§7): verdict `correct` · `partial` · `incorrect`, score 0–1, the node it tested, and an optional misconception. The app shows **Acertou! ✅** / **Quase!** / **Não foi dessa vez** and records mastery evidence (source `tutor_quiz`, weight 0.5 relative to a quiz answer — see learning-engine). |
 | TUT-02.6 | After an `incorrect` or `partial` verdict the app offers **Salvar no Caderno de Erros** (PRA-04); the entry stores the tutor's question, the student's answer, the feedback and the cause (asked to the student with the PRA-04 cause picker). |
 | TUT-02.7 | A Me testa round ends after 5 questions (default) with a summary card: score, nodes tested, "Praticar mais" (opens a PRA-01 quiz on the weakest node). |
 
@@ -88,7 +88,7 @@ It has three modes — **Responder** (direct answer), **Socrático** (guides wit
 | ID | Requirement |
 |---|---|
 | TUT-04.1 | When the retrieved material does not support an answer, the model calls the `marcar_fora_do_material` tool (§7) instead of answering. The app renders a standard card: "Isso não está no seu material de {matéria}." + the closest topic found (chip) if any + **Responder com conhecimento geral**. |
-| TUT-04.2 | **Responder com conhecimento geral** sends a separate request without documents; the answer is rendered in a distinct style (outlined card) with the badge **"Conhecimento geral — não está no seu material. Confira com seu professor."** and no page chips. It is stored with `general_knowledge = true`. |
+| TUT-04.2 | **Responder com conhecimento geral** sends a separate request without documents; the answer is rendered in a distinct style (outlined card) with the badge **"Conhecimento geral — não está no seu material. Confira com seu professor(a)."** and no page chips. It is stored with `general_knowledge = true`. |
 | TUT-04.3 | Setting **"Permitir respostas gerais automaticamente"** (default off): when on, the general answer is generated right after the out-of-material card, still with the badge. |
 | TUT-04.4 | Partially supported questions: the tutor answers the supported part with citations and says which part is not in the material; general knowledge for the remainder only via TUT-04.2. |
 | TUT-04.5 | Off-topic messages (not about studying): one friendly sentence and a redirect to the material. Exceptions in §8.6 (wellbeing and safety). |
@@ -107,7 +107,7 @@ It has three modes — **Responder** (direct answer), **Socrático** (guides wit
 
 | ID | Requirement |
 |---|---|
-| TUT-06.1 | **Segure para falar** (push-to-talk) in any thread, and a **Conversa por voz** toggle for hands-free turn-taking. |
+| TUT-06.1 | **Segure pra falar** (push-to-talk) in any thread, and a **Conversa por voz** toggle for hands-free turn-taking. |
 | TUT-06.2 | Speech-to-text: on-device Android speech recognition (`pt-BR`, or the subject's language for language subjects) with live transcript. In push-to-talk, the transcript can be edited before sending; in hands-free, it is sent after 1.5 s of silence. |
 | TUT-06.3 | Text-to-speech: on-device Android TTS. The answer is spoken sentence by sentence as it streams. Tap anywhere → **Toque para parar** (barge-in stops speech and, in hands-free, starts listening). |
 | TUT-06.4 | Voice turns add a mid-conversation system message "modo voz": ≤ 90 words, no tables, formulas spoken in words ("x ao quadrado"), no Markdown. Citations are still stored and shown on screen. |
@@ -116,9 +116,11 @@ It has three modes — **Responder** (direct answer), **Socrático** (guides wit
 
 ## 5. UX and screens
 
+The tutor is a **modal**, not a tab ([ux-guidelines.md](../design/ux-guidelines.md), S-TUT-02). It opens from the "Perguntar" buttons on Matéria, Tópico, Resumo and PDF screens, from a text selection, and from "Não entendi" on question feedback. The list of conversations (S-TUT-01) lives under **Praticar → Tutor**.
+
 ```mermaid
 flowchart TD
-  T[Tutor tab] --> L[Conversas]
+  T[Praticar → Tutor] --> L[Conversas]
   L --> C[Thread]
   N[Topic / note selection] --> C
   V[PDF viewer region] --> C
@@ -139,11 +141,12 @@ flowchart TD
 │        qual a diferença entre       │
 │        mitose e meiose?        (eu) │
 │ A mitose forma 2 células iguais à   │
-│ mãe 📄21; a meiose forma 4 células  │
-│ com metade dos cromossomos 📄23…    │
+│ mãe 📄 p. 21; a meiose forma 4      │
+│ células com metade dos cromossomos  │
+│ 📄 p. 23…                           │
 │ [Explica mais simples] [Me dá um    │
 │  exemplo] [Me testa sobre isso]     │
-│ [Criar flashcard]        👍 👎       │
+│ [Criar cartão]           👍 👎       │
 │─────────────────────────────────────│
 │ [🎤] Pergunte sobre Biologia…   [➤] │
 └─────────────────────────────────────┘
@@ -158,12 +161,12 @@ flowchart TD
 | Input placeholder | Pergunte sobre {matéria}… |
 | Modes | Responder — responde direto, com a página · Socrático — te guia com perguntas até você chegar lá · Me testa — te faz perguntas e corrige |
 | Scope | Falando sobre: {escopo} · Matéria inteira · Este tópico · Este trecho · Provas de {objetivo} |
-| Follow-up chips | Explica mais simples · Me dá um exemplo · Me testa sobre isso · Criar flashcard |
+| Follow-up chips | Explica mais simples · Me dá um exemplo · Me testa sobre isso · Criar cartão |
 | Socratic give-up | Desisto, me mostra |
-| Me testa verdicts | Certo! ✅ · Quase! · Não foi dessa vez · Salvar no Caderno de Erros |
+| Me testa verdicts | Acertou! ✅ · Quase! · Não foi dessa vez · Salvar no Caderno de Erros |
 | Me testa summary | Você acertou {n} de {total}. · Praticar mais |
 | Out of material | Isso não está no seu material de {matéria}. · O mais perto que encontrei: {tópico} · Responder com conhecimento geral |
-| General badge | Conhecimento geral — não está no seu material. Confira com seu professor. |
+| General badge | Conhecimento geral — não está no seu material. Confira com seu professor(a). |
 | No citation note | Sem referência no material |
 | Excluded topic | Esse tópico está marcado como "não cai na prova". |
 | Processing | Ainda estou lendo seu material ({pct}%). Posso responder com o que já li. |
@@ -174,7 +177,7 @@ flowchart TD
 | Long thread | Essa conversa ficou longa. Continuar numa nova? Eu levo um resumo. |
 | Message too long | Sua mensagem ficou muito longa. Tenta resumir em até 4.000 caracteres. |
 | Feedback reasons | Errado · Não entendi · Muito longo · Sem relação com a pergunta |
-| Voice | Segure para falar · Conversa por voz · Toque para parar · Me testa não funciona por voz. |
+| Voice | Segure pra falar · Conversa por voz · Toque para parar · Me testa não funciona por voz. |
 | Mic permission | Pra conversar por voz, preciso do microfone. O áudio não sai do seu celular — só o texto. |
 | Homework boundary | Não vou fazer o trabalho por você, mas te ajudo a fazer: quer começar pelo esboço? |
 | Refusal | Não consigo ajudar com isso aqui. Quer perguntar de outro jeito? |
@@ -233,16 +236,18 @@ Earlier turns are replayed exactly as stored (`raw_content`), so the prefix stay
 
 **Per-mode settings**
 
-| Mode / task | Effort | `max_tokens` | Notes |
-|---|---|---|---|
-| Responder | `medium` | 2,000 | Cited prose. |
-| Socrático | `medium` | 800 | One guiding question per turn. |
-| Me testa (ask + grade) | `medium` | 1,200 | Grades via `registrar_avaliacao`, then cited feedback + next question. |
-| Voice turns (TUT-06) | `low` | 600 | Latency first. |
-| Router (topic routing fallback, §8.1) | `low` | 300 | Text-only outline; structured output `{node_ids: [..≤3]}`. |
-| General-knowledge answer (TUT-04.2) | `low` | 1,200 | No documents; separate request; not part of the thread's cached prefix. |
-| Thread summary (TUT-01.8) | `low` | 800 | Text-only. |
-| Tutor → flashcard (TUT-01.6) | `low` | 500 | Structured: `{type: basic|cloze, front, back}`; sources = the answer's citations. |
+The "reply target" is a length instruction in the prompt (in tokens). The API `max_tokens` follows the classes in [ai-pipeline.md §2.3](../engineering/ai-pipeline.md#23-max_tokens-classes), because adaptive thinking counts toward `max_tokens` ([ai-pipeline.md R4](../engineering/ai-pipeline.md#14-reconciliations)).
+
+| Mode / task | Effort | Reply target | `max_tokens` class | Notes |
+|---|---|---|---|---|
+| Responder | `medium` | 2,000 | M | Cited prose. |
+| Socrático | `medium` | 800 | M | One guiding question per turn. |
+| Me testa (ask + grade) | `medium` | 1,200 | M | Grades via `registrar_avaliacao`, then cited feedback + next question. |
+| Voice turns (TUT-06) | `low` | 600 | M | Latency first. Effort is constant for the whole thread (it is part of the cache key): a text thread switched to voice starts a new thread or uses the per-message effort system message ([ai-pipeline.md §6.6](../engineering/ai-pipeline.md#66-threads-must-be-append-only-preserved-thinking), R7). |
+| Router (topic routing fallback, §8.1) | `low` | 300 | XS | Text-only outline; structured output `{node_ids: [..≤3]}`. |
+| General-knowledge answer (TUT-04.2) | `low` | 1,200 | M | No documents; separate request; not part of the thread's cached prefix. |
+| Thread summary (TUT-01.8) | `low` | 800 | S | Text-only. |
+| Tutor → flashcard (TUT-01.6) | `low` | 500 | XS | Input: the answer as **plain text** (citation-bearing text blocks can't be sent back as input, [ai-pipeline.md R9](../engineering/ai-pipeline.md#14-reconciliations)) + its citation pages. Structured: `{type: basic|cloze, front, back}`; sources = the answer's citations. |
 
 **Tools** (`strict: true`, `tool_choice: auto` — forced tool choice is not available on this model; the system prompt instructs when to call them)
 
@@ -318,7 +323,7 @@ Before each call: `est_input = cached_history_tokens × 0.1 + new_page_count × 
 
 ### 8.6 Safety and wellbeing (minors)
 
-- **Crisis signals** (self-harm, suicide, abuse, being in danger): the tutor stops tutoring and answers with care, without diagnosing: "Sinto muito que você esteja passando por isso. Você não está só. Se quiser conversar agora, liga ou manda mensagem pro **CVV — 188** (de graça, 24h) ou acessa cvv.org.br. Se estiver em perigo agora, liga **192**. Conversar com um adulto de confiança também ajuda." The message is flagged in `tool_events` (category only, no extra data is shared with anyone).
+- **Crisis signals** (self-harm, suicide, abuse, being in danger): the tutor follows the shared `distress` fragment used by every conversational feature ([ai-pipeline.md §8.3](../engineering/ai-pipeline.md#83-shared-fragments-content-summary)). It stops tutoring, answers with care without diagnosing, and appends `[[APOIO]]`; the app strips the marker and shows the help card ([13 §8.11](13-motivation-wellbeing.md#811-apoio-handling)). Example reply: "Sinto muito que você esteja passando por isso. Você não está só. Se quiser conversar agora, liga ou manda mensagem pro **CVV — 188** (de graça, 24h) ou acessa cvv.org.br. Se estiver em perigo agora, liga **192**. Se alguém está te machucando, dá pra denunciar no **Disque 100**. Conversar com um adulto de confiança também ajuda." The message is flagged with `tutor_messages.safety_flag` (category only, no extra data is shared with anyone).
 - **Stress/anxiety about exams:** brief encouragement and practical tips (breaks, sleep), then back to studying if the student wants.
 - **Bullying, sexual content, dangerous activities:** no engagement; short, kind redirect; for bullying, suggest talking to a trusted adult or the school.
 - No personal data collection: the tutor never asks for full name, address, school, phone or photos of people.

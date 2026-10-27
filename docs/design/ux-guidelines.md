@@ -286,7 +286,7 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 | S-SYS-04 | Denunciar *(sheet)* | Abuse report (people, Turma names, AI outputs) | SP-09 | 1 (AI), 2 (Turma) | Member menu, item menu |
 | S-EXT-01 | Widget | 2×2 / 4×2 home-screen review | MEM-04 | 2 | Android home screen |
 | S-EXT-02 | Notificação com resposta | Answer a card from a notification | MEM-04 | 2 | Notification |
-| S-EXT-03 | Página do convite / desafio | Web landing for `/t/{code}` and `/q/{token}` with APK download | SOC-09.4 | 2 | WhatsApp link |
+| S-EXT-03 | Página do convite / desafio | Web landing for `/c/{code}`, `/i/{code}`, `/q/{token}` and `/b/{pin}` with APK download | SOC-09.4 | 2 | WhatsApp link |
 | S-EXT-04 | Painel do responsável | Guardian supervision (web, PT-BR) | SP-04 | 2 | Guardian e-mail |
 
 **Count:** 148 in-app screens, sheets and states plus 4 surfaces outside the app (152 total).

@@ -91,7 +91,7 @@ Both are **predictions, never guarantees**, and the UI always says so.
 | Key | String |
 |---|---|
 | `pp.title` | Prova Provável |
-| `pp.disclaimer` | Provável, não garantido. Baseado em {n} provas antigas do(a) {teacher}. |
+| `pp.disclaimer` | Provável, não garantido. Baseado em {n} provas antigas de {teacher}. |
 | `pp.upload` | Adicionar prova antiga |
 | `pp.upload.integrity` | Essa prova já aconteceu? Só vale prova de etapas anteriores. |
 | `pp.need_more` | Com mais provas antigas a previsão fica melhor. Peça pros veteranos! |
@@ -205,8 +205,8 @@ Computed from the extracted questions of the teacher's past tests `T` (n = |T|):
   "n_tests": 4,
   "questions_per_test": { "mean": 10.5, "sd": 1.3, "min": 9, "max": 12 },
   "total_points": { "mode": 10 },
-  "type_mix": { "multiple_choice": 0.55, "open": 0.35, "calculation": 0.10 },
-  "points_by_type": { "multiple_choice": 0.5, "open": 1.5 },
+  "type_mix": { "mcq_single": 0.55, "essay_question": 0.35, "problem": 0.10 },
+  "points_by_type": { "mcq_single": 0.5, "essay_question": 1.5 },
   "bloom_mix": { "remember": 0.2, "understand": 0.35, "apply": 0.35, "analyze": 0.1 },
   "difficulty_mean": 2.8,
   "feature_rates": { "contextualized": 0.6, "figure": 0.3, "graph": 0.25, "calculation": 0.4, "multi_part": 0.15 },
@@ -245,7 +245,7 @@ Sum 0.948 → **ω = {0.468, 0.241, 0.291}** (no out-of-scope siblings in this f
 ### 8.3 Prova Provável blueprint (PRA-09.7)
 
 1. `Q = round(questions_per_test.mean)`; if the test has `duration_min` set and it differs from the profile median by > 30%, scale `Q` proportionally (min 5).
-2. **Types:** allocate `Q` across `type_mix` by largest remainder.
+2. **Types:** allocate `Q` across `type_mix` by largest remainder (keys are canonical `questions.type` values, [data-model.md](../engineering/data-model.md)).
 3. **Topics:** systematic sampling over the cumulative `ω` with a seed = hash(user, exam, regeneration index) → deterministic per version; guarantee ≥ 1 slot for every topic with `ω ≥ 1/Q`; at most `ceil(ω_n × Q) + 1` slots per topic.
 4. **Bloom and difficulty:** assign to slots by largest remainder from `bloom_mix`, difficulty target = `difficulty_mean` ± 1.
 5. **Features:** mark `round(feature_rate × Q)` slots with each feature, preferring topics where past questions had that feature.

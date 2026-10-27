@@ -59,7 +59,7 @@ Notes are deliberately short and end with a retrieval prompt, because the produc
 | LRN-01.6 | Citation chips: citations returned by the API are grouped per paragraph and rendered as one chip row at the end of the paragraph ("📄 p. 14 · p. 16"). Max 3 chips per paragraph; extra ones collapse into "+2". |
 | LRN-01.7 | **Resumo da unidade**: concatenation of the unit's topic `tldr` notes (no AI call). **Resumo da matéria**: a ≤ 300-word overview generated from the topic `tldr` notes (text-only call), with topic chips instead of page chips. Regenerated when topics are added/removed (debounced to once per hour). |
 | LRN-01.8 | **End-of-note retrieval prompt**: the Resumo and Aprofundado end with "Agora tenta lembrar" → a 3-question mini quiz built from that topic's existing questions ([05](05-practice-exams.md), PRA-01), preferring questions the user has not answered. Results count as practice evidence for mastery. |
-| LRN-01.9 | **Text selection** in notes offers: "Criar flashcard" (MEM-01, prefilled with the selection, origin `user`), "Perguntar ao tutor" (TUT-03, passage scope with the selection and its citations), "Destacar" (personal highlight). |
+| LRN-01.9 | **Text selection** in notes offers: "Criar cartão" (MEM-01, prefilled with the selection, origin `user`), "Perguntar ao tutor" (TUT-03, passage scope with the selection and its citations), "Destacar" (personal highlight). |
 | LRN-01.10 | **Personal highlights** (`note_highlights`) are private, sync across devices, and survive regeneration when the highlighted text still exists (re-anchored by text match; otherwise kept in a "Destaques antigos" list). |
 | LRN-01.11 | Reading a Resumo for ≥ 60% of its estimated reading time (200 words/min) and scrolling to the end marks the topic as **read** for the user (`learn` evidence) and completes a matching `plan_items` row with activity `learn` (GOL-04). |
 | LRN-01.12 | **Refazer resumo**: personal subjects — the user can regenerate a note (max 3 regenerations per topic per day); the previous version is kept for "Desfazer". Shared subjects — only organizers (uploader, owner, moderators) regenerate; members use LRN-03 for a personal alternative. |
@@ -74,7 +74,7 @@ Notes are deliberately short and end with a retrieval prompt, because the produc
 | LRN-02.2 | Each term has: term, definition (≤ 40 words, in `content_language`; in language subjects the definition is in PT-BR), optional short example, aliases (plural, abbreviations, synonyms in the material), linked concept, source pages. |
 | LRN-02.3 | Terms are unique per subject by `normalized_term` (lowercase, no accents, no punctuation). A duplicate from another topic adds its source pages to the existing term instead of creating a new one. |
 | LRN-02.4 | **Glossário** screen per subject: A–Z list with a letter index, search (accent-insensitive, matches aliases), filter by unit. |
-| LRN-02.5 | Term detail: definition, example, source chips, linked concept ("Ver no resumo"), "Criar flashcard". If an active card for this term already exists (same subject, `normalized_term` match on the card front), the button reads "Já está nos seus flashcards" and opens the card. |
+| LRN-02.5 | Term detail: definition, example, source chips, linked concept ("Ver no resumo"), "Criar cartão". If an active card for this term already exists (same subject, `normalized_term` match on the card front), the button reads "Já está nos seus flashcards" and opens the card. |
 | LRN-02.6 | **Inline linking**: in notes, the first occurrence of each term or alias per H2 section is rendered with a dotted underline; tap → bottom-sheet tooltip with the definition and "Ver no glossário". Matching is whole-word, accent-insensitive, longest-match-first. |
 | LRN-02.7 | The user can edit a definition in personal subjects; in shared subjects edits are personal overrides (architecture §3.2 rule 3). |
 
@@ -132,7 +132,7 @@ Notes are deliberately short and end with a retrieval prompt, because the produc
 │ ── Agora tenta lembrar ──           │
 │ [Responder 3 perguntas rápidas]     │
 │─────────────────────────────────────│
-│ [Flashcards (14)] [Praticar] [Tutor]│
+│ [Cartões (14)] [Praticar] [Tutor]   │
 └─────────────────────────────────────┘
 ```
 
@@ -149,12 +149,12 @@ Notes are deliberately short and end with a retrieval prompt, because the produc
 | Little content | Tem pouco conteúdo sobre isso no seu material. |
 | Updating | Atualizando resumo… |
 | Retrieval prompt | Agora tenta lembrar · Responder 3 perguntas rápidas |
-| Selection menu | Criar flashcard · Perguntar ao tutor · Destacar |
+| Selection menu | Criar cartão · Perguntar ao tutor · Destacar |
 | Regenerate | Refazer resumo · Desfazer · Você já refez esse resumo 3 vezes hoje. Tenta amanhã! |
 | Explain button | Explica de outro jeito |
 | Styles | Mais simples · Com uma analogia · Com um exemplo · Passo a passo |
 | Feedback | Ajudou? · Sim · Não, tenta outro jeito · Salvar |
-| Glossary | Glossário · Buscar termo · Ver no resumo · Criar flashcard · Já está nos seus flashcards |
+| Glossary | Glossário · Buscar termo · Ver no resumo · Criar cartão · Já está nos seus cartões |
 | Glossary empty | Os termos aparecem aqui assim que eu terminar de ler o material. |
 | Concept map | Mapa de conceitos · Ver tópicos · Ver conceitos · Pré-requisitos · Estudar · Praticar · Revisar |
 | Contrast edge label | não confunda |

@@ -114,7 +114,7 @@ Claude produces all text. Voice uses other services: **on-device Android STT/TTS
 
 | Context | String |
 |---|---|
-| Podcast | "Podcast Interativo 🎧" · "Gerar episódio" · "Duração" · "Resumão" · "Aprofundado" · "Revisão pra prova" · "Seu episódio tá sendo gravado… a gente avisa quando ficar pronto 🎧" · "Seu episódio tá pronto 🎧" · "Já existe um episódio da turma sobre isso. Ouvir agora?" · "Baixar pra ouvir offline" · "Fontes" |
+| Podcast | "Podcast Interativo 🎧" · "Gerar episódio" · "Duração" · "Resumão" · "Aprofundado" · "Revisão pra prova" · "Seu episódio tá sendo gravado… eu aviso quando ficar pronto 🎧" · "Seu episódio tá pronto 🎧" · "Já existe um episódio da turma sobre isso. Ouvir agora?" · "Baixar pra ouvir offline" · "Fontes" |
 | ✋ | "✋ Perguntar" · "Segure pra falar" · "Ou digite sua pergunta" · "Voltando ao episódio…" · "Isso não tá no seu material. Quer perguntar ao tutor?" |
 | Pausa | "Pausa pra pensar… 5" |
 | Lucas | "Ensine o Lucas" · "E aí! Faltei na aula de {tópico} 😅 Me explica?" · "Lucas está pensando…" · "Terminar aula" · "O que o Lucas entendeu" · "Quanto o Lucas entendeu: {n}/100" · "Pontos que ficaram faltando" · "O Lucas aprendeu errado:" · "Criar cartões dos pontos fracos" · "Tentar de novo" |
@@ -159,7 +159,7 @@ Common: model `claude-opus-5-5`; `fallbacks: "default"`; check `stop_reason` inc
 ### 7.3 Lucas turn (INT-02, Edge Function, streamed)
 | | |
 |---|---|
-| Input | System: Lucas persona (§8.5) + the hidden plan + current `evaluation_state`. Messages: the conversation so far. |
+| Input | System (static for the whole session): Lucas persona (§8.5). Messages: the hidden plan as the first user-turn content, then the conversation so far replayed verbatim from stored `raw_content`, with the current `evaluation_state` **appended** as a mid-conversation system message after each student turn. The system prompt is never edited during a session and earlier messages are never rewritten: with preserved thinking, editing earlier context makes replayed thinking blocks fail and breaks the cache ([ai-pipeline.md §6.6](../engineering/ai-pipeline.md#66-threads-must-be-append-only-preserved-thinking), R5). |
 | Output (structured, streamed) | `{ lucas_reply: string, evaluation: { misconception_updates: [{id, status: "hidden"\|"revealed"\|"partially_fixed"\|"fixed"}], concepts_covered: [{id, quality: "correct"\|"partial"\|"wrong"}], errors_taught: [{claim, correction, severity: "minor"\|"major", source_pages}], clarity_signals: {used_example: bool, used_analogy: bool, checked_understanding: bool} } }` — `lucas_reply` is the **first** field so the app can render it progressively from the partial JSON stream; `evaluation` is applied server-side and never shown during the session. |
 | Effort | `medium` |
 | Teach-back | Final turn uses the same call with `final: true`; `lucas_reply` contains the teach-back. |
@@ -281,9 +281,9 @@ ENEM mode mapping (informative, not an official grade): Repertório ↔ competê
 |---|---|
 | Scope too small for the chosen length (e.g. 1 small topic, 20 min) | Suggest a shorter length; or allow and let the script go deeper (Aprofundado) with a notice. |
 | Scope too big for 5 min | Prioritize topics by weight; list "Ficou de fora". |
-| TTS fails for some lines | Retry 2×; if still failing, job fails gracefully with "Não conseguimos gravar o episódio agora" and the script is kept for retry without regenerating. |
+| TTS fails for some lines | Retry 2×; if still failing, job fails gracefully with "Não consegui gravar o episódio agora" and the script is kept for retry without regenerating. |
 | Notes changed while generating | Episode completes with the old version; marked superseded when the new one is generated. |
-| ✋ while offline | Question queued with text; "Sem internet — a gente responde quando conectar" (answer shown later in transcript). |
+| ✋ while offline | Question queued with text; "Sem internet — eu respondo quando você conectar" (answer shown later in transcript). |
 | STT not available (no pt-BR language pack) | Show text input only; hint to install the language pack for voice. |
 | Lucas: user pastes a long text from notes | Lucas reacts naturally ("Nossa, que textão 😅 explica com suas palavras?") and clarity scoring reflects it; no penalty beyond that. |
 | Lucas: user answers only with "sim/não" | Lucas asks open questions; after 3 such turns, a gentle tip appears. |

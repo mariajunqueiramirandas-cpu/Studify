@@ -204,7 +204,7 @@ flowchart TD
 | `exam.add` | Adicionar prova |
 | `exam.time.tbd` | Horário a definir |
 | `scope.title` | O que vai cair? |
-| `scope.hint` | Tira uma foto da lista de conteúdo ou cola o texto que o professor mandou. |
+| `scope.hint` | Tira uma foto da lista de conteúdo ou cola o texto que o professor(a) mandou. |
 | `scope.result` | Encontrei {matched} de {total} tópicos no seu material. |
 | `scope.unmatched` | Não encontrei no seu material: {items}. Quer enviar o material ou pedir pra turma? |
 | `scope.default_all` | Sem conteúdo definido — vou considerar a matéria toda. Adicione o conteúdo pra um plano mais certeiro. |
@@ -385,13 +385,15 @@ W'_e = W_e / max_e W_e
    3. shorten `mock` to 20 min;
    4. drop `learn_light` of the lowest-`π` topics (they stay accessible but are marked "fora do plano");
    5. never drop `vespera` or the last remaining unit of a test.
-   Each step is recorded in `plan_runs.triage` and summarized to the student (`plan.tight`).
+   Each step is recorded in `plan_runs.triage` and summarized to the student (`plan.tight`). Ties among equal `π` in triage: the topic **later** in knowledge-map order is downgraded first (earlier topics tend to be prerequisites).
 3. **Placement — day by day, from today:**
    - **Pass 1 (pacing):** for each test `e` (by deadline), place up to its daily quota `q_e(d) = ceil( remaining_e / max(1, deadline_e − d + 1) )` minutes of its available units.
-   - **Pass 2 (EDF fill):** fill remaining `C(d)` with available units by earliest deadline, ties by higher `π`.
+   - **Pass 2 (EDF fill):** fill remaining `C(d)` with available units by earliest deadline.
+   - **Candidate order** (both passes, full tie-break): earliest deadline → higher `π` → unit kind (`learn` < `practice` < `practice₂` < `mock`) → knowledge-map order → unit id. This makes the plan deterministic.
    - **Soft constraints** (a candidate violating them is skipped for this day if another candidate fits): at most `max_subjects_per_day` subjects; no more than 2 consecutive blocks of the same subject; at most `1.5 × q_e(d)` for one test unless needed for feasibility.
    - Pinned items are placed first on their day.
 4. **Order within the day** (`order_in_day`): reviews → `learn` → `practice` (for topics learned on earlier days) → `mock` → `vespera` last. Demanding units are flagged for GOL-10.
+5. **Repair.** The aggregate check in step 1 can pass while block sizes still leave a unit unplaced by its deadline. Then: (a) apply the next triage step and re-place from the earliest affected day; (b) if no triage step remains, place the unit on its deadline day, exceeding `C(d)` by at most 15 min, and report `plan.tight`; (c) otherwise mark it "fora do plano" (it stays accessible). Canonical pseudocode: [learning-engine.md §11.5](../engineering/learning-engine.md#115-feasibility-triage-and-placement).
 
 #### 8.2.6 Replanning
 

@@ -229,8 +229,8 @@ Specified in [08 — Prova Provável](08-prova-provavel.md#enm-08--prova-prováv
 | `red.grading` | Corrigindo sua redação… te aviso quando ficar pronta. |
 | `red.score.label` | Nota estimada |
 | `red.proposta.checklist` | Agente · Ação · Meio/modo · Finalidade · Detalhamento |
-| `red.hr.zero` | Essa proposta desrespeita os direitos humanos: a Competência V fica com zero. |
-| `red.repertorio.unverified` | Não conseguimos confirmar essa referência. Confira antes de usar. |
+| `red.hr.zero` | Essa proposta desrespeita os direitos humanos: a Competência 5 fica com zero. |
+| `red.repertorio.unverified` | Não consegui confirmar essa referência. Confira antes de usar. |
 | `sisu.title` | Meta SISU |
 | `sisu.cutoff.note` | Nota de corte é só referência — ela muda a cada edição. |
 | `sisu.gap` | Você está a {x} pontos da meta. |
@@ -262,7 +262,7 @@ Specified in [08 — Prova Provável](08-prova-provavel.md#enm-08--prova-prováv
 | `quizzes` | `config` for `enem_simulado`: `{ mode, area?, source: "replica" | "misto" | "provavel", edition?, language, item_ids, time_limit_min, includes_essay, seed }` | JSON | ENM-04 |
 | `quiz_attempts` | `area_results` | JSON: per area `{ theta, se, score, ci80_low, ci80_high, n_items, n_correct, n_blank, coherence: { lz, level, easy_miss_ids[], lucky_hit_ids[] }, time: { total_s, per_item_s[], stuck_ids[] } }` | ENM-04.5–6 |
 | `quiz_attempts` | `paused_seconds`, `essay_id` (nullable) | | ENM-04.4, ENM-04.8 |
-| `essays` | `kind` (`enem_redacao` / `dissertativa`), `theme_id` (FK `essay_themes`), `input_mode` (`typed` / `photo`), `line_count`, `est_handwritten_lines`, `status` (`draft` / `grading` / `graded` / `failed`), `total`, `is_zero`, `zero_reasons` (text[]), `competencias` (JSON), `proposta` (JSON), `repertorio` (JSON), `rewrites` (JSON), `grading_runs` (JSON, if dual correction) | | ENM-05 |
+| `essays` | `kind` (`enem_redacao` / `school_answer`), `theme_id` (FK `essay_themes`), `input_mode` (`typed` / `photo`), `line_count`, `est_handwritten_lines`, `status` (`draft` / `grading` / `graded` / `failed`), `total`, `is_zero`, `zero_reasons` (text[]), `competencias` (JSON), `proposta` (JSON), `repertorio` (JSON), `rewrites` (JSON), `grading_runs` (JSON, if dual correction) | | ENM-05 |
 | `essay_themes` (new) | `id`, `title`, `axis`, `source` (`past_enem` / `predicted` / `atualidades` / `custom`), `edition_year` (nullable), `prompt` (JSON: instruction + motivating texts with sources), `rationale`, `connections` (JSON), `proposal_crop_path` (nullable, past themes), `valid_until`, `created_by` (nullable user for custom) | | ENM-05.8, ENM-08.6 |
 | `repertorio_items` (new) | `id`, `user_id`, `kind` (`quote` / `data` / `law` / `work` / `event`), `text`, `source_url`, `source_name`, `verified` (`yes` / `no` / `contradicted`), `atualidades_item_id` (nullable), `tags` | | ENM-05.5, ENM-09.5 |
 | `sisu_offers` (new) | `id`, `edition_year`, `institution`, `institution_acronym`, `campus`, `course`, `degree`, `shift`, `weights` (JSON `{LC, CH, CN, MT, RED}`), `min_scores` (JSON), `cutoffs` (JSON `[{modality_label, cutoff, edition}]`), `source` (`open_data` / `edital` / `manual_admin`), `source_url`, `verified_at` | | ENM-06 |

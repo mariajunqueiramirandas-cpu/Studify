@@ -248,8 +248,8 @@ A minute counts as active if, within it, the user interacted with a study surfac
 
 ### 8.3 Streak rules
 - **Study day** (`counted = true`) if any of: ≥ 5 active minutes, ≥ 10 card reviews, 1 completed quiz/duel/battle/Lucas/debate session, or an exam of an active goal on that date (auto-counted).
-- **Day boundary:** a study day runs from 03:00 to 02:59 local time. *Rationale:* removes the "beat midnight" anxiety; it does **not** encourage late study because there are no reminders after 20:00 and late-night activity triggers the sleep nudge (§8.10).
-- Evaluation runs when the next day starts (03:00) or at next sync:
+- **Day boundary:** a study day runs from 04:00 to 03:59 local time (the same boundary everywhere in the app: `study_preferences`, [learning-engine.md §0.2](../engineering/learning-engine.md#02-time), data-model R9). *Rationale:* removes the "beat midnight" anxiety; it does **not** encourage late study because there are no reminders after 20:00 and late-night activity triggers the sleep nudge (§8.10).
+- Evaluation runs when the next day starts (04:00) or at next sync:
 
 ```
 for each day d after last_counted_date:
@@ -396,7 +396,7 @@ Caps per WEL-03.2. Nudges never appear during a timed activity (duel, battle, si
 
 1. **Mascot:** a capybara named Capi is proposed (very Brazilian, teen-friendly). Keep it, or choose another character/name?
 2. **Default quiet hours** 22:00–07:00 and the 8-hour minimum window: OK for your classmates' routines?
-3. **Streak day boundary at 03:00:** acceptable, or prefer plain midnight?
+3. **Streak day boundary at 04:00** (app-wide study-day boundary): acceptable, or prefer plain midnight?
 4. **App blocking (WEL-02):** worth the two special-access permissions for your group, or keep only soft focus in v1 of Phase 5?
 5. **Weekly mood check-in:** keep it (device-only) or drop it entirely to avoid any sensitive-data concerns?
 6. **LaTeX-to-speech for PT-BR:** evaluate whether an existing library (e.g. Speech Rule Engine) supports Portuguese well enough, or write a mapping for common school notation.

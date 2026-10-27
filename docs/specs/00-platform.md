@@ -67,7 +67,7 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | PLT-02.3 | **Age gate (SP-01).** The user enters birth month and year before any other personal data. Users under 12 see "A Studify é para estudantes a partir de 12 anos." No account is created and nothing is stored. The age rule is in §8.1. |
 | PLT-02.4 | **Guardian link (SP-03), Phase 2.** Users under 16 are asked for a responsável's email before Turma social features (SOC-*) unlock. Whether this is mandatory or recommended is an owner decision (§12). |
 | PLT-02.5 | **Profile:** display name (required, 2–30 characters, moderated before other members can see it; SP-11), preset avatar, school year (`9º ano EF`, `1º ano EM`, `2º ano EM`, `3º ano EM`, `Cursinho`, `Outro`). No school name, no phone number, no photo (data minimization, LGPD Art. 14 §4). |
-| PLT-02.6 | **Onboarding sequence:** Entrar → (código) → idade → (responsável, if required) → aceitar privacidade → perfil → primeira matéria + upload. While the first upload processes, the app offers "Criar sua Semana de Provas" (GOL-01) and starts the first session as soon as the outline exists (ING-03). |
+| PLT-02.6 | **Onboarding sequence** (screens S-AUTH-01…08 in [ux-guidelines.md](../design/ux-guidelines.md)): Entrar → (código) → convite (new accounts only) → idade → (responsável, if required) → seu perfil (incl. the privacy notice and its acceptance) → "Pra que você vai estudar?" → primeira matéria + upload. While the first upload processes, the app offers "Criar sua Semana de Provas" (GOL-01) and starts the first session as soon as the outline exists (ING-03). |
 | PLT-02.7 | The privacy notice (SP-13) is shown in plain PT-BR during onboarding, with a short teen-friendly summary on top and the full text one tap away. Acceptance is stored with the notice version. A new notice version asks for acceptance again on next launch. |
 | PLT-02.8 | **Sign out** ("Sair") clears local data. If the device has unsynced reviews in the outbox, sign-out first tries to sync; if offline, it warns "Você tem revisões que ainda não foram salvas na nuvem" and offers to wait. "Sair de todos os dispositivos" revokes all sessions. |
 | PLT-02.9 | **Export and deletion (SP-14)** are self-service in Perfil → Privacidade: export produces a JSON + CSV archive; deletion follows the process and grace period in [security-privacy.md §10](../engineering/security-privacy.md#10-data-retention-export-and-deletion). Content the user uploaded to a Turma follows the same section's rules for shared content. |
@@ -90,7 +90,7 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | ID | Requirement |
 |---|---|
 | PLT-04.1 | Every AI call passes the server-side budget gate `ai_budget_reserve` ([security-privacy.md §7](../engineering/security-privacy.md#7-rate-limiting-and-ai-budgets-plt-04)) before Claude is called, and settles the real cost in `ai_usage` afterwards. |
-| PLT-04.2 | **Student view** (Perfil → Uso de IA): a simple meter of today's AI usage as a percentage, never dollars ("Você usou 60% da IA de hoje"), plus which features used it. The meter resets at local midnight (America/Sao_Paulo). |
+| PLT-04.2 | **Student view** (Perfil → Uso de IA): a simple meter of today's AI usage as a percentage, never dollars ("Você usou 60% do seu limite de IA de hoje"), plus which features used it. The meter resets at local midnight (America/Sao_Paulo). |
 | PLT-04.3 | At **80%** of the daily limit, a one-time gentle notice appears in the app (not a push). At **100%**, AI actions show the limit state with the reset time. Everything already generated keeps working: reviews, existing quizzes, notes, glossary, the PDF viewer, Caderno de Erros, plans. |
 | PLT-04.4 | **Ingestion and limits.** Before an upload starts processing, its estimated cost is reserved. If the reservation fails, the user can process **only the outline now** (cheap) and the rest is scheduled for the next day, or cancel. Already-running jobs are never killed halfway by the daily limit; they settle against it. |
 | PLT-04.5 | **Shared Turma content** is charged to the Turma's monthly budget, not to the member who uploaded it ([architecture §3.2 rule 4](../engineering/architecture.md#32-ownership-and-sharing-rules)). The Turma owner sees the Turma's usage as a percentage. |
@@ -102,7 +102,7 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | ID | Requirement |
 |---|---|
 | PLT-05.1 | Notification channels, local vs push split and limits follow [mobile-app.md §5](../engineering/mobile-app.md#5-notifications). |
-| PLT-05.2 | Notification permission is requested **in context** after the first upload ("Quer que a gente avise quando seu material estiver pronto?"), never at first launch. If denied, the app works fully and Perfil → Notificações explains how to enable it. |
+| PLT-05.2 | Notification permission is requested **in context** after the first upload ("Quer que eu avise quando seu material estiver pronto?"), never at first launch. If denied, the app works fully and Perfil → Notificações explains how to enable it. |
 | PLT-05.3 | **Quiet hours** default to 22:00–07:00. Users can move them; users under 18 cannot turn them off entirely (minimum 8 hours). Nothing is delivered during quiet hours; the most recent notification of each type is delivered at the end of quiet hours if still relevant, and the rest are dropped. |
 | PLT-05.4 | At most **3 unrequested notifications per day**. Reminders the user explicitly set (e.g. a daily plan reminder at 18:00) and "material pronto" don't count. |
 | PLT-05.5 | Per-channel toggles in Perfil → Notificações: Revisões, Plano de estudos, Turma, Processamento. |
@@ -139,8 +139,8 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | Convite | Enter a Turma/owner invite code | Skipped when the user arrived through an invite link |
 | Idade | Birth month + year | Age gate (PLT-02.3) |
 | Responsável | Guardian email | Phase 2; only when required (PLT-02.4) |
-| Privacidade | Teen-friendly summary + full notice | Acceptance stored with version |
-| Perfil inicial | Name, avatar, school year | |
+| Seu perfil | Name, avatar, school year, teen-friendly privacy summary + full notice | Acceptance stored with version (PLT-02.7) |
+| Pra que você vai estudar? | Semana de Provas / ENEM / one subject | Sets the Hoje call to action only (GOL-01) |
 | Primeira matéria | Create subject + upload | Leads into ING-01 |
 | Perfil (tab) | Profile, goals, settings, privacy, usage, storage, feedback, novidades | |
 | Uso de IA | Today's usage meter | PLT-04.2 |
@@ -152,17 +152,17 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 
 | Context | String |
 |---|---|
-| Sign-in title | "Bora estudar?" |
+| Sign-in title | "Envie o material da aula. Receba um sistema de estudos completo." |
 | Google button | "Entrar com Google" |
 | Email button | "Entrar com e-mail" |
-| Email sent | "Mandamos um link para o seu e-mail. Se preferir, digite o código de 6 dígitos." |
-| Generic email response | "Se este e-mail estiver cadastrado, você vai receber um link em instantes." |
-| Invite needed | "A Studify ainda está em teste e só entra quem tem convite. Peça o link para alguém da sua turma." |
-| Invalid invite | "Esse convite não vale mais. Peça um novo para quem te convidou." |
+| Email sent | "Enviei um código pro seu e-mail. Digite aqui:" (the same e-mail also carries the magic link) |
+| Generic email response | "Se este e-mail estiver cadastrado, você vai receber um código." |
+| Invite needed | "Tem um código de convite?" · "Peça pra quem organiza a sua turma ou pra quem te chamou pro Studify." |
+| Invalid invite | "Código inválido ou expirado. Peça um novo pra quem organiza a turma." |
 | Age question | "Quando você nasceu?" |
 | Under 12 | "A Studify é para estudantes a partir de 12 anos." |
-| Guardian ask | "Como você tem menos de 16 anos, precisamos do e-mail de um responsável para liberar as funções da turma." |
-| Privacy summary title | "O que a gente faz com seus dados (versão curta)" |
+| Guardian ask | "Qual é o e-mail do seu responsável?" · "Para quem tem menos de 16 anos, o Studify avisa seu responsável e ele pode acompanhar seu tempo de estudo. Suas respostas e anotações continuam só suas." |
+| Privacy summary title | "O que o Studify faz com seus dados (versão curta)" |
 | Privacy accept | "Li e concordo" |
 | Display name rejected | "Esse nome não pode ser usado. Que tal outro?" |
 | First subject prompt | "Qual matéria você quer estudar primeiro?" |
@@ -170,19 +170,19 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | Archive confirm | "Arquivar {matéria}? Ela some do seu plano, mas nada é apagado." |
 | Delete confirm | "Isso apaga a matéria, os materiais e seu progresso nela. Digite **{matéria}** para confirmar." |
 | Coming soon tab | "Em breve: estude junto com a sua turma." |
-| AI meter | "Você usou {pct}% da IA de hoje." |
+| AI meter | "Você usou {p}% do seu limite de IA de hoje." |
 | AI 80% notice | "Você já usou boa parte da IA de hoje. Revisões e o que já foi gerado continuam liberados." |
-| AI limit reached | "A IA de hoje acabou. Volta às 00:00. Enquanto isso, dá pra revisar e fazer os quizzes que já existem." |
-| Rate limited | "Calma! Tente de novo em instantes." |
-| Upload over limit | "Esse material é grande para a IA de hoje. Quer gerar só o sumário agora e o resto amanhã?" |
-| Offline banner | "Sem internet. Revisões continuam funcionando." |
-| Sync states | "Tudo salvo" · "Sincronizando…" · "{n} revisões aguardando internet" |
+| AI limit reached | "Seu limite de IA de hoje acabou. O que não precisa de IA continua funcionando — e eu continuo o resto amanhã." |
+| Rate limited | "Calma! Tenta de novo em instantes." |
+| Upload over limit | "Esse material é grande pra IA de hoje. Quer que eu gere só o sumário agora e o resto amanhã?" |
+| Offline banner | "Sem internet — revisões e resumos baixados continuam funcionando." |
+| Sync states | "Tudo salvo" · "Sincronizando…" · "{n} revisões aguardando sincronização" |
 | Unsynced sign-out | "Você tem revisões que ainda não foram salvas na nuvem. Quer esperar a internet voltar?" |
-| Notification permission | "Quer que a gente avise quando seu material estiver pronto?" |
-| New version | "Nova versão disponível. Toque para instalar." |
-| Forced update | "Essa versão ficou antiga. Atualize para continuar — suas revisões estão guardadas." |
+| Notification permission | "Quer que eu avise quando seu material estiver pronto?" |
+| New version | "Nova versão disponível. Toque pra instalar." |
+| Forced update | "Tem uma versão nova do Studify. Atualize pra continuar." (unsynced reviews stay on the phone, PLT-06.3) |
 | AI label | "Gerado por IA" |
-| Error fallback | "Algo deu errado do nosso lado. Tente de novo." |
+| Error fallback | "Algo deu errado. Tenta de novo?" |
 
 ## 6. Data
 
@@ -236,9 +236,9 @@ A user who was blocked can try again after their 12th birthday. Nothing about th
 
 ### 8.2 Invite codes
 
-- 8 characters from Crockford Base32 without ambiguous characters (`0 O 1 I L` removed), shown in groups of 4 (`K7QX-9HMR`).
-- Owner invites: single-use, expire in 14 days. Turma invites: rules in [10 — Turma & social](10-turma-social.md).
-- Codes are compared case-insensitively. 5 failed attempts per device per hour trigger a 1-hour cooldown.
+- 8 characters from the same alphabet as Turma codes (SOC-01.2): `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no `0 O 1 I L`), shown in groups of 4 (`K7QX-9HMR`).
+- Owner (pilot) invites: single-use, expire in 14 days. Turma invites: expiry, max uses and regeneration per SOC-01.4 in [10 — Turma & social](10-turma-social.md). Both live in the `invites` table.
+- Codes are compared case-insensitively. Invalid-code attempts follow SOC-01.14: at most 5 per minute and 20 per hour per user/device and per IP; after 20 failures in an hour, joining is blocked for 1 hour.
 
 ### 8.3 Budget display
 
@@ -271,7 +271,7 @@ When downloads exceed the cache limit, evict in this order until under the limit
 | Magic link opened on a computer | The web page shows the 6-digit code to type in the app. |
 | Google account with a different email than an existing email account | Treated as different accounts in v1. Account linking is an open question. |
 | Invite link opened without the app installed | Landing page with the install link and instructions ([mobile-app.md §2.3](../engineering/mobile-app.md#23-deep-links)); the invite code is kept and pre-filled after install. |
-| Invite expired or used up | "Esse convite não vale mais…" and no account is created. |
+| Invite expired or used up | "Código inválido ou expirado…" and no account is created. |
 | User enters an age under 12 by mistake | They can go back on the same screen. After leaving the screen, the app has stored nothing, so starting again works. |
 | Under-16 user without a guardian email (if mandatory) | Study features work; Turma social features stay locked with an explainer. |
 | Play Protect warns about the APK | Instructions in the invite explain the warning and how to continue. |

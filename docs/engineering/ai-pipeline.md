@@ -170,7 +170,7 @@ export async function callClaude<T>(call: TaskCall<T>) {
 | `tutor.route` | TUT-01 (spec 03 §8.1) | FTS confidence below τ | Edge | Text: outline titles + summaries in scope | `S:RouteNodes` — `node_ids[≤3]` | `low` | XS | SYS, OL | ≤ 1 per turn | user |
 | `tutor.general` | TUT-04.2 | Student taps "Responder com conhecimento geral" | Edge·SSE | Question only, no documents; separate request outside the thread prefix | `P`, labeled "Conhecimento geral" | `low` | M | SYS | rare | user |
 | `tutor.summary` | TUT-01.8 | Thread continuation | Edge | Text-only thread | `P` | `low` | S | — | rare | user |
-| `tutor.toCard` | TUT-01.6 | "Virar flashcard" | Edge | Answer **plain text** + its citation pages | `S:SingleCard` | `low` | XS | — | ~2/user/day | user |
+| `tutor.toCard` | TUT-01.6 | "Criar cartão" | Edge | Answer **plain text** + its citation pages | `S:SingleCard` | `low` | XS | — | ~2/user/day | user |
 
 ### 3.4 Flashcards & memory — [spec 04](../specs/04-flashcards-memory.md)
 
@@ -282,12 +282,12 @@ No AI in duels, battles, insights or study rooms.
 
 - PDFs (or slices) are sent as `document` blocks so the model reads text **and** visuals (diagrams, tables, scanned pages).
 - **Limits:** 32 MB per request; up to 600 pages per request on 1M-context models. Our own slice limits are tighter (spec 01 §8.1): outline slices ≤ 150 pages and ≤ 20 MB; topic slices are the topic's page range, split into consecutive slices of ≤ 60 pages sent in the same request; tutor context packs ≤ 30 new pages per turn and ≤ 120 per thread (spec 03 §8).
-- Slices are built with **pdf-lib** in the worker and stored in Storage, one `document_slices` row each: `document_id`, `purpose` (`outline` / `topic` / `tutor` / `transcription` / `other`), **ordered page list** (original page numbers), `page_list_hash`, `size_bytes`, `token_count` (measured once with `client.messages.countTokens`), `file_id` (§4.2), `file_last_used_at`.
+- Slices are built with **pdf-lib** in the worker and stored in Storage, one `document_slices` row each: `document_id`, `purpose` (`outline` / `topic` / `tutor` / `transcription` / `other`), **ordered page list** (original page numbers), `page_list_hash`, `size_bytes`, `token_count` (measured once with `client.messages.countTokens`), `anthropic_file_id` and `anthropic_file_expires_at` (§4.2; [data-model.md](data-model.md) R14).
 - Slices are reused: a slice is identified by `(document_id, page_list_hash)`, so two tasks (or two tutor threads) needing the same pages share one slice and one cache prefix.
 
 ### 4.2 Files API
 
-The Files API is GA (`client.files.*`, no beta header). Each slice is uploaded once and referenced as `{type: "document", source: {type: "file", file_id}}`:
+The Files API is GA (`client.files.*`, no beta header). **Worker jobs** (outline, Batch generation, transcription) upload the slices they need for the duration of the job and reference them as `{type: "document", source: {type: "file", file_id}}`. **Synchronous calls** (tutor, on-demand notes, explanations) always send slices as `base64` from Storage and rely on prompt caching.
 
 ```ts
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
@@ -295,13 +295,16 @@ import Anthropic, { toFile } from "@anthropic-ai/sdk";
 const uploaded = await client.files.upload({
   file: await toFile(sliceBytes, `${slice.id}.pdf`, { type: "application/pdf" }),
 });
-await db.documentSlices.update(slice.id, { file_id: uploaded.id, file_last_used_at: now() });
+await db.documentSlices.update(slice.id, {
+  anthropic_file_id: uploaded.id,
+  anthropic_file_expires_at: addHours(now(), 48),
+});
 ```
 
-**Retention policy (reconciles ADR 0003 "delete after processing" with spec 01's reusable `document_slices.file_id`):**
-- Files API objects persist until deleted, which extends retention beyond the API's default 30 days. So Studify keeps a slice's `file_id` only while it is **in use**: a nightly worker job deletes Files API objects whose `file_last_used_at` is older than **14 days** and clears `file_id`. The next use re-uploads from Storage (cheap and transparent).
+**Retention policy (single rule, shared with [data-model.md](data-model.md) R14 and [security-privacy.md §10](security-privacy.md#10-data-retention-export-and-deletion)):**
+- Files API objects persist until deleted, which would extend retention beyond the API's default 30 days. So Files API ids are **ephemeral**: the job that uploaded a file deletes it when the job finishes, and an hourly sweeper deletes any file whose `anthropic_file_expires_at` (upload + **48 h**, long enough for a Batch run) has passed and clears the id. The next job re-uploads from Storage (cheap and transparent).
 - Deleting a document deletes its Files API objects **immediately** (spec 01 §8.6).
-- One source type per slice for its lifetime in a cache window: switching the same slice between `base64` and `file` changes the prefix and misses the cache.
+- Each request type keeps one source type (worker jobs: `file`; synchronous calls: `base64`), because switching the same slice between `base64` and `file` changes the prefix and misses the cache.
 - Batch requests reference slices by `file_id` as well (verify Files API support inside Batch requests during Phase 0; fall back to base64 if unsupported).
 
 ### 4.3 Page numbers (TRU-01)
@@ -775,7 +778,7 @@ Worker jobs carry `ai_jobs.id`; a retried job checks which items already exist (
 |---|---|---|---|
 | R1 | Several specs say "all calls use `fallbacks: "default"`", including Batch tasks. | The parameter is rejected on the Batches API. Batch requests omit it; refused batch results are re-run on the standard API with fallbacks (§7.3–7.4). | 01 §7, 02 §7, 04 §7, 05 §7, 06 §7, 09 §7: "all **synchronous** calls". |
 | R2 | ADR 0003 §5 says `high` effort for knowledge maps; spec 01 uses `low` for T1 and `medium` for T2. | Spec 01 wins (outline latency target < 2 min); raise only if outline evals fail. | ADR 0003 §5 wording. |
-| R3 | ADR 0003 §6 says Files API objects are deleted after processing; spec 01 keeps `document_slices.file_id` for reuse. | Keep while in use, delete after 14 days idle and immediately on document deletion; re-upload lazily (§4.2). | ADR 0003 §6; spec 01 §6 (`file_last_used_at`). |
+| R3 | ADR 0003 §6 says Files API objects are deleted after processing; spec 01 keeps `document_slices.file_id` for reuse. | Ephemeral ids: deleted when the uploading job finishes, swept after 48 h at most, and immediately on document deletion; synchronous calls use base64; re-upload lazily (§4.2). Same rule as data-model R14 and security-privacy §10. | ADR 0003; spec 01 ING-02.8. |
 | R4 | Spec 03 §7 gives `max_tokens` 2,000 / 800 / 1,200 / 600 / 300 / 500 for tutor tasks. | Thinking counts toward `max_tokens`; those numbers become **reply-length targets in the prompt**; API `max_tokens` follow the classes in §2.3 (tutor turns M; router and tutor→card XS). | 03 §7 table header "reply target". |
 | R5 | Spec 12 §7.3 puts the current `evaluation_state` in the Lucas system prompt. | Editing the system prompt each turn breaks the cache and, with preserved thinking, makes replayed thinking blocks a 400. State goes into appended mid-conversation system messages (§6.6). | 12 §7.3. |
 | R6 | Spec 01 uses `custom_id = {job_id}:{node_id}:{task}`. | Logical key only; the literal `custom_id` is a short opaque id mapped in `ai_batch_requests` (§7.2). | 01 §7 "Caching" paragraph; data-model (`ai_batch_requests`). |

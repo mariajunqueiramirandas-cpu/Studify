@@ -72,10 +72,12 @@ app/
 │  ├─ sign-in.tsx                   # "Entrar" — email (magic link / OTP code) or Google
 │  ├─ verify.tsx                    # 6-digit code entry; also handles magic-link deep link
 │  └─ onboarding/
-│     ├─ age.tsx                    # birth month/year (age gate, see security-privacy.md)
-│     ├─ guardian.tsx               # responsável link when required by age (see security-privacy.md)
-│     ├─ profile.tsx                # display name, school year
-│     └─ first-subject.tsx          # create first Matéria + upload (target: < 2 min to first session)
+│     ├─ invite.tsx                 # S-AUTH-03 invite code for new accounts (prefilled from a Turma/pilot link; SP-02)
+│     ├─ age.tsx                    # S-AUTH-04 birth month/year (age gate, see security-privacy.md)
+│     ├─ guardian.tsx               # S-AUTH-05 responsável link when required by age (see security-privacy.md)
+│     ├─ profile.tsx                # S-AUTH-06 display name, school year, privacy notice acceptance
+│     ├─ intent.tsx                 # S-AUTH-07 "Pra que você vai estudar?" (Semana de Provas / ENEM / one subject)
+│     └─ first-subject.tsx          # S-AUTH-08 create first Matéria + upload (target: < 2 min to first session)
 ├─ (tabs)/
 │  ├─ _layout.tsx                   # bottom tabs
 │  ├─ today/index.tsx               # Hoje
@@ -97,6 +99,7 @@ app/
 │  │  ├─ quiz/[quizId].tsx          # quiz runner
 │  │  ├─ result/[attemptId].tsx     # results + explanations
 │  │  ├─ mistakes/index.tsx         # Caderno de Erros
+│  │  ├─ tutor.tsx                  # Conversas: tutor thread list (S-TUT-01); threads open as the tutor modal
 │  │  ├─ memory-map.tsx             # Mapa da Memória (Phase 2)
 │  │  └─ feed.tsx                   # Feed de Estudos (Phase 2)
 │  ├─ class/
@@ -130,14 +133,19 @@ app/
 
 ### 2.3 Deep links
 
+The canonical route list (custom scheme and HTTPS App Links) is [api.md §10](api.md#10-deep-links-and-app-links); this table lists the most common ones.
+
 | Link | Opens |
 |---|---|
-| `studify://class/join?code=XXXXXXXX` | Join Turma (SOC-01) |
+| `https://{BASE_URL}/c/{code}` → `studify://class/join?code={code}` | Join Turma (SOC-01) |
+| `https://{BASE_URL}/i/{code}` → `studify://auth/invite?code={code}` | Pilot invite (PLT-02.2) |
+| `https://{BASE_URL}/q/{token}` → `studify://quiz/shared/{token}` | Shared quiz (SOC-09) |
+| `https://{BASE_URL}/b/{pin}` → `studify://class/battle/join?pin={pin}` | Join a live battle (SOC-03) |
 | `studify://auth/callback#…` | Magic-link callback |
 | `studify://practice/review` | Review session (from notification / widget) |
-| `studify://goal/<id>/eve/<examId>` | Modo Véspera (from reminder) |
+| `studify://goal/{goal_id}/eve/{exam_id}` | Modo Véspera (from reminder) |
 
-WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. This needs a domain (open question, §15).
+WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. This needs a domain (open question, §20).
 
 ## 3. State management
 
@@ -249,7 +257,7 @@ Local reminders are rescheduled on app start, after every sync and on `BOOT_COMP
 - **Quiet hours default 22:00–07:00** (user-adjustable, but users under 18 cannot disable quiet hours entirely — see [security-privacy.md](security-privacy.md) on compulsive-use design).
 - **Max 3 non-requested notifications per day** (requested = reminders the user explicitly set). Processing-complete notifications don't count.
 - No notifications engineered around streak loss anxiety; copy is encouraging, never guilt-based (see [copy guide](../design/copy-pt-br.md)).
-- Android 13+ `POST_NOTIFICATIONS` permission is requested **in context** (after the first upload: "Quer que a gente avise quando seu material estiver pronto?"), never at first launch.
+- Android 13+ `POST_NOTIFICATIONS` permission is requested **in context** (after the first upload: "Quer que eu avise quando seu material estiver pronto?"), never at first launch.
 
 ## 6. Review anywhere (MEM-04, Phase 2)
 
@@ -381,7 +389,7 @@ Request each permission **in context**, with a PT-BR rationale shown before the 
 | Permission | Phase | Rationale shown to the user (PT-BR) |
 |---|---|---|
 | `INTERNET`, `ACCESS_NETWORK_STATE` | 0 | — (install-time) |
-| `POST_NOTIFICATIONS` | 1 | "Quer que a gente avise quando seu material estiver pronto e lembre das suas revisões? Você escolhe os horários." |
+| `POST_NOTIFICATIONS` | 1 | "Quer que eu avise quando seu material estiver pronto e lembre das suas revisões? Você escolhe os horários." |
 | `RECEIVE_BOOT_COMPLETED` | 1 | — (install-time; reschedules reminders after restart) |
 | `VIBRATE` | 1 | — |
 | `CAMERA` | 3 | "Para fotografar páginas, exercícios e suas respostas escritas à mão. As fotos ficam só com você, a menos que você compartilhe." |

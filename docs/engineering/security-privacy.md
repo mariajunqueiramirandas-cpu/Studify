@@ -90,20 +90,21 @@
 
 ### 4.2 Policy matrix
 
-S = select, I = insert, U = update, D = delete. "Svc" = service role (worker/Edge Functions).
+S = select, I = insert, U = update, D = delete. "Svc" = service role (worker/Edge Functions). This table summarizes by entity class; the canonical per-table matrix is [data-model.md §6.2](data-model.md#62-policy-matrix), and where they differ, data-model.md wins.
 
 | Entity class | Tables | Owner / self | Turma member | Turma moderator/owner | Other users | Svc |
 |---|---|---|---|---|---|---|
 | **Profile** | `profiles` | S U (own) | S (display name, avatar only, via `profiles_public` view) | same as member | — | all |
 | **Turma** | `class_groups`, `class_group_members` | — | S | U `class_groups`; I/D members (remove), U role | S of a group only via a valid invite code (join function) | all |
-| **Personal content** | `subjects` (personal) and their `documents`, `document_pages`, `knowledge_nodes`, `node_sources`, `node_prerequisites`, `glossary_terms`, `notes`, `cards`, `questions` | S I U D | — | — | — | all |
-| **Shared Turma content** | same tables, where `subjects.owner_class_group_id` is set | uploader: U D own documents | S; I documents (upload into shared subject) if the Turma allows member uploads | S I U D | — | all (generation writes) |
+| **Personal content** | `subjects` (personal) and their `documents`, `document_pages`, `knowledge_nodes`, `node_sources`, `node_prerequisites`, `glossary_terms`, `notes`, `cards`, `questions` | S; I U of own subjects, documents and user-created cards/questions; outline edits only via RPC `edit_outline`; generated content is written by Svc only; deletes are soft | — | — | — | all |
+| **Shared Turma content** | same tables, where `subjects.owner_class_group_id` is set | uploader: U own documents (soft delete) | S; I documents (upload into shared subject) if the Turma allows member uploads | S; U subject/documents; outline edits via RPC; fixes to generated items only through TRU-02 (`resolve_flag`) | — | all (generation writes) |
 | **Personal overrides** | `card_overrides` (and similar) | S I U D (own) | — | — | — | all |
-| **Per-user study state** | `card_states`, `quiz_attempts`, `attempt_answers`, `mistakes`, `mastery`, `goals`, `exams`, `grading_rules`, `plan_items`, `study_sessions`, `tutor_threads`, `tutor_messages`, `essays`, `xp_events`, `achievements`, `streaks` | S I U D (own; `mastery` S only) | — | — | — | all |
-| **Append-only logs** | `review_logs` | S I (own) | — | — | — | all |
+| **Per-user study state** | `quiz_attempts`, `attempt_answers`, `mistakes`, `goals`, `exams`, `grading_rules`, `plan_items`, `study_sessions`, `tutor_threads`, `essays` | S I U (own; scoring columns, duel/battle/simulado attempts and `plan_items` beyond `status`/`pinned` are written by Svc; deletes are soft) | — | — | — | all |
+| **Derived per-user state** | `card_states`, `mastery`, `streaks`, `achievements` | S (own) only; written by Svc (`card_states` by `sync-push` replay of review logs) | — | — | — | all |
+| **Append-only logs** | `review_logs`, `mastery_evidence`, `xp_events`, `tutor_messages` | S (own); no client inserts — reviews arrive only through `sync-push`, tutor messages through the tutor Edge Function (the student may only U `feedback` on their own tutor messages) | — | — | — | I |
 | **Quizzes** | `quizzes` | S I U D (own) | S if `kind in (duel, battle)` and they are a participant | S | — | all |
 | **Social** | `duels`, `battles`, `battle_players` | S (participant) | S (participant) | S (Turma's battles) | — | I U (state transitions via functions only) |
-| **Aggregates** | `class_insights` | — | S (Turma's, already anonymized with k ≥ 5) | S | — | all |
+| **Aggregates** | `class_insights` (private schema) | — | Only through RPC `class_insights_for`, which enforces the anonymity thresholds (k ≥ 5); no direct table access | same as member | — | all |
 | **Moderation** | `content_flags` | S I (own reports) | — | S U (Turma content) | — | all |
 | **AI bookkeeping** | `ai_jobs` | S (own / own subjects) | S (jobs of shared subjects) | S | — | all |
 | | `ai_usage` | S (own) | — | S (Turma totals via view) | — | I |
@@ -188,7 +189,7 @@ A **shared safety preamble** (in `packages/prompts/safety.ts`) is prepended to e
 - Stay on studying. Politely redirect off-topic requests ("Bora voltar pro conteúdo? 😊").
 - Never produce sexual content, never discuss sexual topics involving minors, and refuse roleplay that sexualizes anyone.
 - No instructions for self-harm, weapons, drugs or dangerous activities. Academic content (e.g. chemistry, history of wars) is fine at textbook level.
-- If the student expresses distress, self-harm thoughts or abuse: respond with care, encourage talking to a trusted adult, and give the **CVV — ligue 188 (24 h, gratuito)** and **Disque 100** (human-rights/violence against children reporting). Don't diagnose, and don't continue the study task in that turn.
+- If the student expresses distress, self-harm thoughts or abuse: respond with care, encourage talking to a trusted adult, and give the **CVV — ligue 188 (24 h, gratuito)**, **192** if in immediate danger, and **Disque 100** (human-rights/violence against children reporting). Don't diagnose, and don't continue the study task in that turn. This is the single shared `distress` fragment for every conversational feature, which also appends the `[[APOIO]]` marker so the app shows the help card ([ai-pipeline.md §8.3](ai-pipeline.md#83-shared-fragments-content-summary)).
 - Never ask for personal data (address, phone, school name, photos of themselves).
 - Be honest about uncertainty and cite pages. Say so when something is not in the material (TUT-04).
 
@@ -210,8 +211,8 @@ Other measures:
 
 ## 9. Social and Turma safety
 
-- **Invite codes**: 8 characters from an unambiguous alphabet (no 0/O/1/I), ≈ 10¹² combinations. Each code **expires after 7 days** by default, is **revocable**, and has an optional **max uses**. A Turma holds at most **60 members**. Owners can require **approval to join**.
-- Join attempts are rate-limited (5 failed codes per hour per user), and the WhatsApp link carries only the code.
+- **Invite codes**: 8 characters from an unambiguous alphabet (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`, no 0/O/1/I/L), ≈ 8.5 × 10¹¹ combinations. Codes are **revocable** and have an optional **max uses**. Default expiry: owner (pilot) invites 14 days, single-use ([00 §8.2](../specs/00-platform.md#82-invite-codes)); Turma invites per SOC-01.4 (default 14 days) ([10 — Turma & social](../specs/10-turma-social.md)). A Turma holds at most **60 members**. Owners can require **approval to join**.
+- Invalid-code attempts are rate-limited per SOC-01.14 (5 per minute and 20 per hour per user and per IP; 1-hour join block after 20 failures), and the WhatsApp link carries only the code.
 - Members can **leave**. Owners and moderators can **remove** members. Any user can **block** another user, which hides them from duels, battles and leaderboards.
 - Duels are only possible inside a shared Turma. Live battles show display names only. Class insights (SOC-04) are computed server-side with **k-anonymity ≥ 5** and never expose individual answers.
 - Leaving or deleting an account removes the user from leaderboards and insights going forward.
@@ -230,7 +231,7 @@ Other measures:
 | Exports | 7 days |
 | Moderation records and incident register | ≥ 5 years (Res. 15/2024 for incidents) |
 | Backups | Supabase point-in-time backups per plan. Deleted data leaves backups within the backup window (stated in the privacy notice) |
-| Claude API | Inputs and outputs deleted by Anthropic within 30 days by default. **Files API uploads are deleted by the worker right after processing**, so they don't extend retention |
+| Claude API | Inputs and outputs deleted by Anthropic within 30 days by default. **Files API uploads are ephemeral**: the worker deletes them when the job that uploaded them finishes, and a sweeper removes anything older than 48 h ([ai-pipeline.md §4.2](ai-pipeline.md#42-files-api)), so they don't meaningfully extend retention |
 
 **Export** (Perfil → Privacidade → "Baixar meus dados"): a ZIP with JSON of the profile, goals, exams, grades, card states, review logs, attempts, mistakes, tutor threads, essays, and CSV of the user's cards. It also includes the user's personal uploads.
 

@@ -40,7 +40,7 @@ A vertical, swipe-to-advance feed built **only from the student's own material**
 
 ## 4. Functional requirements
 
-- **FED-01.1** Entry: the **Feed** tab and the "Hoje" screen ("Abrir o Feed"). A scope selector at the top: **Tudo** (all active goals), a goal, a subject, or an exam. Default: the nearest exam's scope if an exam is within 14 days, else Tudo.
+- **FED-01.1** Entry: **Praticar → Feed** (the Feed is not a bottom tab; [ux-guidelines.md](../design/ux-guidelines.md)) and the "Hoje" screen ("Abrir o Feed"). A scope selector at the top: **Tudo** (all active goals), a goal, a subject, or an exam. Default: the nearest exam's scope if an exam is within 14 days, else Tudo.
 - **FED-01.2** Item types (`feed_items.type`, plus items pulled from other features):
 
   | Type | Source | Interaction |
@@ -64,7 +64,7 @@ A vertical, swipe-to-advance feed built **only from the student's own material**
 - **FED-01.11** No item (other than FED-01.9 re-shows) is repeated within 24 h; a `micro_lesson` or `did_you_know` already seen is shown again only after 14 days and only if the concept's mastery is < 0.6.
 - **FED-01.12** **Healthy use** (§8.5): sessions end at a checkpoint; continuing is an explicit choice; no autoplay, no sound, no variable rewards, no streak-loss messages inside the feed, gentle bedtime nudge.
 - **FED-01.13** **Offline:** the device prefetches feed content for active goals (§8.6); the feed works with no connection and syncs answers/reviews later.
-- **FED-01.14** Each item has a "…" menu: **Avisar erro** (TRU-02), **Não mostrar mais isso** (hides the item for the user), **Ver no material** (📄), and for lessons "Explica de outro jeito" (LRN-03, online only).
+- **FED-01.14** Each item has a "…" menu: **Reportar erro** (TRU-02), **Não mostrar mais isso** (hides the item for the user), **Ver no material** (📄), and for lessons "Explica de outro jeito" (LRN-03, online only).
 - **FED-01.15** A thumbs signal "Isso ajudou?" (👍/👎) appears on at most 1 in 10 `micro_lesson`/`did_you_know` items, to measure content quality (not used for ranking popularity).
 - **FED-01.16** Feed time counts as a `study_sessions` row (activities: reviews, questions, lessons) and contributes to plan items of activity `review` and `learn`.
 - **FED-01.17** Content for shared (Turma) subjects is generated once and shared; per-user state (impressions, answers, hides) stays personal.
@@ -97,14 +97,14 @@ flowchart TD
 
 | Context | String |
 |---|---|
-| Tab / entry | "Feed" · "Abrir o Feed" |
+| Entry (Praticar card / Hoje button) | "Feed" · "Abrir o Feed" |
 | Swipe hint (first use) | "Arrasta pra cima pra próxima" |
 | Scope | "Tudo" · "Prova de Biologia · 3 dias" |
 | Due card | "Toque pra ver a resposta" · "← Errei · Lembrei →" · "Avalia o cartão: Errei ou Lembrei?" |
-| Question feedback | "Acertou! ✅" · "Quase! A certa é a **B**." |
+| Question feedback | "Acertou! ✅" · "Não foi dessa vez. A certa é a **B**." |
 | Micro-lesson | "📄 p. 12" · "Explica de outro jeito" |
 | Você sabia? | "Você sabia?" |
-| Item menu | "Avisar erro" · "Não mostrar mais isso" · "Ver no material" |
+| Item menu | "Reportar erro" · "Não mostrar mais isso" · "Ver no material" |
 | Quality signal | "Isso ajudou?" |
 | Checkpoint | "Mandou bem! Você revisou **18 cartões**, acertou **7 de 9** questões e aprendeu **3 conceitos** em 10 min." · "Parar por aqui" · "Mais 5 minutos" |
 | Break suggestion (after 3 extensions) | "Você já tá há quase meia hora. Seu cérebro guarda melhor com pausas — bora dar um tempo?" · "Fazer uma pausa" · "Continuar mesmo assim" |

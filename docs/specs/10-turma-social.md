@@ -76,7 +76,7 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 |---|---|
 | SOC-02.1 | A member can challenge another member of the **same Turma** from the member list, a subject screen, or the results screen of a previous duel ("Revanche"). |
 | SOC-02.2 | Setup: subject (shared subjects of the Turma), optional topics (default: the subject's in-scope topics of the challenger's active goal, if any), **length** 5 / 7 (default) / 10 questions. |
-| SOC-02.3 | Questions are auto-gradable types only: `multiple_choice`, `true_false`. Both players get the **same questions in the same order**. Selection rules in §8.2. |
+| SOC-02.3 | Questions are auto-gradable types only: `mcq_single`, `true_false`. Both players get the **same questions in the same order**. Selection rules in §8.2. |
 | SOC-02.4 | Per-question time limit: **30 s**. Questions are served **one at a time** by the server; the client never receives a question before it is opened, nor the answer before submitting (anti-cheat). |
 | SOC-02.5 | The challenger plays immediately after creating the duel. The opponent receives a push notification and has **48 h** to play. They can also **Recusar**. |
 | SOC-02.6 | Scoring (§8.2): correct = 100 + time bonus up to 50; wrong or timeout = 0. Highest total wins; equal totals = **Empate**. |
@@ -139,7 +139,7 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 
 | ID | Requirement |
 |---|---|
-| SOC-07.1 | Members can write questions (`multiple_choice`, `true_false`, `short_answer`) for a topic of a shared subject. Limit: 20 per user per day. |
+| SOC-07.1 | Members can write questions (`mcq_single`, `true_false`, `short_answer`) for a topic of a shared subject. Limit: 20 per user per day. |
 | SOC-07.2 | AI validation (§7.3) checks grounding in the material, exactly one correct answer, clarity, no duplicates, and appropriateness; it returns suggestions the author can apply. |
 | SOC-07.3 | Validated questions enter a **pending** pool. They become part of the shared bank (origin `peer`) after 3 👍 from other members **or** moderator approval. Moderators can reject. |
 | SOC-07.4 | The author's nickname is credited on the question ("Pergunta de: Léo"); the author can choose to be anonymous. |
@@ -162,7 +162,7 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 | SOC-09.1 | From any finished quiz (practice, mock exam, duel), the user can **Compartilhar desafio**: creates a share token that lets another logged-in user take the **same questions**. |
 | SOC-09.2 | The share includes a snapshot of the questions (stem, options, answer, explanation, page refs) — not the source PDF. Recipients outside the Turma can take the quiz but cannot open the subject's material; 📄 links show "Material disponível só para a turma". |
 | SOC-09.3 | Optional score card image (generated on device): "Fiz 9/10 em Biologia — consegue bater?" with the Studify logo and the link. No other personal data. |
-| SOC-09.4 | Links: `https://{BASE_URL}/q/{token}` (quiz) and `https://{BASE_URL}/t/{code}` (Turma). Android App Links (verified `assetlinks.json`) open the app directly; the custom scheme `studify://quiz/{token}` and `studify://turma/join?code={code}` are used internally. If the app isn't installed, the https URL serves a small landing page: what Studify is, **APK download** button, step-by-step install help, and the code to paste after installing. |
+| SOC-09.4 | Links: `https://{BASE_URL}/q/{token}` (quiz), `https://{BASE_URL}/c/{code}` (Turma) and `https://{BASE_URL}/b/{pin}` (live battle). Android App Links (verified `assetlinks.json`) open the app directly; the custom-scheme routes `studify://quiz/shared/{token}`, `studify://class/join?code={code}` and `studify://class/battle/join?pin={pin}` are used internally. The canonical route list is [api.md §10](../engineering/api.md#10-deep-links-and-app-links). If the app isn't installed, the https URL serves a small landing page: what Studify is, **APK download** button, step-by-step install help, and the code to paste after installing. |
 | SOC-09.5 | Sharing uses the Android share sheet with WhatsApp (`com.whatsapp`, `com.whatsapp.w4b`) as the first suggested target; falls back to the generic share sheet. |
 | SOC-09.6 | Share tokens expire after 30 days and are revocable by the creator. Max 50 shares per user per day. |
 
@@ -174,11 +174,11 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 | TRU-02.2 | Report form: reason (required, one of: *Informação errada*, *Gabarito errado*, *Confuso*, *Não está no material*, *Erro de digitação/formatação*, *Conteúdo impróprio*, *Outro*) + optional comment (max 300 chars, visible only to the AI triage and to owner/moderators). |
 | TRU-02.3 | **Immediate effect for the reporter:** the item is hidden for them ("Em revisão") if the reason is *Informação errada*, *Gabarito errado* or *Conteúdo impróprio*; otherwise it stays visible with a badge. |
 | TRU-02.4 | **AI triage** (§7.1) runs within seconds: verdict `error_confirmed` / `not_an_error` / `unclear`, an explanation grounded in the source pages, and a proposed corrected item. |
-| TRU-02.5 | **Personal subjects (Phase 1):** the reporter sees the triage result. If confirmed: "Você tinha razão! Corrigimos: …" with **Aplicar correção** / **Editar** / **Remover item**. If not an error: the explanation with 📄 page link and **Ocultar mesmo assim** / **Manter**. |
+| TRU-02.5 | **Personal subjects (Phase 1):** the reporter sees the triage result. If confirmed: "Você tinha razão! Corrigi: …" with **Aplicar correção** / **Editar** / **Remover item**. If not an error: the explanation with 📄 page link and **Ocultar mesmo assim** / **Manter**. |
 | TRU-02.6 | **Shared subjects (Phase 2):** the report and triage go to the Turma's **review queue** (owner/moderators + the subject uploader). The reporter sees "Valeu! A turma vai conferir." plus the AI's explanation. |
 | TRU-02.7 | **Auto-hide for everyone** ("Em revisão" for the whole Turma) when ≥ 3 distinct members report the same item version, or when triage is `error_confirmed` with high confidence on a *Gabarito errado* / *Informação errada* report. |
 | TRU-02.8 | Review queue actions: **Aceitar correção** (applies the AI fix), **Editar e aceitar**, **Rejeitar** (item is correct; unhides it), **Remover item**. Each action is logged with who did it. |
-| TRU-02.9 | **Propagation (§8.6):** accepting a fix creates a new item version for everyone. Cards whose answer changed have their state reset for users who studied them; questions whose gabarito changed are **re-graded** in existing attempts, and Caderno de Erros entries are added/removed accordingly. Affected users get one in-app notice ("Corrigimos 2 itens que você estudou"). |
+| TRU-02.9 | **Propagation (§8.6):** accepting a fix creates a new item version for everyone. Cards whose answer changed have their state reset for users who studied them; questions whose gabarito changed are **re-graded** in existing attempts, and Caderno de Erros entries are added/removed accordingly. Affected users get one in-app notice ("2 itens que você estudou foram corrigidos"). |
 | TRU-02.10 | Reporters get credit when their report is accepted (+5 XP, "Caçador de erros" achievement progress). Reports are rate-limited to 30 per user per day; users whose last 10 reports were all rejected have their reports weighted 0 for TRU-02.7 auto-hide (silently). |
 | TRU-02.11 | Every flag stores the item **version** it refers to; a flag on an outdated version is auto-closed as "já corrigido" if the new version differs in the reported field. |
 
@@ -197,7 +197,7 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 
 | Screen | Content |
 |---|---|
-| **Turmas** (tab or section in Perfil) | List of the user's Turmas, **Criar turma**, **Entrar numa turma** (code field + QR scan). |
+| **Turmas** (the **Turma** bottom tab) | List of the user's Turmas, **Criar turma**, **Entrar numa turma** (code field + QR scan). |
 | **Turma home** | Header (name, members count, invite button); shared subjects; "O que a turma mais erra"; active battle banner; open rooms; my duels (pending/your turn/finished). |
 | **Convidar** | Code (big, grouped), QR, **Compartilhar no WhatsApp**, **Copiar link**, invite settings (owner/mods). |
 | **Membros** | Nicknames + avatars + role badge; pending requests (owner/mods) with **Aprovar todos**; per-member menu: Desafiar, Denunciar, Bloquear, (mods) Remover. |
@@ -217,10 +217,10 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 | WhatsApp invite | "Bora estudar junto no Studify? 📚 Entra na nossa turma *{nome}*: {link} (código: {código})" |
 | Share subject | "Compartilhar com a turma?" · "Todo mundo da turma vai poder ver e estudar esta matéria. O seu progresso continua só seu." |
 | Leave | "Sair da turma" · "Você vai perder acesso às matérias da turma. Quer fazer uma cópia pessoal antes?" |
-| Duel | "Desafiar para um duelo ⚔️" · "{nome} te desafiou num duelo de {matéria}!" · "Sua vez!" · "Você venceu! 🏆" · "Foi por pouco! Revanche?" · "Empate! 🤝" · "Esse duelo expirou." |
+| Duel | "Desafiar pra um duelo ⚔️" · "{nome} te desafiou num duelo de {matéria}!" · "Sua vez!" · "Você venceu! 🏆" · "Foi por pouco! Revanche?" · "Empate! 🤝" · "Esse duelo expirou." |
 | Battle | "Batalha ao vivo" · "PIN da batalha: {pin}" · "Esperando a galera entrar…" · "Começar" · "Próxima pergunta" · "Pódio 🏆" · "Você ficou em {n}º!" |
 | Insights | "Difícil para a turma" · "{p}% da turma erra essa" · "A pegadinha mais comum: {p}% marcaram {letra}" · "O que a turma mais erra" |
-| Flag | "Reportar erro" · "O que tá errado?" · "Valeu! A gente vai conferir." · "Você tinha razão! Corrigimos: …" · "Conferimos no material e parece certo:" · "Em revisão" · "Corrigido ✓" · "Corrigimos {n} itens que você estudou." |
+| Flag | "Reportar erro" · "O que tá errado?" · "Valeu! Vou conferir." (personal subject) / "Valeu! A turma vai conferir." (shared subject) · "Você tinha razão! Corrigi: …" · "Conferi no material e parece certo:" · "Em revisão" · "Corrigido ✓" · "{n} itens que você estudou foram corrigidos." |
 | Block/report | "Denunciar" · "Bloquear" · "Você não vai mais receber desafios de {nome}." |
 | Room | "Sala de estudo" · "Meta do grupo" · "Estudando juntos: {n}" |
 | Share quiz | "Compartilhar desafio" · "Fiz {acertos}/{total} em {matéria} — consegue bater?" |
@@ -235,10 +235,8 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 
 | Table | Column | Type | Purpose |
 |---|---|---|---|
-| `class_groups` | `invite_code` | text, unique | SOC-01.2 |
-| | `invite_expires_at` | timestamptz | SOC-01.4 |
-| | `invite_max_uses`, `invite_uses` | int | SOC-01.4 |
-| | `join_policy` | enum `approval`/`open` | SOC-01.5 |
+| `invites` (shared with pilot invites, [00 §6.1](00-platform.md#61-new-entities--fields)) | `code`, `class_group_id`, `expires_at`, `uses_left`, `revoked_at` | | SOC-01.2, SOC-01.4. A Turma's current link is its newest non-revoked invite; regenerating revokes the old row and inserts a new one ([data-model.md](../engineering/data-model.md) R23). |
+| `class_groups` | `join_policy` | enum `approval`/`open` | SOC-01.5 |
 | | `member_cap` | int (default 60) | SOC-01.7 |
 | | `school`, `school_year` | text, nullable | SOC-01.1 |
 | | `settings` | jsonb | hosting restriction, duels on/off, etc. |
@@ -322,7 +320,7 @@ No AI is involved in duels, battles, insights or rooms (question content comes f
 ### 8.2 Duel question selection and scoring
 
 **Selection**
-1. Candidate pool: approved questions of type `multiple_choice` / `true_false` in the chosen topics of the shared subject, not hidden, not under review.
+1. Candidate pool: approved questions of type `mcq_single` / `true_false` in the chosen topics of the shared subject, not hidden, not under review.
 2. Exclude questions either player answered in the last 7 days (if the pool allows; relax to 3 days, then 0).
 3. Target difficulty: average of both players' mastery on the topics. Sample so that ~30% are "easy", 50% "medium", 20% "hard" relative to that average (difficulty from `questions.difficulty`, adjusted by SOC-04 class error rate when available).
 4. Spread across topics: at most `ceil(n / topics) + 1` per topic.
@@ -375,7 +373,7 @@ For an aggregate over `n` distinct answerers with `w` wrong and `c = n − w` co
 | Wrong-option ("pegadinha") | Shown only if that option was chosen by ≥ 3 people and `n ≥ 10`; rounded to 5%. |
 | Topic aggregates | Mean error rate over the topic's questions with `n ≥ 5`, shown only if the topic has ≥ 3 such questions. |
 
-The thresholds are enforced in the database RPC (`get_class_insights`), never in the client. Members who turned off `contribute_insights` are excluded from `n`.
+The thresholds are enforced in the database RPC (`class_insights_for`), never in the client. Members who turned off `contribute_insights` are excluded from `n`.
 
 ### 8.5 League XP
 `league_xp(day) = min(xp_earned(day) excluding quiet-hours events, 500)`; weekly sum. XP sources and amounts are defined in [13 — Motivation §8.1](13-motivation-wellbeing.md#8-rules-and-algorithms). Ties broken by who reached the total first.
@@ -401,7 +399,7 @@ flowchart TD
 - Personal overrides (`card_overrides`) of users take precedence; those users get "A turma corrigiu este cartão. Quer usar a versão nova?".
 
 ### 8.7 Invite link handling
-- `https://{BASE_URL}/t/{code}` → App Link → `studify://turma/join?code={code}` → join preview. If not logged in: login first, then continue to the preview (deep-link state preserved).
+- `https://{BASE_URL}/c/{code}` → App Link → `studify://class/join?code={code}` → join preview. If not logged in: login first, then continue to the preview (deep-link state preserved).
 - Landing page (no app): explains Studify in one line, shows **Baixar o app (Android)** → APK, an install help accordion ("Permitir instalar apps desta fonte"), the code in big letters with **Copiar**, and a note for iPhone users ("Por enquanto o Studify é só para Android").
 
 ### 8.8 Duel/battle anti-cheat
@@ -451,7 +449,7 @@ Applies to Turma names, nicknames, room names, flag comments, SOC-06 contributio
 ## 11. Acceptance criteria
 
 - [ ] Creating a Turma produces an 8-character code from the safe alphabet; a regenerated code invalidates the old link immediately.
-- [ ] Opening `https://{BASE_URL}/t/{code}` on a phone with the app installed opens the join preview; without the app, it opens the landing page with the APK button and the code.
+- [ ] Opening `https://{BASE_URL}/c/{code}` on a phone with the app installed opens the join preview; without the app, it opens the landing page with the APK button and the code.
 - [ ] With `approval` policy, a joiner is `pending` and cannot read shared subjects until approved; **Aprovar todos** approves all pending requests in one action.
 - [ ] 21 invalid join attempts within an hour block further attempts for 1 hour.
 - [ ] Sharing a subject moves ownership to the Turma; other members can study it without any new `ai_usage` rows being created.
@@ -461,7 +459,7 @@ Applies to Turma names, nicknames, room names, flag comments, SOC-06 contributio
 - [ ] A duel not played by the opponent in 48 h becomes `expired` with no XP changes.
 - [ ] A battle with 30 simulated clients runs 10 questions end-to-end; every client sees the same question within 500 ms; scores match §8.3.
 - [ ] If the host disconnects mid-battle, the battle auto-advances and reaches the pódio.
-- [ ] `get_class_insights` returns nothing for n < 5, a band only for 5 ≤ n < 10, and exact rounded rates only when n ≥ 10 and min(c, w) ≥ 2 (property-based test).
+- [ ] `class_insights_for` returns nothing for n < 5, a band only for 5 ≤ n < 10, and exact rounded rates only when n ≥ 10 and min(c, w) ≥ 2 (property-based test).
 - [ ] No API or RPC returns per-member answers of other users (RLS test suite).
 - [ ] A user who turns off "Contribuir para as estatísticas da turma" is excluded from the next aggregate.
 - [ ] Blocked users cannot challenge each other and don't appear in each other's challenge picker or rooms.

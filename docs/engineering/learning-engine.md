@@ -27,7 +27,7 @@ All algorithms are **pure TypeScript functions** in `packages/shared/learning/*`
 | Prova Provável weights/blueprint, ENEM topic stats | Worker | Bulk data |
 | TRI estimate, coherence, SISU targets | Edge (on simulado submit) / device preview | |
 | Duel and battle scoring | Edge / worker (server-measured time) | Anti-cheat (SOC-02, SOC-03) |
-| Class insights thresholds | **SQL RPC** `get_class_insights` | Anonymity enforced in the database (SOC-04) |
+| Class insights thresholds | **SQL RPC** `class_insights_for` | Anonymity enforced in the database (SOC-04) |
 | XP, streaks, levels | Worker from synced events (device shows optimistic values) | Idempotent server truth |
 | FSRS parameter optimization | Worker weekly | Heavy |
 
@@ -396,7 +396,7 @@ Phase 2 (TUT-05): `w(node) = (1 − m) + 0.3·[open Caderno entry] + 0.2·[node 
 
 ### 6.7 Duel selection (spec 10 §8.2)
 
-Pool: approved `multiple_choice` / `true_false` questions in the chosen topics; exclude questions either player answered in the last 7 days (relax to 3, then 0). Target: average of both players' `m` on the topics; draw ~30% easy / 50% medium / 20% hard **relative to that average** (difficulty from `empirical_difficulty` or `questions.difficulty`, adjusted by class error rate when available). At most `ceil(n / topics) + 1` per topic. Seed `(duel_id)`.
+Pool: approved `mcq_single` / `true_false` questions in the chosen topics; exclude questions either player answered in the last 7 days (relax to 3, then 0). Target: average of both players' `m` on the topics; draw ~30% easy / 50% medium / 20% hard **relative to that average** (difficulty from `empirical_difficulty` or `questions.difficulty`, adjusted by class error rate when available). At most `ceil(n / topics) + 1` per topic. Seed `(duel_id)`.
 
 ## 7. Caderno de Erros (PRA-04)
 

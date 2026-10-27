@@ -62,7 +62,7 @@ Studify generates a bank of practice questions for every topic, in all the forma
 - **PRA-01.3** Bloom levels: `remember` (Lembrar), `understand` (Entender), `apply` (Aplicar), `analyze` (Analisar), `evaluate` (Avaliar), `create` (Criar). Default generation mix per topic: 25% remember, 30% understand, 30% apply/analyze, 15% evaluate/create (create only in essay/short answer).
 - **PRA-01.4** Bank generation: after the knowledge map, the worker generates per topic (batch) ~15 questions: 8 `mcq_single`, 2 `true_false`, 2 `fill_blank` or `numeric`, 1 `matching` or `ordering`, 2 `short_answer`. Quantitative topics (topic has formulas in the knowledge map) swap 2 MCQs for `numeric`. Essay questions: 1 per unit. "Gerar mais questões" adds 10 on demand (sync, subject to budget).
 - **PRA-01.5** Quiz creation ("Fazer quiz"): scope = topic, subject, exam scope, goal, or **Pontos fracos** (lowest mastery). Length 5 / 10 / 20. Types filter (default: all auto-gradable + short answer). Selection per §8.3 (adaptive).
-- **PRA-01.6** **Practice mode feedback is immediate**: after each answer the user sees correct/incorrect, the explanation and the 📄 chip. Auto-gradable types are graded **on device** (works offline). `short_answer` is graded by AI synchronously (target < 5 s); offline, it is queued and graded on reconnect ("Vamos corrigir quando você tiver internet").
+- **PRA-01.6** **Practice mode feedback is immediate**: after each answer the user sees correct/incorrect, the explanation and the 📄 chip. Auto-gradable types are graded **on device** (works offline). `short_answer` is graded by AI synchronously (target < 5 s); offline, it is queued and graded on reconnect ("Vou corrigir quando você tiver internet").
 - **PRA-01.7** `fill_blank` and `numeric` grading is tolerant: accent/case-insensitive match against the accepted list; Levenshtein distance ≤ 1 accepted for answers ≥ 5 characters ("Aceitei, mas confere a grafia: …"); numeric within tolerance; unit mismatch counts as wrong only if the unit is required.
 - **PRA-01.8** Partial credit for `multi_select`, `matching`, `ordering`, `short_answer`, `essay_question`, `problem` (§8.4). An answer is **correct** if score ≥ 0.999, **partial** if 0 < score < 1, **wrong** if 0.
 - **PRA-01.9** Every answer updates `mastery` (evidence weights in §8.6) and is stored in `attempt_answers`.
@@ -75,7 +75,7 @@ Studify generates a bank of practice questions for every topic, in all the forma
 - **PRA-02.2** Then a one-tap cause picker "Por que você errou?" with the AI-suggested cause preselected (§8.5). The user can change it or skip; either way a Caderno de Erros entry is created (PRA-04).
 - **PRA-02.3** An auto-created flashcard (`origin = from_mistake`) targets the misconception — not a copy of the question. Its front/back come pre-generated in the question's `remediation_card` field (no AI call at answer time). For AI-graded answers, the grader returns the remediation card.
 - **PRA-02.4** Duplicate guard: if the user already has a card from the same question, nothing is created; if an existing card in the subject has similarity ≥ 0.85 with the remediation card, that card's effective due is set to today instead of creating a new one.
-- **PRA-02.5** The card creation is announced ("Criamos um cartão pra você não esquecer disso") with "Ver cartão" and "Não precisa" (undo → deletes the card).
+- **PRA-02.5** The card creation is announced ("Criei um cartão pra você não esquecer disso") with "Ver cartão" and "Não precisa" (undo → deletes the card).
 - **PRA-02.6** In mock exams (PRA-03) this flow runs on the results screen, for each wrong answer, not during the test.
 
 ### PRA-03 — Mock exams (Simulados)
@@ -126,7 +126,7 @@ Studify generates a bank of practice questions for every topic, in all the forma
 - **PRA-07.3** Rubric: generated questions carry a rubric (criteria with points, model answer, expected length). For user-provided questions, the grader builds the rubric from the relevant material (topic routing as in the tutor) and shows it with the result.
 - **PRA-07.4** Max points follow the test's style (e.g. 2,0 pontos) or default to 10.
 - **PRA-07.5** Result: total points, per-criterion verdict (full / partial / none) with justification, **O que você acertou**, **O que faltou** (with 📄 pages), **Como ficaria nota máxima** (a model answer close to the student's own wording), detected misconceptions, suggested cause, and grader confidence (low if handwriting was unclear or the question is ambiguous).
-- **PRA-07.6** Always labeled: "Correção estimada pela IA — sua professora pode corrigir diferente."
+- **PRA-07.6** Always labeled: "Correção estimada pela IA — seu professor(a) pode corrigir diferente."
 - **PRA-07.7** Grading is synchronous via Edge Function; the result screen shows progress ("Corrigindo…") and target latency < 30 s.
 - **PRA-07.8** "Reescrever" lets the user improve the answer and re-grade; versions are kept in `essays` and compared ("+1,5 ponto").
 - **PRA-07.9** Wrong/partial (< 50%) answers enter the Caderno de Erros with the grader's remediation card.
@@ -180,14 +180,14 @@ flowchart TD
 | Partial | "Quase! Você acertou 2 de 3 associações." |
 | Typo | "Aceitei, mas confere a grafia: *mitocôndria*." |
 | Cause picker | "Por que você errou?" · "Não sabia" · "Confundi" · "Desatenção" · "Li errado" |
-| Card toast | "Criamos um cartão pra você não esquecer disso." · "Ver cartão" · "Não precisa" |
+| Card toast | "Criei um cartão pra você não esquecer disso." · "Ver cartão" · "Não precisa" |
 | Simulado | "Começar simulado" · "Modo prova" · "Modo tranquilo" · "Tempo restante: 12:30" · "Entregar" |
 | Submit confirm | "Tem certeza que quer entregar? Ainda faltam 3 questões e 2 estão marcadas pra revisar." |
 | Results | "Você acertou 14 de 20 — nota estimada **7,0**" · "Próximos passos" |
 | Grading | "Corrigindo…" · "O que você acertou" · "O que faltou" · "Como ficaria nota máxima" |
-| Disclaimer | "Correção estimada pela IA — sua professora pode corrigir diferente." |
+| Disclaimer | "Correção estimada pela IA — seu professor(a) pode corrigir diferente." |
 | Dispute | "Eu discordo da correção" · "Eu estava certo" |
-| Offline AI | "Vamos corrigir quando você tiver internet." |
+| Offline AI | "Vou corrigir quando você tiver internet." |
 | Caderno | "Caderno de Erros" · "40% dos seus erros são desatenção" · "Resolvido 🎉" · "O que eu aprendi" |
 | Contrast drill | "Você confundiu **mitose** com **meiose**. Olha a diferença:" |
 | Slow mode | "Calma: lê de novo antes de confirmar." |
@@ -302,8 +302,8 @@ All calls: model `claude-opus-5-5`, adaptive thinking, explicit effort, server-s
 ### 8.3 Adaptive question selection (quizzes)
 
 For each candidate question `q` in scope (not answered correctly in the last 7 days, status active):
-- `p̂ = σ(α·(mastery_concept − δ_q))` — predicted probability of success, with `δ_q = (difficulty − 3) / 2` (or empirical difficulty when available) and α = 3 (to be tuned in learning-engine.md).
-- Prefer `p̂ ∈ [0.60, 0.85]` (desirable difficulty). Score = `1 − |p̂ − 0.72|` + 0.3 if unseen + 0.2 if concept overconfident (PRA-05) + exam urgency term (same as FED §8).
+- `p̂ = σ(β₀ + α·((2m − 1) − δ_q))` — predicted probability of success, where `m` is the concept's mastery (0.5 when unknown), `δ_q = (difficulty − 3) / 2` (or empirical difficulty when available), α = 1.5 and β₀ = 1.1, refit per subject once enough first attempts exist ([learning-engine.md §6.1](../engineering/learning-engine.md#6-question-selection)).
+- Prefer `p̂ ∈ [0.60, 0.85]` (desirable difficulty). Score = `1 − |p̂ − 0.72|` + 0.3 if unseen + 0.2 if concept overconfident (PRA-05) + 0.3 × `examUrgency(concept)` ([learning-engine.md §6.3](../engineering/learning-engine.md#63-adaptive-quiz-selection-spec-05-83)).
 - Diversity: max 2 questions per concept per quiz; ≥ 3 types in a 10-question quiz when available.
 - Caderno retries due today are included first in "Pontos fracos" and "Hoje" quizzes.
 
@@ -365,7 +365,7 @@ After ≥ 20 first attempts (across all users of a shared subject), `empirical_d
 | App killed during simulado | Attempt resumes from SQLite; timer continues from `started_at` in Modo prova. |
 | Time ends while offline | Auto-submit locally; AI-graded answers queued. |
 | Offline quiz | Auto-gradable types graded on device; short answers queued; results update when graded. |
-| Answer key wrong (flag accepted) | Question fixed or archived; all attempts with that question re-scored; mistakes created from it deleted; affected users notified in-app ("Corrigimos uma questão que você fez"). |
+| Answer key wrong (flag accepted) | Question fixed or archived; all attempts with that question re-scored; mistakes created from it deleted; affected users notified in-app ("Uma questão que você fez foi corrigida"). |
 | Disputed question still open | `status = disputed`; excluded from new quizzes until resolved. |
 | Bank exhausted for a scope | Generate more (sync) if budget allows; else reuse oldest-seen with a note. |
 | Budget exceeded | Auto-gradable practice keeps working; AI grading queued with message "Limite de IA de hoje atingido — corrigimos amanhã"; generation queued. |

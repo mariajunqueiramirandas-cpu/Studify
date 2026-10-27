@@ -269,7 +269,7 @@ flowchart TD
 | Result, then "Refazer erros" | S-PRA-07 → S-PRA-09 | PRA-04 |
 
 **Edge paths**
-- *Offline:* auto-gradable questions grade locally. Short answers queue: "Vamos corrigir quando você tiver internet."
+- *Offline:* auto-gradable questions grade locally. Short answers queue: "Vou corrigir quando você tiver internet."
 - *Disagree with AI grading:* "Eu discordo da correção" (PRA-01 dispute).
 - *Gabarito looks wrong:* ⚑ Reportar erro → UF-13.
 
@@ -362,7 +362,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  W["WhatsApp: 'Bora estudar junto no Studify? 📚 Entra na nossa turma 2º A: https://{BASE_URL}/t/ABCD-EFGH'"] --> T{App installed?}
+  W["WhatsApp: 'Bora estudar junto no Studify? 📚 Entra na nossa turma 2º A: https://{BASE_URL}/c/ABCD-EFGH'"] --> T{App installed?}
   T -- yes --> AL["Android App Link opens S-TUR-04 Prévia da turma"]
   T -- no --> LP["S-EXT-03 Landing page: what Studify is · Baixar o app · install help · code ABCD-EFGH"]
   LP --> INS[Install APK] --> UF01["UF-01 onboarding, invite code prefilled or pasted"]
@@ -636,9 +636,9 @@ flowchart TD
   G --> H["S-ENEM-15 Evolução por competência"]
 ```
 
-- Human-rights violation → C5 = 0, not the whole essay: "Essa proposta desrespeita os direitos humanos: a Competência V fica com zero." (ENM-05.4).
+- Human-rights violation → C5 = 0, not the whole essay: "Essa proposta desrespeita os direitos humanos: a Competência 5 fica com zero." (ENM-05.4).
 - Budget: 3 corrections per week by default. The 4th attempt shows the weekly-limit message (ENM-05.9).
-- Unverified repertório: "Não conseguimos confirmar essa referência. Confira antes de usar." (ENM-05.5).
+- Unverified repertório: "Não consegui confirmar essa referência. Confira antes de usar." (ENM-05.5).
 
 ---
 

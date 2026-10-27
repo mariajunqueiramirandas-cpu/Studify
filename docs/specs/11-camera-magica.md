@@ -94,7 +94,7 @@ Point the phone at something and Studify understands it **in the context of your
 | CAM-03.1 | Capture up to 20 pages (ENEM redação = 1 page of the folha de redação). The scanner's cleanup filter is set to keep pencil/pen strokes (no aggressive binarization). |
 | CAM-03.2 | **Faithful transcription** (§7.3): exactly what is written, **including spelling, accentuation, punctuation and grammar errors** (they matter for grading, e.g. ENEM competência 1). No corrections, no completions. Line breaks preserved; for essays, the physical line count is estimated. |
 | CAM-03.3 | Uncertain words are marked `⟦palavra?⟧` with alternatives; illegible segments `⟦ilegível⟧`. Crossed-out text is omitted and noted (`⟦rasura⟧`). |
-| CAM-03.4 | **Mandatory review screen** before grading: image and editable transcription side by side (stacked on small screens), uncertain words highlighted, tap a word to see the image crop of that line. Copy: "Corrija só o que a gente leu errado — não vale melhorar o texto 😉". Button **Confirmar e corrigir**. |
+| CAM-03.4 | **Mandatory review screen** before grading: image and editable transcription side by side (stacked on small screens), uncertain words highlighted, tap a word to see the image crop of that line. Copy: "Corrija só o que eu li errado — não vale melhorar o texto 😉". Button **Confirmar e corrigir**. |
 | CAM-03.5 | The app computes the edit distance between the AI transcription and the confirmed text. If > 15% of characters changed, the grading request includes `transcription_heavily_edited: true` and the result shows "Transcrição editada por você". |
 | CAM-03.6 | Output handed to the grader: `{confirmed_text, original_transcription, image_paths, line_count_estimate, illegible_segments, edited_ratio}`. PRA-07 and ENM-05 own the grading rules (e.g. ENEM's minimum/maximum lines). |
 | CAM-03.7 | Legibility feedback is part of the result: "{n} trechos ficaram difíceis de ler — na prova, letra legível evita perder pontos." (No judgment about handwriting beyond legibility.) |
@@ -137,8 +137,8 @@ flowchart LR
 | Not in material | "Isso não está no seu material, mas aqui vai uma explicação geral:" |
 | After | "Praticar parecidas" · "Salvar questão" · "Criar cartões disso" · "Perguntar mais" |
 | Privacy | "Rostos na foto foram desfocados para proteger a privacidade." · "Todo mundo da turma vai ver essas fotos." |
-| Transcription | "Confere se a gente leu certo" · "Corrija só o que a gente leu errado — não vale melhorar o texto 😉" · "Confirmar e corrigir" · "Transcrição editada por você" |
-| Errors | "Não achei conteúdo de estudo nessa foto." · "Sem internet agora — a gente processa assim que conectar." |
+| Transcription | "Confere se eu li certo" · "Corrija só o que eu li errado — não vale melhorar o texto 😉" · "Confirmar e corrigir" · "Transcrição editada por você" |
+| Errors | "Não achei conteúdo de estudo nessa foto." · "Sem internet agora — eu processo assim que você conectar." |
 
 ## 6. Data
 
