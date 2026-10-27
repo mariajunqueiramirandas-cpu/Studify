@@ -4,10 +4,8 @@
 // are replayed with their documents rebuilt from the same stored slices, so the replayed prefix is identical.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PdfSlice } from '@studify/prompts';
-import { pagesToRanges } from '@studify/ai';
 import { downloadBytes } from './storage.ts';
-import { toBase64, toPdfSlice, rangePages, type PreparedSlice } from './slices.ts';
-import { prepareSlices } from './slices.ts';
+import { toBase64, prepareSlices, type PreparedSlice } from './slices.ts';
 import type { Deps } from './deps.ts';
 
 export const TUTOR_NEW_PAGES_PER_TURN = 30;
@@ -100,9 +98,3 @@ export async function slicesFromStored(deps: Deps, stored: StoredSlice[], cache:
   }
   return out;
 }
-
-export function pagesOfRanges(pages: readonly number[]): number[] {
-  return pagesToRanges(pages).flatMap((r) => rangePages(r.page_start, r.page_end));
-}
-
-export { toPdfSlice };

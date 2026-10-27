@@ -43,13 +43,13 @@ export const jobs: JobDefinition<any>[] = [
     retryBackoff: true,
     expireInSeconds: 2 * 3600,
     concurrency: 2,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(DocumentPayload, data, 'ingest.document');
       await runIngestDocument(ctx, store(ctx), {
         documentId: p.document_id,
         mode: p.mode,
         userId: p.user_id,
-        aiJobId: p.ai_job_id,
+        aiJobId: p.ai_job_id ?? meta.aiJobId,
       });
     },
   },
@@ -60,13 +60,13 @@ export const jobs: JobDefinition<any>[] = [
     retryBackoff: true,
     expireInSeconds: 2 * 3600,
     concurrency: 2,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(DocumentPayload, data, 'ingest.merge');
       await runIngestDocument(ctx, store(ctx), {
         documentId: p.document_id,
         mode: 'merge',
         userId: p.user_id,
-        aiJobId: p.ai_job_id,
+        aiJobId: p.ai_job_id ?? meta.aiJobId,
       });
     },
   },
@@ -75,7 +75,7 @@ export const jobs: JobDefinition<any>[] = [
     retryLimit: 2,
     expireInSeconds: 3600,
     concurrency: 1,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(RenderPayload, data, 'ingest.render_pages');
       const rendered = await runRenderPages(ctx, store(ctx), p.document_id);
       ctx.log.info({ rendered }, 'pages rendered');
@@ -85,13 +85,13 @@ export const jobs: JobDefinition<any>[] = [
     name: 'ingest.transcribe_pages',
     retryLimit: 3,
     expireInSeconds: 3600,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(TranscribePayload, data, 'ingest.transcribe_pages');
       await runTranscription(ctx, store(ctx), {
         documentId: p.document_id,
         pages: p.pages,
         userId: p.user_id,
-        aiJobId: p.ai_job_id,
+        aiJobId: p.ai_job_id ?? meta.aiJobId,
       });
     },
   },
@@ -99,14 +99,14 @@ export const jobs: JobDefinition<any>[] = [
     name: 'ingest.photos_to_pdf',
     retryLimit: 3,
     expireInSeconds: 1800,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(PhotoPayload, data, 'ingest.photos_to_pdf');
       await runPhotosToPdf(ctx, store(ctx), {
         subjectId: p.subject_id,
         documentId: p.document_id,
         imagePaths: p.image_paths,
         userId: p.user_id,
-        aiJobId: p.ai_job_id,
+        aiJobId: p.ai_job_id ?? meta.aiJobId,
       });
     },
   },

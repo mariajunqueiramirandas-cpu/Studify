@@ -1,0 +1,57 @@
+name: Mobile preview build
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eas-preview-android:
+    name: EAS preview build (Android APK)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # Secrets cannot be used in a step-level `if`, so the token is checked here and read from `steps.eas`.
+      # Fork PRs and repos without the secret skip the build with a notice instead of failing.
+      - name: Check for the EXPO_TOKEN secret
+        id: eas
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::EXPO_TOKEN is not set; skipping the EAS preview build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: steps.eas.outputs.available == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.eas.outputs.available == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      # EAS reads app.config.ts and its plugins from the local install, so dependencies must be present.
+      - name: Install dependencies
+        if: steps.eas.outputs.available == 'true'
+        run: pnpm install --frozen-lockfile
+      - uses: expo/expo-github-action@v8
+        if: steps.eas.outputs.available == 'true'
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build the preview APK
+        if: steps.eas.outputs.available == 'true'
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --profile preview --platform android --non-interactive

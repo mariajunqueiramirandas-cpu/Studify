@@ -1,6 +1,6 @@
 // ingest.photos_to_pdf (ING-01 photo material, CAM-01): decodes the uploaded photos, strips metadata by
 // re-encoding (EXIF, GPS), downsizes to 1600 px on the long edge, and builds one PDF. The PDF then goes through
-// the normal document pipeline (ingest.document). Face blur (ING-01) is not implemented here; see the README.
+// the normal document pipeline (ingest.document). Face blur (ING-01) is not implemented here.
 import { createHash } from 'node:crypto';
 import { loadImage, createCanvas } from '@napi-rs/canvas';
 import type { JobContext } from '../framework/types.ts';

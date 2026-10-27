@@ -1,3 +1,4 @@
+// deno-lint-ignore-file require-await no-this-alias
 // Test doubles for the Edge Function handlers. No network, no real clients: the in-memory database
 // implements the supabase-js query shapes the handlers use (filters, upsert with ON CONFLICT, counts,
 // RPC errors, storage objects, auth), the fake Claude client implements the SDK surface callClaude
@@ -51,7 +52,7 @@ type RpcFn = (args: Record<string, unknown>) => { data?: unknown; error?: PgErro
 export class FakeDb {
   readonly tables = new Map<string, Row[]>();
   readonly rpcs = new Map<string, RpcFn>();
-  readonly storage = new Map<string, Uint8Array>();
+  readonly objects = new Map<string, Uint8Array>();
   readonly users = new Map<string, { id: string; email: string | null }>();
   readonly deletedUsers: string[] = [];
   readonly signedOut: string[] = [];
@@ -124,21 +125,22 @@ export class FakeDb {
     };
   }
 
-  get storageApi() {
+  /** supabase-js storage surface, backed by `objects` (keys are `bucket/object`). */
+  get storage() {
     const db = this;
     return {
       from: (bucket: string) => ({
         info: async (object: string) => {
           const key = `${bucket}/${object}`;
-          return db.storage.has(key) ? { data: { name: object }, error: null } : { data: null, error: { message: 'Object not found' } };
+          return db.objects.has(key) ? { data: { name: object }, error: null } : { data: null, error: { message: 'Object not found' } };
         },
         download: async (object: string) => {
-          const bytes = db.storage.get(`${bucket}/${object}`);
+          const bytes = db.objects.get(`${bucket}/${object}`);
           if (!bytes) return { data: null, error: { message: 'Object not found' } };
           return { data: new Blob([bytes as BlobPart]), error: null };
         },
         upload: async (object: string, bytes: Uint8Array) => {
-          db.storage.set(`${bucket}/${object}`, bytes);
+          db.objects.set(`${bucket}/${object}`, bytes);
           return { data: { path: object }, error: null };
         },
       }),

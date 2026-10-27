@@ -47,7 +47,7 @@ async function resolveScope(deps: Deps, userId: string, req: Req): Promise<{ sub
   let subjectIds: string[] = [];
   let nodeIds: string[] | null = req.scope.node_ids ?? null;
   let goalId: string | null = req.scope.goal_id ?? null;
-  let examId: string | null = req.scope.exam_id ?? null;
+  const examId: string | null = req.scope.exam_id ?? null;
 
   if (examId) {
     const exam = await db.from('exams').select('id, user_id, goal_id, subject_id').eq('id', examId).is('deleted_at', null).maybeSingle();

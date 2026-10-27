@@ -1,7 +1,6 @@
 // explain (LRN-03). Explains a note paragraph, concept, glossary term, question explanation or card back in
 // another style. A shared cache hit (explanations, same target, style and prompt version) streams the stored
 // body at no cost. "Tentar de novo" (force_new) writes a personal explanation.
-import { z } from 'zod';
 import { ApiFailure, ExplainReqSchema, type ExplainReq } from '@studify/shared';
 import { getTask } from '@studify/prompts';
 import { defineFunction } from '../_shared/http.ts';

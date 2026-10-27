@@ -3,12 +3,9 @@
 // lives in `computeMasteries`; `loadLearningData` is the only function that reads the database.
 import {
   DEFAULT_LEARNING_PARAMS,
-  accuracyAt,
   ancestorsOf,
   decayFactor,
-  isIntroduced,
   masteryAt,
-  retrievability,
   resolveParams,
   type CardState,
   type EvidenceAggregate,
@@ -152,10 +149,6 @@ export function computeMasteries(data: LearningData, at: Date, params: LearningP
   return out;
 }
 
-/** Retrievability of a single card at `at` (null when never introduced). Exposed for queue-like callers. */
-export function cardRetrievability(state: CardState, at: Date, params: LearningParams): number | null {
-  return isIntroduced(state) ? retrievability(state, at, params) : null;
-}
 
 /** Subjects the user can learn from: personal subjects plus shared subjects of active Turmas. */
 export async function userSubjectIds(ctx: JobContext, userId: string): Promise<string[]> {

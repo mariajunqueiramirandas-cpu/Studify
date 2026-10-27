@@ -39,7 +39,7 @@ export const jobs: JobDefinition<any>[] = [
     name: 'ingest.topic_content',
     retryLimit: 2,
     expireInSeconds: 3600,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(TopicContentPayload, data, 'ingest.topic_content');
       await runTopicContent(ctx, supabaseStore(ctx.supabase), {
         stage: p.stage,
@@ -49,7 +49,7 @@ export const jobs: JobDefinition<any>[] = [
         nodeIds: p.node_ids,
         kinds: p.kinds,
         force: p.force,
-        aiJobId: p.ai_job_id,
+        aiJobId: p.ai_job_id ?? meta.aiJobId,
       });
     },
   },
@@ -57,20 +57,20 @@ export const jobs: JobDefinition<any>[] = [
     name: 'ingest.prerequisites',
     retryLimit: 2,
     expireInSeconds: 1800,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(PrereqPayload, data, 'ingest.prerequisites');
       await runPrereqJob(ctx, {
         subjectId: p.subject_id,
         documentId: p.document_id,
         userId: p.user_id,
-        aiJobId: p.ai_job_id,
+        aiJobId: p.ai_job_id ?? meta.aiJobId,
       });
     },
   },
   {
     name: 'content.regenerate_topic',
     retryLimit: 2,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const p = parsePayload(RegeneratePayload, data, 'content.regenerate_topic');
       await runRegenerate(ctx, { nodeId: p.node_id, kinds: p.kinds, userId: p.user_id });
     },

@@ -16,6 +16,25 @@ export interface QueueOptions {
   retryDelay: number;
   retryBackoff: boolean;
   expireInSeconds: number;
+  /** `short` makes singletonKey enforce one queued job per key (pg-boss v12). Used by singleton queues only. */
+  policy?: 'standard' | 'short';
+}
+
+/**
+ * Queues whose every send carries a singletonKey. Under pg-boss v12 the key is enforced only by the `short`
+ * policy, so these queues get it; ingest.document keeps `standard` because some of its sends have no key.
+ */
+export const SINGLETON_QUEUES: ReadonlySet<string> = new Set([
+  'batch.poll',
+  'notify.deliver',
+  'ingest.topic_content',
+  'ingest.prerequisites',
+  'ingest.render_pages',
+  'ingest.transcribe_pages',
+]);
+
+export function policyFor(name: string): 'standard' | 'short' {
+  return SINGLETON_QUEUES.has(name) ? 'short' : 'standard';
 }
 
 export interface SendOptions {

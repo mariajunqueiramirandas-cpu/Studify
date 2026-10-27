@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { buildZip, crc32, toCsv } from '../../src/lib/zip.ts';
 import { largestRemainder, predictedBlueprint, seededRandom, teacherStatistics, teacherTopicWeights } from '../../src/lib/prova.ts';
 import { questionPayloadFor } from '../../src/lib/prova-questions.ts';
-import { inQuietHours, quietEndInstant } from '../../src/lib/time.ts';
-import { decideDelivery, channelEnabled, DAILY_CAP } from '../../src/lib/notify-policy.ts';
+import { inQuietHours } from '../../src/lib/time.ts';
 import { fillTemplate, notifyEntry } from '../../src/lib/notify-catalog.ts';
-import { aggregateInsights, battleStep, scoreBattleAnswer } from '../../src/lib/social.ts';
+import { aggregateInsights, battleStep, insightDisplayOf, scoreBattleAnswer } from '../../src/lib/social.ts';
 import { scoreFromCriteria, createsMistake } from '../../src/lib/grading.ts';
 import { carryOverDone, plannerTriggerOf, storedTriggerOf, type PlanItemRow } from '../../src/lib/plan-data.ts';
 import { daysInRange, weekdayMon0, dailyActivityFor, rollStreak } from '../../src/lib/streaks.ts';
@@ -51,35 +50,18 @@ describe('zip writer', () => {
 });
 
 describe('quiet hours (PLT-05.3)', () => {
-  it('wraps midnight and reports the end of the window in UTC', () => {
+  it('wraps past midnight in the student’s time zone', () => {
     const late = new Date('2026-10-28T02:30:00.000Z'); // 23:30 on 27 Oct in São Paulo
     expect(inQuietHours(late, 'America/Sao_Paulo', '22:00', '07:00')).toBe(true);
     expect(inQuietHours(new Date('2026-10-27T15:00:00.000Z'), 'America/Sao_Paulo', '22:00', '07:00')).toBe(false);
-    expect(quietEndInstant(late, 'America/Sao_Paulo', '07:00').toISOString()).toBe('2026-10-28T10:00:00.000Z');
   });
 });
 
-describe('notification policy (PLT-05)', () => {
-  const base = { delivery: 'push' as const, channel: 'class' as const, countsTowardCap: true, channelEnabled: true, hasToken: true, sentToday: 0, inQuiet: false };
-  it('sends, defers in quiet hours, drops on cap, no token, disabled channel and local-only types', () => {
-    expect(decideDelivery(base)).toEqual({ action: 'send' });
-    expect(decideDelivery({ ...base, inQuiet: true })).toEqual({ action: 'defer' });
-    expect(decideDelivery({ ...base, sentToday: DAILY_CAP })).toEqual({ action: 'drop', reason: 'daily_cap' });
-    expect(decideDelivery({ ...base, countsTowardCap: false, sentToday: DAILY_CAP })).toEqual({ action: 'send' });
-    expect(decideDelivery({ ...base, hasToken: false })).toEqual({ action: 'drop', reason: 'no_token' });
-    expect(decideDelivery({ ...base, channelEnabled: false })).toEqual({ action: 'drop', reason: 'disabled' });
-    expect(decideDelivery({ ...base, delivery: 'local' })).toEqual({ action: 'drop', reason: 'local_only' });
-  });
-
-  it('reads channel toggles and defaults missing keys to on', () => {
-    expect(channelEnabled({ notifications: { class: false } }, 'class')).toBe(false);
-    expect(channelEnabled({ notifications: { class: false } }, 'plan')).toBe(true);
-    expect(channelEnabled(null, 'plan')).toBe(true);
-  });
-
+describe('notification catalog (PLT-05)', () => {
   it('fills templates and knows the catalog', () => {
     expect(fillTemplate('studify://subjects/{subject_id}', { subject_id: 'abc' })).toBe('studify://subjects/abc');
     expect(notifyEntry('reviews_due')?.delivery).toBe('local');
+    expect(notifyEntry('subject_shared')).toMatchObject({ channel: 'class', countsTowardCap: true, delivery: 'push' });
     expect(notifyEntry('nope')).toBeNull();
   });
 });
@@ -241,6 +223,14 @@ describe('plan data mapping (GOL-04, data-model §5.5)', () => {
     expect(carried).toHaveLength(1);
     expect(carried[0]).toMatchObject({ plan_run_id: 'new', status: 'done', minutes: 20 });
     expect((carried[0] as Record<string, unknown>).id).toBeUndefined();
+  });
+});
+
+describe('class insight display (SOC-04.3)', () => {
+  it('mirrors the §18.3 display rules for an aggregate', () => {
+    expect(insightDisplayOf({ questionId: 'q', answerers: 4, wrong: 4, optionCounts: {}, topWrongOptionCount: 0 }).display).toEqual({ kind: 'none' });
+    expect(insightDisplayOf({ questionId: 'q', answerers: 5, wrong: 4, optionCounts: {}, topWrongOptionCount: 0 }).display).toEqual({ kind: 'band', band: 'hard', label: 'Difícil para a turma' });
+    expect(insightDisplayOf({ questionId: 'q', answerers: 12, wrong: 6, optionCounts: {}, topWrongOptionCount: 4 })).toEqual({ display: { kind: 'error_rate', errorRate: 0.5 }, pitfallRate: 0.35 });
   });
 });
 

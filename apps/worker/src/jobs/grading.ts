@@ -4,10 +4,10 @@
 import { z } from 'zod';
 import { evidenceWeight, type EvidenceQuestionType } from '@studify/shared';
 import { cardsRemediation, gradeShortAnswer, RemediationCard, ShortAnswerGrade, type RemediationInput, type ShortAnswerInput } from '@studify/prompts';
-import { parseQuestionPayload, parseQuestionResponse } from '@studify/shared';
+import { parseQuestionPayload } from '@studify/shared';
 import type { JobContext, JobDefinition } from '../framework/types.ts';
 import { runPrompt, type AiScope } from '../lib/ai-adapter.ts';
-import { IN_CHUNK, JobDataError, chunk, unwrap, unwrapRows } from '../lib/db.ts';
+import { IN_CHUNK, chunk, unwrap, unwrapRows } from '../lib/db.ts';
 import { createRemediationCard, ensureOpenMistake } from '../lib/mistakes.ts';
 import { createsMistake, round2, scoreFromCriteria } from '../lib/grading.ts';
 import { safeTimeZone, studyDayFor, DEFAULT_ROLLOVER_HOUR } from '../lib/time.ts';

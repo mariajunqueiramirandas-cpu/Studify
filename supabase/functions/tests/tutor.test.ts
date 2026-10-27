@@ -15,8 +15,10 @@ const ANSWER = {
   ],
 };
 
+/** One Idempotency-Key per student message (the app keys a send by its client_message_id). */
 function ask(body: Record<string, unknown>, token?: string) {
-  return request('tutor-chat', { token, idem: '0190a000-0000-7000-8000-0000000000e1', body });
+  const idem = (body.client_message_id as string | undefined) ?? v7(9999);
+  return request('tutor-chat', { token, idem, body });
 }
 
 Deno.test('tutor-chat: streams deltas and citations mapped to the original page numbers', async () => {

@@ -18,7 +18,7 @@ interface Db {
 function fakeDb(db: Db) {
   const log: Array<{ text: string; values: unknown[] }> = [];
   const invalidated: string[] = [];
-  const sql: Sql = {
+  const sql = {
     async query(text: string, values: unknown[] = []) {
       if (text.includes('from public.profiles p')) {
         return db.profile
@@ -34,7 +34,7 @@ function fakeDb(db: Db) {
       log.push({ text, values });
       return { rows: [{ id: `log-${log.length}` }] };
     },
-  };
+  } as unknown as Sql;
   return { sql, log, invalidated };
 }
 

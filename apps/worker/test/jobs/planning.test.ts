@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handlePlanNightly, handlePlanRecompute, handleScopeMatch, handleVesperaPrepare, readinessFor, scopeTopicsByExam } from '../../src/jobs/planning.ts';
 import { loadPlanContext } from '../../src/lib/plan-context.ts';
-import { EXAM, FakeEnv, GOAL, NOW, SUBJECT, TOPIC, TOPIC_B, USER, fakeEnv } from './fakes.ts';
+import { EXAM, FakeEnv, NOW, TOPIC, TOPIC_B, USER, fakeEnv } from './fakes.ts';
 import { seedStudent } from './seed.ts';
 
 let env: FakeEnv;

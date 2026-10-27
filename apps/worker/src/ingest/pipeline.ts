@@ -3,34 +3,27 @@
 //   S0 preflight + text layer + spans  -> S1 outline (standard API)  -> S2 concepts (Batch)
 //   -> S3 prerequisites (standard) and S4 content (Batch: notes, glossary, cards, questions) -> ready.
 // Budget refusals park the document as waiting_budget and re-enqueue the same job for the next local midnight.
-import { BudgetExceededError, AiRetryLaterError, type BudgetContext, type MappedCitation } from '@studify/ai';
-import { getTask } from '@studify/prompts';
-import type pg from 'pg';
-import { PDFDocument } from 'pdf-lib';
+import { BudgetExceededError } from '@studify/ai';
 import type { JobContext } from '../framework/types.ts';
 import type { Sql } from '../framework/db.ts';
 import { applyProgress } from '../framework/progress.ts';
 import { PermanentJobError } from '../framework/errors.ts';
 import { nextLocalMidnight } from '../framework/timeutil.ts';
-import { budgetFor, createEnv, getDocument, type PipelineEnv } from './env.ts';
+import { createEnv, type PipelineEnv } from './env.ts';
 import { BUCKET, keys, type ObjectStore } from './store.ts';
 import { preflightPdf, readBookmarkStarts } from './pdf-preflight.ts';
 import { extractPages, type PageExtraction } from './pdf-text.ts';
 import { renderPages } from './pdf-render.ts';
 import { spansFile } from './pdf-spans.ts';
-import { writeOutline, runOutlineCalls, type TouchedTopic } from './outline.ts';
+import { writeOutline, runOutlineCalls } from './outline.ts';
 import { runPrerequisites } from './prereq.ts';
+import { topicItem, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type WavePlan } from './waves.ts';
 import { loadTopicBundle, sourcesOf, topicSliceRefs, contentLanguageOf, type TopicBundle } from './topics.ts';
-import { topicItem, submitWave, pollWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type WavePlan } from './waves.ts';
 import { expandKinds, type TopicKind } from './custom-id.ts';
-import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, pagesWithFigures, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord } from './repo.ts';
+import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
 import { mapLimit } from './concurrency.ts';
-import { cardTargetCount } from '@studify/prompts';
-import { normalizeTerm } from './text.ts';
 import { tableExists } from '../framework/db.ts';
-import { budgetForTopic } from './topics.ts';
-import { loadSubject } from './repo.ts';
 import { uuidV7 } from '@studify/shared';
 
 export const FAILURE_BODY: Readonly<Record<string, string>> = {
@@ -378,7 +371,7 @@ export async function runTopicContent(ctx: JobContext, store: ObjectStore, paylo
 
 async function runConcepts(stage: Stage, payload: TopicContentPayload, genBatchId: string): Promise<void> {
   const { env, sql } = stage;
-  const withConcepts = await topicsWithConcepts(sql, payload.nodeIds);
+  const withConcepts = await topicsWithConcepts(sql, payload.nodeIds, payload.documentId);
   const todo: TopicBundle[] = [];
   for (const id of payload.nodeIds) {
     if (withConcepts.has(id)) continue;
@@ -518,7 +511,6 @@ async function runContent(stage: Stage, payload: TopicContentPayload, genBatchId
 /** Called by the batch.poll job when a content wave has been collected. */
 export async function onWaveCollected(ctx: JobContext, store: ObjectStore, plan: WavePlan, summary: PollOutcomeSummary): Promise<void> {
   const stage = stageOf(ctx, store);
-  const { sql } = stage;
   if (plan.purpose === 'concepts') {
     await continueAfterConcepts(stage, {
       stage: 'S2',
@@ -627,6 +619,7 @@ export async function runPrereqJob(ctx: JobContext, payload: { subjectId: string
       userId: payload.userId,
       aiJobId: payload.aiJobId,
       uploadedBy: doc?.uploadedBy ?? subject.createdBy,
+      documentId: payload.documentId,
     });
     ctx.log.info({ status: result.status, written: result.written, dropped: result.dropped }, 'prerequisites stage');
   } catch (err) {

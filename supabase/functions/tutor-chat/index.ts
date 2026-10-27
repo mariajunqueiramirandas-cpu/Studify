@@ -3,12 +3,10 @@
 //  replayed history → stream (delta, citation, status, tool, done) → store both messages with raw_content.
 // Limits: 60 student messages per local day (402 budget_exhausted), 120 context pages and 200 messages per
 // thread (400 with a PT-BR message). A refusal stores nothing, so the student can ask again.
-import { z } from 'zod';
 import {
   ApiFailure,
   DEFAULT_TIME_ZONE,
   TutorChatReqSchema,
-  localDateOf,
   wallClockOf,
   type TutorChatReq,
 } from '@studify/shared';
@@ -169,7 +167,7 @@ export const handler = defineFunction<Req>({
     const sent = new Set(thread.context_pages.map((p) => `${p.document_id}|${p.page}`));
     const query = searchTerms(input.message);
     let method: 'fts' | 'router' | 'fixed' = 'fts';
-    let hits = thread.scope_type === 'topic' || thread.scope_type === 'passage' ? [] : await ftsPages(db, [...docs.keys()], query);
+    const hits = thread.scope_type === 'topic' || thread.scope_type === 'passage' ? [] : await ftsPages(db, [...docs.keys()], query);
     if (thread.scope_type === 'topic' && thread.node_id) {
       const sources = await db.from('node_sources').select('document_id, page_start, page_end').eq('node_id', thread.node_id).is('deleted_at', null);
       if (sources.error) throw sources.error;

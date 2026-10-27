@@ -41,21 +41,24 @@ export async function loadTopic(db: SupabaseClient, userId: string, nodeId: stri
     .order('position');
   if (concepts.error) throw concepts.error;
 
-  const sources = await db
-    .from('node_sources')
-    .select('document_id, page_start, page_end, documents!inner(title, storage_path, deleted_at)')
-    .eq('node_id', nodeId)
-    .is('deleted_at', null);
+  // Two plain reads (no embedded join): the source rows, then their documents.
+  const sources = await db.from('node_sources').select('document_id, page_start, page_end').eq('node_id', nodeId).is('deleted_at', null);
   if (sources.error) throw sources.error;
+  const sourceRows = sources.data as Array<{ document_id: string; page_start: number; page_end: number }>;
+  const docIds = [...new Set(sourceRows.map((r) => r.document_id))];
+  const docs = docIds.length
+    ? await db.from('documents').select('id, title, storage_path, deleted_at').in('id', docIds)
+    : { data: [], error: null };
+  if (docs.error) throw docs.error;
+  const docById = new Map((docs.data as Array<{ id: string; title: string; storage_path: string; deleted_at: string | null }>).map((d) => [d.id, d]));
 
   const byDoc = new Map<string, { documentId: string; title: string; storagePath: string; pages: Set<number> }>();
-  for (const row of sources.data as Array<Record<string, unknown>>) {
-    const doc = row.documents as { title: string; storage_path: string; deleted_at: string | null } | null;
+  for (const row of sourceRows) {
+    const doc = docById.get(row.document_id);
     if (!doc || doc.deleted_at) continue;
-    const documentId = row.document_id as string;
-    const entry = byDoc.get(documentId) ?? { documentId, title: doc.title, storagePath: doc.storage_path, pages: new Set<number>() };
+    const entry = byDoc.get(row.document_id) ?? { documentId: row.document_id, title: doc.title, storagePath: doc.storage_path, pages: new Set<number>() };
     for (let p = Number(row.page_start); p <= Number(row.page_end); p += 1) entry.pages.add(p);
-    byDoc.set(documentId, entry);
+    byDoc.set(row.document_id, entry);
   }
 
   return {

@@ -12,49 +12,36 @@ beforeEach(() => {
   env.db.seed('push_tokens', [{ user_id: USER, token: 'ExponentPushToken[abc]', device_id: 'd1', invalidated_at: null }]);
 });
 
-describe('notify.dispatch (PLT-05)', () => {
-  it('sends a server push and logs it', async () => {
-    const result = await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'content_fixed', data: { items: 2 } });
-    expect(result).toEqual({ status: 'sent' });
-    expect(env.pushed).toEqual([expect.objectContaining({ userId: USER, message: expect.objectContaining({ channel: 'processing', requested: false }) })]);
-    expect(env.db.rows('notification_log')[0]).toMatchObject({ type: 'content_fixed', channel: 'processing', counts_toward_cap: false });
-    expect(env.db.rows('notification_log')[0]?.sent_at).toBeTruthy();
+describe('notify.dispatch (PLT-05): catalog in, push service out', () => {
+  it('hands a server push to the push service with the catalog channel, copy and deep link', async () => {
+    const result = await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'export_ready', data: { export_id: 'e1' } });
+    expect(result).toEqual({ status: 'handed_off' });
+    expect(env.pushed).toEqual([
+      expect.objectContaining({
+        userId: USER,
+        message: expect.objectContaining({ channel: 'processing', requested: true, data: expect.objectContaining({ type: 'export_ready', deep_link: 'studify://profile/privacy' }) }),
+      }),
+    ]);
+    // the job itself writes no notification_log rows: the push service does
+    expect(env.db.rows('notification_log')).toHaveLength(0);
   });
 
-  it('enforces the 3-per-day cap for unrequested types', async () => {
-    env.db.seed('notification_log', [0, 1, 2].map((i) => ({ user_id: USER, type: 'subject_shared', channel: 'class', counts_toward_cap: true, scheduled_for: NOW, sent_at: `2026-10-27T13:0${i}:00Z` })));
-    const result = await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'subject_shared', data: {} });
-    expect(result).toEqual({ status: 'dropped', reason: 'daily_cap' });
-    expect(env.pushed).toHaveLength(0);
-    expect(env.db.rows('notification_log').at(-1)).toMatchObject({ dropped_reason: 'daily_cap' });
+  it('marks unrequested types as counting toward the daily cap (PLT-05.4)', async () => {
+    await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'subject_shared', data: { subject_id: 's1' } });
+    expect(env.pushed[0]?.message).toMatchObject({ channel: 'class', requested: false, data: expect.objectContaining({ deep_link: `studify://subjects/s1` }) });
   });
 
-  it('defers pushes that arrive in quiet hours to the end of the window (PLT-05.3)', async () => {
-    env.setNow('2026-10-29T02:30:00.000Z'); // 23:30 on 28 Oct, São Paulo
-    const result = await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'subject_shared', data: {} });
-    expect(result.status).toBe('deferred');
-    expect(env.pushed).toHaveLength(0);
-    const queued = env.enqueued.find((e) => e.name === 'notify.dispatch');
-    expect(queued?.opts?.singletonKey).toBe(`notify:${USER}:subject_shared`);
-    expect(new Date(queued?.opts?.startAfter as Date).toISOString()).toBe('2026-10-29T10:00:00.000Z');
-  });
-
-  it('drops without a device token, with the channel off, and never sends local-only types', async () => {
-    env.db.seed('push_tokens', []);
-    expect(await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'subject_shared', data: {} })).toEqual({ status: 'dropped', reason: 'no_token' });
-    env.db.seed('push_tokens', [{ user_id: USER, token: 't', device_id: 'd', invalidated_at: null }]);
-    env.db.rows('profiles')[0]!.settings = { notifications: { class: false } };
-    expect(await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'subject_shared', data: {} })).toEqual({ status: 'dropped', reason: 'disabled' });
+  it('never pushes local-only or unknown types', async () => {
     expect(await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'reviews_due', data: {} })).toEqual({ status: 'local_only' });
+    expect(await handleNotifyDispatch(env.ctx, { user_id: USER, type: 'mystery', data: {} })).toEqual({ status: 'unknown_type' });
     expect(env.pushed).toHaveLength(0);
   });
 
-  it('a push failure from the transport is not logged as sent (failure path)', async () => {
+  it('a transport failure propagates so pg-boss retries (failure path)', async () => {
     env.ctx.push = async () => {
       throw new Error('expo 503');
     };
     await expect(handleNotifyDispatch(env.ctx, { user_id: USER, type: 'content_fixed', data: {} })).rejects.toThrow(/expo 503/);
-    expect(env.db.rows('notification_log')).toHaveLength(0);
   });
 });
 

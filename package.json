@@ -9,7 +9,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
-    "db:test": "bash supabase/tests/run.sh"
+    "db:test": "bash supabase/tests/run.sh",
+    "db:rls-coverage": "node scripts/check-rls-coverage.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

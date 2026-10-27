@@ -1,8 +1,7 @@
 // Social scoring and state transitions (SOC-02, SOC-03, SOC-04; learning-engine §18). Pure: the jobs
 // read rows, call these, and write the results. Times are server clock values in milliseconds.
-import { battlePoints, classInsightDisplay, duelPoints, isBattleAnswerRejected, isDuelTimeout, type InsightAggregate } from '@studify/shared';
+import { battlePoints, classInsightDisplay, isBattleAnswerRejected, type InsightAggregate } from '@studify/shared';
 
-export type BattleStatus = 'lobby' | 'question_open' | 'question_closed' | 'question_reveal' | 'podium' | 'ended' | 'cancelled';
 
 /**
  * What battle.tick does for (battle, index). Idempotent: a tick for an index the battle has already
@@ -51,12 +50,6 @@ export function scoreBattleAnswer(
   return { points: battlePoints(true, elapsed, secondsPerQuestion, nextStreak), nextStreak, timedOut: false };
 }
 
-/** Duel score for one answer (§18.1): timeouts after deadline + 3 s score 0. */
-export function scoreDuelAnswer(correct: boolean, servedAtMs: number, receivedAtMs: number, deadlineAtMs: number, limitSeconds: number): number {
-  if (isDuelTimeout(receivedAtMs, deadlineAtMs)) return 0;
-  const seconds = (receivedAtMs - servedAtMs) / 1000 - 0.5;
-  return duelPoints(correct, seconds, limitSeconds);
-}
 
 export interface AnswerRow {
   user_id: string;

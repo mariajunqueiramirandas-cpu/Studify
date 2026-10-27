@@ -47,8 +47,8 @@ export async function seedWorld(h: Harness): Promise<void> {
     { id: IDS.bobDoc, subject_id: IDS.bobSubject, title: 'Privado', kind: 'textbook', storage_path: `documents/${IDS.bobSubject}/${IDS.bobDoc}.pdf`, size_bytes: 2048, checksum_sha256: 'b'.repeat(64), status: 'ready', page_count: 40, deleted_at: null, uploaded_by: BOB.id },
   ]);
   const pdf = await makePdf(40);
-  db.storage.set(`documents/${IDS.subject}/${IDS.doc}.pdf`, pdf);
-  db.storage.set(`documents/${IDS.bobSubject}/${IDS.bobDoc}.pdf`, pdf);
+  db.objects.set(`documents/${IDS.subject}/${IDS.doc}.pdf`, pdf);
+  db.objects.set(`documents/${IDS.bobSubject}/${IDS.bobDoc}.pdf`, pdf);
   // Pages 12–14 carry the photosynthesis text; the tutor's full-text search finds them.
   for (const page of [12, 13, 14]) {
     db.seed('document_pages', { document_id: IDS.doc, page_number: page, text: `Fotossíntese na página ${page}: a clorofila capta luz.`, tsv: 'fotossintese clorofila luz' });
@@ -66,12 +66,12 @@ export async function seedWorld(h: Harness): Promise<void> {
 }
 
 /** A multiple-choice question in the shared payload shape (spec 05 §8.1). */
-export function mcq(id: string, correct: 'A' | 'B', nodeId = IDS.topic): Record<string, unknown> {
+export function mcq(id: string, correct: 'A' | 'B', nodeId = IDS.topic, conceptId: string = IDS.concept): Record<string, unknown> {
   return {
     id,
     subject_id: IDS.subject,
     node_id: nodeId,
-    concept_ids: [IDS.concept],
+    concept_ids: [conceptId],
     type: 'mcq_single',
     stem: 'Qual organela faz a fotossíntese?',
     payload: {

@@ -155,7 +155,7 @@ export async function upsertPages(sql: Sql, documentId: string, pages: readonly 
          text = excluded.text,
          text_source = excluded.text_source,
          char_count = excluded.char_count,
-         has_images = excluded.has_images,
+         has_images = public.document_pages.has_images or excluded.has_images,
          image_path = coalesce(excluded.image_path, public.document_pages.image_path),
          thumbnail_path = coalesce(excluded.thumbnail_path, public.document_pages.thumbnail_path),
          text_items_path = coalesce(excluded.text_items_path, public.document_pages.text_items_path),
@@ -277,13 +277,17 @@ export async function documentHasNodes(sql: Sql, documentId: string): Promise<bo
   return Number(rows[0]?.n ?? '0') > 0;
 }
 
-/** Concept rows created from this document for the given topics (S2 idempotency). */
-export async function topicsWithConcepts(sql: Sql, topicIds: readonly string[]): Promise<Set<string>> {
+/**
+ * Topics that already have concepts from this document (S2 idempotency). A matched topic from a merge keeps its
+ * concepts from earlier documents, but its new pages still need S2 (ING-03.11), so only this document counts.
+ */
+export async function topicsWithConcepts(sql: Sql, topicIds: readonly string[], documentId: string | null): Promise<Set<string>> {
   if (topicIds.length === 0) return new Set();
   const { rows } = await sql.query<{ parent_id: string }>(
     `select distinct parent_id from public.knowledge_nodes
-      where parent_id = any($1::uuid[]) and kind = 'concept' and deleted_at is null`,
-    [topicIds],
+      where parent_id = any($1::uuid[]) and kind = 'concept' and deleted_at is null
+        and ($2::uuid is null or origin_document_id = $2::uuid)`,
+    [topicIds, documentId],
   );
   return new Set(rows.map((r) => r.parent_id));
 }

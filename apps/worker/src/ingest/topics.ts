@@ -3,7 +3,7 @@
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
 import { cardTargetCount, getTask, topicQuotas } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
-import { uuidV7, toSourcePages as sharedToSourcePages } from '@studify/shared';
+import { uuidV7 } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
 import type pg from 'pg';
 import { withTransaction, type Sql } from '../framework/db.ts';

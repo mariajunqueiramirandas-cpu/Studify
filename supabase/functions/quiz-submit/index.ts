@@ -16,7 +16,6 @@ import type { QuizSubmitRes } from '../_shared/responses.ts';
 import { defineFunction } from '../_shared/http.ts';
 import { gradeOffline } from '../_shared/grading.ts';
 import { recordMistake } from '../_shared/mistakes.ts';
-import type { Deps } from '../_shared/deps.ts';
 
 type Req = z.infer<typeof QuizSubmitReqSchema>;
 

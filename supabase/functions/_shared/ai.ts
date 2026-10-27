@@ -3,16 +3,7 @@
 // budget gate, stop_reason handling, validation, citation mapping and usage rows (ai-pipeline §2.5).
 import type { ZodType } from 'zod';
 import { callClaude, streamClaude } from '@studify/ai';
-import type {
-  BudgetContext,
-  CallResult,
-  ClaudeDeps,
-  DocumentSlice,
-  MappedCitation,
-  StreamEvent,
-  TaskCall,
-  TaskDef as AiTaskDef,
-} from '@studify/ai';
+import type { BudgetContext, CallResult, ClaudeDeps, DocumentSlice, MappedCitation, StreamEvent, TaskCall, TaskDef as AiTaskDef } from '@studify/ai';
 import { ApiFailure } from '@studify/shared';
 import {
   checkPageRefs,
@@ -29,7 +20,6 @@ import {
   GlossaryTerms,
   type AnyTaskDef,
   type BuiltPrompt,
-  type PdfSlice,
   type PromptMessage,
 } from '@studify/prompts';
 
@@ -155,7 +145,7 @@ export function unwrapResult<T>(result: CallResult<T>): T {
   }
 }
 
-export async function callTask<T>(deps: ClaudeDeps, p: PromptCall<T>): Promise<CallResult<T>> {
+export function callTask<T>(deps: ClaudeDeps, p: PromptCall<T>): Promise<CallResult<T>> {
   return callClaude(deps, toTaskCall(p));
 }
 

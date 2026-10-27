@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleMasteryRecompute, handleNotesPrefetch, handleSrsOptimize } from '../../src/jobs/learning.ts';
 import { handleGradingAnswer } from '../../src/jobs/grading.ts';
-import { ANSWER, CARD, FakeEnv, NOW, QUESTION, SUBJECT, TOPIC, UNIT, USER, fakeEnv } from './fakes.ts';
+import { ANSWER, FakeEnv, NOW, QUESTION, SUBJECT, TOPIC, UNIT, USER, fakeEnv } from './fakes.ts';
 import { seedStudent } from './seed.ts';
 import { EXAM } from './fakes.ts';
 
@@ -51,6 +51,12 @@ describe('mastery.recompute (learning-engine §5)', () => {
     expect(env.enqueued).toEqual([
       expect.objectContaining({ name: 'plan.recompute', data: { user_id: USER, trigger: 'mastery_shift' }, opts: expect.objectContaining({ singletonKey: `plan.recompute:${USER}` }) }),
     ]);
+  });
+
+  it('writes no row for a node without evidence or cards (mastery is NOT NULL, data-model §5.4)', async () => {
+    const result = await handleMasteryRecompute(env.ctx, { user_id: USER, node_ids: ['55555555-5555-4555-8555-555555555556'] });
+    expect(result.updated).toBe(0);
+    expect(env.db.rows('mastery')).toHaveLength(0);
   });
 
   it('returns quietly for a deleted profile', async () => {

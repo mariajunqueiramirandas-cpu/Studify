@@ -6,7 +6,6 @@
 import { z } from 'zod';
 import { ApiFailure, SignupCompleteReqSchema, type SignupCompleteRes, DEFAULT_TIME_ZONE, wallClockOf } from '@studify/shared';
 import { defineFunction } from '../_shared/http.ts';
-import type { Deps } from '../_shared/deps.ts';
 
 /** Display names with a blocklist hit are rejected before any row is written (SP-11, owner list pending). */
 const BLOCKED_NAME_FRAGMENTS = ['studify', 'admin', 'suporte', 'moderador'];

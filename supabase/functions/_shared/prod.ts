@@ -61,7 +61,7 @@ export function prodDeps(): Deps {
     minClientVersion: () => minClientVersionFrom(db),
     // Rate-limit stub (api §2.5: 10 AI requests per minute per user). Not enforced yet; the budget
     // gate still caps spend. Replace with a counter table when the limit is turned on.
-    rateLimit: async () => true,
+    rateLimit: () => Promise.resolve(true),
   };
   return cached;
 }

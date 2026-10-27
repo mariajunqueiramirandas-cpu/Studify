@@ -3,7 +3,6 @@
 // into plan_runs / plan_items rows.
 import {
   DEFAULT_AVAILABILITY_MINUTES,
-  DEFAULT_PLAN_SETTINGS,
   type DesperateOptions,
   type MaterialKind,
   type PlanExam,
@@ -410,7 +409,3 @@ export function carryOverDone(previous: readonly PlanItemRow[], run: PlanRun, ne
     });
 }
 
-/** Planner settings from a study_preferences row, for logs and tests. */
-export function settingsForRow(prefs: PrefsRow | null): PlanSettings {
-  return { ...DEFAULT_PLAN_SETTINGS, ...settingsFrom(prefs) };
-}

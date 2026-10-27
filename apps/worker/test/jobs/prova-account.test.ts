@@ -68,6 +68,21 @@ describe('pp.analyze_past_test (PRA-09.2–9.4)', () => {
     expect(env.db.rows('documents')[0]?.status).toBe('ready');
   });
 
+  it('re-analysing the same past test updates its teacher profile and replaces its questions', async () => {
+    seedPastTest();
+    const extraction = {
+      test: { title: 'P1', teacher_guess: 'Prof. Ana', year_guess: 2025, total_points: null, duration_guess: null },
+      questions: [{ position: 1, page: 1, type: 'short_answer', statement_md: 'Defina membrana.', alternatives: null, answer: { value: 'Bicamada lipídica.', source: 'printed' }, solution_md: null, points: 2, format_features: [], bloom: 'remember', difficulty: 1, node_matches: [{ node_key: TOPIC, confidence: 0.9 }] }],
+    };
+    env.claude.reply('extraia as questões de uma prova antiga', extraction);
+    env.claude.reply('Tarefa: descreva o estilo', { patterns: [], style_notes: 'Direto.', typical_command_verbs: ['defina'] });
+    await handleAnalyzePastTest(env.ctx, { document_id: DOC });
+    env.db.rows('documents')[0]!.status = 'uploaded';
+    await handleAnalyzePastTest(env.ctx, { document_id: DOC });
+    expect(env.db.rows('teacher_profiles')).toHaveLength(1);
+    expect(env.db.rows('questions')).toHaveLength(1);
+  });
+
   it('a refused extraction marks the document failed and throws for retry (failure path)', async () => {
     seedPastTest();
     env.claude.reply('extraia as questões de uma prova antiga', { refusal: true });

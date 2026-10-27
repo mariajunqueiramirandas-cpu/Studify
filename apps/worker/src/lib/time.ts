@@ -41,16 +41,6 @@ export function inQuietHours(at: Date, timeZone: string, quietStart: string, qui
   return s > e ? m >= s || m < e : m >= s && m < e;
 }
 
-/** The first instant at or after `at` when the quiet window ends. Callers check inQuietHours first. */
-export function quietEndInstant(at: Date, timeZone: string, quietEnd: string): Date {
-  const today = localDateOf(at, timeZone);
-  const e = minutesOf(quietEnd);
-  const hh = Math.floor(e / 60);
-  const mm = e % 60;
-  const candidate = wallTimeToInstant(today, hh, mm, timeZone);
-  if (candidate.getTime() > at.getTime()) return candidate;
-  return wallTimeToInstant(addDays(today, 1), hh, mm, timeZone);
-}
 
 export function localHour(at: Date, timeZone: string): number {
   return wallClockOf(at, timeZone).hour;
@@ -60,7 +50,3 @@ export function studyDayFor(at: Date, timeZone: string, rolloverHour = DEFAULT_R
   return studyDayOf(at, timeZone, rolloverHour);
 }
 
-/** Local calendar date (YYYY-MM-DD) for an optional ISO string, or null. */
-export function isoLocalDate(iso: string | null | undefined, timeZone: string): LocalDate | null {
-  return iso ? localDateOf(new Date(iso), timeZone) : null;
-}

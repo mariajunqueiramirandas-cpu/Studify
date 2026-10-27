@@ -54,9 +54,9 @@ export const jobs: JobDefinition<any>[] = [
     retryLimit: 1000,
     retryBackoff: false,
     expireInSeconds: 3600,
-    handler: async (ctx, data) => {
+    handler: async (ctx, data, meta) => {
       const payload = parsePayload(z.object({ ai_job_id: z.string().nullable().optional(), plan: PlanSchema }), data, 'batch.poll');
-      const plan = payload.plan as unknown as WavePlan;
+      const plan = { ...(payload.plan as unknown as WavePlan), aiJobId: (payload.plan as { aiJobId: string | null }).aiJobId ?? payload.ai_job_id ?? meta.aiJobId };
       const store = supabaseStore(ctx.supabase);
       const env = (await import('../ingest/env.ts')).createEnv(ctx, store);
       const summary = await pollWave(env, plan);

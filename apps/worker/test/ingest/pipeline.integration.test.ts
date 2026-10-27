@@ -48,10 +48,32 @@ const TOPIC_MEMBRANA = 'Membrana';
 /** Chooses the canned response for each prompt. Keys come from the task rules text in packages/prompts. */
 function respond(req: MockRequest): MockResponse | undefined {
   const body = req.bodyText;
-  const topic = body.includes('"title": "Membrana"') ? TOPIC_MEMBRANA : TOPIC_ORGANELAS;
+  // bodyText is the JSON request body, so quotes inside the prompt are escaped. The Membrana summary is unique.
+  const topic = body.includes('Membrana plasmática.') ? TOPIC_MEMBRANA : TOPIC_ORGANELAS;
   const isMembrana = topic === TOPIC_MEMBRANA;
   const text = (value: unknown): MockResponse => ({ kind: 'message', message: { text: JSON.stringify(value) } });
 
+  if (body.includes('organize o material em um mapa de conhecimento') && body.includes('Slides Aula 2')) {
+    return text({
+      is_study_material: true,
+      language: 'pt-BR',
+      detected_kind: 'slides',
+      title_suggestion: 'Ribossomos',
+      units: [
+        {
+          key: 'u1',
+          title: 'Síntese de proteínas',
+          summary: 'Onde as proteínas são feitas.',
+          page_start: 1,
+          page_end: 2,
+          match_existing_node_id: null,
+          topics: [
+            { key: 't1', title: 'Ribossomos', summary: 'Sintetizam proteínas.', learning_objectives: ['Explicar a síntese'], page_start: 1, page_end: 2, match_existing_node_id: null },
+          ],
+        },
+      ],
+    });
+  }
   if (body.includes('organize o material em um mapa de conhecimento')) {
     return text({
       is_study_material: true,
@@ -111,9 +133,11 @@ function respond(req: MockRequest): MockResponse | undefined {
     };
   }
   if (body.includes('escreva o glossário do tópico')) {
+    // The glossary prompt carries the key terms, not the topic summary: 'bicamada' is Membrana's key term.
+    const glossaryIsMembrana = body.includes('bicamada');
     return text({
       terms: [
-        isMembrana
+        glossaryIsMembrana
           ? { term: 'Bicamada lipídica', definition: 'Camada dupla de lipídios.', example: null, aliases: [], concept_key: 'c1', source_pages: [{ doc: 'D1', page_start: 3, page_end: 3 }] }
           : { term: 'ATP', definition: 'Molécula que armazena energia.', example: null, aliases: ['adenosina trifosfato'], concept_key: 'c1', source_pages: [{ doc: 'D1', page_start: 1, page_end: 2 }] },
       ],
@@ -184,42 +208,55 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     await pool?.end();
   });
 
-  async function seed(opts: { budgetLimit?: number } = {}) {
-    const userId = randomUUID();
-    await pool.query(`insert into auth.users (id, email) values ($1, $2)`, [userId, `${userId}@teste.invalid`]);
-    await pool.query(
-      `insert into public.profiles (id, display_name, birth_year, birth_month, privacy_notice_version, privacy_accepted_at)
-       values ($1, 'Estudante', 2010, 5, '1', now())`,
-      [userId],
-    );
-    const { rows: subjectRows } = await pool.query<{ id: string }>(
-      `insert into public.subjects (owner_profile_id, created_by, name, color, icon)
-       values ($1, $1, 'Biologia', '#22aa55', 'leaf') returning id`,
-      [userId],
-    );
-    const subjectId = subjectRows[0]!.id;
+  async function seed(opts: { budgetLimit?: number; title?: string; subjectId?: string; userId?: string } = {}) {
+    let userId = opts.userId ?? '';
+    let subjectId = opts.subjectId ?? '';
+    if (!userId) {
+      userId = randomUUID();
+      await pool.query(`insert into auth.users (id, email) values ($1, $2)`, [userId, `${userId}@teste.invalid`]);
+      await pool.query(
+        `insert into public.profiles (id, display_name, birth_year, birth_month, privacy_notice_version, privacy_accepted_at)
+         values ($1, 'Estudante', 2010, 5, '1', now())`,
+        [userId],
+      );
+    }
+    if (!subjectId) {
+      const { rows: subjectRows } = await pool.query<{ id: string }>(
+        `insert into public.subjects (owner_profile_id, created_by, name, color, icon)
+         values ($1, $1, 'Biologia', '#22aa55', 'leaf') returning id`,
+        [userId],
+      );
+      subjectId = subjectRows[0]!.id;
+    }
     const docId = randomUUID();
-    const bytes = await textPdf([
-      ['Mitocôndria produz ATP para a célula.', 'Organelas são estruturas internas.'],
-      ['Organelas incluem ribossomos e retículo.'],
-      ['A membrana plasmática controla a passagem de substâncias.', 'Ela é uma bicamada lipídica.'],
-    ]);
+    const bytes = await textPdf(
+      opts.title
+        ? [['Ribossomos sintetizam proteínas.'], ['O núcleo guarda o DNA.']]
+        : [
+            ['Mitocôndria produz ATP para a célula.', 'Organelas são estruturas internas.'],
+            ['Organelas incluem ribossomos e retículo.'],
+            ['A membrana plasmática controla a passagem de substâncias.', 'Ela é uma bicamada lipídica.'],
+          ],
+    );
     const storagePath = `${subjectId}/${docId}.pdf`;
     const checksum = createHash('sha256').update(bytes).digest('hex');
     await pool.query(
       `insert into public.documents (id, subject_id, uploaded_by, title, kind, storage_path, size_bytes, checksum_sha256, status)
-       values ($1, $2, $3, 'Slides Aula 1', 'slides', $4, $5, $6, 'uploaded')`,
-      [docId, subjectId, userId, storagePath, bytes.byteLength, checksum],
+       values ($1, $2, $3, $4, 'slides', $5, $6, $7, 'uploaded')`,
+      [docId, subjectId, userId, opts.title ?? 'Slides Aula 1', storagePath, bytes.byteLength, checksum],
     );
-    await pool.query(`insert into public.push_tokens (user_id, token, device_id) values ($1, $2, 'device-1')`, [userId, `ExponentPushToken[${userId.slice(0, 8)}]`]);
-    if (opts.budgetLimit !== undefined) {
-      await pool.query(
-        `insert into private.ai_budgets (scope_type, scope_id, period_type, period_start, limit_micro_usd)
-         values ('user', $1, 'day', (now() at time zone 'America/Sao_Paulo')::date, $2)
-         on conflict do nothing`,
-        [userId, opts.budgetLimit],
-      );
-    }
+    await pool.query(
+      `insert into public.push_tokens (user_id, token, device_id) values ($1, $2, $3) on conflict do nothing`,
+      [userId, `ExponentPushToken[${userId.slice(0, 8)}]`, `device-${docId.slice(0, 8)}`],
+    );
+    // The user's daily budget. The default placeholder ($1) is smaller than the conservative reservation for a
+    // Batch wave of this size, so the happy path gets a generous row; the budget test sets it to zero.
+    await pool.query(
+      `insert into private.ai_budgets (scope_type, scope_id, period_type, period_start, limit_micro_usd)
+       values ('user', $1, 'day', (now() at time zone 'America/Sao_Paulo')::date, $2)
+       on conflict do nothing`,
+      [userId, opts.budgetLimit ?? 1_000_000_000],
+    );
     return { userId, subjectId, docId, storagePath, bytes };
   }
 
@@ -247,27 +284,19 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       },
     });
     registry = new JobRegistry({ backend, pool, supabase: fakeSupabase(store), claude, push, log, now });
-    return { backend, registry, expo };
+    return { backend, registry, expo, push };
   }
 
   it('runs S0–S4 for a text PDF and writes the knowledge map, content and usage rows', async () => {
     const store = new FakeObjectStore();
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
-    const { backend, registry, expo } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push_placeholder(registry))]);
+    const { backend, registry, expo, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
     const requestsBefore = mock.requests.length;
 
     await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
     await backend.drain(4000);
-    if (process.env.DEBUG_INT) {
-      console.log('SENT', backend.sent.map((s) => s.name), 'PENDING', backend.pending.length);
-      console.log('JOBS', (await pool.query(`select type, status, stage, error_code, error_message_key from public.ai_jobs where document_id = $1`, [docId])).rows);
-      console.log('DOC', (await pool.query(`select status, error_code from public.documents where id = $1`, [docId])).rows);
-      console.log('USAGE', (await pool.query(`select task, count(*) from public.ai_usage where document_id = $1 group by task`, [docId])).rows);
-      console.log('NODES', (await pool.query(`select kind, content_status, parent_id is null as root from public.knowledge_nodes where origin_document_id = $1`, [docId])).rows);
-      console.log('FAILED', backend.failedJobs);
-    }
     expect(backend.failedJobs).toEqual([]);
 
     const doc = await pool.query<{ status: string; error_code: string | null; page_count: number }>(
@@ -318,8 +347,8 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     }
 
     const usage = await pool.query<{ task: string; batch: boolean; n: string }>(
-      `select task, batch, count(*)::text as n from public.ai_usage where document_id = $1 group by task, batch order by task`,
-      [docId],
+      `select task, batch, count(*)::text as n from public.ai_usage where subject_id = $1 group by task, batch order by task`,
+      [subjectId],
     );
     const tasks = usage.rows.map((r) => r.task);
     expect(tasks).toEqual(expect.arrayContaining(['ingest.outline', 'ingest.topicDetail', 'ingest.prerequisites', 'notes.tldr', 'cards.generate', 'questions.generate']));
@@ -353,12 +382,92 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     expect(mock.requests.length).toBe(callsBefore);
   }, 180_000);
 
+  it('re-runs a refused batch item on the standard API and still writes its output', async () => {
+    const store = new FakeObjectStore();
+    const { userId, subjectId, docId, storagePath, bytes } = await seed();
+    store.put('documents', storagePath, bytes, 'application/pdf');
+    // The Organelas glossary is refused inside the Batch (stop_reason refusal). The standard-API retry is not
+    // a batch item (no custom_id), so it gets the normal answer.
+    mock.setHandler((req) => {
+      if (req.customId && req.bodyText.includes('escreva o glossário do tópico') && !req.bodyText.includes('bicamada')) {
+        return { kind: 'message', message: { stop_reason: 'refusal', refusal_category: 'bio', content: [] } };
+      }
+      return respond(req);
+    });
+    try {
+      const { backend, registry, push } = runtime(store);
+      await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+      await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
+      await backend.drain(4000);
+      expect(backend.failedJobs).toEqual([]);
+
+      const glossary = await pool.query<{ term: string }>(`select term from public.glossary_terms where subject_id = $1 order by term`, [subjectId]);
+      expect(glossary.rows.map((r) => r.term)).toEqual(['ATP', 'Bicamada lipídica']);
+      const rerun = await pool.query<{ n: string }>(
+        `select count(*)::text as n from public.ai_usage where subject_id = $1 and task = 'glossary.define' and batch = false`,
+        [subjectId],
+      );
+      expect(Number(rerun.rows[0]?.n)).toBe(1);
+      const doc = await pool.query<{ status: string }>(`select status from public.documents where id = $1`, [docId]);
+      expect(doc.rows[0]?.status).toBe('ready');
+    } finally {
+      mock.setHandler(respond);
+    }
+  }, 180_000);
+
+  it('merges a second document into the existing map without changing existing nodes', async () => {
+    const store = new FakeObjectStore();
+    const first = await seed();
+    store.put('documents', first.storagePath, first.bytes, 'application/pdf');
+    const { backend, registry, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
+    await registry.enqueue('ingest.document', { document_id: first.docId, mode: 'full', user_id: first.userId });
+    await backend.drain(4000);
+    const before = await pool.query<{ id: string; title: string; position: number; parent_id: string | null }>(
+      `select id, title, position, parent_id from public.knowledge_nodes where subject_id = $1 and kind in ('unit','topic') order by title`,
+      [first.subjectId],
+    );
+
+    const second = await seed({ title: 'Slides Aula 2', subjectId: first.subjectId, userId: first.userId });
+    store.put('documents', second.storagePath, second.bytes, 'application/pdf');
+    await registry.enqueue('ingest.merge', { document_id: second.docId, user_id: first.userId });
+    await backend.drain(4000);
+    expect(backend.failedJobs).toEqual([]);
+
+    const doc = await pool.query<{ status: string }>(`select status from public.documents where id = $1`, [second.docId]);
+    expect(doc.rows[0]?.status).toBe('ready');
+    const after = await pool.query<{ id: string; title: string; position: number; parent_id: string | null }>(
+      `select id, title, position, parent_id from public.knowledge_nodes where subject_id = $1 and kind in ('unit','topic') and origin_document_id = $2 order by title`,
+      [first.subjectId, second.docId],
+    );
+    expect(after.rows.map((r) => r.title).sort()).toEqual(['Ribossomos', 'Síntese de proteínas']);
+    // The existing nodes keep their ids, titles and positions.
+    const all = await pool.query<{ id: string; title: string; position: number }>(
+      `select id, title, position from public.knowledge_nodes where subject_id = $1 and kind in ('unit','topic') and origin_document_id = $2`,
+      [first.subjectId, first.docId],
+    );
+    for (const row of before.rows) {
+      expect(all.rows.find((r) => r.id === row.id)).toMatchObject({ title: row.title, position: row.position });
+    }
+    // The new unit goes after the existing one (ING-03.6).
+    const newUnit = await pool.query<{ position: number }>(
+      `select position from public.knowledge_nodes where subject_id = $1 and kind = 'unit' and title = 'Síntese de proteínas'`,
+      [first.subjectId],
+    );
+    expect(newUnit.rows[0]?.position).toBe(1);
+    const newTopicContent = await pool.query<{ content_status: string }>(
+      `select content_status from public.knowledge_nodes where subject_id = $1 and title = 'Ribossomos' and kind = 'topic'`,
+      [first.subjectId],
+    );
+    expect(newTopicContent.rows[0]?.content_status).toBe('ready');
+  }, 180_000);
+
   it('parks the document as waiting_budget when the user day budget is exhausted', async () => {
     const store = new FakeObjectStore();
     const { userId, docId, storagePath, bytes } = await seed({ budgetLimit: 0 });
     store.put('documents', storagePath, bytes, 'application/pdf');
-    const { backend, registry } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push_placeholder(registry))]);
+    const { backend, registry, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push)]);
 
     await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
     await backend.drain(200);
@@ -371,12 +480,3 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
   }, 120_000);
 });
 
-/** Push service stub for the built-in jobs in tests that do not assert on notifications. */
-function push_placeholder(registry: JobRegistry) {
-  return {
-    push: async () => 'sent' as const,
-    deliverDeferred: async () => 'sent' as const,
-    checkReceipts: async () => 0,
-    registry,
-  } as unknown as ReturnType<typeof createPushService>;
-}

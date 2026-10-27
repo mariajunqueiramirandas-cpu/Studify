@@ -9,7 +9,7 @@ import type { JobContext, JobDefinition } from './types.ts';
 import { PermanentJobError } from './errors.ts';
 import { applyProgress, ensureAiJob, isUuid, type ProgressPatch } from './progress.ts';
 import type { PushService, PushMessage } from './push.ts';
-import type { QueueBackend, QueueJob, QueueOptions, SendOptions } from './queue.ts';
+import { policyFor, type QueueBackend, type QueueJob, type QueueOptions, type SendOptions } from './queue.ts';
 import type { Logger } from './logger.ts';
 
 export interface RuntimeDeps {
@@ -49,7 +49,7 @@ export class JobRegistry {
   /** Enqueues a job. Creates the queue with default options when no module registered it. */
   async enqueue(name: string, data: Record<string, unknown>, opts?: SendOptions): Promise<string | null> {
     const def = this.definitions.get(name);
-    await this.ensureQueue(name, def ? optionsFor(def) : defaultOptions());
+    await this.ensureQueue(name, def ? optionsFor(def) : defaultOptions(name));
     return this.deps.backend.send(name, data, opts);
   }
 
@@ -123,11 +123,12 @@ export function optionsFor(def: JobDefinition<any>): QueueOptions {
     retryDelay: 10,
     retryBackoff: def.retryBackoff ?? true,
     expireInSeconds: def.expireInSeconds ?? DEFAULT_EXPIRE_SECONDS,
+    policy: policyFor(def.name),
   };
 }
 
-function defaultOptions(): QueueOptions {
-  return { retryLimit: DEFAULT_RETRY_LIMIT, retryDelay: 10, retryBackoff: true, expireInSeconds: DEFAULT_EXPIRE_SECONDS };
+function defaultOptions(name: string): QueueOptions {
+  return { retryLimit: DEFAULT_RETRY_LIMIT, retryDelay: 10, retryBackoff: true, expireInSeconds: DEFAULT_EXPIRE_SECONDS, policy: policyFor(name) };
 }
 
 function describe(err: unknown): { name: string; code?: string; message: string } {

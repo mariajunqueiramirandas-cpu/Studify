@@ -1,6 +1,6 @@
 // Streak rollover inputs (MOT-01, learning-engine §17.3): per study day activity into DailyActivity
 // rows, then the shared evaluateStreak state machine. Pure; the job does the reads and writes.
-import { autoRestDays, evaluateStreak, isCountedDay, type DailyActivity, type StreakState } from '@studify/shared';
+import { autoRestDays, evaluateStreak, type DailyActivity, type StreakState } from '@studify/shared';
 import { addDays } from './time.ts';
 
 export interface DayFacts {
@@ -52,8 +52,4 @@ export function rollStreak(state: StreakState, days: readonly DailyActivity[]): 
   return evaluateStreak(days, state);
 }
 
-export function countedFlag(day: DailyActivity): boolean {
-  return isCountedDay(day);
-}
 
-export type { DailyActivity, StreakState };

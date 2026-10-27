@@ -68,7 +68,8 @@ export async function handleMasteryRecompute(ctx: JobContext, data: Record<strin
     }
   }
 
-  const rows = affected.map((id) => {
+  // mastery.mastery is NOT NULL (0–1): nodes with no evidence or cards have no row (data-model §5.4).
+  const rows = affected.filter((id) => (masteries.get(id)?.mastery ?? null) !== null).map((id) => {
     const m = masteries.get(id);
     return {
       user_id: payload.user_id,

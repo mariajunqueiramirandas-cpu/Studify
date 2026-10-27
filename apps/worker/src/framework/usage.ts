@@ -1,6 +1,6 @@
 // UsageSink over public.ai_usage (ai-pipeline §9.2). The table has fewer columns than AiUsageRow:
 // budget_class, mode, ttft, batch_id, custom_id, attempt and error_code are not stored. Batch
-// reconciliation therefore relies on request ids and the pg-boss job logs (see the worker README).
+// reconciliation therefore relies on request ids and the job logs.
 import type { AiUsageRow, UsageSink } from '@studify/ai';
 import type { Sql } from './db.ts';
 import type { Logger } from './logger.ts';

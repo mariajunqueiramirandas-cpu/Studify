@@ -35,7 +35,7 @@ export function addEdgeIfAcyclic(edges: Map<string, Set<string>>, node: string, 
 
 export async function runPrerequisites(
   ctx: JobContext,
-  input: { subjectId: string; subjectName: string; ownerClassGroupId: string | null; userId: string | null; aiJobId: string | null; uploadedBy: string | null },
+  input: { subjectId: string; subjectName: string; ownerClassGroupId: string | null; userId: string | null; aiJobId: string | null; uploadedBy: string | null; documentId: string | null },
 ): Promise<PrereqResult> {
   const sql: Sql = ctx.db;
   const nodes = await listNodes(sql, input.subjectId, true);
@@ -54,7 +54,7 @@ export async function runPrerequisites(
 
   const built = getTask('ingest.prerequisites').build({ subjectName: input.subjectName, nodes: promptNodes });
   const budget = budgetFor(
-    { subjectId: input.subjectId, ownerClassGroupId: input.ownerClassGroupId, uploadedBy: input.uploadedBy },
+    { subjectId: input.subjectId, ownerClassGroupId: input.ownerClassGroupId, uploadedBy: input.uploadedBy, documentId: input.documentId },
     { jobId: input.aiJobId, feature: 'ING-03', userId: input.userId },
   );
   const prepared = prepareCall('ingest.prerequisites', built, budget, []);

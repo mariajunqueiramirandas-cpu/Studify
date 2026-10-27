@@ -18,6 +18,24 @@ const SchedulePayload = z.object({ schedule_import_id: z.string().min(1) });
 
 const normalizeTeacher = (name: string | null | undefined): string | null => (name ? name.trim().toLowerCase().replace(/\s+/g, ' ') : null);
 
+/**
+ * teacher_profiles is unique on (subject_id, coalesce(teacher_key, '')), an expression index that an
+ * upsert cannot target, so reads and writes go through a plain lookup: NULL keys match with IS NULL.
+ */
+function teacherProfileQuery(ctx: JobContext, subjectId: string, teacherKey: string | null, columns: string) {
+  const query = ctx.supabase.from('teacher_profiles').select(columns).eq('subject_id', subjectId);
+  return teacherKey === null ? query.is('teacher_key', null) : query.eq('teacher_key', teacherKey);
+}
+
+async function writeTeacherProfile(ctx: JobContext, subjectId: string, teacherKey: string | null, values: Record<string, unknown>): Promise<void> {
+  const found = unwrap(await teacherProfileQuery(ctx, subjectId, teacherKey, 'id').maybeSingle(), 'teacher_profiles') as { id: string } | null;
+  if (found) {
+    unwrap(await ctx.supabase.from('teacher_profiles').update(values).eq('id', found.id), 'teacher_profiles');
+    return;
+  }
+  unwrap(await ctx.supabase.from('teacher_profiles').insert({ subject_id: subjectId, teacher_key: teacherKey, version: 1, ...values }), 'teacher_profiles');
+}
+
 export interface AnalyzeOutcome {
   status: 'ready' | 'skipped';
   questions: number;
@@ -155,23 +173,14 @@ export async function handleAnalyzePastTest(ctx: JobContext, raw: Record<string,
         ctx.log.warn({ status: profileRun.result.status }, 'pp.analyze_past_test: teacher patterns not stored');
       }
     }
-    unwrap(
-      await ctx.supabase.from('teacher_profiles').upsert(
-        {
-          subject_id: doc.subject_id,
-          teacher_key: teacherKey,
-          teacher_display: doc.teacher_name ?? extraction.test.teacher_guess,
-          source_document_ids: tests.map((t) => t.id),
-          n_tests: tests.length,
-          profile: { statistics, patterns, style_notes: styleNotes, typical_command_verbs: verbs },
-          confidence: tests.length >= 3 ? 'high' : tests.length >= 2 ? 'mid' : 'low',
-          computed_at: ctx.now().toISOString(),
-          version: 1,
-        },
-        { onConflict: 'subject_id,teacher_key' },
-      ),
-      'teacher_profiles',
-    );
+    await writeTeacherProfile(ctx, doc.subject_id, teacherKey, {
+      teacher_display: doc.teacher_name ?? extraction.test.teacher_guess,
+      source_document_ids: tests.map((t) => t.id),
+      n_tests: tests.length,
+      profile: { statistics, patterns, style_notes: styleNotes, typical_command_verbs: verbs },
+      confidence: tests.length >= 3 ? 'high' : tests.length >= 2 ? 'mid' : 'low',
+      computed_at: ctx.now().toISOString(),
+    });
   }
   unwrap(await ctx.supabase.from('documents').update({ status: 'ready', error_code: null }).eq('id', doc.id), 'documents');
   await ctx.progress({ stage: 'done', status: 'succeeded', items_total: extraction.questions.length, items_done: rows.length });
@@ -218,7 +227,7 @@ export async function handleGeneratePredicted(ctx: JobContext, raw: Record<strin
 
   const teacherKey = normalizeKey(exam.teacher_name);
   const profileRow = unwrap(
-    await ctx.supabase.from('teacher_profiles').select('profile,n_tests').eq('subject_id', exam.subject_id).eq('teacher_key', teacherKey).maybeSingle(),
+    await teacherProfileQuery(ctx, exam.subject_id, teacherKey, 'profile,n_tests').maybeSingle(),
     'teacher_profiles',
   ) as { profile: { statistics?: { pointsShare?: Record<string, number>; questionsPerTest?: number; typeMix?: Record<string, number>; bloomMix?: Record<string, number>; difficultyMean?: number }; patterns?: unknown } ; n_tests: number } | null;
   const stats = profileRow?.profile.statistics;
