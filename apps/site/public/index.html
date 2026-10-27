@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Studify</title>
+  <meta name="description" content="O Studify transforma os PDFs das suas aulas em resumos, cartões e quizzes, e monta o plano até a prova.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Nunito:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <span class="brand"><span class="brand-mark" aria-hidden="true">S</span>Studify</span>
+    <section>
+      <h1>Seus PDFs viram resumos, cartões e quizzes.</h1>
+      <p>Mande o material da aula e o Studify monta o plano até a prova, com revisões no tempo certo.</p>
+    </section>
+    <a class="btn btn-primary hidden" id="download" href="#">Baixar o app (Android)</a>
+    <details>
+      <summary>Como instalar no Android</summary>
+      <ol>
+        <li>Toque em <strong>Baixar o app (Android)</strong> e abra o arquivo quando o download terminar.</li>
+        <li>Se o celular pedir, ative <strong>Permitir desta fonte</strong> nas configurações.</li>
+        <li>Volte e toque em <strong>Instalar</strong>.</li>
+      </ol>
+    </details>
+    <p class="note">Por enquanto o Studify é só para Android e funciona por convite.</p>
+    <footer>studify.vendua.com.br</footer>
+  </main>
+  <script src="/config.js"></script>
+  <script>
+    (function () {
+      var url = (window.STUDIFY_SITE || {}).apkUrl;
+      var a = document.getElementById('download');
+      if (url) { a.href = url; a.classList.remove('hidden'); }
+    })();
+  </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import { ApiError, callFunction } from '../../../api/functions';
 import { ActionBar, Banner, Button, Chip, ChipGroup, Screen, Stepper, SwitchRow, Text, TextField } from '../../../components';
 import { useOnboarding } from '../../../features/auth/onboarding';
 import { PRIVACY_NOTICE_VERSION, SCHOOL_YEARS, useSession } from '../../../features/auth/session';
+import { sitePage } from '../../../features/common/links';
 import { options, t } from '../../../i18n';
 
 interface SignupCompleteRes {
@@ -74,7 +75,7 @@ export default function ProfileStep() {
           <Chip key={y} label={yearLabels[i] ?? y} selected={draft.schoolYear === y} onPress={() => draft.set({ schoolYear: y })} />
         ))}
       </ChipGroup>
-      <Button variant="text" icon="document-text-outline" label={t('onb.profile.privacy_open')} onPress={() => void Linking.openURL(`${process.env.EXPO_PUBLIC_BASE_URL ?? 'https://studify.app'}/privacidade`)} />
+      <Button variant="text" icon="document-text-outline" label={t('onb.profile.privacy_open')} onPress={() => void Linking.openURL(sitePage('privacidade'))} />
       <SwitchRow label={t('onb.profile.privacy')} value={accepted} onChange={setAccepted} />
     </Screen>
   );

@@ -8,6 +8,7 @@ import { useSession } from '../../features/auth/session';
 import { battleAnswer, battleControl, battleJoin, type BattleStatus, type QuestionPublic } from '../../features/class/api';
 import type { QuestionResponse, QuestionRow } from '../../features/practice/types';
 import { t } from '../../i18n';
+import { battleJoinLink } from '../../features/common/links';
 import { space } from '../../theme';
 
 interface BattleState {
@@ -122,7 +123,7 @@ export default function BattleScreen() {
               <Text variant="display">{t('battle.pin', { pin: pinParam })}</Text>
               {isHost ? (
                 <View style={{ padding: space.md, backgroundColor: '#FFFFFF', borderRadius: 12 }}>
-                  <QRCode value={`${process.env.EXPO_PUBLIC_BASE_URL ?? 'studify:/'}/b/${pinParam}`} size={180} />
+                  <QRCode value={battleJoinLink(String(pinParam))} size={180} />
                 </View>
               ) : null}
             </View>

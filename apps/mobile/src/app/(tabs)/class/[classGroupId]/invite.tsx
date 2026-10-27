@@ -6,14 +6,9 @@ import { ActionBar, Button, Card, Screen, Text, useOverlay } from '../../../../c
 import { formatInviteCode } from '../../../../features/auth/onboarding';
 import { rotateInvite, useClassGroup, useInvite } from '../../../../features/class/api';
 import { longDate } from '../../../../features/common/format';
+import { classInviteLink } from '../../../../features/common/links';
 import { t } from '../../../../i18n';
 import { space, useTheme } from '../../../../theme';
-
-function inviteLink(code: string): string {
-  // D-05: HTTPS App Link once a domain exists (WhatsApp doesn't linkify custom schemes).
-  const base = process.env.EXPO_PUBLIC_BASE_URL;
-  return base ? `${base.replace(/\/$/, '')}/c/${code}` : `studify://class/join?code=${code}`;
-}
 
 /** S-TUR-06 Convidar: code, QR, WhatsApp, copy link (SOC-01.3–01.4, SOC-09.5). */
 export default function Invite() {
@@ -23,7 +18,7 @@ export default function Invite() {
   const overlay = useOverlay();
   const { colors } = useTheme();
   const code = invite.data?.code ?? '';
-  const link = code ? inviteLink(code) : '';
+  const link = code ? classInviteLink(code) : '';
   const message = t('class.invite.whatsapp', { name: cg.data?.group?.name ?? '', link, code: formatInviteCode(code) });
 
   return (

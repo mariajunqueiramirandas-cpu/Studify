@@ -5,6 +5,7 @@ import { supabase } from '../../api/supabase';
 import { ActionBar, Banner, Button, Screen, Spacer, Text, TextField, useOnline, useOverlay } from '../../components';
 import { signInWithGoogle, googleAvailable } from '../../features/auth/google';
 import { t } from '../../i18n';
+import { sitePage } from '../../features/common/links';
 import { space } from '../../theme';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -58,7 +59,7 @@ export default function SignIn() {
               <Button variant="text" label={t('global.back')} onPress={() => setMode('choose')} />
             </>
           )}
-          <Button variant="text" compact label={t('auth.privacy_link')} onPress={() => void Linking.openURL(`${process.env.EXPO_PUBLIC_BASE_URL ?? 'https://studify.app'}/privacidade`)} />
+          <Button variant="text" compact label={t('auth.privacy_link')} onPress={() => void Linking.openURL(sitePage('privacidade'))} />
         </ActionBar>
       }
     >

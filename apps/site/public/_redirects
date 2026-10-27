@@ -1,0 +1,5 @@
+# Netlify / Cloudflare Pages: every link route renders the same landing page.
+/c/*  /link.html  200
+/i/*  /link.html  200
+/q/*  /link.html  200
+/b/*  /link.html  200

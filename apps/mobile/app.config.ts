@@ -2,10 +2,10 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 // mobile-app.md §17: one config, three environments (development / preview / production).
 const ENV = (process.env.EXPO_PUBLIC_ENV ?? 'development') as 'development' | 'preview' | 'production';
-// D-05: the HTTPS domain for invite links is still an open owner decision. App Links are
-// only declared once EXPO_PUBLIC_BASE_URL is set; custom-scheme links work either way.
-const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL;
-const appLinkHost = BASE_URL ? new URL(BASE_URL).host : undefined;
+// D-05 (2026-10-27): public links live on studify.vendua.com.br (override with EXPO_PUBLIC_BASE_URL).
+// Verified App Links need https://<host>/.well-known/assetlinks.json listing this build's signing key.
+const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL || 'https://studify.vendua.com.br';
+const appLinkHost = new URL(BASE_URL).host;
 
 const nameSuffix = ENV === 'production' ? '' : ENV === 'preview' ? ' (prévia)' : ' (dev)';
 const packageSuffix = ENV === 'production' ? '' : `.${ENV}`;
@@ -43,16 +43,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.SCHEDULE_EXACT_ALARM',
       'android.permission.RECORD_AUDIO',
     ],
-    intentFilters: appLinkHost
-      ? [
-          {
-            action: 'VIEW',
-            autoVerify: true,
-            data: ['/c', '/i', '/q', '/b'].map((pathPrefix) => ({ scheme: 'https', host: appLinkHost, pathPrefix })),
-            category: ['BROWSABLE', 'DEFAULT'],
-          },
-        ]
-      : [],
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        data: ['/c', '/i', '/q', '/b'].map((pathPrefix) => ({ scheme: 'https', host: appLinkHost, pathPrefix })),
+        category: ['BROWSABLE', 'DEFAULT'],
+      },
+    ],
   },
   plugins: [
     'expo-router',

@@ -3,9 +3,10 @@ import { Linking } from 'react-native';
 import { BottomSheet, Button, Card, ListItem, Screen, TextField, useOverlay } from '../../../components';
 import { useSession } from '../../../features/auth/session';
 import { sendFeedback } from '../../../features/profile/api';
+import { PUBLIC_BASE_URL } from '../../../features/common/links';
 import { t } from '../../../i18n';
 
-const BASE = process.env.EXPO_PUBLIC_BASE_URL ?? 'https://studify.app';
+const BASE = PUBLIC_BASE_URL;
 
 /** S-PERF-15 Ajuda e sobre (SP-13, SP-15, PLT-06.5 feedback). */
 export default function Help() {
