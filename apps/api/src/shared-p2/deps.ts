@@ -1,5 +1,6 @@
 // Phase 2 dependency seam. Extends the shared Deps (supabase/functions/_shared/deps.ts) with what the
 // Turma, duel and battle functions need beyond the base pipeline. Tests build fakes for every member.
+import type { TtsProvider } from '@studify/speech';
 import type { Deps } from '../shared/deps.ts';
 
 /** Runs an RPC as the signed-in user (anon key + user JWT), so auth.uid() is the caller (join_class_group). */
@@ -38,4 +39,10 @@ export interface P2Deps extends Deps {
   /** Cryptographically random bytes (share tokens, guardian tokens). */
   randomBytes(n: number): Uint8Array;
   guardianMail?: GuardianMail;
+  /** Cloud TTS for ✋ answers (INT-01.8). Null or unset: the app reads them with on-device TTS (INT-01.11). */
+  tts?: TtsProvider | null;
+  /** Signed download URL of a stored object (`bucket/path`), or null when it cannot be signed. */
+  signedUrl?: (path: string, ttlSeconds: number) => Promise<string | null>;
+  /** Uploads bytes with a content type (audio answers). */
+  uploadObject?: (path: string, bytes: Uint8Array, contentType: string) => Promise<void>;
 }

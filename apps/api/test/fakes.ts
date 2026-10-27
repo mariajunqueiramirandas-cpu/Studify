@@ -145,6 +145,14 @@ export class FakeDb {
           db.objects.set(`${bucket}/${object}`, bytes);
           return { data: { path: object }, error: null };
         },
+        remove: async (objects: string[]) => {
+          for (const object of objects) db.objects.delete(`${bucket}/${object}`);
+          return { data: objects.map((name) => ({ name })), error: null };
+        },
+        createSignedUrl: async (object: string, ttl: number) => {
+          const key = `${bucket}/${object}`;
+          return db.objects.has(key) ? { data: { signedUrl: `https://storage.test/${key}?ttl=${ttl}` }, error: null } : { data: null, error: { message: 'Object not found' } };
+        },
       }),
     };
   }

@@ -6,6 +6,8 @@ import {
   cameraAttemptEvidence,
   canReact,
   decideTopicMatch,
+  firstNumber,
+  sameSolveAnswer,
   editRatio,
   fitLongEdge,
   hintLadderLength,
@@ -103,6 +105,18 @@ describe('course match and hint ladder (§8.3, §8.5)', () => {
     expect(decideTopicMatch([{ node_id: 'a', score: 0.8 }, { node_id: 'b', score: 0.75 }])).toEqual({ kind: 'ambiguous', candidates: ['a', 'b'] });
     expect(decideTopicMatch([{ node_id: 'a', score: 0.3 }])).toEqual({ kind: 'none' });
     expect(decideTopicMatch([])).toEqual({ kind: 'none' });
+  });
+
+  it('compares typed answers by format (CAM-02.4 Tentar responder)', () => {
+    expect(sameSolveAnswer('numeric', '6 N', 'F = 6,0 N')).toBe(true);
+    expect(sameSolveAnswer('numeric', '1.250 kg', '1250')).toBe(true);
+    expect(sameSolveAnswer('numeric', '6 N', '7')).toBe(false);
+    expect(sameSolveAnswer('choice', 'C', 'letra c)')).toBe(true);
+    expect(sameSolveAnswer('choice', 'C', 'B')).toBe(false);
+    expect(sameSolveAnswer('expression', 'x = 2a + 2', '2(a+1)')).toBe(true);
+    expect(sameSolveAnswer('text', 'Mitocôndria', 'a mitocondria')).toBe(true);
+    expect(sameSolveAnswer('text', 'Mitocôndria', '')).toBe(false);
+    expect(firstNumber('x = -3,5')).toBe(-3.5);
   });
 
   it('shortens the ladder for trivial questions and classifies attempts (CAM-02.10)', () => {

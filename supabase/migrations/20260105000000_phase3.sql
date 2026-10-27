@@ -50,6 +50,13 @@ create table public.camera_captures (
 create index camera_captures_user on public.camera_captures (user_id, created_at desc) where deleted_at is null;
 create index camera_captures_expiry on public.camera_captures (expires_at) where not saved and deleted_at is null;
 
+-- PRA-07.1 "Tenho uma questão da professora": an essay answer to a question that is not in the bank keeps the
+-- question here ({question_text, max_points, subject_id, node_id}); the grader builds the rubric (PRA-07.3).
+alter table public.essays
+  add column prompt jsonb check (prompt is null or jsonb_typeof(prompt) = 'object');
+grant insert (prompt) on public.essays to authenticated;
+grant update (prompt) on public.essays to authenticated;
+
 -- The forward references of the earlier migrations now get their foreign keys.
 alter table public.questions
   add constraint questions_source_capture_id_fkey foreign key (source_capture_id)

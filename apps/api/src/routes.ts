@@ -10,6 +10,8 @@ import { handler as battleControl } from './functions/battle-control.ts';
 import { handler as battleJoin } from './functions/battle-join.ts';
 import { handler as cardDraft } from './functions/card-draft.ts';
 import { handler as cardsGenerateMore } from './functions/cards-generate-more.ts';
+import { handler as captureAct } from './functions/capture-act.ts';
+import { handler as captureAnalyze } from './functions/capture-analyze.ts';
 import { handler as duelAnswer } from './functions/duel-answer.ts';
 import { handler as duelCreate } from './functions/duel-create.ts';
 import { handler as duelNext } from './functions/duel-next.ts';
@@ -17,6 +19,7 @@ import { handler as duelRespond } from './functions/duel-respond.ts';
 import { handler as explain } from './functions/explain.ts';
 import { handler as flagCreate } from './functions/flag-create.ts';
 import { handler as gradeAnswer } from './functions/grade-answer.ts';
+import { handler as gradeEssay } from './functions/grade-essay.ts';
 import { handler as guardianLink } from './functions/guardian-link.ts';
 import { handler as ingestRetry } from './functions/ingest-retry.ts';
 import { handler as ingestStart } from './functions/ingest-start.ts';
@@ -24,6 +27,9 @@ import { handler as joinClass } from './functions/join-class.ts';
 import { handler as noteGenerate } from './functions/note-generate.ts';
 import { handler as outlineEdit } from './functions/outline-edit.ts';
 import { handler as planRecompute } from './functions/plan-recompute.ts';
+import { handler as podcastAsk } from './functions/podcast-ask.ts';
+import { handler as podcastCreate } from './functions/podcast-create.ts';
+import { handler as problemCheckWork } from './functions/problem-check-work.ts';
 import { handler as provaProvavelGenerate } from './functions/prova-provavel-generate.ts';
 import { handler as questionsGenerateMore } from './functions/questions-generate-more.ts';
 import { handler as quizCreate } from './functions/quiz-create.ts';
@@ -31,10 +37,14 @@ import { handler as quizShare } from './functions/quiz-share.ts';
 import { handler as quizSharedOpen } from './functions/quiz-shared-open.ts';
 import { handler as quizSubmit } from './functions/quiz-submit.ts';
 import { handler as reportCreate } from './functions/report-create.ts';
+import { handler as roomControl } from './functions/room-control.ts';
 import { handler as scheduleImport } from './functions/schedule-import.ts';
 import { handler as scopeResolve } from './functions/scope-resolve.ts';
 import { handler as signupComplete } from './functions/signup-complete.ts';
 import { handler as syncPush } from './functions/sync-push.ts';
+import { handler as teachingFinish } from './functions/teaching-finish.ts';
+import { handler as teachingStart } from './functions/teaching-start.ts';
+import { handler as teachingTurn } from './functions/teaching-turn.ts';
 import { handler as tutorChat } from './functions/tutor-chat.ts';
 import { handler as uploadPhotos } from './functions/upload-photos.ts';
 import { handler as vesperaPrepare } from './functions/vespera-prepare.ts';
@@ -47,6 +57,8 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['battle-answer', battleAnswer],
   ['battle-control', battleControl],
   ['battle-join', battleJoin],
+  ['capture-act', captureAct],
+  ['capture-analyze', captureAnalyze],
   ['card-draft', cardDraft],
   ['cards-generate-more', cardsGenerateMore],
   ['duel-answer', duelAnswer],
@@ -56,6 +68,7 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['explain', explain],
   ['flag-create', flagCreate],
   ['grade-answer', gradeAnswer],
+  ['grade-essay', gradeEssay],
   ['guardian-link', guardianLink],
   ['ingest-retry', ingestRetry],
   ['ingest-start', ingestStart],
@@ -63,6 +76,9 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['note-generate', noteGenerate],
   ['outline-edit', outlineEdit],
   ['plan-recompute', planRecompute],
+  ['podcast-ask', podcastAsk],
+  ['podcast-create', podcastCreate],
+  ['problem-check-work', problemCheckWork],
   ['prova-provavel-generate', provaProvavelGenerate],
   ['questions-generate-more', questionsGenerateMore],
   ['quiz-create', quizCreate],
@@ -70,10 +86,14 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['quiz-shared-open', quizSharedOpen],
   ['quiz-submit', quizSubmit],
   ['report-create', reportCreate],
+  ['room-control', roomControl],
   ['schedule-import', scheduleImport],
   ['scope-resolve', scopeResolve],
   ['signup-complete', signupComplete],
   ['sync-push', syncPush],
+  ['teaching-finish', teachingFinish],
+  ['teaching-start', teachingStart],
+  ['teaching-turn', teachingTurn],
   ['tutor-chat', tutorChat],
   ['upload-photos', uploadPhotos],
   ['vespera-prepare', vesperaPrepare],

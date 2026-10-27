@@ -16,6 +16,7 @@
     "@studify/ai": "workspace:*",
     "@studify/prompts": "workspace:*",
     "@studify/shared": "workspace:*",
+    "@studify/speech": "workspace:*",
     "@supabase/supabase-js": "^2.118.0",
     "expo-server-sdk": "^8.0.0",
     "pdf-lib": "^1.17.1",

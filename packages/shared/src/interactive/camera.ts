@@ -2,6 +2,8 @@
 // (CAM-00.6), the transcription markers and edit ratio of CAM-03, the course match rule (§8.5) and the hint
 // ladder policy (§8.3). Pure functions over plain pixel buffers, so the app and the server share them.
 import type { CaptureIntent } from '../core/enums.ts';
+import { expressionsEquivalent } from '../practice/expression.ts';
+import { foldAnswer } from '../practice/text.ts';
 
 /** §8.1 thresholds (tunable). */
 export const CAPTURE_QUALITY = {
@@ -253,4 +255,44 @@ export function cameraAttemptEvidence(correct: boolean, hintsRevealed: number, s
   if (!correct) return { solutionViewed: false, score: 0 };
   if (solutionViewed || hintsRevealed >= 3) return { solutionViewed: true, score: 1 };
   return { solutionViewed: false, score: 1 };
+}
+
+/** First number in a free answer ("6 N", "x = 3,5", "1.250 kg"): PT-BR comma decimals, dot thousands. */
+export function firstNumber(text: string): number | null {
+  const match = /-?\d{1,3}(?:\.\d{3})+(?:,\d+)?|-?\d+(?:[.,]\d+)?/.exec(text.replace(/−/g, '-'));
+  if (!match) return null;
+  let raw = match[0];
+  if (/\.\d{3}(?:,|$)/.test(raw) && raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(?:\.\d{3})+$/.test(raw)) raw = raw.replace(/\./g, '');
+  else raw = raw.replace(',', '.');
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * CAM-02.4 "Tentar responder": compares the student's answer with the ladder's final answer by format.
+ * numeric: within 1% (or 1e-6); choice: same letter A–E; expression: equivalent at random points;
+ * text: same folded text, or one contains the other (short answers like "mitocôndria").
+ */
+export function sameSolveAnswer(format: 'numeric' | 'expression' | 'choice' | 'text', expected: string, given: string): boolean {
+  const answer = given.trim();
+  if (!answer) return false;
+  if (format === 'numeric') {
+    const a = firstNumber(answer);
+    const b = firstNumber(expected);
+    if (a === null || b === null) return false;
+    return Math.abs(a - b) <= Math.max(1e-6, 0.01 * Math.abs(b));
+  }
+  if (format === 'choice') {
+    const letter = (t: string) => /\b([A-Ea-e])\b/.exec(t.replace(/[().]/g, ' '))?.[1]?.toUpperCase() ?? null;
+    const a = letter(answer);
+    return a !== null && a === letter(expected);
+  }
+  if (format === 'expression') {
+    const rhs = (t: string) => (t.includes('=') ? t.slice(t.lastIndexOf('=') + 1) : t);
+    return expressionsEquivalent(rhs(answer), rhs(expected));
+  }
+  const a = foldAnswer(answer);
+  const b = foldAnswer(expected);
+  return a.length > 0 && (a === b || (a.length >= 3 && b.includes(a)) || (b.length >= 3 && a.includes(b)));
 }

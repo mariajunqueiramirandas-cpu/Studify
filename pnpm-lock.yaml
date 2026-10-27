@@ -38,6 +38,9 @@ importers:
       '@studify/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@studify/speech':
+        specifier: workspace:*
+        version: link:../../packages/speech
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0(@opentelemetry/api@1.10.0)
@@ -304,6 +307,9 @@ importers:
       '@studify/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@studify/speech':
+        specifier: workspace:*
+        version: link:../../packages/speech
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0(@opentelemetry/api@1.10.0)
@@ -369,6 +375,8 @@ importers:
       fast-check:
         specifier: ^4.10.2
         version: 4.10.2
+
+  packages/speech: {}
 
 packages:
 
