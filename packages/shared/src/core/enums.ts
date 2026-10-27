@@ -645,6 +645,178 @@ export const DELETION_STATUS = ['pending', 'running', 'done', 'failed'] as const
 export type DeletionStatus = (typeof DELETION_STATUS)[number];
 export const DeletionStatusSchema = z.enum(DELETION_STATUS);
 
+// ---------------------------------------------------------------- camera, interactive learning, rooms (§5.7–5.8, Phase 3)
+
+// CAM-00.2: what the student wants from the photo.
+export const CAPTURE_INTENT = ['explain', 'solve', 'add_to_subject', 'grade_answer', 'grade_essay'] as const;
+export type CaptureIntent = (typeof CAPTURE_INTENT)[number];
+export const CaptureIntentSchema = z.enum(CAPTURE_INTENT);
+
+// CAM-01.1 Step A classification.
+export const CAPTURE_CONTENT_TYPE = ['book_page', 'whiteboard', 'handwritten_notes', 'exercise', 'essay', 'other'] as const;
+export type CaptureContentType = (typeof CAPTURE_CONTENT_TYPE)[number];
+export const CaptureContentTypeSchema = z.enum(CAPTURE_CONTENT_TYPE);
+
+export const CAPTURE_STATUS = ['queued', 'processing', 'ready', 'failed'] as const;
+export type CaptureStatus = (typeof CAPTURE_STATUS)[number];
+export const CaptureStatusSchema = z.enum(CAPTURE_STATUS);
+
+// INT-01.2: Resumão, Aprofundado, Revisão pra prova.
+export const PODCAST_STYLE = ['overview', 'deep', 'exam_review'] as const;
+export type PodcastStyle = (typeof PODCAST_STYLE)[number];
+export const PodcastStyleSchema = z.enum(PODCAST_STYLE);
+
+// data-model §5.8 (api §4.8): 5, 10 or 15 minutes. Numeric, so not part of the CHECK registry below.
+export const PODCAST_LENGTHS = [5, 10, 15] as const;
+export type PodcastLength = (typeof PODCAST_LENGTHS)[number];
+
+export const PODCAST_STATUS = ['queued', 'scripting', 'synthesizing', 'ready', 'failed'] as const;
+export type PodcastStatus = (typeof PODCAST_STATUS)[number];
+export const PodcastStatusSchema = z.enum(PODCAST_STATUS);
+
+// INT-01.8, WEL-04.9: how a question reached the server (the text of on-device STT, or typed).
+export const VOICE_INPUT_MODE = ['voice', 'text'] as const;
+export type VoiceInputMode = (typeof VOICE_INPUT_MODE)[number];
+export const VoiceInputModeSchema = z.enum(VOICE_INPUT_MODE);
+
+// INT-02.2: Rápido (6 turns) or Completo (12 turns).
+export const TEACHING_LENGTH = ['short', 'full'] as const;
+export type TeachingLength = (typeof TEACHING_LENGTH)[number];
+export const TeachingLengthSchema = z.enum(TEACHING_LENGTH);
+
+export const TEACHING_STATUS = ['active', 'finished', 'abandoned'] as const;
+export type TeachingStatus = (typeof TEACHING_STATUS)[number];
+export const TeachingStatusSchema = z.enum(TEACHING_STATUS);
+
+// SOC-05 study rooms.
+export const ROOM_STATUS = ['open', 'closed'] as const;
+export type RoomStatus = (typeof ROOM_STATUS)[number];
+export const RoomStatusSchema = z.enum(ROOM_STATUS);
+
+// SOC-05.2: presence shows what the member studies, or only "Estudando".
+export const ROOM_STATUS_MODE = ['auto', 'hidden'] as const;
+export type RoomStatusMode = (typeof ROOM_STATUS_MODE)[number];
+export const RoomStatusModeSchema = z.enum(ROOM_STATUS_MODE);
+
+// SOC-05.5: the only interaction in a room.
+export const ROOM_REACTIONS = ['👏', '🔥', '💪', '☕', '😴', '🎉'] as const;
+export type RoomReaction = (typeof ROOM_REACTIONS)[number];
+export const RoomReactionSchema = z.enum(ROOM_REACTIONS);
+
+// ---------------------------------------------------------------- ENEM mode and Argumentação (§5.10, Phase 4)
+
+// System-owned subjects that hold global content (the ENEM bank, Atualidades questions).
+export const SYSTEM_SUBJECT_KIND = ['enem_bank', 'atualidades'] as const;
+export type SystemSubjectKind = (typeof SYSTEM_SUBJECT_KIND)[number];
+
+// ENM-08.1: dates confirmed by the INEP edital (with a verification stamp) or provisional.
+export const ENEM_DATES_STATUS = ['official', 'provisional'] as const;
+export type EnemDatesStatus = (typeof ENEM_DATES_STATUS)[number];
+
+export const ENEM_APPLICATION = ['regular', 'ppl', 'other'] as const;
+export type EnemApplication = (typeof ENEM_APPLICATION)[number];
+export const EnemApplicationSchema = z.enum(ENEM_APPLICATION);
+
+export const ENEM_LANGUAGE = ['en', 'es'] as const;
+export type EnemLanguage = (typeof ENEM_LANGUAGE)[number];
+
+export const ENEM_ANSWER_KEY = ['A', 'B', 'C', 'D', 'E'] as const;
+export type EnemAnswerKey = (typeof ENEM_ANSWER_KEY)[number];
+export const EnemAnswerKeySchema = z.enum(ENEM_ANSWER_KEY);
+
+// ENM-02.9: an imported item is published only after review.
+export const ENEM_REVIEW_STATUS = ['ok', 'needs_review'] as const;
+export type EnemReviewStatus = (typeof ENEM_REVIEW_STATUS)[number];
+
+export const ENEM_EXPLANATION_STATUS = ['pending', 'ok', 'flagged'] as const;
+export type EnemExplanationStatus = (typeof ENEM_EXPLANATION_STATUS)[number];
+
+// Spec 09 §8.4.1: `std` is the N(0,1) scale; `enem` is the published 500/100 scale (converted before use).
+export const TRI_PARAM_SCALE = ['std', 'enem'] as const;
+export type TriParamScale = (typeof TRI_PARAM_SCALE)[number];
+
+export const TOPIC_TREND = ['up', 'flat', 'down'] as const;
+export type TopicTrend = (typeof TOPIC_TREND)[number];
+export const TopicTrendSchema = z.enum(TOPIC_TREND);
+
+export const ESSAY_THEME_SOURCE = ['past_enem', 'predicted', 'atualidades', 'custom'] as const;
+export type EssayThemeSource = (typeof ESSAY_THEME_SOURCE)[number];
+export const EssayThemeSourceSchema = z.enum(ESSAY_THEME_SOURCE);
+
+export const DIGEST_STATUS = ['draft', 'published', 'withdrawn'] as const;
+export type DigestStatus = (typeof DIGEST_STATUS)[number];
+
+// ENM-05: Repertório kinds and the verification outcome of repertorio.verify.
+export const REPERTORIO_KIND = ['quote', 'data', 'law', 'work', 'event'] as const;
+export type RepertorioKind = (typeof REPERTORIO_KIND)[number];
+export const RepertorioKindSchema = z.enum(REPERTORIO_KIND);
+
+export const REPERTORIO_VERIFIED = ['yes', 'no', 'contradicted'] as const;
+export type RepertorioVerified = (typeof REPERTORIO_VERIFIED)[number];
+export const RepertorioVerifiedSchema = z.enum(REPERTORIO_VERIFIED);
+
+export const SISU_OFFER_SOURCE = ['open_data', 'edital', 'manual_admin'] as const;
+export type SisuOfferSource = (typeof SISU_OFFER_SOURCE)[number];
+
+// ENM-09 Argumentação.
+export const ARGUMENT_GOAL_MODE = ['exam_week', 'enem'] as const;
+export type ArgumentGoalMode = (typeof ARGUMENT_GOAL_MODE)[number];
+export const ArgumentGoalModeSchema = z.enum(ARGUMENT_GOAL_MODE);
+
+export const ARGUMENT_THEME_SOURCE = ['suggested', 'enem', 'custom'] as const;
+export type ArgumentThemeSource = (typeof ARGUMENT_THEME_SOURCE)[number];
+export const ArgumentThemeSourceSchema = z.enum(ARGUMENT_THEME_SOURCE);
+
+export const ARGUMENT_MODE = ['debate', 'build'] as const;
+export type ArgumentMode = (typeof ARGUMENT_MODE)[number];
+export const ArgumentModeSchema = z.enum(ARGUMENT_MODE);
+
+export const ARGUMENT_STATUS = ['active', 'finished', 'abandoned'] as const;
+export type ArgumentStatus = (typeof ARGUMENT_STATUS)[number];
+
+// ---------------------------------------------------------------- Phase 5
+
+/** LRN-05.1 visual types; `none` caches "Esse tópico não fica bom em diagrama" (LRN-05.2). */
+export const VISUAL_TYPE = ['flowchart', 'timeline', 'comparison_table', 'hierarchy', 'cycle', 'none'] as const;
+export type VisualType = (typeof VISUAL_TYPE)[number];
+export const VisualTypeSchema = z.enum(VISUAL_TYPE);
+
+export const VISUAL_STATUS = ['ready', 'failed'] as const;
+export type VisualStatus = (typeof VISUAL_STATUS)[number];
+
+/** ING-06.1 finding types. */
+export const FINDING_TYPE = ['contradiction', 'numeric_or_formula_typo', 'skipped_step', 'unclear'] as const;
+export type FindingType = (typeof FINDING_TYPE)[number];
+export const FindingTypeSchema = z.enum(FINDING_TYPE);
+
+export const FINDING_SEVERITY = ['low', 'medium', 'high'] as const;
+export type FindingSeverity = (typeof FINDING_SEVERITY)[number];
+export const FindingSeveritySchema = z.enum(FINDING_SEVERITY);
+
+export const FINDING_STATUS = ['open', 'dismissed', 'confirmed'] as const;
+export type FindingStatus = (typeof FINDING_STATUS)[number];
+
+export const FINDING_VOTE = ['not_error', 'is_error'] as const;
+export type FindingVote = (typeof FINDING_VOTE)[number];
+
+/** MEM-06.2 mnemonic types. */
+export const MNEMONIC_TYPE = ['acronym', 'phrase', 'rhyme', 'story', 'palace', 'keyword'] as const;
+export type MnemonicType = (typeof MNEMONIC_TYPE)[number];
+export const MnemonicTypeSchema = z.enum(MNEMONIC_TYPE);
+
+export const DIVIDE_STATUS = ['open', 'merging', 'done', 'cancelled'] as const;
+export type DivideStatus = (typeof DIVIDE_STATUS)[number];
+
+export const CONTRIBUTION_STATUS = ['draft', 'submitted', 'approved', 'rejected'] as const;
+export type ContributionStatus = (typeof CONTRIBUTION_STATUS)[number];
+
+export const CONTRIBUTION_INPUT_MODE = ['typed', 'photo'] as const;
+export type ContributionInputMode = (typeof CONTRIBUTION_INPUT_MODE)[number];
+
+/** MOT-04.1 Retrospectiva periods. */
+export const RETRO_PERIOD = ['goal', 'semester', 'year'] as const;
+export type RetroPeriodKind = (typeof RETRO_PERIOD)[number];
+
 // ---------------------------------------------------------------- feature IDs (PRD §5 catalog)
 
 // Every PRD feature ID. `ai_usage.feature` and `xp_events.source_feature` store these (data-model §1.1).
@@ -770,6 +942,7 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'duels.status': DUEL_STATUS,
   'battles.status': BATTLE_STATUS,
   'notification_log.channel': NOTIFICATION_CHANNEL,
+  'notification_inbox.channel': NOTIFICATION_CHANNEL,
   'notification_log.dropped_reason': DROPPED_REASON,
   'guardian_links.status': GUARDIAN_LINK_STATUS,
   'user_reports.reason': REPORT_REASON,
@@ -784,4 +957,51 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'data_exports.status': EXPORT_STATUS,
   'account_deletions.requested_by': DELETION_REQUESTER,
   'account_deletions.status': DELETION_STATUS,
+  // Phase 3
+  'camera_captures.intent': CAPTURE_INTENT,
+  'camera_captures.content_type': CAPTURE_CONTENT_TYPE,
+  'camera_captures.status': CAPTURE_STATUS,
+  'podcast_episodes.style': PODCAST_STYLE,
+  'podcast_episodes.status': PODCAST_STATUS,
+  'podcast_interactions.input_mode': VOICE_INPUT_MODE,
+  'teaching_sessions.length': TEACHING_LENGTH,
+  'teaching_sessions.status': TEACHING_STATUS,
+  'study_rooms.status': ROOM_STATUS,
+  'study_room_members.status_mode': ROOM_STATUS_MODE,
+  // Phase 4
+  'subjects.system_kind': SYSTEM_SUBJECT_KIND,
+  'enem_editions.dates_status': ENEM_DATES_STATUS,
+  'enem_skills.area': ENEM_AREA,
+  'enem_topics.area': ENEM_AREA,
+  'enem_items.application': ENEM_APPLICATION,
+  'enem_items.area': ENEM_AREA,
+  'enem_items.answer_key': ENEM_ANSWER_KEY,
+  'enem_items.language': ENEM_LANGUAGE,
+  'enem_items.explanation_status': ENEM_EXPLANATION_STATUS,
+  'enem_items.review_status': ENEM_REVIEW_STATUS,
+  'enem_item_params.scale': TRI_PARAM_SCALE,
+  'enem_topic_stats.area': ENEM_AREA,
+  'enem_topic_trends.trend': TOPIC_TREND,
+  'enem_redacao_themes.application': ENEM_APPLICATION,
+  'essay_themes.source': ESSAY_THEME_SOURCE,
+  'atualidades_digests.status': DIGEST_STATUS,
+  'repertorio_items.kind': REPERTORIO_KIND,
+  'repertorio_items.verified': REPERTORIO_VERIFIED,
+  'sisu_offers.source': SISU_OFFER_SOURCE,
+  'argument_sessions.goal_mode': ARGUMENT_GOAL_MODE,
+  'argument_sessions.theme_source': ARGUMENT_THEME_SOURCE,
+  'argument_sessions.mode': ARGUMENT_MODE,
+  'argument_sessions.status': ARGUMENT_STATUS,
+  // Phase 5
+  'visuals.type': VISUAL_TYPE,
+  'visuals.status': VISUAL_STATUS,
+  'material_findings.type': FINDING_TYPE,
+  'material_findings.severity': FINDING_SEVERITY,
+  'material_findings.status': FINDING_STATUS,
+  'material_finding_votes.vote': FINDING_VOTE,
+  'mnemonics.type': MNEMONIC_TYPE,
+  'divide_plans.status': DIVIDE_STATUS,
+  'contributions.input_mode': CONTRIBUTION_INPUT_MODE,
+  'contributions.status': CONTRIBUTION_STATUS,
+  'retrospectives.period_type': RETRO_PERIOD,
 };

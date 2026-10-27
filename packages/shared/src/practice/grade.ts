@@ -28,6 +28,7 @@ import {
   type TrueFalsePayload,
 } from './payloads.ts';
 import { matchAcceptedAnswer, parseDecimal, sameUnit } from './text.ts';
+import { expressionsEquivalent } from './expression.ts';
 
 /** Result of grading one answer. `correct` is true iff `score === 1`; both are null while pending. */
 export interface PracticeGradeResult {
@@ -36,7 +37,7 @@ export interface PracticeGradeResult {
   score: number | null;
   /** Canonical accepted spelling when a fill_blank answer was accepted with a typo, case or accent difference (PRA-01.7). */
   typo: string | null;
-  /** True when the score comes later: AI grading (short_answer, essay_question) or an expression check (problem). */
+  /** True when the score comes later: AI grading (short_answer, essay_question). */
   pending: boolean;
 }
 
@@ -67,11 +68,12 @@ export function hintCredit(hintsUsed: number, totalHints: number, solutionViewed
   return 1 - used / (total + 1);
 }
 
-/** Whether this answer can be graded without AI or a symbolic engine (offline queue decision). */
-export function isLocallyGraded(type: QuestionType, payload: QuestionPayload): boolean {
-  if (type === 'short_answer' || type === 'essay_question') return false;
-  if (type === 'problem') return (payload as ProblemPayload).answer_format !== 'expression';
-  return true;
+/**
+ * Whether this answer can be graded without AI (offline queue decision). Expression answers of `problem`
+ * items are checked numerically by expression.ts (PRA-08.4), so only open text needs the server.
+ */
+export function isLocallyGraded(type: QuestionType, _payload: QuestionPayload): boolean {
+  return type !== 'short_answer' && type !== 'essay_question';
 }
 
 /**
@@ -230,19 +232,20 @@ function gradeFindError(p: FindErrorPayload, response: unknown): PracticeGradeRe
   return scoreParsed(FindErrorResponseSchema, response, (r) => (r.segment_id === p.error_segment_id ? 1 : 0));
 }
 
-/** problem (PRA-08.3–08.4): correctness × hint credit. Expression answers are pending (no symbolic engine here). */
+/** problem (PRA-08.3–08.4): correctness × hint credit. Expressions are compared at random points (expression.ts). */
 function gradeProblem(p: ProblemPayload, response: unknown, options: PracticeGradeOptions): PracticeGradeResult {
   if (options.solutionViewed ?? false) return scored(0);
   const parsed = ProblemResponseSchema.safeParse(response);
   if (!parsed.success) return scored(0);
-  const verdict = problemVerdict(p, parsed.data.answer);
-  if (verdict === 'pending') return pending();
-  if (!verdict) return scored(0);
+  if (!problemVerdict(p, parsed.data.answer)) return scored(0);
   return scored(hintCredit(options.hintsUsed ?? 0, p.hints.length, false));
 }
 
-function problemVerdict(p: ProblemPayload, answer: string): boolean | 'pending' {
-  if (p.answer_format === 'expression') return 'pending';
+function problemVerdict(p: ProblemPayload, answer: string): boolean {
+  if (p.answer_format === 'expression') {
+    if (answer.trim() === '') return false;
+    return expressionsEquivalent(answer, String(p.final_answer));
+  }
   if (p.answer_format === 'choice') return foldChoice(answer) === foldChoice(String(p.final_answer));
   const typed = parseDecimal(answer);
   const expected = typeof p.final_answer === 'number' ? p.final_answer : parseDecimal(p.final_answer);

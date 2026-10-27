@@ -22,6 +22,7 @@ import { JobDataError, chunk, unwrap, unwrapRows, uniq } from '../lib/db.ts';
 import { computeMasteries, type NodeInfo } from '../lib/learning-state.ts';
 import { buildPlanInput, carryOverDone, planItemRows, planRunRecord, plannerTriggerOf, topicOf, type PlanItemRow } from '../lib/plan-data.ts';
 import { loadPlanContext, type PlanContext } from '../lib/plan-context.ts';
+import { ensureEnemTags, enemItemRows, loadEnemPlanContext, planEnem } from '../lib/enem-plan.ts';
 import { wallClockOf } from '@studify/shared';
 import { addDays, localHour, safeTimeZone } from '../lib/time.ts';
 
@@ -131,21 +132,30 @@ export function readinessFor(planCtx: PlanContext, scopeByExam: ReadonlyMap<stri
   return out;
 }
 
-/** Signature of a plan: block id, day, minutes and status, for items that exist in the new run or are not done. */
-export function samePlan(run: PlanRun, previous: readonly PlanItemRow[]): boolean {
-  const inRun = new Set(run.items.map((i) => i.id));
+/**
+ * Signature of a plan: block id, day, minutes and status, for items that exist in the new run or are not done.
+ * `extra` carries the units of the ENEM plan (spec 09 §8.7), written in the same run.
+ */
+export function samePlan(run: PlanRun, previous: readonly PlanItemRow[], extra: ReadonlyArray<{ id: string; day: string; minutes: number; status: string }> = []): boolean {
+  const inRun = new Set([...run.items.map((i) => i.id), ...extra.map((e) => e.id)]);
   const blockOf = (row: PlanItemRow): string => (typeof row.reason_params?.blockId === 'string' ? row.reason_params.blockId : row.id);
   const sig = (block: string, day: string, minutes: number, status: string): string => `${block}|${day}|${minutes}|${status}`;
   const before = previous
     .filter((r) => r.status !== 'done' || inRun.has(blockOf(r)))
     .map((r) => sig(blockOf(r), r.local_date, r.minutes, r.status))
     .sort();
-  const after = run.items.map((i) => sig(i.id, i.day, Math.round(i.minutes), i.status)).sort();
+  const after = [...run.items.map((i) => sig(i.id, i.day, Math.round(i.minutes), i.status)), ...extra.map((e) => sig(e.id, e.day, Math.round(e.minutes), e.status))].sort();
   return before.length === after.length && before.every((v, i) => v === after[i]);
 }
 
 /** Replans one user from a loaded context. Identical inputs to the last run write nothing. */
 export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger: ReplanTrigger): Promise<ReplanResult> {
+  // ENEM goal (spec 07 §8.9): ENEM takes its share of each day first; the school planner sees the rest.
+  const enem = await loadEnemPlanContext(ctx, planCtx);
+  const enemPlan = enem ? planEnem(planCtx, enem) : null;
+  if (enem) await ensureEnemTags(ctx, planCtx);
+  const overridden = new Set((enemPlan?.schoolExceptions ?? []).map((e) => e.local_date));
+  const exceptions = enemPlan ? [...planCtx.exceptions.filter((e) => !overridden.has(e.local_date)), ...enemPlan.schoolExceptions] : planCtx.exceptions;
   const built = buildPlanInput({
     today: planCtx.today,
     timeZone: planCtx.timeZone,
@@ -156,16 +166,17 @@ export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger:
     excludedNodeIds: planCtx.excludedNodeIds,
     sourcesByNode: planCtx.sourcesByNode,
     masteries: planCtx.masteries,
-    exceptions: planCtx.exceptions,
+    exceptions,
     reviewMinutesByDay: planCtx.reviewMinutesByDay,
-    previousItems: planCtx.previousRows,
+    previousItems: enem ? planCtx.previousRows.filter((r) => r.goal_id !== enem.goalId) : planCtx.previousRows,
     desperate: planCtx.desperate,
     mode: planCtx.desperate ? 'desperate' : 'normal',
   });
   const run: PlanRun = buildPlan(built.input, trigger);
   // No-op check on the resulting plan, not the input hash: the hash includes the previous items, so it
   // changes after every write. Same blocks on the same days with the same minutes → nothing new.
-  if (planCtx.latestRun && samePlan(run, planCtx.previousRows)) return { status: 'unchanged' };
+  const extra = (enemPlan?.items ?? []).map((i) => ({ id: i.id, day: i.day, minutes: i.minutes, status: 'planned' }));
+  if (planCtx.latestRun && samePlan(run, planCtx.previousRows, extra)) return { status: 'unchanged' };
 
   const version = (planCtx.latestRun?.version ?? 0) + 1;
   const inserted = unwrap(
@@ -173,9 +184,14 @@ export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger:
     'plan_runs insert',
   ) as { id: string } | null;
   if (!inserted) throw new JobDataError('plan_runs insert returned no row', 'db_error');
+  const schoolRows = planItemRows(planCtx.userId, inserted.id, run, built);
+  const schoolOrder = new Map<string, number>();
+  for (const r of schoolRows) schoolOrder.set(r.local_date, Math.max(schoolOrder.get(r.local_date) ?? -1, r.order_in_day));
+  const enemIds = new Set(extra.map((e) => e.id));
   const rows = [
-    ...planItemRows(planCtx.userId, inserted.id, run, built),
-    ...carryOverDone(planCtx.previousRows as PlanItemRow[], run, inserted.id),
+    ...schoolRows,
+    ...(enem && enemPlan ? enemItemRows(planCtx.userId, inserted.id, enem, enemPlan.items, schoolOrder) : []),
+    ...carryOverDone(planCtx.previousRows as PlanItemRow[], run, inserted.id).filter((r) => !enemIds.has(typeof r.reason_params?.blockId === 'string' ? r.reason_params.blockId : '')),
   ];
   for (const part of chunk(rows, 200)) {
     unwrap(await ctx.supabase.from('plan_items').insert(part), 'plan_items insert');

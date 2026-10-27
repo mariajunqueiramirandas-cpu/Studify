@@ -11,6 +11,17 @@ flowchart LR
   P4 --> P5[Phase 5<br/>The rest]
 ```
 
+## Implementation status
+
+| Phase | Code | Exit criteria |
+|---|---|---|
+| 0–2 | Done: schema + RLS (pgTAP), shared logic, prompts, API, worker and app screens | Not yet verified on a real phone with real class material |
+| 3 | Done: Câmera Mágica, Podcast Interativo, Ensine o Lucas, Salas de estudo, PRA-06/07/08, read-aloud and voice | Not yet verified |
+| 4 | Done: ENEM bank import, TRI simulados, Correção de Redação, Meta SISU (computed on the phone), Atualidades, Repertório, Reta Final, Treino de Argumentação | Not yet verified; the Redação calibration set and the SISU data source are still owner decisions |
+| 5 | Done: everything in the table below, including the Android focus module (`apps/mobile/modules/studify-focus`) | Not yet verified; app blocking needs the design review in mobile-app.md §16 before a Play listing |
+
+"Done" means implemented and covered by the automated suites (shared, prompts, API, worker, pgTAP, mobile). A phase is only **done** for the roadmap when its exit criteria pass on a real Android phone, so the checkboxes below stay open until then.
+
 ---
 
 ## Phase 0 — Foundation
@@ -122,6 +133,20 @@ flowchart LR
 | Turma | SOC-06, SOC-07, SOC-08 |
 | Motivation | MOT-02, MOT-03, MOT-04 |
 | Wellbeing | WEL-01, WEL-02, WEL-03 |
+
+**Exit criteria**
+- [ ] A topic with a process gets a diagram (or an honest "nenhum diagrama ajuda aqui"); every box opens its page.
+- [ ] The material checker flags a seeded contradiction between two PDFs as a *possible* error, and two classmates' votes confirm it.
+- [ ] A mnemonic created for a leech card shows up as the hint in the next review, offline.
+- [ ] With calendar sync on, busy events reduce the day's minutes, study blocks appear in the "Studify" calendar, and no event title reaches the server (network inspection).
+- [ ] After two weeks of use, Progresso shows the student's best study windows.
+- [ ] A Turma splits a test's topics in Dividir e conquistar and gets one merged class summary per topic, with credits.
+- [ ] Peer questions are checked by the AI, voted in by 3 classmates and then appear in quizzes.
+- [ ] The weekly league only shows opted-in members and never makes anyone lose XP or a streak.
+- [ ] A unit boss can be fought from the Mapa; a retry uses different questions; defeating it unlocks the hunter's beanie for Capi.
+- [ ] A Retrospectiva arrives after an exam week, and a shared card image never shows a classmate's name or (unless toggled) a grade.
+- [ ] A 25/5 focus session keeps counting with the app killed, alerts at each phase end, and blocks a chosen app with the overlay during focus only.
+- [ ] Studying past 23:00 on a school night shows one gentle nudge; two lowest weekly check-ins show the CVV help card.
 
 ---
 

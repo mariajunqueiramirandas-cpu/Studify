@@ -20,9 +20,15 @@ import { DatabaseProvider } from '../db/DatabaseProvider';
 import { startSync, useSyncStatus } from '../db/sync';
 import { SessionProvider, useSession } from '../features/auth/session';
 import { ShareIntentHandler } from '../features/subjects/share';
+import { useCalendarAutoSync } from '../features/calendar/useCalendarAutoSync';
+import { FocusRuntime } from '../features/focus/FocusRuntime';
+import { markReadByKey } from '../features/notifications/inbox';
+import { NotificationsRuntime } from '../features/notifications/NotificationsRuntime';
+import { startActivityTracking } from '../features/wellbeing/activity';
 import { initSentry } from '../lib/sentry';
 import { setupNotificationChannels } from '../platform/notifications';
 import { attachNotificationActions, registerReviewCategories } from '../platform/notification-actions';
+import { attachNotificationLinks } from '../platform/notification-links';
 import { refreshFeatureFlags } from '../lib/flags';
 import { useDb } from '../db/DatabaseProvider';
 import { Platform } from 'react-native';
@@ -77,6 +83,8 @@ function AuthGate() {
     void setupNotificationChannels();
     void refreshFeatureFlags(db).catch(() => undefined);
     const stopSync = startSync();
+    const stopActivity = startActivityTracking();
+    const detachLinks = attachNotificationLinks((key) => void markReadByKey(key));
     let detach: (() => void) | undefined;
     if (Platform.OS === 'android') {
       void registerReviewCategories();
@@ -84,12 +92,27 @@ function AuthGate() {
     }
     return () => {
       stopSync();
+      stopActivity();
+      detachLinks();
       detach?.();
     };
   }, [session, profile, db]);
 
   if (sync.updateRequired) return <UpdateRequired />;
-  return session && profile ? <ShareIntentHandler /> : null;
+  return session && profile ? (
+    <>
+      <ShareIntentHandler />
+      <FocusRuntime />
+      <NotificationsRuntime />
+      <CalendarAutoSync />
+    </>
+  ) : null;
+}
+
+/** GOL-09: keeps the Studify calendar in step with replans while sync is on. */
+function CalendarAutoSync() {
+  useCalendarAutoSync();
+  return null;
 }
 
 /** S-SYS-01 — blocks builds below min_supported_version; unsynced reviews stay on the phone (PLT-06.3). */
@@ -128,6 +151,9 @@ function Navigator() {
         <Stack.Screen name="tutor/[threadId]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="session/[sessionId]" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="share" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="focus/index" options={{ animation: 'fade' }} />
+        <Stack.Screen name="retro/[retroId]" options={{ animation: 'fade' }} />
+        <Stack.Screen name="notifications/index" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <AuthGate />
     </>

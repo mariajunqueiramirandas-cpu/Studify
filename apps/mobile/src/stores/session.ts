@@ -10,6 +10,8 @@ export interface AnsweredCard {
   logId: string;
   cardId: string;
   rating: Grade;
+  /** Answer time, for the burnout guard's performance-drop check (WEL-03). */
+  ms: number;
 }
 
 export interface SessionState {
@@ -21,7 +23,8 @@ export interface SessionState {
   start: (cardIds: string[]) => void;
   reveal: () => void;
   /** Records the rating for the current card, then advances. Returns the new log id. */
-  answer: (db: AppDb, rating: Grade, opts?: { durationMs?: number; source?: ReviewSource }) => Promise<string>;
+  /** `hintUsed`: the mnemonic hint was opened before the reveal (MEM-06.4, logged only). */
+  answer: (db: AppDb, rating: Grade, opts?: { durationMs?: number; source?: ReviewSource; hintUsed?: boolean }) => Promise<string>;
   /** Undoes the last answer of this session (restores the card and steps back). */
   undo: (db: AppDb) => Promise<boolean>;
   /** Ends the session and syncs now. */
@@ -52,11 +55,12 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       rating,
       durationMs: opts.durationMs,
       source: opts.source ?? 'session',
+      hintUsed: opts.hintUsed ?? false,
     });
     set((s) => ({
       index: s.index + 1,
       revealed: false,
-      history: [...s.history, { logId: result.logId, cardId, rating }],
+      history: [...s.history, { logId: result.logId, cardId, rating, ms: opts.durationMs ?? 0 }],
     }));
     return result.logId;
   },

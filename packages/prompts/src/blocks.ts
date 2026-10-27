@@ -54,7 +54,7 @@ export function documentBlocks(slices: readonly PdfSlice[], ttl?: CacheTtl): Doc
   return { blocks, labels, allowedPages };
 }
 
-export function imageBlock(data: string, mediaType: 'image/jpeg' | 'image/png' = 'image/jpeg'): ContentBlock {
+export function imageBlock(data: string, mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg'): ContentBlock {
   return { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
 }
 

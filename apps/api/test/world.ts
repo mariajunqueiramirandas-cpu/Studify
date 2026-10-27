@@ -66,7 +66,7 @@ export async function seedWorld(h: Harness): Promise<void> {
 }
 
 /** A multiple-choice question in the shared payload shape (spec 05 §8.1). */
-export function mcq(id: string, correct: 'A' | 'B', nodeId = IDS.topic, conceptId: string = IDS.concept): Record<string, unknown> {
+export function mcq(id: string, correct: 'A' | 'B', nodeId: string = IDS.topic, conceptId: string = IDS.concept): Record<string, unknown> {
   return {
     id,
     subject_id: IDS.subject,

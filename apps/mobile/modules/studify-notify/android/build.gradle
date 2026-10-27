@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.studify'
+version = '1.0.0'
+
+android {
+  namespace "com.studify.notify"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // StudifyMessagingService extends Expo's FCM service so rich pushes are drawn natively and the rest go
+  // to Expo unchanged. Same Firebase Messaging version as expo-notifications.
+  implementation project(':expo-notifications')
+  implementation 'com.google.firebase:firebase-messaging:25.0.1'
+  implementation 'androidx.core:core-ktx:1.17.0'
+}

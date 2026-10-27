@@ -43,6 +43,8 @@ export const PULL_TABLES: readonly PullTableDef[] = [
     name: 'subjects',
     table: s.subjects,
     pk: ['id'],
+    // System subjects (ENEM bank, Atualidades) are read online, never mirrored (thousands of global rows).
+    filters: () => [{ column: 'system_kind', op: 'is_null' }],
     cascade: [
       { child: s.knowledgeNodes, column: 'subjectId' },
       { child: s.cards, column: 'subjectId' },
@@ -131,6 +133,9 @@ export const PULL_TABLES: readonly PullTableDef[] = [
   { name: 'daily_activity', table: s.dailyActivity, pk: ['userId', 'localDate'] },
   { name: 'streaks', table: s.streaks, pk: ['userId'] },
   { name: 'achievements', table: s.achievements, pk: ['userId', 'code'] },
+  // Phase 5 (MEM-06): own rows only (RLS), so no extra scope.
+  { name: 'memory_palaces', table: s.memoryPalaces, pk: ['id'] },
+  { name: 'mnemonics', table: s.mnemonics, pk: ['id'] },
 ];
 
 /**

@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import { ActionBar, Banner, Button, Card, CountdownChip, EmptyState, IconButton, ListItem, PctRing, Row, Screen, Section, SkeletonList, Text } from '../../../components';
@@ -18,6 +18,8 @@ export default function GoalDashboard() {
   const desperate = useDesperateMode(goalId);
   const names = useMemo(() => new Map((subjects.data ?? []).map((s) => [s.id, s.name])), [subjects.data]);
   const upcoming = (exams.data ?? []).filter((e) => e.status === 'scheduled');
+  // ENEM goals have their own home (S-ENEM-01).
+  if (goal.data?.mode === 'enem') return <Redirect href="/enem" />;
 
   return (
     <Screen

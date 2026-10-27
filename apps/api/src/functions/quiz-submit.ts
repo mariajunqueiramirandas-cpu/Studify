@@ -11,11 +11,13 @@ import {
   evidenceWeight,
   simuladoGrade,
   type EvidenceQuestionType,
+  bossPassed,
 } from '@studify/shared';
 import type { QuizSubmitRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
 import { gradeOffline } from '../shared/grading.ts';
 import { recordMistake } from '../shared/mistakes.ts';
+import { letterOf, simuladoAreaResults, type SimuladoAnswer } from '../shared-p4/enem.ts';
 
 type Req = z.infer<typeof QuizSubmitReqSchema>;
 
@@ -37,12 +39,12 @@ export const handler = defineFunction<Req>({
     const { db } = deps;
     const userId = ctx.user.userId;
 
-    const attempt = await db.from('quiz_attempts').select('id, user_id, quiz_id, status').eq('id', input.attempt_id).maybeSingle();
+    const attempt = await db.from('quiz_attempts').select('id, user_id, quiz_id, status, paused_seconds').eq('id', input.attempt_id).maybeSingle();
     if (attempt.error) throw attempt.error;
     if (!attempt.data || attempt.data.user_id !== userId) throw new ApiFailure('not_found');
     if (attempt.data.status !== 'in_progress') throw new ApiFailure('already_exists', { message: 'Esse simulado já foi entregue.' });
 
-    const quiz = await db.from('quizzes').select('id, question_ids, goal_id').eq('id', attempt.data.quiz_id as string).maybeSingle();
+    const quiz = await db.from('quizzes').select('id, question_ids, goal_id, kind, config, scope').eq('id', attempt.data.quiz_id as string).maybeSingle();
     if (quiz.error) throw quiz.error;
     if (!quiz.data) throw new ApiFailure('not_found');
     const questionIds = quiz.data.question_ids as string[];
@@ -189,18 +191,48 @@ export const handler = defineFunction<Req>({
     const score = total > 0 ? sum / total : 0;
     const grade = quiz.data.goal_id ? simuladoGrade(sum, total, 10) : null;
     const pending = graded.filter((g) => g.status === 'pending');
+
+    // ENEM simulado (ENM-04.5–04.7): TRI estimate per area; blanks count as wrong, annulled items are skipped.
+    let areaResults: Awaited<ReturnType<typeof simuladoAreaResults>> | null = null;
+    if (quiz.data.kind === 'enem_simulado') {
+      const answers = new Map<string, SimuladoAnswer>();
+      for (const g of graded) {
+        const d = detail.get(g.answerId);
+        answers.set(g.questionId, { questionId: g.questionId, response: letterOf(d?.response), timeSeconds: d?.time ?? 0, correct: g.correct });
+      }
+      const config = (quiz.data.config ?? {}) as { mode?: 'full_day1' | 'full_day2' | 'area' | 'mini'; edition?: number };
+      let durations = { day1: null as number | null, day2: null as number | null };
+      if (config.mode === 'full_day1' || config.mode === 'full_day2') {
+        const edition = await db.from('enem_editions').select('day1_duration_min, day2_duration_min').order('year', { ascending: false }).limit(1).maybeSingle();
+        if (edition.error) throw edition.error;
+        durations = { day1: (edition.data?.day1_duration_min as number | null) ?? null, day2: (edition.data?.day2_duration_min as number | null) ?? null };
+      }
+      areaResults = await simuladoAreaResults(db, { mode: config.mode ?? 'area' }, questionIds, answers, Number(attempt.data.paused_seconds ?? 0), durations);
+    }
+
     const finished = await db
       .from('quiz_attempts')
-      .update({ status: 'submitted', finished_at: input.finished_at, score, grade })
+      .update({ status: 'submitted', finished_at: input.finished_at, score, grade, ...(areaResults ? { area_results: areaResults } : {}) })
       .eq('id', input.attempt_id);
     if (finished.error) throw finished.error;
+
+    // MOT-02.4: a boss attempt is recorded once with its score; ≥ 70% defeats the boss.
+    if (quiz.data.kind === 'boss') {
+      const unitId = ((quiz.data as { scope?: { unit_node_id?: string } | null }).scope ?? {}).unit_node_id;
+      if (unitId) {
+        const boss = await db
+          .from('boss_attempts')
+          .upsert({ id: deps.newId(), user_id: userId, unit_node_id: unitId, quiz_attempt_id: input.attempt_id, passed: bossPassed(score), score }, { onConflict: 'quiz_attempt_id', ignoreDuplicates: true });
+        if (boss.error) throw boss.error;
+      }
+    }
 
     for (const g of pending) {
       await deps.enqueue('grading.answer', { attempt_answer_id: g.answerId }, { singletonKey: g.answerId, retryLimit: 2 });
     }
 
     const body: QuizSubmitRes = {
-      attempt: { id: input.attempt_id, status: 'submitted', score, grade },
+      attempt: { id: input.attempt_id, status: 'submitted', score, grade, ...(areaResults ? { area_results: areaResults } : {}) },
       answers: graded.map((g) => ({
         id: g.answerId,
         correct: g.correct,

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { energyBucketOf, orderByEnergy } from '@studify/shared';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -7,6 +8,7 @@ import {
   Banner,
   BottomSheet,
   Button,
+  Capi,
   Card,
   CountdownChip,
   IconButton,
@@ -23,9 +25,17 @@ import { useLive } from '../../../db/hooks';
 import { useSession } from '../../../features/auth/session';
 import { daysBetween, greeting, parseDate } from '../../../features/common/format';
 import { updatePlanItem, useGoalExams, useGoals, useUpcomingExams, type Exam } from '../../../features/goals/api';
+import { enemRoute } from '../../../features/enem/format';
 import { useTodayPlan, type TodayItem } from '../../../features/goals/today';
 import { dueCount } from '../../../features/memory/local';
 import { useMotivation } from '../../../features/motivation/api';
+import { InboxBell } from '../../../features/notifications/InboxBell';
+import { useCapi } from '../../../features/motivation/capi';
+import { isDemandingUnit, usePerformanceWindows } from '../../../features/energy/api';
+import { useUnseenRetrospective } from '../../../features/retro/api';
+import { WeeklyCheckin } from '../../../features/wellbeing/WeeklyCheckin';
+import { WellbeingNudge } from '../../../features/wellbeing/WellbeingNudge';
+import { useFocusStore } from '../../../stores/focus';
 import { useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
 import { space, useTheme } from '../../../theme';
@@ -40,6 +50,10 @@ export default function Today() {
   const pastExams = useGoalExams(goals.data?.[0]?.id);
   const subjects = useSubjects();
   const motivation = useMotivation();
+  const capi = useCapi();
+  const focusRunning = useFocusStore((st) => st.run !== null);
+  const retro = useUnseenRetrospective();
+  const energy = usePerformanceWindows();
   const overlay = useOverlay();
   const { colors } = useTheme();
   const [quick, setQuick] = useState(false);
@@ -49,6 +63,15 @@ export default function Today() {
   const subjectName = useMemo(() => new Map((subjects.data ?? []).map((s) => [s.id, s.name])), [subjects.data]);
   const upcoming = (exams.data ?? []).slice(0, 4);
   const pending = plan.items.filter((i) => i.status === 'planned');
+  // GOL-10.2: inside one of the student's best windows, demanding items go first.
+  const best = energy.data?.best;
+  const { items: orderedItems, inGoodWindow } = useMemo(() => {
+    const now = new Date();
+    const minute = now.getHours() * 60 + now.getMinutes();
+    const good = best ?? [];
+    const withDemand = plan.items.map((i) => ({ ...i, demanding: isDemandingUnit(i.unitType) }));
+    return { items: orderByEnergy(withDemand, minute, good), inGoodWindow: good.includes(energyBucketOf(minute)) };
+  }, [plan.items, best]);
   const hasSubjects = (subjects.data ?? []).length > 0;
 
   // At most 3 cards (ux §4.2): véspera, desespero offer, grade ask, upload.
@@ -140,15 +163,29 @@ export default function Today() {
     <Screen
       root
       title={greeting(profile?.display_name ?? '')}
-      actions={<IconButton icon="trophy-outline" label={t('progress.title')} onPress={() => router.push('/profile/progress')} />}
+      actions={
+        <>
+          <IconButton icon="timer-outline" label={t('focus.title')} onPress={() => router.push('/focus')} />
+          <IconButton icon="camera-outline" label={t('cam.title')} onPress={() => router.push('/camera')} />
+          <InboxBell />
+        </>
+      }
       context={
         motivation.data ? (
           <Row gap={space.md}>
-            <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={36} stroke={5} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
-            <Text variant="bodySmall" tone="secondary">
-              {motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}
-              {motivation.data.streak > 0 ? `  ·  ${t('streak.count', { n: motivation.data.streak })}` : ''}
-            </Text>
+            {capi.visible ? (
+              <Pressable onPress={() => router.push('/profile/capi')} accessibilityRole="button" accessibilityLabel={t('capi.title')}>
+                <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={44} />
+              </Pressable>
+            ) : null}
+            {/* The ring and streak open Progresso (the trophy's old place in the bar is the bell now). */}
+            <Pressable onPress={() => router.push('/profile/progress')} accessibilityRole="button" accessibilityLabel={t('progress.title')} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, flexShrink: 1 }}>
+              <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={36} stroke={5} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
+              <Text variant="bodySmall" tone="secondary" style={{ flexShrink: 1 }}>
+                {motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}
+                {motivation.data.streak > 0 ? `  ·  ${t('streak.count', { n: motivation.data.streak })}` : ''}
+              </Text>
+            </Pressable>
           </Row>
         ) : null
       }
@@ -159,6 +196,12 @@ export default function Today() {
         </ActionBar>
       }
     >
+      {focusRunning ? <Banner kind="info" icon="timer-outline" message={t('focus.running_banner')} action={{ label: t('focus.open'), onPress: () => router.push('/focus') }} /> : null}
+      {retro ? (
+        <Banner kind="success" icon="sparkles-outline" title={t('retro.ready')} message={retro.title} action={{ label: t('retro.open'), onPress: () => router.push({ pathname: '/retro/[retroId]', params: { retroId: retro.id } }) }} />
+      ) : null}
+      <WellbeingNudge surface="today" />
+      <WeeklyCheckin />
       {motivation.data?.streakResetNotice ? <Banner kind="neutral" message={t('streak.reset', { n: motivation.data.bestStreak })} /> : null}
       {upcoming.length ? (
         <Row wrap>
@@ -193,7 +236,12 @@ export default function Today() {
         >
           {plan.items.length ? <Text tone="secondary">{t('today.summary', { minutes: plan.minutes, subjects: plan.subjects })}</Text> : null}
           {plan.items.length === 0 ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
-          {plan.items.map((item) => (
+          {inGoodWindow && pending.some((i) => isDemandingUnit(i.unitType)) ? (
+            <Text variant="bodySmall" tone="accent">
+              {t('energy.good_now')}
+            </Text>
+          ) : null}
+          {orderedItems.map((item) => (
             <PlanRow key={item.id} item={item} onDone={() => toggleItem(item, 'done')} onSkip={() => toggleItem(item, 'skipped')} />
           ))}
         </Section>
@@ -217,8 +265,10 @@ export default function Today() {
 function PlanRow({ item, onDone, onSkip }: { item: TodayItem; onDone: () => void; onSkip: () => void }) {
   const { colors } = useTheme();
   const done = item.status !== 'planned';
+  // ENEM units open their own screen (simulado setup, redação, bank, Reta Final).
+  const enem = enemRoute(item);
   return (
-    <Card accent={item.subjectColor} style={done ? { opacity: 0.6 } : undefined}>
+    <Card accent={item.subjectColor} style={done ? { opacity: 0.6 } : undefined} onPress={!done && enem ? () => router.push(enem) : undefined}>
       <Row>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="label" style={done ? { textDecorationLine: 'line-through' } : undefined}>
@@ -235,6 +285,11 @@ function PlanRow({ item, onDone, onSkip }: { item: TodayItem; onDone: () => void
         </View>
         {!done ? (
           <>
+            <IconButton
+              icon="timer-outline"
+              label={`${t('focus.start_for')}: ${item.title}`}
+              onPress={() => router.push({ pathname: '/focus', params: { planItemId: item.id, label: item.title, ...(item.goalId ? { goalId: item.goalId } : {}), ...(item.subjectId ? { subjectId: item.subjectId } : {}) } })}
+            />
             <IconButton icon="checkmark-circle-outline" label={`${t('today.item_done')}: ${item.title}`} color={colors.success} onPress={onDone} />
             <IconButton icon="arrow-redo-outline" label={`${t('today.item_skip')}: ${item.title}`} onPress={onSkip} />
           </>

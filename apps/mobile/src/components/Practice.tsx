@@ -11,6 +11,7 @@ import { Button } from './Button';
 import { Chip, ChipGroup, PageChips } from './Chip';
 import { RichContent } from './MarkdownView';
 import { RichText, Text } from './Text';
+import { ReadAloudButton } from '../features/voice/VoiceButtons';
 
 /** PRA-05: "Quão confiante você está?" — 4 chips, single select. */
 export function ConfidencePicker({ value, onChange }: { value: Confidence | null; onChange: (c: Confidence) => void }) {
@@ -98,7 +99,12 @@ export function FeedbackPanel({
       {question.type === 'true_false' && typeof p.justification === 'string' ? <RichContent text={p.justification} /> : null}
       {question.explanation ? (
         <View style={{ gap: space.xs }}>
-          <Text variant="label">{t('quiz.explanation')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text variant="label" style={{ flex: 1 }}>
+              {t('quiz.explanation')}
+            </Text>
+            <ReadAloudButton id={`explanation:${question.id}`} text={question.explanation} size={20} />
+          </View>
           <RichContent text={question.explanation} />
         </View>
       ) : null}

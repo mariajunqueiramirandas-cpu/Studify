@@ -11,6 +11,7 @@ import { applyProgress, ensureAiJob, isUuid, type ProgressPatch } from './progre
 import type { PushService, PushMessage } from './push.ts';
 import { policyFor, type QueueBackend, type QueueJob, type QueueOptions, type SendOptions } from './queue.ts';
 import type { Logger } from './logger.ts';
+import type { TtsProvider } from '@studify/speech';
 
 export interface RuntimeDeps {
   backend: QueueBackend;
@@ -20,6 +21,7 @@ export interface RuntimeDeps {
   push: PushService;
   log: Logger;
   now: () => Date;
+  tts?: TtsProvider | null;
 }
 
 const DEFAULT_RETRY_LIMIT = 3;
@@ -113,6 +115,7 @@ export class JobRegistry {
       push: async (userId: string, message: PushMessage) => {
         await deps.push.push(userId, message);
       },
+      tts: deps.tts ?? null,
     };
   }
 }

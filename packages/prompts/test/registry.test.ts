@@ -8,8 +8,8 @@ describe('task registry', () => {
     expect(TASK_BY_ID.size).toBe(ids.length);
   });
 
-  it('covers the Phase 0–2 catalog (38 tasks)', () => {
-    expect(TASKS.length).toBe(38);
+  it('covers the Phase 0–5 catalog (77 tasks)', () => {
+    expect(TASKS.length).toBe(77);
   });
 
   it('gives every task a prompt_version of the form <task id>@v<n>', () => {
@@ -41,7 +41,18 @@ describe('task registry', () => {
 
   it('uses citations output only for prose with page citations', () => {
     const citations = TASKS.filter((t) => t.outputMode === 'citations').map((t) => t.id).sort();
-    expect(citations).toEqual(['explain.restyle', 'notes.deep', 'notes.study', 'notes.tldr', 'tutor.turn']);
+    expect(citations).toEqual([
+      'argument.reply',
+      'camera.explain',
+      'camera.solveFull',
+      'divide.merge',
+      'explain.restyle',
+      'notes.deep',
+      'notes.study',
+      'notes.tldr',
+      'podcast.handAnswer',
+      'tutor.turn',
+    ]);
   });
 
   it('getTask throws on unknown ids and resolves known ones', () => {

@@ -14,7 +14,9 @@ describe('uuidV7', () => {
   });
 
   it('encodes the millisecond timestamp in the first 48 bits', () => {
-    const ms = Date.UTC(2026, 9, 27, 12, 0, 0);
+    // Ahead of the ids generated above at Date.now(): the generator is monotonic, so a past timestamp
+    // would reuse the last millisecond instead of encoding its own.
+    const ms = Date.now() + 60_000;
     expect(uuidV7Time(uuidV7(ms))).toBe(ms);
   });
 

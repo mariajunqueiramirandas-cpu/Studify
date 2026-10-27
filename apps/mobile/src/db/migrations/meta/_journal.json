@@ -15,6 +15,13 @@
       "when": 1793063647948,
       "tag": "0001_review_prev_card_state",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793109125769,
+      "tag": "0002_phase5_mnemonics",
+      "breakpoints": true
     }
   ]
 }

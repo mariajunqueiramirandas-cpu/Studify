@@ -18,7 +18,7 @@ import { radius, space, useTheme } from '../theme';
 
 type Item =
   | { kind: 'card'; id: string; card: ReviewCard }
-  | { kind: 'feed'; id: string; type: string; subjectId: string; content: FeedContent; sourcePages: { document_id: string; page_start: number; page_end: number }[]; external: boolean };
+  | { kind: 'feed'; id: string; type: string; subjectId: string; nodeId: string | null; content: FeedContent; sourcePages: { document_id: string; page_start: number; page_end: number }[]; external: boolean };
 
 interface FeedContent {
   title?: string;
@@ -75,7 +75,7 @@ export default function Feed() {
       .limit(60)
       .all()
       .filter((r) => !r.personalForUserId || r.personalForUserId === userId)
-      .map<Item>((r) => ({ kind: 'feed', id: r.id, type: r.type, subjectId: r.subjectId, content: r.content as FeedContent, sourcePages: (r.sourcePages ?? []) as never, external: !!r.externalKnowledge }));
+      .map<Item>((r) => ({ kind: 'feed', id: r.id, type: r.type, subjectId: r.subjectId, nodeId: r.nodeId ?? null, content: r.content as FeedContent, sourcePages: (r.sourcePages ?? []) as never, external: !!r.externalKnowledge }));
     return buildRounds(cards, rows);
   }, [db, userId]);
 
@@ -175,7 +175,7 @@ export default function Feed() {
             ) : (
               <Card style={{ borderLeftWidth: 4, borderLeftColor: colors.primary, borderRadius: radius.xl }}>
                 <Text variant="label" tone="accent">
-                  {item.type === 'did_you_know' ? t('feed.did_you_know') : item.type === 'quick_question' ? t('feed.quick_question') : t('feed.micro_lesson')}
+                  {item.type === 'did_you_know' ? t('feed.did_you_know') : item.type === 'quick_question' ? t('feed.quick_question') : item.type === 'diagram' ? t('feed.diagram') : t('feed.micro_lesson')}
                 </Text>
                 {item.content.title ? <Text variant="title">{item.content.title}</Text> : null}
                 {item.content.body ? <RichContent text={item.content.body} variant="cardFace" /> : null}
@@ -199,6 +199,10 @@ export default function Feed() {
                       <RichText>{answers[item.id] === item.content.question.correct ? t('quiz.correct') : t('quiz.wrong', { letter: item.content.question.correct })}</RichText>
                     ) : null}
                   </View>
+                ) : null}
+                {/* LRN-05.5: a diagram card from an auto visual opens the native drawing. */}
+                {item.type === 'diagram' && item.nodeId && (item.content as { visual_id?: string }).visual_id ? (
+                  <Button compact variant="tonal" icon="git-network-outline" label={t('visual.feed_open')} onPress={() => router.push({ pathname: '/visual/[nodeId]', params: { nodeId: item.nodeId!, subjectId: item.subjectId } })} />
                 ) : null}
                 {item.external ? <Text variant="bodySmall" tone="info">Curiosidade além do material</Text> : null}
                 <PageChips sources={item.sourcePages} subjectId={item.subjectId} />

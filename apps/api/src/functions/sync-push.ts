@@ -9,7 +9,6 @@
 //  - every kind is checked against its own table and ownership (RLS-equivalent): user_id is the caller,
 //    ids are the client UUID v7 and an insert is idempotent on id. Rows the server can never store are
 //    rejected with drop=true; a row that depends on data not synced yet is rejected with drop=false.
-// podcast_play has no table in the migrations yet, so it is rejected with drop=true (api §4.1 rejected[].drop).
 import { z } from 'zod';
 import {
   ApiFailure,
@@ -31,7 +30,7 @@ import {
   type QuestionType,
 } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
-import { canReadSubject, loadSubject, type SubjectRow } from '../shared/access.ts';
+import { canReadSubject, isPublicQuestion, loadSubject, type SubjectRow } from '../shared/access.ts';
 import type { Deps } from '../shared/deps.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { gradeOffline } from '../shared/grading.ts';
@@ -70,6 +69,8 @@ interface PushState {
   touchedCards: Set<string>;
   cards: Map<string, CardRow | null>;
   subjects: Map<string, boolean>;
+  /** Readable system subjects (ENEM bank, Atualidades): their questions must also be public. */
+  systemSubjects: Set<string>;
 }
 
 interface CardRow {
@@ -114,13 +115,14 @@ async function subjectReadable(st: PushState, subjectId: string): Promise<boolea
   if (cached !== undefined) return cached;
   const { data, error } = await st.db
     .from('subjects')
-    .select('id, owner_profile_id, owner_class_group_id, created_by, name, content_language, is_language_subject, enem_area')
+    .select('id, owner_profile_id, owner_class_group_id, created_by, name, content_language, is_language_subject, enem_area, system_kind')
     .eq('id', subjectId)
     .is('deleted_at', null)
     .maybeSingle();
   if (error) throw error;
   const ok = data ? await canReadSubject(st.db, st.userId, data as SubjectRow) : false;
   st.subjects.set(subjectId, ok);
+  if (ok && (data as SubjectRow).system_kind) st.systemSubjects.add(subjectId);
   return ok;
 }
 
@@ -406,6 +408,11 @@ async function pushAnswers(st: PushState, items: AnswerItem[]): Promise<void> {
       continue;
     }
     if (!(await subjectReadable(st, question.data.subject_id as string))) {
+      reject(st, item.id, 'forbidden', true);
+      continue;
+    }
+    // ENEM bank and Atualidades questions: only published ones (ENM-02.9, spec 09 §9 withdrawn items).
+    if (st.systemSubjects.has(question.data.subject_id as string) && !(await isPublicQuestion(st.db, p.question_id))) {
       reject(st, item.id, 'forbidden', true);
       continue;
     }
@@ -824,6 +831,41 @@ async function pushTopicReads(st: PushState, items: Item<'topic_read'>[]): Promi
   }
 }
 
+// podcast_play (INT-01): podcast_plays, one row per (user, episode), last writer wins on updated_at (clamped).
+// The episode must be one the caller can read (a personal Revisão pra prova episode is its owner's only).
+async function pushPodcastPlays(st: PushState, items: Item<'podcast_play'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    const episode = await st.db.from('podcast_episodes').select('id, subject_id, owner_user_id').eq('id', p.episode_id).maybeSingle();
+    if (episode.error) throw episode.error;
+    if (!episode.data) {
+      reject(st, item.id, 'not_found', true);
+      continue;
+    }
+    const owner = episode.data.owner_user_id as string | null;
+    if ((owner && owner !== st.userId) || !(await subjectReadable(st, episode.data.subject_id as string))) {
+      reject(st, item.id, 'forbidden', true);
+      continue;
+    }
+    const at = clampLww(p.updated_at, st.now).toISOString();
+    await guardRow(st, item.id, async () => {
+      const existing = await st.db.from('podcast_plays').select('updated_at').eq('user_id', st.userId).eq('episode_id', p.episode_id).maybeSingle();
+      if (existing.error) throw existing.error;
+      const row: Record<string, unknown> = { position_ms: p.position_ms, updated_at: at, deleted_at: null };
+      if (p.completed_at !== undefined) row.completed_at = p.completed_at;
+      if (p.downloaded !== undefined) row.downloaded = p.downloaded;
+      if (!existing.data) {
+        const inserted = await st.db.from('podcast_plays').insert({ user_id: st.userId, episode_id: p.episode_id, ...row });
+        if (inserted.error && inserted.error.code !== '23505') throw inserted.error;
+      } else if (new Date(existing.data.updated_at as string).getTime() < new Date(at).getTime()) {
+        const updated = await st.db.from('podcast_plays').update(row).eq('user_id', st.userId).eq('episode_id', p.episode_id);
+        if (updated.error) throw updated.error;
+      }
+      st.acked.add(item.id);
+    });
+  }
+}
+
 // feed_impression (FED-01): feed_impressions, append-only. The feed's visit id is not a study session, so a
 // session_id that is not one of the student's study sessions is stored as null instead of refusing the row.
 async function pushFeedImpressions(st: PushState, items: Item<'feed_impression'>[]): Promise<void> {
@@ -960,6 +1002,7 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
       touchedCards: new Set(),
       cards: new Map(),
       subjects: new Map(),
+      systemSubjects: new Set(),
     };
 
     // Validate each row with its own schema. A row that fails is rejected; the batch goes on.
@@ -974,6 +1017,7 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
     const sessions: Item<'study_session'>[] = [];
     const topicReads: Item<'topic_read'>[] = [];
     const impressions: Item<'feed_impression'>[] = [];
+    const plays: Item<'podcast_play'>[] = [];
     for (const raw of envelope.items) {
       const parsed = OutboxItemSchema.safeParse(raw);
       if (!parsed.success) {
@@ -1023,8 +1067,7 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
           impressions.push(item);
           break;
         case 'podcast_play':
-          // No table in the migrations yet, and no later row depends on it: dropped, not retried forever.
-          reject(st, item.id, 'invalid', true);
+          plays.push(item);
           break;
       }
     }
@@ -1042,6 +1085,7 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
     await pushStudySessions(st, sessions);
     await pushTopicReads(st, topicReads);
     await pushFeedImpressions(st, impressions);
+    await pushPodcastPlays(st, plays);
     const cardStates = await replayTouchedCards(st);
 
     const body: SyncPushRes = {

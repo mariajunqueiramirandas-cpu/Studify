@@ -77,7 +77,7 @@ export function useSubjects() {
     enabled: !!userId,
     queryFn: async () => {
       const [subjects, settings] = await Promise.all([
-        rows<Subject>(supabase.from('subjects').select('*').is('deleted_at', null).order('created_at')),
+        rows<Subject>(supabase.from('subjects').select('*').is('deleted_at', null).is('system_kind', null).order('created_at')),
         rows<SubjectUserSettings>(supabase.from('subject_user_settings').select('*').eq('user_id', userId!)),
       ]);
       const byId = new Map(settings.map((s) => [s.subject_id, s]));
@@ -250,4 +250,17 @@ export async function shareSubject(subjectId: string, classGroupId: string) {
 export async function signedUrl(bucket: string, path: string): Promise<string | null> {
   const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
   return data?.signedUrl ?? null;
+}
+
+/** Signed URL of a stored `bucket/path` (refreshed before the 1 h TTL ends); null path → null. */
+export function useStorageUrl(path: string | null | undefined) {
+  return useQuery({
+    queryKey: ['signedUrl', path],
+    enabled: !!path,
+    staleTime: 50 * 60 * 1000,
+    queryFn: () => {
+      const slash = path!.indexOf('/');
+      return signedUrl(path!.slice(0, slash), path!.slice(slash + 1));
+    },
+  });
 }

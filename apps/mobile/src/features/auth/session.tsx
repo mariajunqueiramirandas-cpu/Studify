@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../../api/supabase';
+import { invalidatePushToken } from '../notifications/push-token';
 
 export const PRIVACY_NOTICE_VERSION = '2026-10-v1';
 
@@ -72,6 +73,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await qc.invalidateQueries({ queryKey: ['profile', userId] });
     },
     signOut: async (scope = 'local') => {
+      // While still signed in: this install stops receiving pushes for this account.
+      if (session?.user.id) await invalidatePushToken(session.user.id);
       await supabase.auth.signOut({ scope });
       qc.clear();
     },

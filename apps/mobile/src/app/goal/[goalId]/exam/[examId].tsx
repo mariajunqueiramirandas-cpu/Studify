@@ -78,6 +78,7 @@ export default function ExamDetail() {
         <Card>
           <ListItem icon="moon-outline" title={t('exam.vespera')} onPress={() => router.push(`/goal/${goalId}/eve/${examId}`)} />
           <ListItem icon="sparkles-outline" title={t('exam.predicted')} onPress={() => router.push(`/goal/${goalId}/predicted/${examId}`)} />
+          {e.subject_id ? <ListItem icon="headset-outline" title={t('podcast.exam_review')} onPress={() => router.push({ pathname: '/podcast/new', params: { subjectId: e.subject_id!, examId, style: 'exam_review' } })} /> : null}
           {isPast ? <ListItem icon="checkbox-outline" title={t('pp.what_fell')} onPress={() => router.push({ pathname: '/goal/[goalId]/predicted/[examId]', params: { goalId, examId, outcome: '1' } })} /> : null}
           <ListItem
             icon="refresh-outline"

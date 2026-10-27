@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { ActionBar, Button, Card, Celebrate, Row, Screen, Stat, Text } from '../../components';
 import { useTodayPlan } from '../../features/goals/today';
+import { CapiCheer } from '../../features/motivation/CapiCheer';
 import { t } from '../../i18n';
 import { space } from '../../theme';
 
@@ -25,6 +26,7 @@ export default function SessionEnd() {
       }
     >
       <View style={{ height: space.xxl }} />
+      <CapiCheer happy={!calm} />
       <Celebrate text={kind === 'review' ? '🎉' : '✅'} calm={!!calm} />
       <Text variant="title" align="center">
         {kind === 'review' ? t('review.done', { n, min: Math.max(1, min) }) : t('session.summary', { min: Math.max(1, min), cards: n, questions: Number(questions ?? 0), topics: Number(topics ?? 0) })}

@@ -114,7 +114,175 @@ const pageRef = (doc = 'D1') => ({ doc, page_start: 3, page_end: 4 });
 
 const feedItemValid = { type: 'diagram', concept_key: 'c1', title: 'Célula', body: 'Organelas.', formula_latex: null, question: null, figure_page: 13, caption: 'Figura 1', external_knowledge: false, source_pages: [ref] };
 
+// ---------------------------------------------------------------- Phase 3 (camera, PRA-06/07/08, INT-01/02)
+
+const understanding = {
+  content_type: 'exercise', language: 'pt-BR', is_study_content: true, contains_people: false,
+  transcription_md: '1) Calcule 2 + 2.', key_concepts: ['soma'], subject_guess: { subject_key: 'S1', confidence: 0.8 },
+  detected_questions: [{ label: '1', preview: 'Calcule 2 + 2', text_md: 'Calcule 2 + 2.', complete: true, has_figure: false }],
+  quality_issues: [],
+};
+const ladder = {
+  question_md: 'Calcule 2 + 2.', trivial: false, quantitative: true,
+  hints: [1, 2, 3, 4].map((level) => ({ level, text_md: `Dica ${level}` })),
+  final_answer: '4', answer_format: 'numeric', why_others_wrong: [], assumptions: [], uncertain_step: null, source_pages: [ref],
+};
+const transcription = { lines: [{ n: 1, text: 'A resposta é ⟦fotosintese?⟧.' }], uncertain: [{ line: 1, word: 'fotosintese', alternatives: ['fotossíntese'] }], illegible_count: 0, line_count_estimate: 1, title_present: false };
+const essayGrade = {
+  built_rubric: false,
+  criteria: [{ id: 'r1', criterion: 'Tese', points_max: 5, points: 3, verdict: 'partial', justification: 'Tese pouco clara.' }],
+  strengths: ['Boa introdução.'], missing: [{ point: 'Exemplo', source_pages: [ref] }], model_answer: 'Resposta modelo.',
+  misconceptions: [], suggested_cause: 'didnt_know', grader_confidence: 'medium', feedback: 'Bom começo.', remediation_card: null,
+};
+const acheItem = {
+  statement_kind: 'statement', segments: [{ id: 'S1', text: 'a' }, { id: 'S2', text: 'b' }, { id: 'S3', text: 'c' }],
+  error_segment_id: 'S2', error_type: 'conceitual', explanation: 'Conceito trocado.', corrected_text: 'b certo',
+  concept_keys: ['c1'], difficulty: 2, source_pages: [ref],
+};
+const acheNoError = { ...acheItem, error_segment_id: null, error_type: null, corrected_text: null };
+const problemItem = {
+  statement: 'Um corpo de 2 kg acelera a 3 m/s². Qual a força?', given: [{ name: 'm', value: '2' }, { name: 'a', value: '3' }],
+  final_answer: '6', answer_format: 'numeric', unit: 'N', tolerance: 0.01, check_expression: 'm*a',
+  solution_steps: ['F = m·a', 'F = 2·3 = 6 N'], hints: ['Segunda lei.', 'Monte F = m·a.', 'Substitua.'], difficulty: 1,
+  concept_keys: ['c1'], source_pages: [ref],
+};
+const worked = { statement: 'Exemplo.', steps: ['Passo 1', 'Passo 2'], answer: '6 N' };
+const podcastSegment = (id: string, kind: string) => ({
+  id, kind, node_keys: kind === 'topic' ? ['t1'] : [], title: 'Parte', source_pages: kind === 'topic' ? [ref] : [],
+  lines: [{ speaker: 'bia', text: 'Oi!', pause_after_ms: null }], recall_question: null,
+});
+const podcastScriptValid = { title: 'Episódio', segments: [podcastSegment('seg1', 'hook'), podcastSegment('seg2', 'topic'), podcastSegment('seg3', 'outro')] };
+const lucasPlanValid = {
+  key_concepts: [
+    { id: 'k1', statement: 'A glicólise ocorre no citoplasma.', concept_key: 'c1', source_pages: [ref] },
+    { id: 'k2', statement: 'Produz piruvato.', concept_key: null, source_pages: [ref] },
+  ],
+  misconceptions: [{ id: 'm1', lucas_belief: 'Ocorre na mitocôndria.', correct_concept: 'Ocorre no citoplasma.', fix_criteria: ['citoplasma'], trigger: 'early', source_pages: [ref] }],
+  naive_questions: ['Por quê?', 'Onde?'],
+};
+const lucasTurnValid = {
+  lucas_reply: 'Ah, então é no citoplasma?', safety: 'ok',
+  evaluation: {
+    misconception_updates: [{ id: 'm1', status: 'revealed' }], concepts_covered: [{ id: 'k1', quality: 'partial' }],
+    errors_taught: [], clarity_signals: { used_example: false, used_analogy: false, checked_understanding: true },
+  },
+};
+
+const PHASE3_CASES: SchemaCase[] = [
+  { name: 'CaptureUnderstanding', schema: S.CaptureUnderstanding, valid: understanding, invalid: { ...understanding, subject_guess: { subject_key: 'Biologia', confidence: 0.8 } } },
+  { name: 'HintLadder', schema: S.HintLadder, valid: ladder, invalid: { ...ladder, trivial: true } },
+  { name: 'FaithfulTranscription', schema: S.FaithfulTranscription, valid: transcription, invalid: { ...transcription, lines: [{ n: 2, text: 'x' }] } },
+  { name: 'EssayQuestionGrade', schema: S.EssayQuestionGrade, valid: essayGrade, invalid: { ...essayGrade, criteria: [] } },
+  { name: 'AcheOErroItem', schema: S.AcheOErroItem, valid: acheItem, invalid: { ...acheItem, error_type: null } },
+  { name: 'AcheOErroItems', schema: S.AcheOErroItems, valid: { items: [acheItem, acheItem, acheNoError] }, invalid: { items: [acheItem, acheNoError, acheNoError] } },
+  { name: 'WorkedExample', schema: S.WorkedExample, valid: worked, invalid: { ...worked, steps: ['só um'] } },
+  { name: 'GeneratedProblem', schema: S.GeneratedProblem, valid: problemItem, invalid: { ...problemItem, given: [{ name: '1x', value: '2' }] } },
+  { name: 'ProblemSet', schema: S.ProblemSet, valid: { worked_examples: [worked], problems: [problemItem, problemItem, { ...problemItem, difficulty: 3 }] }, invalid: { worked_examples: [], problems: [{ ...problemItem, difficulty: 3 }, problemItem, problemItem] } },
+  { name: 'FirstWrongStep', schema: S.FirstWrongStep, valid: { student_steps: ['F = m/a'], first_wrong_step_index: 0, what_went_wrong: 'Dividiu em vez de multiplicar.', nudge: 'Releia a segunda lei.' }, invalid: { student_steps: [], first_wrong_step_index: -1, what_went_wrong: 'x', nudge: 'y' } },
+  { name: 'PodcastScriptSchema', schema: S.PodcastScriptSchema, valid: podcastScriptValid, invalid: { ...podcastScriptValid, segments: [podcastSegment('seg1', 'hook'), podcastSegment('seg1', 'topic'), podcastSegment('seg3', 'outro')] } },
+  { name: 'LucasPlanSchema', schema: S.LucasPlanSchema, valid: lucasPlanValid, invalid: { ...lucasPlanValid, naive_questions: ['só uma'] } },
+  { name: 'LucasTurnSchema', schema: S.LucasTurnSchema, valid: lucasTurnValid, invalid: { ...lucasTurnValid, safety: 'unknown' } },
+];
+
 /** Payload schemas are exercised through their question variant (same payload object). */
+// ---------------------------------------------------------------- Phase 4 (ENEM, INT-03)
+
+const alts = ['A', 'B', 'C', 'D', 'E'].map((label) => ({ label, text_md: `Alternativa ${label}` }));
+const rationales = (answer: string) => ['A', 'B', 'C', 'D', 'E'].filter((l) => l !== answer).map((label) => ({ label, why: 'Confunde os conceitos.' }));
+const textoWritten = { kind: 'written', content_md: 'Em uma cidade, o transporte…', chart_data: null, source_pages: [], label: 'Texto elaborado pelo Studify' };
+const chart = { type: 'bar', title: 'Usuários por modal', x_label: 'Modal', y_label: '%', series: [{ name: '2025', points: [{ x: 'Ônibus', y: 40 }, { x: 'Metrô', y: 20 }] }] };
+const enemItem = { texto_base: textoWritten, comando_md: 'Qual é a causa?', alternatives: alts, answer: 'B', explanation_md: 'Porque…', distractor_rationales: rationales('B'), skill_code: 'CN-H17', difficulty: 'media', source_pages: [ref] };
+const element = { present: true, quote: 'o Ministério da Educação' };
+const competencia = (id: number, score = 160) => ({ id, score, level_text: 'Bom domínio.', justification: 'Poucos desvios.', evidence: [{ quote: 'Nesse contexto', line: 2 }], issues: [], strengths: ['Boa coesão.'] });
+const redacaoGrade = {
+  zero_check: { is_zero: false, reasons: [], evidence: null },
+  competencias: [1, 2, 3, 4, 5].map((id) => competencia(id)),
+  proposta: { agente: element, acao: element, meio: element, finalidade: element, detalhamento: { present: false, quote: null }, direitos_humanos_ok: true, note: null },
+  repertorio_refs: [{ text: 'Segundo o IBGE…', kind: 'data', line: 3 }],
+  rewrites: [],
+  top_actions: ['Detalhe a proposta.', 'Use mais conectivos.', 'Revise a crase.'],
+};
+const writtenQuestion = { texto_base_md: 'Texto elaborado pelo Studify: …', comando_md: 'Qual?', alternatives: alts, answer: 'C', explanation_md: 'Porque…', distractor_rationales: rationales('C'), skill_code: 'CH-H26', difficulty: 'facil' };
+const source = { url: 'https://agenciabrasil.ebc.com.br/x', name: 'Agência Brasil', published_at: '2026-10-20' };
+const digestItem = { title: 'Seca na Amazônia', summary_md: 'Rios em níveis mínimos.', why_md: 'Meio ambiente.', areas: ['CN', 'RED'], skill_codes: ['CN-H28'], redacao_axes: ['meio ambiente'], repertorio: [{ text: 'Rio Negro em nível mínimo.', source_url: source.url }], sources: [source], questions: [writtenQuestion, writtenQuestion] };
+const motivating = { kind: 'summary', text: 'Resumo da fonte.', source_url: source.url, source_name: 'Agência Brasil', published_at: '2026-10-20' };
+const predictedTheme = (axis: string) => ({ title: `Caminhos para enfrentar o desafio de ${axis} no Brasil`, axis, rationale: 'Padrão recorrente.', connections: [{ digest_item_key: 'A1', why: 'Relacionado.' }], repertorio_directions: ['dados do IBGE'], prompt: { instruction: 'Redija…', motivating_texts: [motivating, { ...motivating, kind: 'data' }] } });
+const axes = ['saúde', 'educação', 'meio ambiente', 'tecnologia', 'cidadania', 'cultura', 'trabalho', 'mobilidade'];
+const criteria = { tese: 3, fundamentacao: 2, repertorio: 2, coerencia: 3, refutacao: 1, falacias: 4 };
+const outlineArg = { topico: 'Falta investimento.', argumento: 'Sem recursos, o serviço piora.', repertorio: null };
+const argumentSummary = {
+  rubric: criteria,
+  strongest_argument: 'Dados de uso.',
+  weakest_point: 'Refutação.',
+  fallacies: [{ name: 'generalização apressada', count: 1 }],
+  repertorio_suggestions: [{ text: 'Dados do IBGE sobre transporte.', origin: 'geral' }],
+  strengths: ['Tese clara.'],
+  improve: ['Antecipe o contra-argumento.'],
+  outline: {
+    introducao: { contexto: 'Cidades cresceram.', tese: 'É preciso investir.' },
+    d1: outlineArg,
+    d2: outlineArg,
+    conclusao: { retomada: 'Portanto…', proposta: { agente: 'Governo federal', acao: 'ampliar o investimento', meio: 'por meio de parcerias', finalidade: 'para reduzir o tempo de deslocamento', detalhamento: 'priorizando periferias' } },
+  },
+};
+
+const PHASE4_CASES: SchemaCase[] = [
+  { name: 'HttpUrl', schema: S.HttpUrl, valid: 'https://ibge.gov.br/x', invalid: 'ftp://x' },
+  { name: 'EnemSkillCode', schema: S.EnemSkillCode, valid: 'MT-H21', invalid: 'MT-H31' },
+  { name: 'EnemTopicKey', schema: S.EnemTopicKey, valid: 'T12', invalid: 'topic-12' },
+  { name: 'EnemNodeTags', schema: S.EnemNodeTags, valid: { nodes: [{ node_key: 'n2', skill_codes: [{ code: 'CN-H14', confidence: 0.8 }], enem_topic_keys: [{ key: 'T1', confidence: 0.7 }] }] }, invalid: { nodes: [{ node_key: 'n2', skill_codes: [{ code: 'BIO-1', confidence: 0.8 }], enem_topic_keys: [] }] } },
+  { name: 'EnemItemTranscription', schema: S.EnemItemTranscription, valid: { statement_md: 'Enunciado', alternatives: alts, has_figure: true, alt_text: 'Gráfico de barras.', subject_guess: 'Biologia', unreadable: false }, invalid: { statement_md: 'Enunciado', alternatives: alts, has_figure: true, alt_text: null, subject_guess: null, unreadable: false } },
+  { name: 'EnemItemExplanation', schema: S.EnemItemExplanation, valid: { chosen_answer: 'B', solution_md: 'Resolução.', distractors: rationales('B').map((r) => ({ label: r.label, why_wrong: r.why })), skill_explanation: 'Interpretar.' }, invalid: { chosen_answer: 'B', solution_md: 'Resolução.', distractors: rationales('A').map((r) => ({ label: r.label, why_wrong: r.why })), skill_explanation: 'Interpretar.' } },
+  { name: 'EnemItemTopics', schema: S.EnemItemTopics, valid: { subject: 'Biologia', enem_topic_keys: [{ key: 'T1', confidence: 0.9 }] }, invalid: { subject: 'Biologia', enem_topic_keys: [] } },
+  { name: 'ChartData', schema: S.ChartData, valid: chart, invalid: { ...chart, series: [] } },
+  { name: 'TextoBase', schema: S.TextoBase, valid: textoWritten, invalid: { ...textoWritten, label: 'Texto da Folha de S.Paulo' } },
+  { name: 'EnemGeneratedItem', schema: S.EnemGeneratedItem, valid: enemItem, invalid: { ...enemItem, texto_base: { kind: 'excerpt', content_md: 'x'.repeat(700), chart_data: null, source_pages: [ref], label: null } } },
+  { name: 'EnemGeneratedItems', schema: S.EnemGeneratedItems, valid: { items: [enemItem] }, invalid: { items: [{ ...enemItem, alternatives: alts.slice(0, 4) }] } },
+  { name: 'EssayGrade', schema: S.EssayGrade, valid: redacaoGrade, invalid: { ...redacaoGrade, competencias: [1, 2, 3, 4, 5].map((id) => competencia(id, 150)) } },
+  { name: 'RepertorioVerdict', schema: S.RepertorioVerdict, valid: { status: 'confirmed', source_url: 'https://ibge.gov.br/x', source_name: 'IBGE', note: 'Confirmado.' }, invalid: { status: 'contradicted', source_url: null, source_name: null, note: 'Errado.' } },
+  { name: 'WrittenEnemQuestion', schema: S.WrittenEnemQuestion, valid: writtenQuestion, invalid: { ...writtenQuestion, distractor_rationales: rationales('C').slice(0, 3) } },
+  { name: 'AtualidadesDigest', schema: S.AtualidadesDigest, valid: { items: [digestItem], skipped_note: null }, invalid: { items: [{ ...digestItem, sources: [] }], skipped_note: null } },
+  { name: 'PredictedThemes', schema: S.PredictedThemes, valid: { themes: axes.map(predictedTheme) }, invalid: { themes: axes.map(() => predictedTheme('saúde')) } },
+  { name: 'EssayThemePromptOut', schema: S.EssayThemePromptOut, valid: { title: 'Desafios da mobilidade urbana no Brasil', axis: 'mobilidade', instruction: 'Redija…', motivating_texts: [{ kind: 'context', text: 'Contexto.', source_url: null, source_name: null }] }, invalid: { title: 'Curto', axis: 'x', instruction: 'Redija…', motivating_texts: [] } },
+  { name: 'ArgumentCriteria', schema: S.ArgumentCriteria, valid: criteria, invalid: { ...criteria, tese: 5 } },
+  { name: 'ArgumentRoundFeedback', schema: S.ArgumentRoundFeedback, valid: { rubric: criteria, fallacies: [{ name: 'ad hominem', quote: 'Você não entende nada.', explanation: 'Ataca a pessoa.' }], tip: 'Traga um dado.' }, invalid: { rubric: criteria, fallacies: [{ name: 'falácia inventada', quote: 'x', explanation: 'y' }], tip: 'z' } },
+  { name: 'ThesisFeedback', schema: S.ThesisFeedback, valid: { clear: true, has_position: true, specific: false, feedback: 'Clara, mas genérica.', suggestion: 'Diga qual tipo de celular.' }, invalid: { clear: true, feedback: 'x' } },
+  { name: 'ArgumentSummary', schema: S.ArgumentSummary, valid: argumentSummary, invalid: { ...argumentSummary, outline: { ...argumentSummary.outline, conclusao: { retomada: 'x', proposta: { agente: 'Governo' } } } } },
+  { name: 'ArgumentThemes', schema: S.ArgumentThemes, valid: { themes: Array.from({ length: 5 }, (_, i) => ({ question: `A escola deve proibir celulares ${i}?`, node_keys: ['n1'], why: 'Dois lados legítimos.' })) }, invalid: { themes: [{ question: 'A escola deve proibir celulares?', node_keys: ['n1'], why: 'x' }] } },
+];
+
+const flowVisual = {
+  type: 'flowchart',
+  title: 'Respiração celular',
+  alt_text: 'Fluxo da glicose até o ATP, passando pela glicólise e pelo ciclo de Krebs.',
+  nodes: [
+    { id: 'n1', label: 'Glicose', detail: null, source: ref },
+    { id: 'n2', label: 'Glicólise', detail: null, source: null },
+  ],
+  edges: [{ from: 'n1', to: 'n2', label: null }],
+};
+const finding = {
+  type: 'contradiction',
+  severity: 'high',
+  doc: 'D1',
+  page_start: 4,
+  page_end: 4,
+  related: { doc: 'D1', page: 9 },
+  node_key: 't1',
+  description: 'Possível erro: a p. 4 diz 38 ATP e a p. 9 diz 30–32 ATP.',
+  suggested_fix: null,
+};
+const mnemonicOption = (type: string) => ({ type, title: 'PMAT', text: 'P-M-A-T', how_to_use: 'Lembre da sigla antes de virar o cartão.', loci: null });
+
+const PHASE5_CASES: SchemaCase[] = [
+  { name: 'VisualOut', schema: S.VisualOut, valid: { fits: true, reason: null, visual: flowVisual }, invalid: { fits: true, reason: null, visual: null } },
+  { name: 'MaterialFindings', schema: S.MaterialFindings, valid: { findings: [finding] }, invalid: { findings: [{ ...finding, related: null }] } },
+  { name: 'MnemonicOptions', schema: S.MnemonicOptions, valid: { options: ['acronym', 'phrase', 'rhyme'].map(mnemonicOption) }, invalid: { options: [mnemonicOption('acronym')] } },
+  { name: 'ContributionReview', schema: S.ContributionReview, valid: { errors: [{ quote: '38 ATP', correction: 'O material diz 30–32 ATP.', source: ref }], missing_concepts: ['Cadeia respiratória'], ok_to_merge: false, summary: 'Bom começo!' }, invalid: { errors: [], missing_concepts: [], ok_to_merge: true } },
+  { name: 'PeerQuestionValidation', schema: S.PeerQuestionValidation, valid: { grounded: true, evidence: [ref], single_correct_answer: true, clarity_issues: [], appropriate: true, duplicate_of: null, suggested_fix: null }, invalid: { grounded: true, evidence: [], single_correct_answer: true, clarity_issues: [], appropriate: true, duplicate_of: 'question-1', suggested_fix: null } },
+  { name: 'RetroTitle', schema: S.RetroTitle, valid: { title_pt: 'Seu semestre foi brabo! ✨', subtitle_pt: '42 horas de estudo bem aproveitadas.' }, invalid: { title_pt: 'x'.repeat(61), subtitle_pt: 'ok ok' } },
+];
+
 export const PAYLOAD_ALIASES: Record<string, string> = {
   McqSinglePayload: 'question variant mcq_single',
   MultiSelectPayload: 'question variant multi_select',
@@ -175,4 +343,7 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'TeacherPatterns', schema: S.TeacherPatterns, valid: { patterns: [{ text: 'Pede justificativa.', evidence_question_ids: ['q1', 'q2'] }], style_notes: 'Cobra justificativa.', typical_command_verbs: ['justifique'] }, invalid: { patterns: [{ text: 'x', evidence_question_ids: ['q1'] }], style_notes: 'x', typical_command_verbs: [] } },
   { name: 'FlagVerdict', schema: S.FlagVerdict, valid: { verdict: 'error_confirmed', confidence: 'high', explanation_pt: 'A página 4 diz outra coisa.', evidence_pages: [ref], corrected_item: { fields: [{ name: 'back', value: 'Correto' }] }, answer_changed: true }, invalid: { verdict: 'not_an_error', confidence: 'high', explanation_pt: 'x', evidence_pages: [], corrected_item: { fields: [{ name: 'back', value: 'x' }] }, answer_changed: false } },
   { name: 'ModerationVerdict', schema: S.ModerationVerdict, valid: { allowed: true, category: 'ok' }, invalid: { allowed: true, category: 'offensive' } },
+  ...PHASE3_CASES,
+  ...PHASE4_CASES,
+  ...PHASE5_CASES,
 ];

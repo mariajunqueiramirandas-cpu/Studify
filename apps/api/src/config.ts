@@ -36,6 +36,8 @@ export interface ApiConfig {
   baseUrl: string | undefined;
   pgBossSchema: string;
   siteDir: string;
+  /** TTS_PROVIDER, GOOGLE_TTS_API_KEY, TTS_VOICE_*, TTS_USD_PER_MILLION_CHARS (packages/speech ttsFromEnv). */
+  ttsEnv: Record<string, string | undefined>;
 }
 
 export class ConfigError extends Error {
@@ -79,5 +81,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     baseUrl: env.BASE_URL === undefined ? undefined : env.BASE_URL.trim(),
     pgBossSchema: v.PG_BOSS_SCHEMA,
     siteDir: v.SITE_DIR ?? DEFAULT_SITE_DIR,
+    ttsEnv: Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('TTS_') || key === 'GOOGLE_TTS_API_KEY')),
   };
 }

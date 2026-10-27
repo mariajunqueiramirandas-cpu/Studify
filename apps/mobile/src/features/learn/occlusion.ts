@@ -1,0 +1,64 @@
+// Image-occlusion card creation (MEM-03): the image is re-encoded on device (≤ 1568 px), ML Kit proposes masks
+// from the text it reads (MEM-03.2), and saving uploads the image to media/{subject}/occlusion/… and inserts one
+// card per labeled mask with a shared sibling group (MEM-03.4). Personal by default in a Turma subject (03.7).
+import TextRecognition from '@react-native-ml-kit/text-recognition';
+import { CAPTURE_IMAGE, fitLongEdge, occlusionCardText, occlusionCardsFor, suggestMasks, type OcclusionMask, type OcclusionMode } from '@studify/shared';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { uuidv7 } from 'uuidv7';
+import { uploadFile } from '../../api/storage';
+import { supabase } from '../../api/supabase';
+
+export interface OcclusionSource {
+  uri: string;
+  width: number;
+  height: number;
+}
+
+/** Resizes the image and suggests masks from recognized text. Recognition failures leave the mask list empty. */
+export async function prepareOcclusionImage(source: OcclusionSource): Promise<OcclusionSource & { masks: OcclusionMask[] }> {
+  const size = fitLongEdge(source.width, source.height, CAPTURE_IMAGE.longEdge);
+  const context = ImageManipulator.manipulate(source.uri);
+  if (size.width !== source.width || size.height !== source.height) context.resize(size);
+  const saved = await (await context.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: CAPTURE_IMAGE.jpegQuality });
+  let masks: OcclusionMask[] = [];
+  try {
+    const result = await TextRecognition.recognize(saved.uri);
+    const boxes = result.blocks.flatMap((b) => b.lines).filter((l) => l.frame).map((l) => ({ text: l.text, frame: l.frame! }));
+    masks = suggestMasks(boxes, saved.width, saved.height);
+  } catch {
+    masks = [];
+  }
+  return { uri: saved.uri, width: saved.width, height: saved.height, masks };
+}
+
+export async function createOcclusionCards(
+  userId: string,
+  input: { subjectId: string; nodeId: string; image: OcclusionSource; masks: OcclusionMask[]; mode: OcclusionMode; personal: boolean },
+): Promise<number> {
+  const object = `${input.subjectId}/occlusion/${uuidv7()}.jpg`;
+  await uploadFile({ bucket: 'media', path: object, uri: input.image.uri, contentType: 'image/jpeg' });
+  const medias = occlusionCardsFor({ path: `media/${object}`, width: input.image.width, height: input.image.height }, input.masks, input.mode);
+  const group = uuidv7();
+  const rows = medias.map((media) => {
+    const text = occlusionCardText(media);
+    return {
+      id: uuidv7(),
+      subject_id: input.subjectId,
+      node_id: input.nodeId,
+      type: 'image_occlusion',
+      front: text.front,
+      back: text.back,
+      media,
+      has_math: false,
+      sibling_group_id: group,
+      source_pages: [],
+      origin: 'user',
+      created_by: userId,
+      personal_for_user_id: input.personal ? userId : null,
+    };
+  });
+  if (rows.length === 0) return 0;
+  const { error } = await supabase.from('cards').insert(rows);
+  if (error) throw Object.assign(new Error(error.message), { code: error.code });
+  return rows.length;
+}

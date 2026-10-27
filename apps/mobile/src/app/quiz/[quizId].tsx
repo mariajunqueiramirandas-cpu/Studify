@@ -1,4 +1,4 @@
-import { gradeAnswer, suggestMistakeCause } from '@studify/shared';
+import { bossHealth, bossPassed, gradeAnswer, suggestMistakeCause } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -20,9 +20,12 @@ import {
   Text,
   useOverlay,
 } from '../../components';
+import { supabase } from '../../api/supabase';
 import { useDb } from '../../db/DatabaseProvider';
 import { useSession } from '../../features/auth/session';
 import { formatClock } from '../../features/common/format';
+import { EnemItemHeader, TextoBaseView } from '../../features/enem/components';
+import { awardXp } from '../../features/motivation/xp';
 import { ExplainSheet } from '../../features/learn/ExplainSheet';
 import { useQuizBundle } from '../../features/practice/api';
 import { usePickedCauses } from '../../features/practice/causes';
@@ -49,12 +52,15 @@ export default function QuizRunner() {
   const quiz = bundle.data?.quiz;
   const questions = bundle.data?.questions ?? [];
   const exam = quiz?.mode === 'exam_conditions' || quiz?.mode === 'relaxed';
+  const enemSim = quiz?.kind === 'enem_simulado';
+  const isBoss = quiz?.kind === 'boss';
   const confidenceOn = (profile?.settings as { confidence_enabled?: boolean } | undefined)?.confidence_enabled !== false;
 
   const [response, setResponse] = useState<QuestionResponse | null>(null);
   const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [result, setResult] = useState<GradeResult | null>(null);
   const [cause, setCause] = useState<MistakeCause | null>(null);
+  const [hints, setHints] = useState(0);
   const [suggested, setSuggested] = useState<MistakeCause | null>(null);
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [navigator, setNavigator] = useState(false);
@@ -63,6 +69,7 @@ export default function QuizRunner() {
   const [now, setNow] = useState(Date.now());
   const shownAt = useRef(Date.now());
   const submitted = useRef(false);
+  const warned = useRef<Set<number>>(new Set());
 
   // Start or resume the persisted runner for this attempt.
   useEffect(() => {
@@ -77,6 +84,7 @@ export default function QuizRunner() {
     const saved = runner.answers[q.id];
     setResponse((saved?.response as QuestionResponse | undefined) ?? null);
     setConfidence(saved?.confidence ?? null);
+    setHints(saved?.hintsUsed ?? 0);
     setResult(null);
     setCause(null);
     shownAt.current = Date.now();
@@ -94,6 +102,16 @@ export default function QuizRunner() {
     if (remaining !== null && remaining <= 0 && !submitted.current) {
       overlay.snack(t('sim.time_up'));
       void submit();
+      return;
+    }
+    // ENEM simulado: warnings at 60, 30 and 15 minutes left (ENM-04.3), once each.
+    if (enemSim && remaining !== null) {
+      for (const min of [60, 30, 15]) {
+        if (remaining <= min * 60 && remaining > (min - 1) * 60 && !warned.current.has(min)) {
+          warned.current.add(min);
+          overlay.snack(t('sim.time.warning', { min }));
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remaining]);
@@ -106,7 +124,8 @@ export default function QuizRunner() {
   const confirm = () => {
     if (!q) return;
     persist(response, confidence);
-    const g = gradeAnswer(q.type as never, q.payload as never, response as never) as GradeResult;
+    // PRA-08.3: each hint lowers the credit of a correct problem answer.
+    const g = gradeAnswer(q.type as never, q.payload as never, response as never, { hintsUsed: hints }) as GradeResult;
     setResult(g);
     if (g.correct === false || (g.score != null && g.score < 1 && !g.pending)) {
       // PRA-04 §8.5: no AI call at answer time — the cause is suggested deterministically.
@@ -148,13 +167,30 @@ export default function QuizRunner() {
       if (g.correct) correct++;
     }
     const id = await runner.submit(db);
-    router.replace({ pathname: '/practice/result/[attemptId]', params: { attemptId: id ?? attemptId ?? '', k: String(correct), n: String(questions.length), quizId } });
+    // MOT-02.4: ≥ 70% defeats the boss: 50 XP the first time for this unit, 10 on later wins (spec 13 §8.1).
+    let bossWon = false;
+    if (isBoss && userId && questions.length) {
+      bossWon = bossPassed(correct / questions.length);
+      const unitId = (quiz?.scope as { unit_node_id?: string } | undefined)?.unit_node_id;
+      if (bossWon && unitId) {
+        const before = await supabase.from('boss_attempts').select('id').eq('user_id', userId).eq('unit_node_id', unitId).eq('passed', true).limit(1);
+        awardXp(db, userId, { kind: 'boss_defeated', retry: (before.data ?? []).length > 0 }, { type: 'boss', id: id ?? attemptId ?? quizId, feature: 'MOT-02' });
+      }
+    }
+    // ENEM simulado: per-area TRI estimate instead of a single score (ENM-04.5).
+    if (enemSim && (id ?? attemptId)) router.replace({ pathname: '/enem/simulado/[attemptId]', params: { attemptId: (id ?? attemptId)! } });
+    else router.replace({ pathname: '/practice/result/[attemptId]', params: { attemptId: id ?? attemptId ?? '', k: String(correct), n: String(questions.length), quizId, ...(isBoss ? { boss: bossWon ? 'won' : 'lost' } : {}) } });
   };
 
   if (bundle.isError) return <Screen title="" immersive><ErrorState onRetry={bundle.refetch} /></Screen>;
   if (!quiz || !q) return <Screen title="" immersive><SkeletonList rows={4} height={64} /></Screen>;
 
   const answered = isAnswered(q.type, response);
+  // Correct answers so far, graded on the device (bosses use auto-graded types only).
+  const bossCorrect = isBoss
+    ? questions.filter((x) => runner.answers[x.id]?.response && (gradeAnswer(x.type as never, x.payload as never, runner.answers[x.id]!.response as never) as GradeResult).correct).length
+    : 0;
+  const enemMeta = bundle.data?.enem.get(q.id);
   const needsConfidence = confidenceOn && !exam && answered && !result;
   const subjectShared = false;
 
@@ -174,7 +210,11 @@ export default function QuizRunner() {
       context={
         <Row>
           <View style={{ flex: 1 }}>
-            <ProgressBar value={(runner.index + (result ? 1 : 0)) / questions.length} />
+            {isBoss ? (
+              <ProgressBar value={bossHealth(bossCorrect, questions.length)} label={t('map.boss_health')} />
+            ) : (
+              <ProgressBar value={(runner.index + (result ? 1 : 0)) / questions.length} />
+            )}
           </View>
           {remaining !== null ? (
             <Text variant="label" tone={remaining < 60 ? 'warning' : 'secondary'} accessibilityLiveRegion="none">
@@ -205,7 +245,21 @@ export default function QuizRunner() {
         </ActionBar>
       }
     >
-      <QuestionView question={q} response={response} onChange={(r) => (setResponse(r), exam && persist(r, null))} revealed={!!result && !result.pending} />
+      <QuestionView
+        question={q}
+        header={enemMeta ? <EnemItemHeader meta={enemMeta} transcription={q.stem} /> : q.texto_base ? <TextoBaseView value={q.texto_base} /> : null}
+        stemInHeader={!!enemMeta}
+        response={response}
+        onChange={(r) => (setResponse(r), exam && persist(r, null))}
+        revealed={!!result && !result.pending}
+        hintsUsed={hints}
+        // Hints are a practice aid (PRA-08.3); simulados run without them.
+        onHint={exam ? undefined : () => {
+          const n = hints + 1;
+          setHints(n);
+          runner.answer(q.id, { response, confidence, hintsUsed: n });
+        }}
+      />
       {needsConfidence ? (
         <View style={{ gap: space.xs }}>
           <ConfidencePicker value={confidence} onChange={setConfidence} />

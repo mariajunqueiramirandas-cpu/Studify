@@ -258,6 +258,12 @@ export const ACHIEVEMENTS = [
     computable: false,
   },
   { code: 'consistent_week', name: 'Semana consistente', criterion: 'Bater a meta do dia em 4 dias de uma mesma semana.', metric: 'bestWeekGoalDays', threshold: 4, computable: true },
+  // Phase 5 (spec 13 §8.5 "Later")
+  { code: 'boss_first', name: 'Caçador de chefões', criterion: 'Derrotar o primeiro chefão de uma unidade (MOT-02).', metric: 'bossesDefeated', threshold: 1, computable: true },
+  { code: 'lucas_90', name: 'Nasceu pra ensinar', criterion: 'Tirar 90 ou mais no Ensine o Lucas.', metric: 'bestLucasScore', threshold: 90, computable: true },
+  { code: 'debate_5', name: 'Bom de argumento', criterion: 'Terminar 5 Treinos de Argumentação.', metric: 'debatesFinished', threshold: 5, computable: true },
+  { code: 'turma_10', name: 'Líder da turma', criterion: '10 contribuições aprovadas na turma (resumos ou perguntas).', metric: 'turmaContributions', threshold: 10, computable: true },
+  { code: 'focus_10', name: 'Foco total', criterion: 'Completar 10 ciclos do Modo foco.', metric: 'focusCycles', threshold: 10, computable: true },
 ] as const;
 
 export type AchievementDefinition = (typeof ACHIEVEMENTS)[number];
@@ -288,6 +294,16 @@ export interface AchievementMetrics {
   errorReportsAccepted: number;
   /** Most days with the daily goal met in one study week (Monday start). */
   bestWeekGoalDays: number;
+  /** Distinct units whose boss was passed (boss_attempts.passed). */
+  bossesDefeated: number;
+  /** Best teaching_sessions.score. */
+  bestLucasScore: number;
+  /** argument_sessions with status finished. */
+  debatesFinished: number;
+  /** Approved contributions plus approved peer questions authored by the user. */
+  turmaContributions: number;
+  /** Σ study_sessions.cycles_done of focus sessions. */
+  focusCycles: number;
 }
 
 export interface AchievementProgress {

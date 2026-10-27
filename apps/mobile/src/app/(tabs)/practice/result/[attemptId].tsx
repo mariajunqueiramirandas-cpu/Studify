@@ -10,10 +10,11 @@ import { usePickedCauses } from '../../../../features/practice/causes';
 import type { GradeResult, QuestionResponse, QuestionRow } from '../../../../features/practice/types';
 import { options, t } from '../../../../i18n';
 import { space } from '../../../../theme';
+import { CapiCheer } from '../../../../features/motivation/CapiCheer';
 
 /** S-PRA-07 Resultado + S-PRA-08 Correção (PRA-03, PRA-01.6). */
 export default function Result() {
-  const { attemptId, k, n, quizId } = useLocalSearchParams<{ attemptId: string; k?: string; n?: string; quizId?: string }>();
+  const { attemptId, k, n, quizId, boss } = useLocalSearchParams<{ attemptId: string; k?: string; n?: string; quizId?: string; boss?: 'won' | 'lost' }>();
   const res = useAttemptResult(attemptId);
   const online = useOnline();
   const mistakes = useMistakes('open');
@@ -58,7 +59,9 @@ export default function Result() {
         </ActionBar>
       }
     >
-      <Celebrate text={total && correct / total >= 0.7 ? '🎉' : '💪'} />
+      <CapiCheer happy={boss === 'won' || (!!total && correct / total >= 0.7)} />
+      <Celebrate text={boss === 'won' ? '🏆' : total && correct / total >= 0.7 ? '🎉' : '💪'} />
+      {boss === 'won' ? <Banner kind="success" message={t('map.boss_defeated')} /> : boss === 'lost' ? <Banner kind="info" message={t('map.boss_again')} /> : null}
       <RichText variant="title" align="center">
         {grade != null ? t('sim.result', { k: correct, n: total, grade: formatGrade(grade) }) : t('result.score', { k: correct, n: total })}
       </RichText>

@@ -13,11 +13,14 @@ export interface UiState {
   reduceMotion: boolean;
   /** Timed activities use 1.5× time. */
   extraTime: boolean;
+  /** WEL-04.8 read-aloud speed, 0.75×–2×. */
+  readAloudRate: number;
   setTheme: (theme: ThemeMode) => void;
   setEasyReading: (value: boolean) => void;
   setHighContrast: (value: boolean) => void;
   setReduceMotion: (value: boolean) => void;
   setExtraTime: (value: boolean) => void;
+  setReadAloudRate: (value: number) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -28,11 +31,13 @@ export const useUiStore = create<UiState>()(
       highContrast: false,
       reduceMotion: false,
       extraTime: false,
+      readAloudRate: 1,
       setTheme: (theme) => set({ theme }),
       setEasyReading: (easyReading) => set({ easyReading }),
       setHighContrast: (highContrast) => set({ highContrast }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       setExtraTime: (extraTime) => set({ extraTime }),
+      setReadAloudRate: (readAloudRate) => set({ readAloudRate: Math.min(2, Math.max(0.75, readAloudRate)) }),
     }),
     {
       name: 'studify.ui.v1',

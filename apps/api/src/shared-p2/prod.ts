@@ -1,5 +1,6 @@
 // Production wiring for the Phase 2 functions: extends the base runtime with the Realtime broadcaster, the
 // user-scoped RPC runner and the public base URL. Built once at startup next to the base runtime.
+import { ttsFromEnv } from '@studify/speech';
 import type { ApiConfig } from '../config.ts';
 import { buildProdRuntime, type ProdRuntime } from '../shared/prod.ts';
 import type { P2Deps } from './deps.ts';
@@ -27,6 +28,18 @@ export function buildP2Runtime(config: ApiConfig): P2Runtime {
       return (buf[0] ?? 0) % maxExclusive;
     },
     randomBytes: (n: number) => crypto.getRandomValues(new Uint8Array(n)),
+    // INT-01.8 ✋ audio. Null (TTS_PROVIDER=device or no key): the app reads answers with on-device TTS.
+    tts: ttsFromEnv(config.ttsEnv),
+    signedUrl: async (path: string, ttlSeconds: number) => {
+      const slash = path.indexOf('/');
+      const { data, error } = await base.deps.db.storage.from(path.slice(0, slash)).createSignedUrl(path.slice(slash + 1), ttlSeconds);
+      return error || !data ? null : data.signedUrl;
+    },
+    uploadObject: async (path: string, bytes: Uint8Array, contentType: string) => {
+      const slash = path.indexOf('/');
+      const { error } = await base.deps.db.storage.from(path.slice(0, slash)).upload(path.slice(slash + 1), bytes, { contentType, upsert: true });
+      if (error) throw error;
+    },
   };
   return { ...base, deps };
 }

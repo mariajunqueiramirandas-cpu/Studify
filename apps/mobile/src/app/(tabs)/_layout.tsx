@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { BottomTabBar, type BottomTabBarProps } from 'expo-router/tabs';
+import { MiniPlayer } from '../../features/podcast/MiniPlayer';
 import type { ComponentProps } from 'react';
 import { t } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -11,12 +13,25 @@ function icon(active: IconName, inactive: IconName) {
   return ({ color, focused }: { color: unknown; focused: boolean }) => <Ionicons name={focused ? active : inactive} size={24} color={color as string} />;
 }
 
+/** The podcast mini-player sits on top of the tab bar while an episode is loaded (spec 12 §5.1). */
+function TabBarWithPlayer(props: BottomTabBarProps) {
+  return (
+    <>
+      <MiniPlayer />
+      <BottomTabBar {...props} />
+    </>
+  );
+}
+
+const renderTabBar = (props: BottomTabBarProps) => <TabBarWithPlayer {...props} />;
+
 /** Five bottom tabs with labels always visible (ux §2, §6 BottomTabBar). */
 export default function TabsLayout() {
   const { colors, type } = useTheme();
   const requests = usePendingRequestsBadge();
   return (
     <Tabs
+      tabBar={renderTabBar}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,

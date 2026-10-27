@@ -58,11 +58,12 @@ Settings > Secrets and variables > Actions.
 | `ANDROID_KEY_ALIAS` | Secret | yes | Key alias (`studify`) |
 | `ANDROID_KEY_PASSWORD` | Secret | yes | Key password (same as the keystore password for PKCS12) |
 | `SENTRY_AUTH_TOKEN` | Secret | no | Uploads source maps and native symbols. Without it the upload is skipped (`SENTRY_DISABLE_AUTO_UPLOAD=true`). |
+| `GOOGLE_SERVICES_JSON_BASE64` | Secret | for remote push | Base64 of the Firebase `google-services.json` (step 6). Without it the build gets no push token. |
 | `EXPO_PUBLIC_SUPABASE_URL` | Variable | yes | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Variable | yes | Supabase anon key (public by design; RLS protects the data) |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Variable | recommended | Google sign-in web client id (empty disables Google sign-in) |
 | `EXPO_PUBLIC_SENTRY_DSN` | Variable | recommended | Sentry DSN (public ingest URL) |
-| `EXPO_PUBLIC_EAS_PROJECT_ID` | Variable | no | Enables the expo-updates URL. Leave empty unless you use OTA updates. |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | Variable | for remote push | The Expo project the push tokens belong to (step 6); also enables the expo-updates URL. |
 | `EXPO_PUBLIC_BASE_URL` | Variable | no | Defaults to `https://studify.vendua.com.br` |
 | `EXPO_PUBLIC_API_URL` | Variable | no | Defaults to `https://studify.vendua.com.br/api`. The app does not read it yet. |
 | `APP_VERSION_SUFFIX` | Variable | no | Appended to the version name, for example `-beta.1` |
@@ -85,6 +86,25 @@ Copy the `SHA256:` value into `apps/site/public/.well-known/assetlinks.json`, in
 `"package_name": "com.studify.app"`, replacing `REPLACE_WITH_PRODUCTION_SHA256_FROM_eas_credentials`. Deploy the
 site so the file is live before users install a build, then check that the URL above returns the JSON.
 If the key is ever rotated, list both fingerprints in `sha256_cert_fingerprints` during the transition.
+
+### 6. Remote push (optional, recommended)
+
+Without this, the app still shows its local reminders (reviews with the next card, the day's plan, the exam
+eve, the streak), mirrors live progress while it is open, and keeps the Central de notificações in step. With
+it, server pushes (material ready, Turma, battles, live progress while the app is closed) reach the phone and
+are drawn by the `studify-notify` module.
+
+1. Create a Firebase project and add an Android app with the package `com.studify.app`. Download its
+   `google-services.json` and store it as the secret: `base64 -w0 google-services.json` → `GOOGLE_SERVICES_JSON_BASE64`.
+   The workflow writes it to the runner and sets `GOOGLE_SERVICES_FILE`, which `app.config.ts` passes to
+   `android.googleServicesFile`. The file is git-ignored; never commit it.
+2. Create an Expo project (`npx eas-cli@latest init` in `apps/mobile`) and set its id as `EXPO_PUBLIC_EAS_PROJECT_ID`.
+3. In Firebase, create a service-account key for FCM HTTP v1 and upload it to the Expo project
+   (`npx eas-cli@latest credentials` → Android → Google Service Account → FCM V1). Expo uses it to deliver.
+4. Give the worker an Expo access token with push permission as `EXPO_ACCESS_TOKEN` (see `apps/worker/.env.example`).
+
+Check: on a release build, sign in, allow notifications, and look for a row in `push_tokens` for your user.
+Perfil → Notificações → Ver exemplos sends every layout to the shade without the server.
 
 ## Versioning
 

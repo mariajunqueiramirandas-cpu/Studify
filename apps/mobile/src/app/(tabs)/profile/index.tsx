@@ -21,10 +21,14 @@ export default function Profile() {
       <Card>
         <ListItem icon="flag-outline" title={t('profile.goals')} onPress={() => router.push('/profile/goals')} />
         <ListItem icon="trophy-outline" title={t('profile.progress')} onPress={() => router.push('/profile/progress')} />
+        <ListItem icon="paw-outline" title={t('capi.title')} onPress={() => router.push('/profile/capi')} />
+        <ListItem icon="sparkles-outline" title={t('retro.title')} onPress={() => router.push('/retro')} />
+        <ListItem icon="timer-outline" title={t('focus.title')} onPress={() => router.push('/focus')} />
         <ListItem icon="sparkles-outline" title={t('profile.ai_usage')} onPress={() => router.push('/profile/ai-usage')} />
       </Card>
       <Card>
         <ListItem icon="settings-outline" title={t('profile.settings')} onPress={() => router.push('/profile/settings')} />
+        <ListItem icon="heart-outline" title={t('wellbeing.title')} onPress={() => router.push('/profile/wellbeing')} />
         <ListItem icon="shield-checkmark-outline" title={t('profile.privacy')} onPress={() => router.push('/profile/privacy')} />
         <ListItem icon="help-circle-outline" title={t('profile.help')} onPress={() => router.push('/profile/help')} />
       </Card>

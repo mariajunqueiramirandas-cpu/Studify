@@ -14,6 +14,7 @@ COPY apps/mobile/package.json apps/mobile/
 COPY packages/ai/package.json packages/ai/
 COPY packages/prompts/package.json packages/prompts/
 COPY packages/shared/package.json packages/shared/
+COPY packages/speech/package.json packages/speech/
 RUN pnpm install --frozen-lockfile --prod --filter @studify/worker...
 COPY . .
 

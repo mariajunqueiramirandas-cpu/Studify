@@ -1,12 +1,16 @@
-import { ACHIEVEMENTS } from '@studify/shared';
+import { ACHIEVEMENTS, suggestedReminderTimes } from '@studify/shared';
+import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { View } from 'react-native';
 import { supabase } from '../../../api/supabase';
-import { Card, ProgressBar, Row, Screen, Section, Stat, Text } from '../../../components';
+import { Capi, Card, ListItem, ProgressBar, Row, Screen, Section, Stat, Text } from '../../../components';
+import { bucketLabel, usePerformanceWindows } from '../../../features/energy/api';
+import { useStudyPreferences } from '../../../features/goals/api';
+import { useCapi } from '../../../features/motivation/capi';
 import { useSession } from '../../../features/auth/session';
 import { rows } from '../../../features/common/query';
 import { addDays, toLocalDate } from '../../../features/common/format';
-import { useMotivation } from '../../../features/motivation/api';
+import { useAchievements, useMotivation } from '../../../features/motivation/api';
 import { t } from '../../../i18n';
 import { radius, space, useTheme } from '../../../theme';
 
@@ -21,12 +25,15 @@ export default function Progress() {
     enabled: !!userId,
     queryFn: () => rows<{ local_date: string; active_minutes: number; counted: boolean | null }>(supabase.from('daily_activity').select('local_date,active_minutes,counted').eq('user_id', userId!).gte('local_date', from)).catch(() => []),
   });
-  const achievements = useQuery({
-    queryKey: ['achievements', userId],
-    enabled: !!userId,
-    queryFn: () =>
-      rows<{ code: string; progress: number; unlocked_at: string | null }>(supabase.from('achievements').select('code,progress,unlocked_at').eq('user_id', userId!).is('deleted_at', null)).catch(() => []),
-  });
+  const achievements = useAchievements();
+  const capi = useCapi();
+  const energy = usePerformanceWindows();
+  const prefs = useStudyPreferences();
+  const best = energy.data?.best ?? [];
+  const hm = (v: string | undefined, d: string) => (v ?? d).slice(0, 5);
+  const reminderTimes = best.length
+    ? suggestedReminderTimes(best, { start: hm(prefs.data?.window_start, '14:00'), end: hm(prefs.data?.window_end, '21:30') }, { start: hm(prefs.data?.quiet_start, '22:00'), end: hm(prefs.data?.quiet_end, '07:00') })
+    : [];
   const xp = m.data?.xp ?? 0;
   const level = m.data?.level ?? 1;
   let base = 0;
@@ -38,6 +45,14 @@ export default function Progress() {
   return (
     <Screen title={t('progress.title')}>
       <Card>
+        {capi.visible ? (
+          <Row>
+            <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={64} />
+            <Text variant="bodySmall" tone="secondary" style={{ flex: 1 }}>
+              {t('capi.stage_title', { stage: t(`capi.stage.${capi.stage}`) })}
+            </Text>
+          </Row>
+        ) : null}
         <Row>
           <Stat value={t('progress.level', { n: level })} label={`${xp} XP`} />
           <Stat value={String(m.data?.streak ?? 0)} label={t('streak.count', { n: m.data?.streak ?? 0 }).split(':')[0] ?? ''} />
@@ -57,6 +72,23 @@ export default function Progress() {
           })}
         </View>
       </Section>
+      <Section title={t('energy.title')}>
+        {best.length ? (
+          <>
+            <Text>{t('energy.best', { windows: best.map(bucketLabel).join(' e ') })}</Text>
+            {reminderTimes.length ? (
+              <Text variant="bodySmall" tone="secondary">
+                {t('energy.reminders', { times: reminderTimes.join(', ') })}
+              </Text>
+            ) : null}
+          </>
+        ) : (
+          <Text tone="secondary">{t('energy.not_ready')}</Text>
+        )}
+      </Section>
+      <Card>
+        <ListItem icon="sparkles-outline" title={t('retro.title')} subtitle={t('retro.entry_hint')} onPress={() => router.push('/retro')} />
+      </Card>
       <Section title={t('progress.achievements')}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
           {ACHIEVEMENTS.filter((a) => a.computable).map((a) => {

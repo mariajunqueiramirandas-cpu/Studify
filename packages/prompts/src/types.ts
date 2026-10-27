@@ -33,7 +33,7 @@ export interface DocumentBlock {
 
 export interface ImageBlock {
   type: 'image';
-  source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png'; data: string };
+  source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string };
   cache_control?: CacheControl;
 }
 
@@ -46,12 +46,26 @@ export interface PromptMessage {
 
 export type JsonSchema = Record<string, unknown>;
 
-export interface ToolDef {
+/** A client tool the model calls with a strict JSON input (ai-pipeline §2.2 Tools). */
+export interface CustomToolDef {
   name: string;
   description: string;
   strict: true;
   input_schema: JsonSchema;
 }
+
+/**
+ * A server tool run by the API (ai-pipeline §12): code execution (CAM-02.6, PRA-08) and web search
+ * (ENM-09, ENM-05.5). Results come back as server tool result blocks; usage is billed per tool.
+ */
+export interface ServerToolDef {
+  type: string;
+  name: string;
+  max_uses?: number;
+  allowed_domains?: string[];
+}
+
+export type ToolDef = CustomToolDef | ServerToolDef;
 
 export interface DocumentMap {
   /** doc label (D1, D2…) → stored document id. */

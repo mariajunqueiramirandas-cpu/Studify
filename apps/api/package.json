@@ -15,6 +15,7 @@
     "@studify/ai": "workspace:*",
     "@studify/prompts": "workspace:*",
     "@studify/shared": "workspace:*",
+    "@studify/speech": "workspace:*",
     "@supabase/supabase-js": "^2.118.0",
     "hono": "^4.13.14",
     "pdf-lib": "^1.17.1",

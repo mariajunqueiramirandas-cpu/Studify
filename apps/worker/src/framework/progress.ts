@@ -17,6 +17,18 @@ export interface ProgressPatch {
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 
+/** Told about every applied patch (the runtime turns stage changes into live notifications, notify.live). */
+export type ProgressListener = (aiJobId: string, patch: ProgressPatch) => void;
+let listener: ProgressListener | null = null;
+
+export function setProgressListener(fn: ProgressListener | null): void {
+  listener = fn;
+}
+
+export function isTerminalStatus(status: string | undefined): boolean {
+  return status !== undefined && TERMINAL.has(status);
+}
+
 /**
  * Applies a patch to ai_jobs. `progress` is derived from items when only the counts change.
  * Sets started_at on the first running state and finished_at on a terminal state.
@@ -49,6 +61,13 @@ export async function applyProgress(sql: Sql, aiJobId: string, patch: ProgressPa
   if (patch.status && TERMINAL.has(patch.status)) sets.push('finished_at = now()');
   if (sets.length === 1) return;
   await sql.query(`update public.ai_jobs set ${sets.join(', ')} where id = $1`, values);
+  if (listener && (patch.stage !== undefined || patch.status !== undefined || progress !== undefined)) {
+    try {
+      listener(aiJobId, patch);
+    } catch {
+      // A notification problem never fails the job.
+    }
+  }
 }
 
 /**

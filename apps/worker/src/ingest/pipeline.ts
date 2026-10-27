@@ -18,7 +18,7 @@ import { spansFile } from './pdf-spans.ts';
 import { writeOutline, runOutlineCalls } from './outline.ts';
 import { runPrerequisites } from './prereq.ts';
 import { topicItem, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type WavePlan } from './waves.ts';
-import { loadTopicBundle, sourcesOf, topicSliceRefs, contentLanguageOf, type TopicBundle } from './topics.ts';
+import { loadTopicBundle, sourcesOf, topicSliceRefs, contentLanguageOf, isQuantitativeTopic, type TopicBundle } from './topics.ts';
 import { expandKinds, type TopicKind } from './custom-id.ts';
 import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
@@ -423,13 +423,17 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
       ai_job_id: payload.aiJobId,
     }, { singletonKey: `prereq:${payload.subjectId}:${payload.documentId}` });
   }
+  // ING-06: the material checker runs once per document after S2; it never blocks generation (ING-06.4).
+  if (payload.documentId) {
+    await ctx.enqueue('ingest.material_check', { document_id: payload.documentId }, { singletonKey: `material-check:${payload.documentId}` });
+  }
   await ctx.enqueue('ingest.topic_content', {
     stage: 'S4',
     subject_id: payload.subjectId,
     document_id: payload.documentId,
     user_id: payload.userId,
     node_ids: payload.nodeIds,
-    kinds: ['notes', 'glossary', 'cards', 'questions'],
+    kinds: ['notes', 'glossary', 'cards', 'questions', 'find_error', 'problems'],
     force: false,
     ai_job_id: payload.aiJobId,
   }, { singletonKey: `topic-content:S4:${payload.documentId ?? payload.nodeIds.join(',')}` });
@@ -459,8 +463,17 @@ async function existingKinds(sql: Sql, topicId: string): Promise<Set<TopicKind>>
   }
   const cards = await sql.query<{ n: string }>(`select count(*)::text as n from public.cards where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active'`, [topicId]);
   if (Number(cards.rows[0]?.n ?? '0') > 0) found.add('cards');
-  const questions = await sql.query<{ n: string }>(`select count(*)::text as n from public.questions where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active'`, [topicId]);
-  if (Number(questions.rows[0]?.n ?? '0') > 0) found.add('questions');
+  const questions = await sql.query<{ type: string; n: string }>(
+    `select type, count(*)::text as n from public.questions
+      where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active' group by type`,
+    [topicId],
+  );
+  for (const row of questions.rows) {
+    if (Number(row.n) === 0) continue;
+    if (row.type === 'find_error') found.add('find_error');
+    else if (row.type === 'problem') found.add('problems');
+    else found.add('questions');
+  }
   return found;
 }
 
@@ -475,7 +488,8 @@ async function runContent(stage: Stage, payload: TopicContentPayload, genBatchId
     const bundle = await loadTopicBundle(sql, topicId);
     if (!bundle) continue;
     const present = payload.force ? new Set<TopicKind>() : await existingKinds(sql, topicId);
-    const wanted = kinds.filter((k) => !present.has(k) && (k !== 'feed' || feedEnabled));
+    // PRA-08.1: problem sets only for quantitative topics.
+    const wanted = kinds.filter((k) => !present.has(k) && (k !== 'feed' || feedEnabled) && (k !== 'problems' || isQuantitativeTopic(bundle)));
     if (wanted.length === 0) continue;
     const refs = await topicSliceRefs(env, bundle.sources);
     if (refs.length === 0) continue;

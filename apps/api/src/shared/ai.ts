@@ -18,6 +18,24 @@ import {
   TopicQuestions,
   TutorCard,
   GlossaryTerms,
+  CaptureUnderstanding,
+  HintLadder,
+  FaithfulTranscription,
+  EssayQuestionGrade,
+  FirstWrongStep,
+  LucasPlanSchema,
+  LucasTurnSchema,
+  ModerationVerdict,
+  EnemGeneratedItems,
+  EssayThemePromptOut,
+  ArgumentRoundFeedback,
+  ThesisFeedback,
+  ArgumentSummary,
+  ArgumentThemes,
+  VisualOut,
+  MnemonicOptions,
+  ContributionReview,
+  PeerQuestionValidation,
   type AnyTaskDef,
   type BuiltPrompt,
   type PromptMessage,
@@ -37,31 +55,53 @@ export const OUTPUT_SCHEMAS: Readonly<Record<string, ZodType>> = {
   'tutor.route': RouteNodes,
   'tutor.toCard': TutorCard,
   'glossary.define': GlossaryTerms,
+  // Phase 3
+  'camera.understand': CaptureUnderstanding,
+  'camera.matchTiebreak': RouteNodes,
+  'camera.solveLadder': HintLadder,
+  'camera.transcribe': FaithfulTranscription,
+  'grade.essayQuestion': EssayQuestionGrade,
+  'problems.firstWrongStep': FirstWrongStep,
+  'lucas.plan': LucasPlanSchema,
+  'lucas.turn': LucasTurnSchema,
+  // Phase 4
+  'moderation.classify': ModerationVerdict,
+  'enem.question.generate': EnemGeneratedItems,
+  'essay.themePrompt': EssayThemePromptOut,
+  'argument.feedback': ArgumentRoundFeedback,
+  'argument.thesis': ThesisFeedback,
+  'argument.summary': ArgumentSummary,
+  'argument.themes': ArgumentThemes,
+  // Phase 5
+  'visual.generate': VisualOut,
+  'mnemonics.suggest': MnemonicOptions,
+  'divide.review': ContributionReview,
+  'peer.validate': PeerQuestionValidation,
 };
 
 export function taskDef(id: string): AnyTaskDef {
   return getTask(id);
 }
 
-/** Document labels (D1, D2…) in the order the document blocks appear in the request. */
+/**
+ * Sources of the document blocks this build adds, in request order. Replayed history comes first in the
+ * messages and its blocks are described by the caller's historySources, so only the last
+ * |built.documents.labels| document blocks are new (their labels restart at D1 in every build).
+ */
 export function sourcesFromBuilt(built: BuiltPrompt): DocumentSlice[] {
   const docs = built.documents;
-  const out: DocumentSlice[] = [];
+  const blocks: Array<{ title: string }> = [];
   for (const message of built.messages) {
     if (typeof message.content === 'string') continue;
-    for (const block of message.content) {
-      if (block.type !== 'document') continue;
-      const label = /Documento (D\d+)/.exec(block.title)?.[1];
-      if (!label || !docs) throw new ApiFailure('internal_error');
-      out.push({
-        id: label,
-        documentId: docs.labels[label] ?? '',
-        title: label,
-        pages: [...(docs.allowedPages[label] ?? [])],
-      });
-    }
+    for (const block of message.content) if (block.type === 'document') blocks.push(block);
   }
-  return out;
+  const fresh = docs ? Object.keys(docs.labels).length : 0;
+  if (fresh > blocks.length) throw new ApiFailure('internal_error');
+  return blocks.slice(blocks.length - fresh).map((block) => {
+    const label = /Documento (D\d+)/.exec(block.title)?.[1];
+    if (!label || !docs || docs.labels[label] === undefined) throw new ApiFailure('internal_error');
+    return { id: label, documentId: docs.labels[label], title: label, pages: [...(docs.allowedPages[label] ?? [])] };
+  });
 }
 
 /** Walks the output for `{doc, page_start, page_end}` references and checks them against what was sent. */
@@ -88,6 +128,8 @@ export interface PromptCall<T> {
   estimate?: { inputTokens?: number; outputTokens?: number };
   /** Set for structured tasks. */
   structured?: boolean;
+  /** Pages sent as text rather than document blocks (doc label → pages) that the output may also cite. */
+  textPages?: Record<string, number[]>;
   messages?: PromptMessage[];
 }
 
@@ -97,7 +139,7 @@ export function toTaskCall<T>(p: PromptCall<T>): TaskCall<T> {
   const built = p.built;
   const schema = OUTPUT_SCHEMAS[p.taskId];
   const newSources = sourcesFromBuilt(built);
-  const pages = built.documents?.allowedPages ?? {};
+  const pages = { ...(p.textPages ?? {}), ...(built.documents?.allowedPages ?? {}) };
   const output: AiTaskDef<T>['output'] =
     def.outputMode === 'structured'
       ? { mode: 'structured', schema: schema as unknown as ZodType<T> }

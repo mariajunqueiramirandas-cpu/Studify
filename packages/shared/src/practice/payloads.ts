@@ -172,6 +172,18 @@ export const EssayQuestionPayloadSchema = z.object({
   expected_lines: z.number().int().positive().nullish(),
 });
 
+/** PRA-06.2 error types. Generated items store one of these keys in `error_type`; the UI shows the label. */
+export const FIND_ERROR_TYPES = {
+  conceitual: 'Erro de conceito',
+  calculo: 'Erro de cálculo',
+  sinal: 'Erro de sinal',
+  unidade: 'Erro de unidade',
+  definicao: 'Definição errada',
+  data_nome: 'Data ou nome errado',
+  causa_efeito: 'Causa e efeito trocados',
+} as const;
+export type FindErrorType = keyof typeof FIND_ERROR_TYPES;
+
 /** find_error: exactly one planted segment, or `null` for "Não tem erro" (PRA-06.1). */
 export const FindErrorPayloadSchema = z
   .object({
@@ -267,7 +279,12 @@ export const MatchingResponseSchema = z.strictObject({ pairs: z.array(z.tuple([I
 export const OrderingResponseSchema = z.strictObject({ order: z.array(Id) });
 /** Shared by short_answer and essay_question. */
 export const TextResponseSchema = z.strictObject({ text: z.string() });
-export const FindErrorResponseSchema = z.strictObject({ segment_id: Id.nullable() });
+/** PRA-06.3: the tapped segment, plus the optional error type and free-text explanation of the follow-up step. */
+export const FindErrorResponseSchema = z.strictObject({
+  segment_id: Id.nullable(),
+  error_type: z.string().max(40).optional(),
+  explanation: z.string().max(1000).optional(),
+});
 export const ProblemResponseSchema = z.strictObject({ answer: z.string() });
 
 export const QUESTION_RESPONSE_SCHEMAS = {

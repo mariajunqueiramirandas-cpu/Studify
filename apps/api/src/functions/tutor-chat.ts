@@ -3,6 +3,8 @@
 //  replayed history → stream (delta, citation, status, tool, done) → store both messages with raw_content.
 // Limits: 60 student messages per local day (402 budget_exhausted), 120 context pages and 200 messages per
 // thread (400 with a PT-BR message). A refusal stores nothing, so the student can ask again.
+// Capture threads (CAM-01.4) keep the photo's transcription and matched topic in context; voice turns
+// (TUT-06.4) append the "modo voz" system message, and Me testa is not offered by voice (TUT-06.5).
 import {
   ApiFailure,
   DEFAULT_TIME_ZONE,
@@ -35,6 +37,7 @@ interface ThreadRow {
   context_pages: Array<{ document_id: string; page: number }>;
   title: string | null;
   passage: { text: string } | null;
+  capture_id: string | null;
 }
 
 /** Start of the student's local day, as an ISO instant (budget and message limits reset at local midnight). */
@@ -51,6 +54,7 @@ async function createThread(db: SupabaseClient, newId: () => string, userId: str
   let goalId: string | null = null;
   let nodeId: string | null = null;
   let passage: { text: string } | null = null;
+  let captureId: string | null = null;
   if (scope.type === 'subject') {
     if (!scope.subject_id) throw new ApiFailure('invalid_request');
     subjectId = (await requireSubject(db, userId, scope.subject_id, 'read')).id;
@@ -75,8 +79,14 @@ async function createThread(db: SupabaseClient, newId: () => string, userId: str
     }
     passage = { text: scope.passage.text };
   } else {
-    // Capture scopes arrive with the camera (Phase 3).
-    throw new ApiFailure('invalid_request', { message: 'Essa conversa ainda não está disponível.' });
+    // CAM-01.4: follow-ups of a Câmera Mágica capture keep its subject and matched topic.
+    if (!scope.capture_id) throw new ApiFailure('invalid_request');
+    const capture = await db.from('camera_captures').select('id, user_id, subject_id, node_id, transcription, deleted_at').eq('id', scope.capture_id).maybeSingle();
+    if (capture.error) throw capture.error;
+    if (!capture.data || capture.data.user_id !== userId || capture.data.deleted_at) throw new ApiFailure('not_found');
+    captureId = capture.data.id as string;
+    if (capture.data.subject_id) subjectId = (await requireSubject(db, userId, capture.data.subject_id as string, 'read')).id;
+    nodeId = (capture.data.node_id as string | null) ?? null;
   }
   const id = newId();
   const created = await db.from('tutor_threads').insert({
@@ -87,19 +97,24 @@ async function createThread(db: SupabaseClient, newId: () => string, userId: str
     goal_id: goalId,
     node_id: nodeId,
     passage: scope.passage ?? null,
+    capture_id: captureId,
     mode: req.mode,
     title: req.message.slice(0, 60),
     context_pages: [],
     state: {},
   });
   if (created.error) throw created.error;
-  return { id, user_id: userId, scope_type: scope.type, subject_id: subjectId, goal_id: goalId, node_id: nodeId, mode: req.mode, context_pages: [], title: req.message.slice(0, 60), passage };
+  if (captureId) {
+    const linked = await db.from('camera_captures').update({ tutor_thread_id: id }).eq('id', captureId);
+    if (linked.error) throw linked.error;
+  }
+  return { id, user_id: userId, scope_type: scope.type, subject_id: subjectId, goal_id: goalId, node_id: nodeId, mode: req.mode, context_pages: [], title: req.message.slice(0, 60), passage, capture_id: captureId };
 }
 
 async function loadThread(db: SupabaseClient, userId: string, threadId: string): Promise<ThreadRow> {
   const { data, error } = await db
     .from('tutor_threads')
-    .select('id, user_id, scope_type, subject_id, goal_id, node_id, mode, context_pages, title, passage, archived_at')
+    .select('id, user_id, scope_type, subject_id, goal_id, node_id, mode, context_pages, title, passage, capture_id, archived_at')
     .eq('id', threadId)
     .maybeSingle();
   if (error) throw error;
@@ -129,6 +144,9 @@ export const handler = defineFunction<Req>({
     const { deps, input } = ctx;
     const { db } = deps;
     const userId = ctx.user.userId;
+    if (input.voice && input.mode === 'quiz') {
+      throw new ApiFailure('invalid_request', { message: 'O modo Me testa não funciona por voz. Use Responder ou Socrático.' });
+    }
 
     const thread = input.thread_id ? await loadThread(db, userId, input.thread_id) : await createThread(db, deps.newId, userId, input);
     const subject: SubjectRow | null = thread.subject_id
@@ -168,7 +186,7 @@ export const handler = defineFunction<Req>({
     const query = searchTerms(input.message);
     let method: 'fts' | 'router' | 'fixed' = 'fts';
     const hits = thread.scope_type === 'topic' || thread.scope_type === 'passage' ? [] : await ftsPages(db, [...docs.keys()], query);
-    if (thread.scope_type === 'topic' && thread.node_id) {
+    if ((thread.scope_type === 'topic' || thread.scope_type === 'capture') && thread.node_id) {
       const sources = await db.from('node_sources').select('document_id, page_start, page_end').eq('node_id', thread.node_id).is('deleted_at', null);
       if (sources.error) throw sources.error;
       method = 'router';
@@ -190,9 +208,10 @@ export const handler = defineFunction<Req>({
         const pdf = await slicesFromStored(deps, storedSlices, cache);
         for (const s of storedSlices) historySources.push({ id: s.row_id, documentId: s.document_id, title: s.title, pages: s.pages });
         const blocks = documentBlocks(pdf).blocks.map((b) => ({ ...b, citations: { enabled: true } }));
-        const raw = (m.raw_content as { body?: string; mode_note?: string | null } | null) ?? null;
+        const raw = (m.raw_content as { body?: string; mode_note?: string | null; system_notes?: string[] } | null) ?? null;
         replay.push({ role: 'user', content: [...blocks, textBlock(raw?.body ?? (m.content as string))] });
-        if (raw?.mode_note) replay.push({ role: 'system', content: raw.mode_note });
+        const notes = raw?.system_notes ?? (raw?.mode_note ? [raw.mode_note] : []);
+        for (const note of notes) replay.push({ role: 'system', content: note });
       } else if (m.role === 'assistant') {
         replay.push({ role: 'assistant', content: m.raw_content });
       }
@@ -200,6 +219,7 @@ export const handler = defineFunction<Req>({
 
     const task = getTask('tutor.turn');
     const scopeLabel = subject?.name ?? 'Seu material';
+    const captureText = thread.capture_id ? await captureTranscription(db, thread.capture_id) : null;
     const built = task.build({
       mode: input.mode === 'answer' ? 'Responder' : input.mode === 'socratic' ? 'Socrático' : 'Me testa',
       modeChanged: thread.mode !== input.mode && past.length > 0,
@@ -207,17 +227,19 @@ export const handler = defineFunction<Req>({
       newSlices: prepared.map((p) => ({ documentId: p.documentId, title: p.title, pages: p.pages, source: { type: 'base64', media_type: 'application/pdf', data: p.base64 } }) as PdfSlice),
       message: input.message,
       scope: {
-        kind: thread.scope_type === 'capture' ? 'subject' : (thread.scope_type as 'subject' | 'goal' | 'topic' | 'passage'),
+        kind: thread.scope_type,
         label: scopeLabel,
         passageText: thread.passage?.text ?? null,
+        captureText,
       },
       socraticAttempts: 0,
       meTestaNodeKeys: [],
       contentLanguage: subject?.content_language ?? 'pt-BR',
       languageSubject: subject?.is_language_subject ?? false,
+      voice: input.voice ?? false,
     });
 
-    const budgetCtx = budgetCtxFor(subject, userId, 'TUT-01', 'user', { nodeId: thread.node_id });
+    const budgetCtx = budgetCtxFor(subject, userId, input.voice ? 'TUT-06' : 'TUT-01', 'user', { nodeId: thread.node_id });
     const session = await openStream(
       claudeDepsFor(deps),
       toTaskCall({ built, taskId: 'tutor.turn', ctx: budgetCtx, historySources: [...historySources] }),
@@ -242,7 +264,7 @@ export const handler = defineFunction<Req>({
       const display = result.text.split(DISTRESS_MARKER).join('').trim();
       const citations = citationsForStorage(result.citations);
       // raw_content keeps the exact text sent (replayed verbatim, ai-pipeline §6.6) plus the mode note, if any.
-      const userRaw = { body: sentBody(built), slices: stored, mode_note: modeNote(built) };
+      const userRaw = { body: sentBody(built), slices: stored, system_notes: systemNotes(built) };
       const userWrite = await db.from('tutor_messages').insert({
         id: input.client_message_id,
         thread_id: thread.id,
@@ -317,14 +339,25 @@ function sentBody(built: BuiltPrompt): string {
   return '';
 }
 
-/** "Modo atual: …" mid-conversation message appended after the new user turn, when the mode changed. */
-function modeNote(built: BuiltPrompt): string | null {
+/**
+ * Mid-conversation system messages appended after the new user turn ("Modo atual: …", "Modo voz: …"), in
+ * order, so the replay of this turn is identical (ai-pipeline §6.6).
+ */
+function systemNotes(built: BuiltPrompt): string[] {
+  const notes: string[] = [];
   for (let i = built.messages.length - 1; i >= 0; i -= 1) {
     const m = built.messages[i]!;
-    if (m.role === 'system') return typeof m.content === 'string' ? m.content : null;
-    if (m.role === 'user') return null; // the new turn carries the note right after it, so stop at the first user turn
+    if (m.role === 'user') break; // the notes follow the new turn, so stop at the first user turn
+    if (m.role === 'system' && typeof m.content === 'string') notes.unshift(m.content);
   }
-  return null;
+  return notes;
+}
+
+/** CAM-01.4: the capture's transcription, kept in the thread's context as data. */
+async function captureTranscription(db: SupabaseClient, captureId: string): Promise<string | null> {
+  const { data, error } = await db.from('camera_captures').select('confirmed_text, transcription').eq('id', captureId).maybeSingle();
+  if (error) throw error;
+  return ((data?.confirmed_text as string | null) ?? (data?.transcription as string | null) ?? null)?.slice(0, 6000) ?? null;
 }
 
 export default handler;

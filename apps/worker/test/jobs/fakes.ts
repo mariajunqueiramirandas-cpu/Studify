@@ -277,12 +277,14 @@ function messageFor(value: unknown, n: number): Record<string, unknown> {
       : typeof value === 'string'
         ? value
         : JSON.stringify(value);
+  // {content: [...]} replies with raw content blocks (web search results and citations).
+  const raw = typeof value === 'object' && value !== null && Array.isArray((value as { content?: unknown }).content) ? (value as { content: unknown[] }).content : null;
   return {
     id: `msg_fake_${n}`,
     type: 'message',
     role: 'assistant',
     model: 'claude-haiku-5-5',
-    content: [{ type: 'text', text, citations: [] }],
+    content: raw ?? [{ type: 'text', text, citations: [] }],
     stop_reason: refusal ? 'refusal' : truncated ? 'max_tokens' : 'end_turn',
     stop_sequence: null,
     stop_details: refusal ? { category: 'test' } : null,
@@ -407,6 +409,8 @@ export interface FakeEnv {
   pushed: Array<{ userId: string; message: Record<string, unknown> }>;
   progress: Array<Record<string, unknown>>;
   pgQueries: Array<{ text: string; values?: unknown[] }>;
+  /** Rows returned by ctx.db.query for SQL containing `match` (first match wins; default: no rows). */
+  pgRows: Array<{ match: string; rows: Row[] }>;
   auth: { deleted: string[]; failDelete: string | null };
   setNow(iso: string): void;
 }
@@ -423,10 +427,12 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
   const pgQueries: FakeEnv['pgQueries'] = [];
   const auth: FakeEnv['auth'] = { deleted: [], failDelete: null };
   let nowIso = startIso;
+  const pgRows: FakeEnv['pgRows'] = [];
   const pg = {
     query: async (text: string, values?: unknown[]) => {
       pgQueries.push({ text, values });
-      return { rows: [], rowCount: 1 };
+      const hit = pgRows.find((r) => text.includes(r.match));
+      return { rows: hit?.rows ?? [], rowCount: hit?.rows.length ?? 1 };
     },
   };
   const broadcasts: FakeBroadcast[] = [];
@@ -488,6 +494,7 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
     pushed,
     progress,
     pgQueries,
+    pgRows,
     auth,
     setNow: (iso: string) => {
       nowIso = iso;

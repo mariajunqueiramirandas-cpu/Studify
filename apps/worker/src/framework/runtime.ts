@@ -4,6 +4,7 @@
 import { PgBoss } from 'pg-boss';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ClaudeDeps } from '@studify/ai';
+import { ttsFromEnv, type TtsProvider } from '@studify/speech';
 import type { WorkerConfig } from './env.ts';
 import { createBudgetStore } from './budget.ts';
 import { createPool, type Sql } from './db.ts';
@@ -14,6 +15,7 @@ import { createExpoClient, createPushService, type PushService } from './push.ts
 import { createPgBossBackend, type QueueBackend } from './queue.ts';
 import { JobRegistry, type RuntimeDeps } from './registry.ts';
 import { builtinJobs } from './builtin.ts';
+import { isTerminalStatus, setProgressListener } from './progress.ts';
 import type pg from 'pg';
 
 export interface Runtime {
@@ -33,6 +35,8 @@ export interface RuntimeOverrides {
   log?: Logger;
   /** Expo client override (tests). Defaults to the real client when EXPO_ACCESS_TOKEN is set. */
   expo?: Parameters<typeof createPushService>[0]['expo'];
+  /** TTS override (tests). Defaults to TTS_PROVIDER / GOOGLE_TTS_API_KEY (packages/speech). */
+  tts?: TtsProvider | null;
 }
 
 /** Starts pg-boss unless a backend is injected. Callers register job modules afterwards. */
@@ -88,8 +92,17 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     push,
     log,
     now,
+    tts: overrides.tts !== undefined ? overrides.tts : ttsFromEnv(process.env),
   } satisfies RuntimeDeps);
   enqueueRef = (name, data, opts) => registry.enqueue(name, data, opts);
+  // Live progress (api.md §9.1): each stage change and each terminal state of a job, and at most one
+  // update per minute within a stage, become a notify.live job.
+  setProgressListener((aiJobId, patch) => {
+    const slot = isTerminalStatus(patch.status) ? 'end' : String(Math.floor(now().getTime() / 60_000));
+    void registry
+      .enqueue('notify.live', { ai_job_id: aiJobId }, { singletonKey: `live:${aiJobId}:${patch.stage ?? ''}:${patch.status ?? ''}:${slot}` })
+      .catch(() => undefined);
+  });
   await registry.register(builtinJobs(() => push));
 
   return {
@@ -99,6 +112,7 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     push,
     async shutdown() {
       log.info('shutting down');
+      setProgressListener(null);
       if (boss) await boss.stop({ graceful: true, timeout: 30_000 });
       await pool.end();
     },

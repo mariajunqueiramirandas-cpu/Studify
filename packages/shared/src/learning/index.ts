@@ -179,3 +179,42 @@ export type {
   BattleLeaderboardEntry,
   BattleRealtimeEvent,
 } from './social.ts';
+
+// Phase 5
+export { SKILL_TREE, skillNodeState, skillTreeLayout, bossQuestionCount, selectBossQuestions, bossHealth, bossPassed } from './skilltree.ts';
+export type { SkillNodeState, SkillNodeInput, SkillNodeView, SkillTreeUnit, SkillTreeTopic, SkillTreeLayout, BossCandidate } from './skilltree.ts';
+
+export { capiStage, capiMood, CAPI_RESTING_DAYS, CAPI_ACCESSORIES, isAccessoryUnlocked, equippedAccessories } from './capi.ts';
+export type { CapiStage, CapiMood, CapiMoodInput, CapiSlot, CapiAccessory } from './capi.ts';
+
+export { LEAGUE, leagueWeekXp, rankLeague, leagueBadges, visibleBoard } from './league.ts';
+export type { LeagueXpEvent, LeagueEntryInput, RankedLeagueEntry } from './league.ts';
+
+export { DEFAULT_SEMESTER_ENDS, YEAR_RETRO_DAY, retroPeriodsDue, retroCards, retroFallbackTitle } from './retro.ts';
+export type { RetroPeriodType, RetroPeriod, RetroGoalInput, RetroStats, RetroCard } from './retro.ts';
+
+export {
+  FOCUS_PRESETS,
+  FOCUS_LIMITS,
+  validateFocusConfig,
+  focusPhases,
+  focusTotalMinutes,
+  blockingAllowed,
+  focusPositionAt,
+  focusPhaseWindows,
+  focusCreditedMs,
+  completedFocusCycles,
+  BURNOUT,
+  isLateNight,
+  burnoutNudges,
+  HELP_CARD,
+} from './wellbeing.ts';
+export type { FocusConfig, FocusPhase, FocusPosition, FocusWindow, BurnoutNudgeKind, BurnoutInput, BurnoutNudge } from './wellbeing.ts';
+
+export { MNEMONICS, acronymOf, encodesItems, placeOnLoci, isMnemonicList } from './mnemonics.ts';
+
+export { MAX_FINDINGS_PER_DOCUMENT, FINDING_CONFIRMATIONS, findingStatus, rankFindings, visibleFindings } from './material.ts';
+export type { FindingSeverityName, FindingStatusName, FindingLike } from './material.ts';
+
+export { VISUAL_LIMITS, visualSpecErrors, flowchartLayout, cycleLayout, hierarchyLayout, timelineOrder } from './visuals.ts';
+export type { VisualNode, VisualSpecShape, PlacedNode } from './visuals.ts';

@@ -8,11 +8,13 @@ import { useDb } from '../../db/DatabaseProvider';
 import { enqueueOutbox } from '../../db/outbox';
 import { useSession } from '../../features/auth/session';
 import { updatePlanItem } from '../../features/goals/api';
+import { enemRoute } from '../../features/enem/format';
 import { useTodayPlan, type TodayItem } from '../../features/goals/today';
 import { buildLocalQueue } from '../../features/memory/local';
 import { createQuiz } from '../../features/practice/api';
 import { t } from '../../i18n';
 import { space, useTheme } from '../../theme';
+import { WellbeingNudge } from '../../features/wellbeing/WellbeingNudge';
 
 interface Block {
   key: string;
@@ -86,6 +88,11 @@ export default function SessionRunner() {
       return;
     }
     const item = b.item!;
+    const enem = enemRoute(item);
+    if (enem) {
+      router.push(enem);
+      return;
+    }
     if (b.kind === 'learn' && item.subjectId && item.nodeIds[0]) {
       router.push({ pathname: '/subjects/[subjectId]/topic/[nodeId]', params: { subjectId: item.subjectId, nodeId: item.nodeIds[0] } });
       return;
@@ -141,6 +148,7 @@ export default function SessionRunner() {
       }
     >
       <ProgressBar value={progress} label={t('session.title')} />
+      <WellbeingNudge surface="session" />
       {blocks.length === 0 ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
       {blocks.map((b, i) => {
         const isDone = done.has(b.key);

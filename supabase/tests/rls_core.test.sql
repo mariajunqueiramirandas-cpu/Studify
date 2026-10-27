@@ -121,10 +121,11 @@ select is(
     where n.nspname in ('public','private') and c.relkind in ('r','p') and not c.relrowsecurity),
   0, 'every table in public and private has row level security enabled');
 
-select is(
+-- Later phases add tables; their suites (rls_phase3.test.sql, ...) assert their own counts.
+select cmp_ok(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('public','private') and c.relkind in ('r','p')),
-  88, 'the foundation, Phase 1 and Phase 2 create 88 tables (81 public, 7 private)');
+  '>=', 88, 'the foundation, Phase 1 and Phase 2 create 88 tables (81 public, 7 private)');
 
 -- =====================================================================
 -- 1. profiles and public views (data-model §4.1, §5.1, §6.2)
@@ -345,8 +346,8 @@ select test_helpers.check_err('nobody can DELETE review logs: service role is re
   $$delete from public.review_logs$$);
 select test_helpers.check_rows('bob reads the approved Turma question and his pending peer question', 'authenticated', pg_temp.u('bob'),
   $$select id from public.questions$$, 2);
-select test_helpers.check_rows('alice does not see bob pending peer question', 'authenticated', pg_temp.u('alice'),
-  $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000002'$$, 0);
+select test_helpers.check_rows('alice (Turma member) sees bob pending peer question to vote on it (SOC-07.3)', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000002'$$, 1);
 select test_helpers.check_rows('alice sees the approved Turma question', 'authenticated', pg_temp.u('alice'),
   $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000001'$$, 1);
 select test_helpers.check_rows('carol (moderator) sees the pending peer question', 'authenticated', pg_temp.u('carol'),

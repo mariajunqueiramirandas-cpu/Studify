@@ -11,7 +11,7 @@ export type TutorMode = 'answer' | 'socratic' | 'quiz';
 
 export interface TutorThread {
   id: string;
-  scope_type: TutorScope['type'] | 'capture';
+  scope_type: TutorScope['type'];
   subject_id: string | null;
   goal_id: string | null;
   node_id: string | null;
@@ -54,7 +54,7 @@ export function useThreadMessages(threadId: string | null) {
 }
 
 export function sendTutorMessage(
-  input: { thread_id?: string; scope?: TutorScope; mode: TutorMode; message: string; allow_general_answer?: boolean },
+  input: { thread_id?: string; scope?: TutorScope; mode: TutorMode; message: string; allow_general_answer?: boolean; voice?: boolean },
   handlers: StreamHandlers,
 ) {
   const client_message_id = uuidv7();

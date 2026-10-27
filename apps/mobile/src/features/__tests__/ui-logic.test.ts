@@ -4,7 +4,7 @@ import { ageFrom } from '../auth/session';
 import { countdown, formatClock, formatGrade, formatMinutes, longInterval, pageLabel, shortInterval, toLocalDate, weekdayDate } from '../common/format';
 import { buildOutline, type KnowledgeNode } from '../subjects/outline';
 import { matchSpans } from '../subjects/highlight';
-import { renderCloze } from '../../components/Flashcard';
+import { renderCloze } from '../../components/cloze';
 
 jest.mock('../../api/supabase', () => ({ supabase: {} }));
 // api/functions reaches lib/kv (MMKV, a native module that Jest cannot load); these tests never use storage.

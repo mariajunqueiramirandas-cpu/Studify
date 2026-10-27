@@ -96,6 +96,8 @@ export const QuizScopeSchema = z.object({
   subject_id: UuidSchema.optional(),
   node_ids: z.array(UuidSchema).optional(),
   weak_only: z.boolean().optional(),
+  /** Chefão (MOT-02.4): the unit whose topics the boss mixes. */
+  unit_node_id: UuidSchema.optional(),
 });
 
 /** Modo Desespero topic grouping, `desperate_modes.topic_groups` (GOL-12). */
@@ -145,7 +147,8 @@ export const ProfileSettingsSchema = z
     line_height: z.number(),
     time_extension: z.union([z.literal(1), z.literal(1.5), z.literal(2)]),
     mascot: z.object({ visible: z.boolean(), accessories: z.array(z.string()) }).partial(),
-    semester_ends: LocalDateSchema,
+    /** MOT-04.1 semester ends as MM-DD (default end of June and end of November). */
+    semester_ends: z.array(z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/)).min(1).max(4),
     flags: z.array(z.string()),
   })
   .partial();

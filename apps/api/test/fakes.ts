@@ -28,6 +28,8 @@ const UNIQUE: Record<string, string[][]> = {
   invites: [['id']],
   profiles: [['id']],
   study_preferences: [['user_id']],
+  visuals: [['id'], ['node_id', 'type']],
+  boss_attempts: [['id'], ['quiz_attempt_id']],
 };
 
 function normalize(text: string): string {
@@ -145,6 +147,14 @@ export class FakeDb {
           db.objects.set(`${bucket}/${object}`, bytes);
           return { data: { path: object }, error: null };
         },
+        remove: async (objects: string[]) => {
+          for (const object of objects) db.objects.delete(`${bucket}/${object}`);
+          return { data: objects.map((name) => ({ name })), error: null };
+        },
+        createSignedUrl: async (object: string, ttl: number) => {
+          const key = `${bucket}/${object}`;
+          return db.objects.has(key) ? { data: { signedUrl: `https://storage.test/${key}?ttl=${ttl}` }, error: null } : { data: null, error: { message: 'Object not found' } };
+        },
       }),
     };
   }
@@ -232,6 +242,35 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
   }
   lte(col: string, value: unknown) {
     this.#filters.push((r) => r[col] != null && compare(r[col], value) <= 0);
+    return this;
+  }
+  /** jsonb/array containment (`@>`): every element of `value` is in the column (objects compared as JSON subsets). */
+  contains(col: string, value: readonly unknown[]) {
+    const subset = (want: unknown, have: unknown): boolean => {
+      if (want && typeof want === 'object' && have && typeof have === 'object') {
+        return Object.entries(want as Record<string, unknown>).every(([k, v]) => subset(v, (have as Record<string, unknown>)[k]));
+      }
+      return want === have;
+    };
+    this.#filters.push((r) => Array.isArray(r[col]) && value.every((v) => (r[col] as unknown[]).some((h) => subset(v, h))));
+    return this;
+  }
+  /** Only `not(col, 'is', null)` is used by the handlers. */
+  not(col: string, op: string, value: unknown) {
+    if (op !== 'is' || value !== null) throw new Error(`fake: unsupported not(${col}, ${op})`);
+    this.#filters.push((r) => r[col] !== null && r[col] !== undefined);
+    return this;
+  }
+  /** PostgREST `or` with `col.is.null` / `col.eq.value` terms (what the handlers use). */
+  or(expr: string) {
+    const terms = expr.split(',').map((t) => {
+      const [col, op, ...rest] = t.split('.');
+      const value = rest.join('.');
+      if (op === 'is' && value === 'null') return (r: Row) => r[col!] === null || r[col!] === undefined;
+      if (op === 'eq') return (r: Row) => String(r[col!]) === value;
+      throw new Error(`fake: unsupported or term ${t}`);
+    });
+    this.#filters.push((r) => terms.some((f) => f(r)));
     return this;
   }
   textSearch(col: string, query: string) {

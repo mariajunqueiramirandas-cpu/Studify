@@ -10,6 +10,9 @@ const metaSchema = z.object({
   message_id: UuidSchema.optional(),
   thread_id: UuidSchema.optional(),
   explanation_id: UuidSchema.optional(), // `explain` opens with this id
+  capture_id: UuidSchema.optional(), // capture-act (CAM-01, CAM-02)
+  session_id: UuidSchema.optional(), // teaching-turn (INT-02)
+  interaction_id: UuidSchema.optional(), // podcast-ask (INT-01.8)
 });
 
 export const SseEventSchema = z.discriminatedUnion('event', [

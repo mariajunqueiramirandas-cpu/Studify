@@ -134,7 +134,10 @@ export function useExam(examId: string | undefined) {
   });
 }
 
-export async function createGoal(userId: string, input: { name: string; start_date: string; end_date: string; term_index?: number | null; mode?: 'exam_week' }) {
+export async function createGoal(
+  userId: string,
+  input: { name: string; start_date: string; end_date: string; term_index?: number | null; mode?: 'exam_week' | 'enem'; settings?: Record<string, unknown> },
+) {
   const id = uuidv7();
   const { error } = await supabase.from('goals').insert({
     id,
@@ -145,6 +148,7 @@ export async function createGoal(userId: string, input: { name: string; start_da
     end_date: input.end_date,
     term_index: input.term_index ?? null,
     school_year: new Date().getFullYear(),
+    ...(input.settings ? { settings: input.settings } : {}),
   });
   if (error) throw error;
   return id;
@@ -233,6 +237,8 @@ export async function updatePlanItem(itemId: string, patch: Partial<Pick<PlanIte
 export interface StudyPreferences {
   user_id: string;
   minutes_by_weekday: number[];
+  window_start?: string;
+  window_end?: string;
   quiet_start: string;
   quiet_end: string;
   vespera_time: string;

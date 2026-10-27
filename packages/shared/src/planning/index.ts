@@ -70,3 +70,18 @@ export type {
   PlanUnitKind,
   ReplanTrigger,
 } from './types.ts';
+
+export {
+  ENERGY,
+  energyBucketOf,
+  performanceResidual,
+  performanceWindows,
+  mergeIntervals,
+  quietIntervals,
+  freeIntervals,
+  freeMinutes,
+  placeBlocks,
+  orderByEnergy,
+  suggestedReminderTimes,
+} from './energy.ts';
+export type { ResidualEvent, WindowStat, PerformanceWindows, MinuteInterval, BlockUnit, PlacedBlock } from './energy.ts';

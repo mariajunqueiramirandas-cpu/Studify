@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyProgress, isUuid } from '../../src/framework/progress.ts';
+import { applyProgress, isUuid, setProgressListener } from '../../src/framework/progress.ts';
 import type { Sql } from '../../src/framework/db.ts';
 
 function capture() {
@@ -9,6 +9,23 @@ function capture() {
 }
 
 describe('applyProgress', () => {
+  it('tells the live-notification listener about stage, status and progress changes only', async () => {
+    const { sql } = capture();
+    const seen: Array<[string, unknown]> = [];
+    setProgressListener((id, patch) => {
+      seen.push([id, patch.stage ?? patch.status ?? 'progress']);
+      throw new Error('listener failures never fail the job');
+    });
+    try {
+      await applyProgress(sql, 'job-1', { stage: 'S2', status: 'running' });
+      await applyProgress(sql, 'job-1', { items_total: 4, items_done: 2 });
+      await applyProgress(sql, 'job-1', { attempts: 2 });
+    } finally {
+      setProgressListener(null);
+    }
+    expect(seen).toEqual([['job-1', 'S2'], ['job-1', 'progress']]);
+  });
+
   it('sets only the fields in the patch and derives progress from the counts', async () => {
     const { sql, calls } = capture();
     await applyProgress(sql, 'job-1', { stage: 'S2', items_total: 4, items_done: 1 });

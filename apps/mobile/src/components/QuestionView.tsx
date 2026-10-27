@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { t } from '../i18n';
 import type { Option, QuestionResponse, QuestionRow } from '../features/practice/types';
 import { radius, space, touch, useTheme } from '../theme';
 import { IconButton } from './Button';
+import { FindErrorQuestion, ProblemQuestion } from './QuestionTypes3';
 import { RichContent } from './MarkdownView';
 import { Text } from './Text';
 
@@ -18,15 +19,22 @@ interface Props {
   submitOnTap?: (r: QuestionResponse) => void;
   /** Battle reveal: per-option distribution, only when ≥ 5 answered (SOC-03.10). */
   distribution?: Record<string, number> | null;
+  /** problem (PRA-08.3): hints revealed so far and the "Dica" action; omitted where hints are not offered. */
+  hintsUsed?: number;
+  onHint?: () => void;
+  /** Shown above the question: an ENEM texto-base, or the official item (crops) that already includes the stem. */
+  header?: ReactNode;
+  stemInHeader?: boolean;
 }
 
-export function QuestionView({ question, response, onChange, revealed, submitOnTap, distribution }: Props) {
+export function QuestionView({ question, response, onChange, revealed, submitOnTap, distribution, hintsUsed, onHint, header, stemInHeader }: Props) {
   return (
     <View style={{ gap: space.lg }}>
+      {header}
       {question.stimulus?.markdown ? <Stimulus text={question.stimulus.markdown} /> : null}
       {question.stimulus?.table_markdown ? <Stimulus text={question.stimulus.table_markdown} /> : null}
-      {question.type !== 'fill_blank' && question.type !== 'true_false' ? <RichContent text={question.stem} /> : null}
-      <Body question={question} response={response} onChange={onChange} revealed={revealed} submitOnTap={submitOnTap} distribution={distribution} />
+      {question.type !== 'fill_blank' && question.type !== 'true_false' && !stemInHeader ? <RichContent text={question.stem} /> : null}
+      <Body question={question} response={response} onChange={onChange} revealed={revealed} submitOnTap={submitOnTap} distribution={distribution} hintsUsed={hintsUsed} onHint={onHint} />
     </View>
   );
 }
@@ -40,7 +48,7 @@ function Stimulus({ text }: { text: string }) {
   );
 }
 
-function Body({ question, response, onChange, revealed, submitOnTap, distribution }: Props) {
+function Body({ question, response, onChange, revealed, submitOnTap, distribution, hintsUsed, onHint }: Props) {
   const p = question.payload as Record<string, unknown>;
   switch (question.type) {
     case 'mcq_single':
@@ -116,6 +124,10 @@ function Body({ question, response, onChange, revealed, submitOnTap, distributio
       );
     case 'ordering':
       return <Ordering items={(p.items as { id: string; text: string }[]) ?? []} correct={revealed ? (p.correct_order as string[]) : undefined} response={response} onChange={onChange} seed={question.id} />;
+    case 'find_error':
+      return <FindErrorQuestion payload={p as never} response={response} onChange={onChange} revealed={revealed} />;
+    case 'problem':
+      return <ProblemQuestion question={question} response={response} onChange={onChange} revealed={revealed} hintsUsed={hintsUsed} onHint={onHint} />;
     case 'short_answer':
     case 'essay_question':
     default:
