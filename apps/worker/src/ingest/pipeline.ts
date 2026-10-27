@@ -8,7 +8,7 @@ import type { JobContext } from '../framework/types.ts';
 import type { Sql } from '../framework/db.ts';
 import { applyProgress } from '../framework/progress.ts';
 import { PermanentJobError } from '../framework/errors.ts';
-import { nextLocalMidnight } from '../framework/timeutil.ts';
+import { nextLocalMidnight, zonedToInstant } from '../framework/timeutil.ts';
 import { createEnv, type PipelineEnv } from './env.ts';
 import { BUCKET, keys, type ObjectStore } from './store.ts';
 import { preflightPdf, readBookmarkStarts } from './pdf-preflight.ts';
@@ -84,7 +84,7 @@ async function notifyDocument(stage: Stage, doc: DocumentRecord, userId: string 
 
 async function failDocument(stage: Stage, doc: DocumentRecord, code: string, userId: string | null, aiJobId: string | null): Promise<void> {
   await patchDocument(stage.sql, doc.id, { status: 'failed', errorCode: code });
-  if (aiJobId) await applyProgress(stage.sql, aiJobId, { status: 'failed', error_code: code, stage: 'S0' });
+  if (aiJobId) await applyProgress(stage.sql, aiJobId, { status: 'failed', error_code: code });
   await notifyDocument(stage, doc, userId, 'failed', code);
 }
 
@@ -93,7 +93,7 @@ async function parkForBudget(stage: Stage, doc: DocumentRecord, payload: IngestP
   await patchDocument(stage.sql, doc.id, { status: 'waiting_budget' });
   if (payload.aiJobId) await applyProgress(stage.sql, payload.aiJobId, { status: 'waiting_budget' });
   const tz = await timezoneOf(stage.sql, payload.userId ?? doc.uploadedBy);
-  const when = resetsAt ? zonedMidnightFrom(resetsAt, tz) : nextLocalMidnight(stage.ctx.now(), tz);
+  const when = resetsAt ? localMidnightOn(resetsAt, tz) : nextLocalMidnight(stage.ctx.now(), tz);
   await stage.ctx.enqueue(
     'ingest.document',
     { document_id: doc.id, mode: 'resume', user_id: payload.userId, ai_job_id: payload.aiJobId },
@@ -101,9 +101,10 @@ async function parkForBudget(stage: Stage, doc: DocumentRecord, payload: IngestP
   );
 }
 
-/** resets_at is the local date of the next budget period; 00:05 local is 03:05 UTC in America/Sao_Paulo (UTC-3). */
-function zonedMidnightFrom(resetsAt: string, _tz: string): Date {
-  return new Date(`${resetsAt}T03:05:00.000Z`);
+/** 00:05 on the local date `resets_at` (the budget period boundary, PLT-04) in the user's time zone. */
+function localMidnightOn(resetsAt: string, timeZone: string): Date {
+  const [y, m, d] = resetsAt.split('-').map(Number) as [number, number, number];
+  return zonedToInstant(y, m, d, 0, 5, timeZone);
 }
 
 export async function timezoneOf(sql: Sql, userId: string | null): Promise<string> {
