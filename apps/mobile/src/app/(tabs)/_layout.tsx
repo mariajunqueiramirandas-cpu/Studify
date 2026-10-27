@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBar, type BottomTabBarProps } from 'expo-router/tabs';
 import { MiniPlayer } from '../../features/podcast/MiniPlayer';
 import type { ComponentProps } from 'react';
@@ -29,6 +30,10 @@ const renderTabBar = (props: BottomTabBarProps) => <TabBarWithPlayer {...props} 
 export default function TabsLayout() {
   const { colors, type } = useTheme();
   const requests = usePendingRequestsBadge();
+  const insets = useSafeAreaInsets();
+  // Some Android gesture bars report a small (or zero) bottom inset, which left the labels under the gesture
+  // pill. Keep at least 12 dp below the labels, plus a little room above the pill.
+  const bottomPad = Math.max(insets.bottom, 12) + 6;
   return (
     <Tabs
       tabBar={renderTabBar}
@@ -36,7 +41,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border, minHeight: 64 },
+        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border, height: 58 + bottomPad, paddingTop: 4, paddingBottom: bottomPad },
         tabBarLabelStyle: { ...type('label'), fontSize: 12 },
         tabBarItemStyle: { paddingVertical: 4 },
       }}
