@@ -53,7 +53,9 @@ Every study effort is organized as a **Goal** (`Objetivo`). A goal has a mode:
 
 Each feature has a stable ID used across specs, tickets, code comments and commits. **Phase** refers to the [roadmap](roadmap.md). **Spec** links to the detailed specification.
 
-### 5.1 Platform (PLT) — spec: [00-platform](../specs/00-platform.md), [mobile-app](../engineering/mobile-app.md)
+### 5.1 Platform (PLT)
+
+Spec: [00-platform](../specs/00-platform.md), [mobile-app](../engineering/mobile-app.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -65,7 +67,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | PLT-06 | Distribution via install link (EAS internal distribution) | 0 |
 | PLT-07 | Offline: reviews and downloaded notes work without internet; sync on reconnect | 1 (reviews), 2 (full) |
 
-### 5.2 Ingestion & Knowledge Map (ING) — spec: [01-ingestion-knowledge-map](../specs/01-ingestion-knowledge-map.md)
+### 5.2 Ingestion & Knowledge Map (ING)
+
+Spec: [01-ingestion-knowledge-map](../specs/01-ingestion-knowledge-map.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -78,7 +82,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | ING-07 | Import school exam schedule / plano de ensino → creates subjects, exams, weights | 2 |
 | ING-08 | In-app PDF viewer; 📄 page chips jump to page and highlight the passage | 0 |
 
-### 5.3 Learn / Understand (LRN) — spec: [02-learn-notes](../specs/02-learn-notes.md)
+### 5.3 Learn / Understand (LRN)
+
+Spec: [02-learn-notes](../specs/02-learn-notes.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -88,7 +94,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | LRN-04 | Interactive concept map + prerequisite detective ("you struggle with X because Y isn't solid") | 2 |
 | LRN-05 | Auto visuals: diagrams, flowcharts, timelines, comparison tables generated from text | 5 |
 
-### 5.4 Remember (MEM) — spec: [04-flashcards-memory](../specs/04-flashcards-memory.md)
+### 5.4 Remember (MEM)
+
+Spec: [04-flashcards-memory](../specs/04-flashcards-memory.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -99,13 +107,17 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | MEM-05 | Mapa da Memória: concepts glow/fade by predicted retention; tap to refresh | 2 |
 | MEM-06 | Estúdio de Mnemônicos: acronyms, rhymes, stories, memory palaces | 5 |
 
-### 5.5 Feed de Estudos (FED) — spec: [06-feed-de-estudos](../specs/06-feed-de-estudos.md)
+### 5.5 Feed de Estudos (FED)
+
+Spec: [06-feed-de-estudos](../specs/06-feed-de-estudos.md)
 
 | ID | Feature | Phase |
 |---|---|---|
 | FED-01 | Vertical swipe feed of micro-lessons, quick questions and diagrams from your material, interleaved with due cards | 2 |
 
-### 5.6 Practice & Exams (PRA) — spec: [05-practice-exams](../specs/05-practice-exams.md), [08-prova-provavel](../specs/08-prova-provavel.md)
+### 5.6 Practice & Exams (PRA)
+
+Spec: [05-practice-exams](../specs/05-practice-exams.md), [08-prova-provavel](../specs/08-prova-provavel.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -119,7 +131,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | PRA-08 | Problem sets with worked solutions and hint ladder | 3 |
 | PRA-09 | Prova Provável (school): teacher's past tests → predicted test in the teacher's style | 2 |
 
-### 5.7 Tutor (TUT) — spec: [03-tutor](../specs/03-tutor.md)
+### 5.7 Tutor (TUT)
+
+Spec: [03-tutor](../specs/03-tutor.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -130,7 +144,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | TUT-05 | Personalized by history (weak topics, past mistakes) | 2 |
 | TUT-06 | Voice mode (speak and listen) | 3 |
 
-### 5.8 Goals & Planning — Semana de Provas (GOL) — spec: [07-goals-semana-de-provas](../specs/07-goals-semana-de-provas.md)
+### 5.8 Goals & Planning — Semana de Provas (GOL)
+
+Spec: [07-goals-semana-de-provas](../specs/07-goals-semana-de-provas.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -146,7 +162,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | GOL-10 | Energy-aware scheduling (learns when you perform best) | 5 |
 | GOL-11 | Predicted grade with confidence range | 2 |
 
-### 5.9 Turma / Together (SOC) — spec: [10-turma-social](../specs/10-turma-social.md)
+### 5.9 Turma / Together (SOC)
+
+Spec: [10-turma-social](../specs/10-turma-social.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -160,7 +178,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | SOC-08 | Weekly leagues (opt-in) | 5 |
 | SOC-09 | Share a quiz to WhatsApp | 2 |
 
-### 5.10 Câmera Mágica (CAM) — spec: [11-camera-magica](../specs/11-camera-magica.md)
+### 5.10 Câmera Mágica (CAM)
+
+Spec: [11-camera-magica](../specs/11-camera-magica.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -168,7 +188,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | CAM-02 | Photograph a question/exercise → step-by-step solution, skill/topic, similar questions | 3 |
 | CAM-03 | Photograph handwritten answers or essays for grading (PRA-07, ENM-05) | 3 |
 
-### 5.11 Interactive Learning (INT) — spec: [12-interactive-learning](../specs/12-interactive-learning.md)
+### 5.11 Interactive Learning (INT)
+
+Spec: [12-interactive-learning](../specs/12-interactive-learning.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -176,7 +198,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | INT-02 | Ensine o Lucas: teach a virtual student; scored on how well Lucas understands | 3 |
 | INT-03 | Treino de Argumentação: the AI attacks your thesis; practice building arguments | 4 |
 
-### 5.12 ENEM Mode (ENM) — spec: [09-enem-mode](../specs/09-enem-mode.md), [08-prova-provavel](../specs/08-prova-provavel.md)
+### 5.12 ENEM Mode (ENM)
+
+Spec: [09-enem-mode](../specs/09-enem-mode.md), [08-prova-provavel](../specs/08-prova-provavel.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -191,7 +215,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | ENM-09 | Atualidades: weekly current-events digest for Humanas and Redação, with questions and repertório | 4 |
 | ENM-10 | Reta Final: last weeks plan, review by area, exam-day logistics checklist | 4 |
 
-### 5.13 Motivation (MOT) and Focus & Wellbeing (WEL) — spec: [13-motivation-wellbeing](../specs/13-motivation-wellbeing.md)
+### 5.13 Motivation (MOT) and Focus & Wellbeing (WEL)
+
+Spec: [13-motivation-wellbeing](../specs/13-motivation-wellbeing.md)
 
 | ID | Feature | Phase |
 |---|---|---|
@@ -204,7 +230,9 @@ Each feature has a stable ID used across specs, tickets, code comments and commi
 | WEL-03 | Burnout guard: notices overload, suggests breaks, sleep reminders | 5 |
 | WEL-04 | Accessibility: font scaling, high contrast, dyslexia-friendly font, read-aloud, voice input | 1 (baseline), 3 (read-aloud/voice) |
 
-### 5.14 Trust (TRU) — spec: [01-ingestion-knowledge-map](../specs/01-ingestion-knowledge-map.md), [10-turma-social](../specs/10-turma-social.md)
+### 5.14 Trust (TRU)
+
+Spec: [01-ingestion-knowledge-map](../specs/01-ingestion-knowledge-map.md), [10-turma-social](../specs/10-turma-social.md)
 
 | ID | Feature | Phase |
 |---|---|---|
