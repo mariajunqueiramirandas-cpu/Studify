@@ -31,6 +31,7 @@ export const SINGLETON_QUEUES: ReadonlySet<string> = new Set([
   'ingest.prerequisites',
   'ingest.render_pages',
   'ingest.transcribe_pages',
+  'notify.live',
 ]);
 
 export function policyFor(name: string): 'standard' | 'short' {

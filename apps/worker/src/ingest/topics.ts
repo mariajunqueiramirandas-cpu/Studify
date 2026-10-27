@@ -494,6 +494,7 @@ export async function writeNote(
   }));
   const rendered = renderCitedBody(text, inputs);
   const body = rendered.body.trim();
+  let written = true;
   await withTransaction(ctx.pool, async (client) => {
     if (ctx.force) {
       await client.query(
@@ -501,6 +502,18 @@ export async function writeNote(
           where node_id = $1 and depth = $2 and status in ('pending','generating','ready') and deleted_at is null`,
         [ctx.bundle.topicId, depth],
       );
+    } else {
+      // One current note per topic and depth. A ready one stays (a retried wave writes nothing twice); a pending
+      // or generating one belongs to note-generate, which finishes that row itself.
+      const current = await client.query(
+        `select 1 from public.notes
+          where node_id = $1 and depth = $2 and status in ('pending','generating','ready') and deleted_at is null`,
+        [ctx.bundle.topicId, depth],
+      );
+      if ((current.rowCount ?? 0) > 0) {
+        written = false;
+        return;
+      }
     }
     await client.query(
       `insert into public.notes
@@ -523,7 +536,7 @@ export async function writeNote(
       ],
     );
   });
-  return { written: true };
+  return { written };
 }
 
 export async function writeGlossary(

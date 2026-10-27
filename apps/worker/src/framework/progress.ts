@@ -31,7 +31,8 @@ export function isTerminalStatus(status: string | undefined): boolean {
 
 /**
  * Applies a patch to ai_jobs. `progress` is derived from items when only the counts change.
- * Sets started_at on the first running state and finished_at on a terminal state.
+ * Sets started_at on the first running state and finished_at on a terminal state. A finished job (succeeded,
+ * failed, cancelled) never goes back to a non-terminal status; such a patch changes nothing and notifies no one.
  */
 export async function applyProgress(sql: Sql, aiJobId: string, patch: ProgressPatch): Promise<void> {
   const sets: string[] = ['updated_at = now()'];
@@ -60,7 +61,9 @@ export async function applyProgress(sql: Sql, aiJobId: string, patch: ProgressPa
   if (patch.status === 'running') sets.push('started_at = coalesce(started_at, now())');
   if (patch.status && TERMINAL.has(patch.status)) sets.push('finished_at = now()');
   if (sets.length === 1) return;
-  await sql.query(`update public.ai_jobs set ${sets.join(', ')} where id = $1`, values);
+  const keepFinished = patch.status !== undefined && !TERMINAL.has(patch.status) ? ` and status not in ('succeeded', 'failed', 'cancelled')` : '';
+  const updated = await sql.query(`update public.ai_jobs set ${sets.join(', ')} where id = $1${keepFinished}`, values);
+  if (keepFinished && updated.rowCount === 0) return;
   if (listener && (patch.stage !== undefined || patch.status !== undefined || progress !== undefined)) {
     try {
       listener(aiJobId, patch);
