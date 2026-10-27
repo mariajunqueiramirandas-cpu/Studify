@@ -14,10 +14,26 @@ android {
   }
 }
 
+// expo-notifications ships prebuilt in its local-maven-repo, and autolinking then adds that repository to
+// every project instead of a ':expo-notifications' project. Use the project only when it is built from source
+// (expo.autolinking.android.buildFromSource), otherwise the artifact for the installed version.
+def expoNotificationsDependency() {
+  def sourceProject = rootProject.findProject(':expo-notifications')
+  if (sourceProject != null) {
+    return sourceProject
+  }
+  def packageJson = providers.exec {
+    workingDir projectDir
+    commandLine 'node', '--print', "require.resolve('expo-notifications/package.json')"
+  }.standardOutput.asText.get().trim()
+  def version = new groovy.json.JsonSlurper().parse(file(packageJson)).version
+  return "host.exp.exponent:expo.modules.notifications:${version}"
+}
+
 dependencies {
   // StudifyMessagingService extends Expo's FCM service so rich pushes are drawn natively and the rest go
   // to Expo unchanged. Same Firebase Messaging version as expo-notifications.
-  implementation project(':expo-notifications')
+  implementation expoNotificationsDependency()
   implementation 'com.google.firebase:firebase-messaging:25.0.1'
   implementation 'androidx.core:core-ktx:1.17.0'
 }

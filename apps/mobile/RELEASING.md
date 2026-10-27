@@ -116,7 +116,9 @@ Perfil → Notificações → Ver exemplos sends every layout to the shade witho
 - `app.config.ts` reads `ANDROID_VERSION_CODE` (an integer from 1 to 2100000000) and `APP_VERSION_SUFFIX`. Without
   them, the versionCode stays at Expo's default.
 
-To run the workflow manually: Actions > Android release > Run workflow, on `main`. Runs on other branches stop before building.
+To run the workflow manually: Actions > Android release > Run workflow, on `main`. Runs on other branches stop before
+building, unless **dry_run** is ticked: a dry run builds and signs the APK on any branch and attaches it to the run as
+an artifact (kept 7 days) without publishing a release. Use it to test release-build changes before merging.
 Re-running an old run fails if its release already exists. Push a new commit or start a new run instead.
 
 ## Local build (optional)

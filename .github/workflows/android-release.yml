@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and sign the APK and upload it as a workflow artifact, without publishing a release (any branch)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,11 +23,13 @@ concurrency:
 env:
   # versionCode = github.run_number + offset. The offset keeps new codes above builds made before this workflow.
   ANDROID_VERSION_CODE_OFFSET: '100'
-  # SDK packages that Expo SDK 58 / RN 0.88 generate (expo-autolinking defaults and RN's libs.versions.toml).
-  # Update these when the Expo or React Native version changes.
-  ANDROID_COMPILE_SDK: '36'
-  ANDROID_BUILD_TOOLS: '36.0.0'
-  ANDROID_NDK: '28.2.13676358'
+  # SDK packages the generated project builds with (the "[ExpoRootProject] Using the following versions" lines in
+  # the Gradle log). Update these when the Expo or React Native version changes. compileSdk 37 is the SDK package
+  # platforms;android-37.0 (there is no platforms;android-37).
+  ANDROID_COMPILE_SDK: '37.0'
+  ANDROID_BUILD_TOOLS: '37.0.0'
+  ANDROID_NDK: '27.1.12297006'
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
   release:
@@ -45,8 +52,10 @@ jobs:
     steps:
       - name: Only build releases from main
         run: |
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "::error title=Wrong branch::Android releases are built from main only (this run is on $GITHUB_REF)."
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice title=Dry run::Building $GITHUB_REF without publishing a release."
+          elif [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error title=Wrong branch::Android releases are built from main only (this run is on $GITHUB_REF). Use a dry run to test another branch."
             exit 1
           fi
 
@@ -133,7 +142,7 @@ jobs:
           version=$(node -p 'require(process.argv[1]).version' "$RUNNER_TEMP/expo-config.json")
           build="$GITHUB_RUN_NUMBER"
           tag="v${version}-build.${build}"
-          if gh release view "$tag" > /dev/null 2>&1; then
+          if [ "$DRY_RUN" != "true" ] && gh release view "$tag" > /dev/null 2>&1; then
             echo "::error title=Release already exists::$tag is already published. Push a new commit to create the next build."
             exit 1
           fi
@@ -274,8 +283,17 @@ jobs:
           } > "$notes"
           cat "$notes"
 
+      - name: Upload the dry-run APK
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_NAME }}
+          path: ${{ env.RELEASE_APK }}
+          retention-days: 7
+
       - name: Publish the GitHub Release
         id: release
+        if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -295,10 +313,14 @@ jobs:
         run: |
           {
             echo "## Studify $APP_VERSION (build $BUILD_NUMBER)"
+            if [ "$DRY_RUN" = "true" ]; then
+              echo
+              echo "Dry run: nothing was published. The signed APK is attached to this run as an artifact."
+            fi
             echo
             echo "| Item | Value |"
             echo "| --- | --- |"
-            echo "| Release | $RELEASE_URL |"
+            echo "| Release | ${RELEASE_URL:-not published (dry run)} |"
             echo "| Tag | \`$RELEASE_TAG\` |"
             echo "| versionCode | \`$ANDROID_VERSION_CODE\` |"
             echo "| APK | \`$APK_NAME\` |"
