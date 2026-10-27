@@ -42,7 +42,7 @@ export const handler = defineFunction<z.infer<typeof IngestRetryReqSchema>>({
     if (updated.error) throw updated.error;
     await deps.enqueue(
       'ingest.document',
-      { document_id: doc.data.id, mode: 'full', from_stage: input.from_stage ?? 'S0', job_id: jobId },
+      { document_id: doc.data.id, mode: 'full', from_stage: input.from_stage ?? 'S0', ai_job_id: jobId },
       { singletonKey: doc.data.id as string, retryLimit: 3 },
     );
     const body: IngestRetryRes = { job_id: jobId };

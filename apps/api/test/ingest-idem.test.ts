@@ -50,6 +50,7 @@ test('ingest-start: queues the document, pre-checks the budget and returns the j
   assertEquals(h.db.rows('documents').find((d) => d.id === UPLOADED)?.status, 'processing');
   const job = h.enqueued.find((e) => e.queue === 'ingest.document')!;
   assertEquals(job.data.document_id, UPLOADED);
+  assertEquals(job.data.ai_job_id, body.job_id, 'the worker reports progress on the job the app was given');
   assertEquals(job.options?.singletonKey, UPLOADED);
 });
 
