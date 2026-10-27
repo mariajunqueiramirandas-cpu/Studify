@@ -94,7 +94,12 @@ export function useAttemptResult(attemptId: string | undefined) {
       const qs = answers.length ? await rows<QuestionRow>(supabase.from('questions').select('*').in('id', answers.map((a) => a.question_id))) : [];
       return { attempt, answers, questions: new Map(qs.map((q) => [q.id, q])) };
     },
-    refetchInterval: (q) => ((q.state.data?.answers ?? []).some((a) => a.grading_status === 'pending') ? 4000 : false),
+    // Poll while the attempt is still being finalized (sync + quiz-submit) or AI grading is pending; give up after ~5 min.
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      const waiting = !d?.attempt || d.attempt.status === 'in_progress' || d.answers.some((a) => a.grading_status === 'pending');
+      return waiting && q.state.dataUpdateCount < 75 ? 4000 : false;
+    },
   });
 }
 

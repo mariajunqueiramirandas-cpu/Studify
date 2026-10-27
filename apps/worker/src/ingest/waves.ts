@@ -371,6 +371,7 @@ export async function writeOutcome(
     }
     case 'tldr':
     case 'study':
+    case 'deep':
       await writeNote(ctx, item.kind, text, citations);
       return true;
     case 'glossary':

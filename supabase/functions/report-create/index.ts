@@ -5,8 +5,30 @@ import { ApiFailure, ReportCreateReqSchema, } from '@studify/shared';
 import type { ReportCreateRes } from '../_shared/responses.ts';
 import { defineFunction } from '../_shared/http.ts';
 import { activeMembership } from '../_shared/access.ts';
+import type { Deps } from '../_shared/deps.ts';
 
 type Req = z.infer<typeof ReportCreateReqSchema>;
+
+/**
+ * Who is told about a report, other than the reporter: the owner and moderators of the Turma the report is about
+ * (class_group_members, role owner|moderator, active). A report with no Turma goes to the app admins, the Studify
+ * operator who escalates it (SP-09, profiles.app_role).
+ */
+async function reportRecipients(db: Deps['db'], classGroupId: string | null, reporterId: string): Promise<string[]> {
+  if (classGroupId) {
+    const { data, error } = await db
+      .from('class_group_members')
+      .select('user_id')
+      .eq('class_group_id', classGroupId)
+      .eq('status', 'active')
+      .in('role', ['owner', 'moderator']);
+    if (error) throw error;
+    return (data as Array<{ user_id: string }>).map((row) => row.user_id).filter((id) => id !== reporterId);
+  }
+  const { data, error } = await db.from('profiles').select('id').eq('app_role', 'app_admin');
+  if (error) throw error;
+  return (data as Array<{ id: string }>).map((row) => row.id).filter((id) => id !== reporterId);
+}
 
 export const handler = defineFunction<Req>({
   name: 'report-create',
@@ -33,11 +55,14 @@ export const handler = defineFunction<Req>({
       status: 'open',
     });
     if (inserted.error) throw inserted.error;
-    await deps.enqueue('notify.dispatch', {
-      user_id: null,
-      type: 'report_created',
-      data: { report_id: reportId, class_group_id: input.class_group_id ?? null },
-    }, { retryLimit: 3 });
+    // One notification per recipient: notify.dispatch needs a user (the worker pushes to a user's devices).
+    for (const recipient of await reportRecipients(deps.db, input.class_group_id ?? null, userId)) {
+      await deps.enqueue('notify.dispatch', {
+        user_id: recipient,
+        type: 'report_created',
+        data: { report_id: reportId, class_group_id: input.class_group_id ?? null },
+      }, { singletonKey: `report_created:${reportId}:${recipient}`, retryLimit: 3 });
+    }
 
     const body: ReportCreateRes = { report_id: reportId };
     return ctx.json(body);

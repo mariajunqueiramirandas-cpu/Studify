@@ -1,24 +1,13 @@
 // flag-create (TRU-02, SP-09). A student flags an item they can see; the triage runs in the worker
 // (flag.triage) and never in this request. One open flag per (item, reporter) (data-model §5.7).
 import { z } from 'zod';
-import { ApiFailure, FlagCreateReqSchema, type ItemType } from '@studify/shared';
+import { ApiFailure, FlagCreateReqSchema } from '@studify/shared';
 import type { FlagCreateRes } from '../_shared/responses.ts';
 import { defineFunction } from '../_shared/http.ts';
 import { requireSubject } from '../_shared/access.ts';
+import { FLAG_TABLES } from '../_shared/flags.ts';
 
 type Req = z.infer<typeof FlagCreateReqSchema>;
-
-/** Items that are a row with subject_id (Phase 1–2). Other item types are not flaggable yet. */
-const FLAG_TABLES: Partial<Record<ItemType, { table: string; select: string; versioned: boolean }>> = {
-  knowledge_node: { table: 'knowledge_nodes', select: 'id, subject_id, version', versioned: true },
-  note: { table: 'notes', select: 'id, subject_id, version', versioned: true },
-  glossary_term: { table: 'glossary_terms', select: 'id, subject_id, version', versioned: true },
-  card: { table: 'cards', select: 'id, subject_id, version, personal_for_user_id', versioned: true },
-  question: { table: 'questions', select: 'id, subject_id, version, personal_for_user_id', versioned: true },
-  explanation: { table: 'explanations', select: 'id, subject_id, personal_for_user_id', versioned: false },
-  feed_item: { table: 'feed_items', select: 'id, subject_id', versioned: false },
-  document: { table: 'documents', select: 'id, subject_id', versioned: false },
-};
 
 export const handler = defineFunction<Req>({
   name: 'flag-create',

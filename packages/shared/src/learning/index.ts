@@ -133,8 +133,21 @@ export {
   autoRestDays,
   evaluateStreak,
   activeMinutesByStudyDay,
+  ACHIEVEMENTS,
+  achievementProgress,
+  bestWeekGoalDays,
 } from './motivation.ts';
-export type { XpEvent, XpDayContext, DailyActivity, StreakState } from './motivation.ts';
+export type {
+  XpEvent,
+  XpDayContext,
+  DailyActivity,
+  StreakState,
+  AchievementDefinition,
+  AchievementCode,
+  AchievementMetricName,
+  AchievementMetrics,
+  AchievementProgress,
+} from './motivation.ts';
 
 export {
   duelAnswerSeconds,
@@ -145,5 +158,24 @@ export {
   roundRate,
   classInsightDisplay,
   topicInsight,
+  DISTRIBUTION_MIN_ANSWERS,
+  LEADERBOARD_SIZE,
+  PODIUM_SIZE,
+  battleTopic,
+  leaderboardTop,
+  battleDistributionOf,
+  battleChoiceOf,
+  battlePublicQuestion,
+  battleStateEvent,
+  battleRevealEvent,
+  battlePodiumEvent,
 } from './social.ts';
-export type { InsightAggregate, InsightDisplay, ClassInsight } from './social.ts';
+export type {
+  InsightAggregate,
+  InsightDisplay,
+  ClassInsight,
+  BattleStatusName,
+  BattlePlayerScore,
+  BattleLeaderboardEntry,
+  BattleRealtimeEvent,
+} from './social.ts';

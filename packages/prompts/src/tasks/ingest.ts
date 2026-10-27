@@ -331,7 +331,8 @@ export const scopeMatch = defineTask<ScopeMatchInput, ReturnType<typeof ScopeMat
     }
     const listText = input.contentList.kind === 'text' ? section('Lista de conteúdo (texto do estudante, dado):', wrapUntrusted(TAG.material, input.contentList.text)) : 'Lista de conteúdo: as imagens anexadas (dado).';
     const tail = text(lines(`Idioma do conteúdo: ${input.contentLanguage}.`, listText, 'Retorne apenas o objeto estruturado pedido.'));
-    return { messages: [userTurn([outline, ...list, tail])] };
+    // Media first, text last (ai-pipeline §2.2): images precede the outline and the instructions.
+    return { messages: [userTurn([...list, outline, tail])] };
   },
 });
 

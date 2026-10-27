@@ -1,6 +1,44 @@
 // Social scoring and state transitions (SOC-02, SOC-03, SOC-04; learning-engine §18). Pure: the jobs
 // read rows, call these, and write the results. Times are server clock values in milliseconds.
-import { battlePoints, classInsightDisplay, isBattleAnswerRejected, type InsightAggregate } from '@studify/shared';
+import {
+  battleChoiceOf,
+  battlePoints,
+  classInsightDisplay,
+  isBattleAnswerRejected,
+  type InsightAggregate,
+} from '@studify/shared';
+
+/** Question statuses of battle.tick (api §8.2, battles.status CHECK in migration 20260103000000). */
+export const BATTLE_OPEN = 'question_open';
+export const BATTLE_REVEAL = 'reveal';
+export const BATTLE_PODIUM = 'podium';
+export const BATTLE_ENDED = 'ended';
+
+/** Correct response in the battle Realtime shape: `{choice}` for mcq_single, `{value}` for true_false. */
+export function correctResponseOf(type: string, payload: Record<string, unknown>): unknown {
+  if (type === 'mcq_single') return { choice: typeof payload.correct === 'string' ? payload.correct : null };
+  if (type === 'true_false') return { value: payload.correct === true };
+  return null;
+}
+
+/** Option ids a distribution is computed over (true_false: `true` / `false`). Empty when the type has none. */
+export function optionIdsOf(type: string, payload: Record<string, unknown>): string[] {
+  if (type === 'mcq_single') {
+    const options = (payload.options as Array<{ id: string }> | undefined) ?? [];
+    return options.map((o) => o.id);
+  }
+  if (type === 'true_false') return ['true', 'false'];
+  return [];
+}
+
+/** The chosen option id of one response, in the same vocabulary as optionIdsOf. */
+export function choiceIdOf(type: string, response: unknown): string | null {
+  if (type === 'mcq_single') return battleChoiceOf(response);
+  if (type === 'true_false' && response && typeof response === 'object' && typeof (response as { value?: unknown }).value === 'boolean') {
+    return (response as { value: boolean }).value ? 'true' : 'false';
+  }
+  return null;
+}
 
 
 /**
@@ -11,11 +49,11 @@ export type BattleStep = { kind: 'close' } | { kind: 'advance'; nextIndex: numbe
 
 export function battleStep(battle: { status: string; current_index: number }, index: number, questionCount: number): BattleStep {
   if (battle.current_index !== index) return { kind: 'noop' };
-  if (battle.status === 'question_open') return { kind: 'close' };
-  if (battle.status === 'question_reveal') {
+  if (battle.status === BATTLE_OPEN) return { kind: 'close' };
+  if (battle.status === BATTLE_REVEAL) {
     return index + 1 < questionCount ? { kind: 'advance', nextIndex: index + 1 } : { kind: 'podium' };
   }
-  if (battle.status === 'podium') return { kind: 'end' };
+  if (battle.status === BATTLE_PODIUM) return { kind: 'end' };
   return { kind: 'noop' };
 }
 

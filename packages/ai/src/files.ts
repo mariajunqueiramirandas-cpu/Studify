@@ -29,7 +29,10 @@ export async function uploadSliceFile(
   input: { sliceId: string; bytes: Uint8Array },
 ): Promise<UploadedSliceFile> {
   const clock = deps.clock ?? Date.now;
-  const file = new File([input.bytes], `${input.sliceId}.pdf`, { type: "application/pdf" });
+  // Copy into a fresh ArrayBuffer-backed view: a Uint8Array<ArrayBufferLike> (e.g. over a SharedArrayBuffer)
+  // is not a BlobPart under TS 6 / Deno's lib, and the copy leaves the bytes themselves unchanged.
+  const body = new Uint8Array(input.bytes);
+  const file = new File([body], `${input.sliceId}.pdf`, { type: "application/pdf" });
   try {
     const meta = await deps.client.files.upload({ file });
     return {

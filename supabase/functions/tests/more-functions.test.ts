@@ -69,7 +69,38 @@ Deno.test('report-create: a Turma report needs membership; a report on a person 
   const person = await reportCreate(request('report-create', { idem: v7(842), body: { reported_id: BOB.id, reason: 'harassment' } }), h.deps);
   assertEquals(person.status, 200);
   assertEquals(h.db.rows('user_reports').length, 1);
-  assertEquals(h.enqueued.some((e) => e.queue === 'notify.dispatch'), true);
+  // No Turma: the app admins (the operator) are told, one notify.dispatch each, never a null user.
+  assertEquals(h.enqueued.filter((e) => e.queue === 'notify.dispatch').length, 0, 'no admin yet');
+});
+
+Deno.test('report-create: a Turma report notifies its owner and moderators, not the reporter; one dispatch each', async () => {
+  const h = makeHarness();
+  await seedWorld(h);
+  const group = v7(843);
+  const owner = v7(844);
+  const moderator = v7(845);
+  h.db.seed('class_groups', { id: group, name: 'Turma 2B', allow_member_uploads: false });
+  h.db.seed('class_group_members', [
+    { class_group_id: group, user_id: ALICE.id, role: 'moderator', status: 'active' },
+    { class_group_id: group, user_id: owner, role: 'owner', status: 'active' },
+    { class_group_id: group, user_id: moderator, role: 'moderator', status: 'active' },
+    { class_group_id: group, user_id: BOB.id, role: 'moderator', status: 'removed' },
+  ]);
+  const res = await reportCreate(request('report-create', { idem: v7(846), body: { class_group_id: group, reason: 'spam' } }), h.deps);
+  assertEquals(res.status, 200);
+  const dispatched = h.enqueued.filter((e) => e.queue === 'notify.dispatch').map((e) => e.data.user_id);
+  assertEquals(dispatched.sort(), [owner, moderator].sort(), 'the reporter (a moderator herself) and removed members are not told');
+});
+
+Deno.test('report-create: a report with no Turma goes to the app admins', async () => {
+  const h = makeHarness();
+  await seedWorld(h);
+  const admin = v7(848);
+  h.db.seed('profiles', { id: admin, display_name: 'Operador', app_role: 'app_admin' });
+  const res = await reportCreate(request('report-create', { idem: v7(849), body: { reported_id: BOB.id, reason: 'harassment' } }), h.deps);
+  assertEquals(res.status, 200);
+  const dispatched = h.enqueued.filter((e) => e.queue === 'notify.dispatch');
+  assertEquals(dispatched.map((e) => e.data.user_id), [admin]);
 });
 
 Deno.test('plan-recompute: a student’s goal is queued once; a second call inside the window coalesces', async () => {

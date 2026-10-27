@@ -6,8 +6,10 @@
 //    authoritative card_states are returned in the ack (the device overwrites its prediction).
 //  - last-writer-wins fields use updated_at clamped to server time ±5 min and only move forward.
 //  - auto-gradable quiz answers are re-graded here with the shared grader; AI-graded ones are queued.
-// Kinds whose tables are not in the migrations yet are rejected with drop=false, so the device keeps the
-// row and retries after the server catches up (api §4.1 rejected[].drop).
+//  - every kind is checked against its own table and ownership (RLS-equivalent): user_id is the caller,
+//    ids are the client UUID v7 and an insert is idempotent on id. Rows the server can never store are
+//    rejected with drop=true; a row that depends on data not synced yet is rejected with drop=false.
+// podcast_play has no table in the migrations yet, so it is rejected with drop=true (api §4.1 rejected[].drop).
 import { z } from 'zod';
 import {
   ApiFailure,
@@ -29,24 +31,24 @@ import {
   type QuestionType,
 } from '@studify/shared';
 import { defineFunction } from '../_shared/http.ts';
-import { canReadSubject, type SubjectRow } from '../_shared/access.ts';
+import { canReadSubject, loadSubject, type SubjectRow } from '../_shared/access.ts';
 import type { Deps } from '../_shared/deps.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { gradeOffline } from '../_shared/grading.ts';
-
-const SYNC_KINDS_WITHOUT_TABLE = new Set([
-  'flag',
-  'feed_impression',
-  'xp_event',
-  'study_session',
-  'topic_read',
-  'podcast_play',
-  'card_override',
-  'mistake_update',
-  'note_highlight',
-]);
+import { FLAG_TABLES } from '../_shared/flags.ts';
 
 const CLOCK_SKEW_MS = CLOCK_SKEW_TOLERANCE_MS;
+
+/**
+ * Largest XP one xp_event may add (spec 13 §8.1: the biggest single award is the first boss defeat, 50).
+ * The server does not recompute XP (it has no event context), so a larger client amount is clamped here.
+ */
+export const XP_MAX_PER_EVENT = 50;
+
+/** Postgres error codes that mean the row itself can never be stored (CHECK, NOT NULL, bad value). */
+const ROW_NEVER_STORABLE = new Set(['23514', '23502', '22001', '22P02']);
+/** Foreign-key violation: the parent row may still arrive from the device, so the device keeps the row. */
+const FK_MISSING = '23503';
 
 export const SyncPushEnvelopeSchema = z.object({
   schema_version: z.number().int().min(1),
@@ -450,7 +452,7 @@ async function pushAnswers(st: PushState, items: AnswerItem[]): Promise<void> {
 
 type LwwItem = Extract<
   z.infer<typeof OutboxItemSchema>,
-  { kind: 'plan_item_status' | 'card_state_flag' | 'node_user_setting' | 'subject_user_setting' | 'study_preferences' }
+  { kind: 'plan_item_status' | 'card_state_flag' | 'card_override' | 'node_user_setting' | 'subject_user_setting' | 'study_preferences' }
 >;
 
 async function pushLww(st: PushState, items: LwwItem[]): Promise<void> {
@@ -510,6 +512,37 @@ async function pushLww(st: PushState, items: LwwItem[]): Promise<void> {
         if (updated.error) throw updated.error;
       }
       st.acked.add(item.id);
+      continue;
+    }
+
+    if (item.kind === 'card_override') {
+      // MEM-01: the student's own front/back/media for a card. Keyed by (user, card), so no id column.
+      const p = item.payload;
+      const access = await cardAccess(st, p.card_id);
+      if (!access.ok) {
+        reject(st, item.id, access.reject, access.drop);
+        continue;
+      }
+      if (p.media !== undefined && p.media !== null && typeof p.media !== 'object') {
+        reject(st, item.id, 'invalid', true); // card_overrides.media is a JSON object (DB check)
+        continue;
+      }
+      const fields: Record<string, unknown> = {};
+      if (p.front !== undefined) fields.front = p.front;
+      if (p.back !== undefined) fields.back = p.back;
+      if (p.media !== undefined) fields.media = p.media;
+      await guardRow(st, item.id, async () => {
+        const existing = await st.db.from('card_overrides').select('updated_at').eq('user_id', st.userId).eq('card_id', p.card_id).maybeSingle();
+        if (existing.error) throw existing.error;
+        if (!existing.data) {
+          const created = await st.db.from('card_overrides').insert({ user_id: st.userId, card_id: p.card_id, ...fields, updated_at: at });
+          if (created.error && created.error.code !== '23505') throw created.error;
+        } else if (new Date(existing.data.updated_at as string).getTime() < new Date(at).getTime()) {
+          const updated = await st.db.from('card_overrides').update({ ...fields, updated_at: at }).eq('user_id', st.userId).eq('card_id', p.card_id);
+          if (updated.error) throw updated.error;
+        }
+        st.acked.add(item.id);
+      });
       continue;
     }
 
@@ -573,6 +606,339 @@ async function pushLww(st: PushState, items: LwwItem[]): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------- kinds with their own table
+
+type OutboxKind = z.infer<typeof OutboxItemSchema>['kind'];
+type Item<K extends OutboxKind> = Extract<z.infer<typeof OutboxItemSchema>, { kind: K }>;
+type Access = { ok: true } | { ok: false; reject: Reject['code']; drop: boolean };
+
+/**
+ * Runs the writes of one row. A row the database can never store is rejected with drop=true; a row whose
+ * parent (foreign key) has not arrived is kept with drop=false. Any other error fails the batch, as before.
+ */
+async function guardRow(st: PushState, id: string, work: () => Promise<void>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (code && ROW_NEVER_STORABLE.has(code)) reject(st, id, 'invalid', true);
+    else if (code === FK_MISSING) reject(st, id, 'not_found', false);
+    else throw error;
+  }
+}
+
+/** An id-keyed row (client UUID v7): `mine` means the push is an idempotent ack, `theirs` is refused. */
+async function ownership(st: PushState, table: string, id: string, ownerColumn = 'user_id'): Promise<'mine' | 'theirs' | 'none'> {
+  const { data, error } = await st.db.from(table).select(`id, ${ownerColumn}`).eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!data) return 'none';
+  return (data as unknown as Record<string, unknown>)[ownerColumn] === st.userId ? 'mine' : 'theirs';
+}
+
+/** The id when the caller owns that row, otherwise null: a dangling link is dropped, the row is kept. */
+async function ownedId(st: PushState, table: string, id: string): Promise<string | null> {
+  const { data, error } = await st.db.from(table).select('id').eq('id', id).eq('user_id', st.userId).maybeSingle();
+  if (error) throw error;
+  return data ? id : null;
+}
+
+/** Shared by `ownership` results: refuse another student's row, ack the caller's own. Returns true when handled. */
+function handledByOwnership(st: PushState, id: string, owner: 'mine' | 'theirs' | 'none'): boolean {
+  if (owner === 'theirs') {
+    reject(st, id, 'forbidden', true);
+    return true;
+  }
+  if (owner === 'mine') {
+    st.acked.add(id);
+    return true;
+  }
+  return false;
+}
+
+/** Access to the item a feed impression refers to (FED-01). Same rules as the reads the student can do. */
+async function feedRefAccess(st: PushState, kind: 'feed_item' | 'card' | 'mistake', refId: string): Promise<Access> {
+  if (kind === 'card') return cardAccess(st, refId);
+  if (kind === 'mistake') {
+    const mistake = await st.db.from('mistakes').select('id').eq('id', refId).eq('user_id', st.userId).maybeSingle();
+    if (mistake.error) throw mistake.error;
+    return mistake.data ? { ok: true } : { ok: false, reject: 'not_found', drop: true };
+  }
+  const feed = await st.db.from('feed_items').select('id, subject_id, personal_for_user_id').eq('id', refId).is('deleted_at', null).maybeSingle();
+  if (feed.error) throw feed.error;
+  if (!feed.data) return { ok: false, reject: 'not_found', drop: true };
+  const personal = feed.data.personal_for_user_id as string | null;
+  if (personal && personal !== st.userId) return { ok: false, reject: 'not_found', drop: true };
+  if (!(await subjectReadable(st, feed.data.subject_id as string))) return { ok: false, reject: 'forbidden', drop: true };
+  return { ok: true };
+}
+
+// flag (TRU-02): content_flags. The same item rules as flag-create; the triage job is queued like there.
+async function pushFlags(st: PushState, items: Item<'flag'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    if (handledByOwnership(st, item.id, await ownership(st, 'content_flags', item.id, 'reporter_id'))) continue;
+    const spec = FLAG_TABLES[p.item_type];
+    if (!spec) {
+      reject(st, item.id, 'invalid', true);
+      continue;
+    }
+    await guardRow(st, item.id, async () => {
+      const found = await st.db.from(spec.table).select(spec.select).eq('id', p.item_id).is('deleted_at', null).maybeSingle();
+      if (found.error) throw found.error;
+      const row = found.data as Record<string, unknown> | null;
+      const personal = row?.personal_for_user_id as string | null | undefined;
+      const subject = row ? await loadSubject(st.db, row.subject_id as string) : null;
+      if (!row || (personal && personal !== st.userId) || !subject || !(await canReadSubject(st.db, st.userId, subject))) {
+        reject(st, item.id, 'not_found', true);
+        return;
+      }
+      // One open flag per (item, reporter): a flag this student already has open is not added again.
+      const open = await st.db
+        .from('content_flags')
+        .select('id')
+        .eq('item_type', p.item_type)
+        .eq('item_id', p.item_id)
+        .eq('reporter_id', st.userId)
+        .in('status', ['open', 'triaged', 'hidden_pending'])
+        .maybeSingle();
+      if (open.error) throw open.error;
+      if (open.data) {
+        st.acked.add(item.id);
+        return;
+      }
+      const inserted = await st.db.from('content_flags').insert({
+        id: item.id,
+        item_type: p.item_type,
+        item_id: p.item_id,
+        item_version: spec.versioned ? Number(row.version ?? 1) : 1,
+        class_group_id: subject.owner_class_group_id,
+        reporter_id: st.userId,
+        reason: p.reason,
+        comment: p.comment ?? null,
+        status: 'open',
+      });
+      if (inserted.error) {
+        if (inserted.error.code !== '23505') throw inserted.error;
+        st.acked.add(item.id);
+        return;
+      }
+      st.acked.add(item.id);
+      await st.deps.enqueue('flag.triage', { flag_id: item.id }, { singletonKey: item.id, retryLimit: 2 });
+    });
+  }
+}
+
+// xp_event (MOT-01, SOC-08): xp_events. The client amount is clamped; (user, ref, feature) is awarded once.
+async function pushXp(st: PushState, items: Item<'xp_event'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    // Zero or negative: nothing to award (for example a card repeated within 10 min). Acked, not stored.
+    if (p.amount <= 0) {
+      st.acked.add(item.id);
+      continue;
+    }
+    if (p.ref_type.length > 40) {
+      reject(st, item.id, 'invalid', true); // xp_events.ref_type is at most 40 characters (DB check)
+      continue;
+    }
+    if (handledByOwnership(st, item.id, await ownership(st, 'xp_events', item.id))) continue;
+    const occurredAt = clampReviewedAt(p.occurred_at, st.now).at;
+    await guardRow(st, item.id, async () => {
+      const inserted = await st.db.from('xp_events').upsert(
+        {
+          id: item.id,
+          user_id: st.userId,
+          amount: Math.min(p.amount, XP_MAX_PER_EVENT),
+          source_feature: p.source_feature,
+          ref_type: p.ref_type,
+          ref_id: p.ref_id,
+          occurred_at: occurredAt.toISOString(),
+          local_date: p.local_date,
+          in_quiet_hours: p.in_quiet_hours,
+        },
+        { onConflict: 'user_id,ref_type,ref_id,source_feature', ignoreDuplicates: true },
+      );
+      if (inserted.error) throw inserted.error;
+      st.acked.add(item.id);
+    });
+  }
+}
+
+// study_session (GOL-05, WEL-01/02, MOT-01): study_sessions. Links to plans and goals are kept only when owned.
+async function pushStudySessions(st: PushState, items: Item<'study_session'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    if (handledByOwnership(st, item.id, await ownership(st, 'study_sessions', item.id))) continue;
+    await guardRow(st, item.id, async () => {
+      const inserted = await st.db.from('study_sessions').insert({
+        id: item.id,
+        user_id: st.userId,
+        kind: p.kind,
+        plan_item_id: p.plan_item_id ? await ownedId(st, 'plan_items', p.plan_item_id) : null,
+        goal_id: p.goal_id ? await ownedId(st, 'goals', p.goal_id) : null,
+        started_at: p.started_at,
+        ended_at: p.ended_at ?? null,
+        active_minutes: p.active_minutes ?? 0,
+        activities: p.activities ?? [],
+        planned_focus_minutes: p.planned_focus_minutes ?? null,
+        cycles_planned: p.cycles_planned ?? null,
+        cycles_done: p.cycles_done ?? null,
+        interruptions: p.interruptions ?? null,
+        blocked_attempts: p.blocked_attempts ?? null,
+        dnd_used: p.dnd_used ?? false,
+        updated_at: st.now.toISOString(),
+      });
+      if (inserted.error && inserted.error.code !== '23505') throw inserted.error;
+      st.acked.add(item.id);
+    });
+  }
+}
+
+// topic_read (LRN-01.11): topic_reads, append-only. The node must be readable by the student.
+async function pushTopicReads(st: PushState, items: Item<'topic_read'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    if (handledByOwnership(st, item.id, await ownership(st, 'topic_reads', item.id))) continue;
+    const node = await st.db.from('knowledge_nodes').select('id, subject_id').eq('id', p.node_id).is('deleted_at', null).maybeSingle();
+    if (node.error) throw node.error;
+    if (!node.data) {
+      reject(st, item.id, 'not_found', true);
+      continue;
+    }
+    if (!(await subjectReadable(st, node.data.subject_id as string))) {
+      reject(st, item.id, 'forbidden', true);
+      continue;
+    }
+    await guardRow(st, item.id, async () => {
+      const inserted = await st.db.from('topic_reads').insert({
+        id: item.id,
+        user_id: st.userId,
+        node_id: p.node_id,
+        depth: p.depth,
+        read_at: p.read_at,
+        seconds: p.seconds,
+      });
+      if (inserted.error && inserted.error.code !== '23505') throw inserted.error;
+      st.acked.add(item.id);
+    });
+  }
+}
+
+// feed_impression (FED-01): feed_impressions, append-only. The feed's visit id is not a study session, so a
+// session_id that is not one of the student's study sessions is stored as null instead of refusing the row.
+async function pushFeedImpressions(st: PushState, items: Item<'feed_impression'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    if (handledByOwnership(st, item.id, await ownership(st, 'feed_impressions', item.id))) continue;
+    if (!p.action) {
+      reject(st, item.id, 'invalid', true); // the table needs an action; the device always sends one
+      continue;
+    }
+    const ref = await feedRefAccess(st, p.item_kind, p.item_ref_id);
+    if (!ref.ok) {
+      reject(st, item.id, ref.reject, ref.drop);
+      continue;
+    }
+    await guardRow(st, item.id, async () => {
+      const inserted = await st.db.from('feed_impressions').insert({
+        id: item.id,
+        user_id: st.userId,
+        feed_item_id: p.item_kind === 'feed_item' ? p.item_ref_id : null,
+        item_kind: p.item_kind,
+        item_ref_id: p.item_ref_id,
+        session_id: await ownedId(st, 'study_sessions', p.session_id),
+        shown_at: p.shown_at,
+        dwell_ms: p.dwell_ms ?? 0,
+        action: p.action,
+        helpful: p.helpful ?? null,
+      });
+      if (inserted.error && inserted.error.code !== '23505') throw inserted.error;
+      st.acked.add(item.id);
+    });
+  }
+}
+
+// note_highlight (LRN-01.10): note_highlights. Last writer wins on updated_at, like the other edits.
+async function pushHighlights(st: PushState, items: Item<'note_highlight'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    const existing = await st.db.from('note_highlights').select('id, user_id, updated_at').eq('id', item.id).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data && existing.data.user_id !== st.userId) {
+      reject(st, item.id, 'forbidden', true);
+      continue;
+    }
+    const note = await st.db.from('notes').select('id, subject_id').eq('id', p.note_id).is('deleted_at', null).maybeSingle();
+    if (note.error) throw note.error;
+    if (!note.data) {
+      reject(st, item.id, 'not_found', true);
+      continue;
+    }
+    if (!(await subjectReadable(st, note.data.subject_id as string))) {
+      reject(st, item.id, 'forbidden', true);
+      continue;
+    }
+    const at = clampLww(p.updated_at, st.now).toISOString();
+    await guardRow(st, item.id, async () => {
+      const values = {
+        note_id: p.note_id,
+        start: p.start,
+        end: p.end,
+        quote: p.quote,
+        color: p.color,
+        orphaned: p.orphaned ?? false,
+        deleted_at: p.deleted_at ?? null,
+        updated_at: at,
+      };
+      if (!existing.data) {
+        const created = await st.db.from('note_highlights').insert({ id: item.id, user_id: st.userId, ...values });
+        if (created.error && created.error.code !== '23505') throw created.error;
+      } else if (new Date(existing.data.updated_at as string).getTime() < new Date(at).getTime()) {
+        const updated = await st.db.from('note_highlights').update(values).eq('id', item.id).eq('user_id', st.userId);
+        if (updated.error) throw updated.error;
+      }
+      st.acked.add(item.id);
+    });
+  }
+}
+
+// mistake_update (PRA-04): mistakes. Only the student's own cause and note change; the server keeps one open
+// mistake per (user, question), so the row is found by its question.
+async function pushMistakeUpdates(st: PushState, items: Item<'mistake_update'>[]): Promise<void> {
+  for (const item of items) {
+    const p = item.payload;
+    const found = await st.db
+      .from('mistakes')
+      .select('id, updated_at')
+      .eq('user_id', st.userId)
+      .eq('question_id', p.question_id)
+      .is('deleted_at', null)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (found.error) throw found.error;
+    const mistake = found.data as { id: string; updated_at: string } | null;
+    if (!mistake) {
+      reject(st, item.id, 'not_found', true);
+      continue;
+    }
+    const at = clampLww(p.updated_at, st.now);
+    await guardRow(st, item.id, async () => {
+      if (new Date(mistake.updated_at).getTime() < at.getTime()) {
+        const patch: Record<string, unknown> = { updated_at: at.toISOString() };
+        if (p.cause !== undefined) {
+          patch.cause = p.cause;
+          patch.cause_source = 'user';
+        }
+        if (p.user_note !== undefined) patch.user_note = p.user_note;
+        const updated = await st.db.from('mistakes').update(patch).eq('id', mistake.id).eq('user_id', st.userId);
+        if (updated.error) throw updated.error;
+      }
+      st.acked.add(item.id);
+    });
+  }
+}
+
 export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
   name: 'sync-push',
   mutating: true,
@@ -601,6 +967,13 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
     const attempts: AttemptItem[] = [];
     const answers: AnswerItem[] = [];
     const lww: LwwItem[] = [];
+    const mistakeUpdates: Item<'mistake_update'>[] = [];
+    const highlights: Item<'note_highlight'>[] = [];
+    const flags: Item<'flag'>[] = [];
+    const xp: Item<'xp_event'>[] = [];
+    const sessions: Item<'study_session'>[] = [];
+    const topicReads: Item<'topic_read'>[] = [];
+    const impressions: Item<'feed_impression'>[] = [];
     for (const raw of envelope.items) {
       const parsed = OutboxItemSchema.safeParse(raw);
       if (!parsed.success) {
@@ -610,11 +983,6 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
         continue;
       }
       const item = parsed.data;
-      if (SYNC_KINDS_WITHOUT_TABLE.has(item.kind)) {
-        // The table ships in a later migration: keep the row on the device and retry.
-        reject(st, item.id, 'invalid', false);
-        continue;
-      }
       switch (item.kind) {
         case 'review_log':
           reviews.push(item);
@@ -627,19 +995,53 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
           break;
         case 'plan_item_status':
         case 'card_state_flag':
+        case 'card_override':
         case 'node_user_setting':
         case 'subject_user_setting':
         case 'study_preferences':
           lww.push(item);
           break;
+        case 'mistake_update':
+          mistakeUpdates.push(item);
+          break;
+        case 'note_highlight':
+          highlights.push(item);
+          break;
+        case 'flag':
+          flags.push(item);
+          break;
+        case 'xp_event':
+          xp.push(item);
+          break;
+        case 'study_session':
+          sessions.push(item);
+          break;
+        case 'topic_read':
+          topicReads.push(item);
+          break;
+        case 'feed_impression':
+          impressions.push(item);
+          break;
+        case 'podcast_play':
+          // No table in the migrations yet, and no later row depends on it: dropped, not retried forever.
+          reject(st, item.id, 'invalid', true);
+          break;
       }
     }
 
-    // Order matters: attempts before the answers that reference them, reviews before the replay.
+    // Order matters: attempts before the answers that reference them, reviews before the replay, study
+    // sessions before the feed impressions that may link to them.
     await pushReviews(st, reviews);
     await pushAttempts(st, attempts);
     await pushAnswers(st, answers);
     await pushLww(st, lww);
+    await pushMistakeUpdates(st, mistakeUpdates);
+    await pushHighlights(st, highlights);
+    await pushFlags(st, flags);
+    await pushXp(st, xp);
+    await pushStudySessions(st, sessions);
+    await pushTopicReads(st, topicReads);
+    await pushFeedImpressions(st, impressions);
     const cardStates = await replayTouchedCards(st);
 
     const body: SyncPushRes = {

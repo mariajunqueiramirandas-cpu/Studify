@@ -3,7 +3,7 @@ import { Share } from 'react-native';
 import { shareQuiz } from '../../../../features/class/api';
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { ActionBar, AiBadge, Banner, BottomSheet, Button, Card, Celebrate, FeedbackPanel, ListItem, RichContent, RichText, Row, Screen, Section, Stat, Text, useOverlay } from '../../../../components';
+import { ActionBar, AiBadge, Banner, BottomSheet, Button, Card, Celebrate, FeedbackPanel, ListItem, RichContent, RichText, Row, Screen, Section, Stat, Text, useOnline, useOverlay } from '../../../../components';
 import { formatGrade } from '../../../../features/common/format';
 import { updateMistake, useAttemptResult, useMistakes, type AttemptAnswer } from '../../../../features/practice/api';
 import { usePickedCauses } from '../../../../features/practice/causes';
@@ -15,6 +15,7 @@ import { space } from '../../../../theme';
 export default function Result() {
   const { attemptId, k, n, quizId } = useLocalSearchParams<{ attemptId: string; k?: string; n?: string; quizId?: string }>();
   const res = useAttemptResult(attemptId);
+  const online = useOnline();
   const mistakes = useMistakes('open');
   const take = usePickedCauses((s) => s.take);
   const overlay = useOverlay();
@@ -35,7 +36,9 @@ export default function Result() {
     }
   }, [mistakes.data, res.data, attemptId, take]);
 
-  const answers = res.data?.answers ?? [];
+  // Until quiz-submit has graded the attempt on the server, show the on-device score (k/n params).
+  const finalized = res.data?.attempt?.status === 'submitted';
+  const answers = finalized ? (res.data?.answers ?? []) : [];
   const correct = answers.length ? answers.filter((a) => a.correct).length : Number(k ?? 0);
   const total = answers.length || Number(n ?? 0);
   const pending = answers.filter((a) => a.grading_status === 'pending').length;
@@ -60,7 +63,7 @@ export default function Result() {
         {grade != null ? t('sim.result', { k: correct, n: total, grade: formatGrade(grade) }) : t('result.score', { k: correct, n: total })}
       </RichText>
       {pending ? <Banner kind="info" icon="time-outline" message={t('result.pending_grading', { n: pending })} /> : null}
-      {!res.data?.attempt && !res.isLoading ? <Banner kind="neutral" message={t('offline.queued')} /> : null}
+      {!finalized && !res.isLoading ? <Banner kind="neutral" icon={online ? 'time-outline' : 'cloud-offline-outline'} message={online ? t('grading.progress') : t('offline.queued')} /> : null}
       <Card>
         <Row>
           <Stat value={`${correct}/${total}`} label="acertos" />

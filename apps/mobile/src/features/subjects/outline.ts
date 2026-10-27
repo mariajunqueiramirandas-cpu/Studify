@@ -1,4 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { uuidv7 } from 'uuidv7';
+import { callFunction } from '../../api/functions';
 import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
 import { rows, rpc } from '../common/query';
@@ -108,9 +110,12 @@ export type OutlineOp =
   | { op: 'restore'; node_id: string }
   | { op: 'create'; kind: 'unit' | 'topic'; title: string; parent_id?: string | null };
 
-/** ING-04 edits go through `edit_outline` so every change is an undoable node_event. */
+/**
+ * ING-04 edits go through the `outline-edit` function: it runs `edit_outline` as the student (every
+ * change is an undoable node_event) and queues regeneration for topics whose sources changed.
+ */
 export async function editOutline(subjectId: string, ops: OutlineOp[]) {
-  return rpc<{ event_ids: string[]; regenerate_node_ids: string[] }>('edit_outline', { subject_id: subjectId, ops });
+  return callFunction<{ subject_id: string; ops: OutlineOp[] }, { event_ids: string[]; regenerate_node_ids: string[] }>('outline-edit', { subject_id: subjectId, ops }, { idempotencyKey: uuidv7() });
 }
 
 export async function undoOutlineEvent(eventId: string) {

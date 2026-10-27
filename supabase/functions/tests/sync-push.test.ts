@@ -85,12 +85,13 @@ Deno.test('sync-push: an invalid row is rejected, the rest of the batch still la
   assertEquals(body.rejected, [{ id: bad.id, code: 'invalid', drop: true }]);
 });
 
-Deno.test('sync-push: a kind whose table is not migrated yet is kept on the device (drop=false)', async () => {
+Deno.test('sync-push: podcast_play has no table yet, so the row is dropped (drop=true), not retried forever', async () => {
   const h = makeHarness();
   await seedWorld(h);
-  const xp = { id: v7(18), kind: 'xp_event', created_at: NOW.toISOString(), payload: { amount: 5, source_feature: 'MEM-02', ref_type: 'review', ref_id: v7(19), occurred_at: NOW.toISOString(), local_date: '2026-10-27', in_quiet_hours: false } };
-  const body = await json(await handler(push([xp]), h.deps));
-  assertEquals(body.rejected, [{ id: xp.id, code: 'invalid', drop: false }]);
+  const play = { id: v7(18), kind: 'podcast_play', created_at: NOW.toISOString(), payload: { episode_id: v7(19), position_ms: 1200, updated_at: NOW.toISOString() } };
+  const body = await json(await handler(push([play]), h.deps));
+  assertEquals(body.acked, []);
+  assertEquals(body.rejected, [{ id: play.id, code: 'invalid', drop: true }]);
 });
 
 Deno.test('sync-push: a last-writer-wins plan edit clamps its timestamp and only moves forward', async () => {

@@ -24,15 +24,20 @@ export async function handleNotifyDispatch(ctx: JobContext, raw: Record<string, 
   // Local types are scheduled on the device (api.md §9); the server never pushes them.
   if (entry.delivery === 'local') return { status: 'local_only' };
 
+  // A producer may send its own PT-BR copy (e.g. duel-create sends `body`, spec 10 §8.2); it wins over the catalog.
   await ctx.push(payload.user_id, {
     channel: entry.channel,
-    title: entry.title,
-    body: fillTemplate(entry.body, payload.data),
+    title: nonEmpty(payload.data.title) ?? entry.title,
+    body: nonEmpty(payload.data.body) ?? fillTemplate(entry.body, payload.data),
     data: { ...payload.data, type: payload.type, deep_link: fillTemplate(entry.deepLink, payload.data) },
     // requested = not counted toward the cap (PLT-05.4); the push service reads this flag.
     requested: !entry.countsTowardCap,
   });
   return { status: 'handed_off' };
+}
+
+function nonEmpty(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 export const jobs: JobDefinition[] = [

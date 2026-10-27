@@ -6,6 +6,7 @@ import type { JobContext, JobDefinition } from '../framework/types.ts';
 import { IN_CHUNK, chunk, unwrap, unwrapRows, uniq } from '../lib/db.ts';
 import { dailyActivityFor, daysInRange, rollStreak, type DayFacts } from '../lib/streaks.ts';
 import { DEFAULT_ROLLOVER_HOUR, addDays, inQuietHours, localDateOf, safeTimeZone, studyDayFor } from '../lib/time.ts';
+import { syncAchievements } from '../lib/achievements.ts';
 
 const RolloverPayload = z.object({ user_ids: z.array(z.string().min(1)).max(1000).optional() });
 
@@ -208,6 +209,8 @@ export async function handleStreaksRollover(ctx: JobContext, raw: Record<string,
   for (const userId of uniq(userIds)) {
     const result = await rolloverUser(ctx, userId);
     if (result.status === 'rolled') rolled++;
+    // Streak and daily-goal achievements change with the rollover, so they are re-measured for every user.
+    await syncAchievements(ctx, userId);
   }
   return { users: userIds.length, rolled };
 }
@@ -279,6 +282,8 @@ export async function handleXpAward(ctx: JobContext, raw: Record<string, unknown
     'xp_events',
   );
   const awarded = inserted.reduce((acc, r) => acc + Number(r.amount), 0);
+  // Reviews, questions and duels arrive as XP events, so achievements are re-measured after each batch.
+  if (inserted.length > 0) await syncAchievements(ctx, payload.user_id);
   return { awarded, inserted: inserted.length, skipped: payload.events.length - inserted.length };
 }
 

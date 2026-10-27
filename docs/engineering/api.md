@@ -588,12 +588,13 @@ Subscribed tables and filters are in [data-model §8.1](data-model.md#81-postgre
 
 ```ts
 // battle:{battle_id}  — sent by battle-control / battle.tick
-type BattleState  = { event: "state"; status: BattleStatus; index: number; total: number;
-                      opens_at?: string; closes_at?: string; question?: QuestionPublic };   // never contains the answer
-type BattleReveal = { event: "reveal"; index: number; correct_response: unknown;
-                      distribution?: Record<string, number>;   // only if ≥ 5 answered (SOC-03.10)
-                      top5: { nickname: string; score: number }[]; you?: never };      // own result via battle-answer history
-type BattlePodium = { event: "podium"; top: { nickname: string; score: number; rank: number }[] };
+type LeaderRow    = { user_id: string; nickname: string; score: number; rank: number };
+type BattleState  = { event: "state"; status: BattleStatus; current_index: number; total: number;
+                      opens_at?: string; closes_at?: string; question?: QuestionPublic; players?: number }; // never contains the answer
+type BattleReveal = { event: "reveal"; index: number; correct_response: unknown; explanation?: string;
+                      distribution: Record<string, number> | null;   // null unless ≥ 5 answered (SOC-03.10)
+                      leaderboard: LeaderRow[] };                     // top 5; own result via battle-answer history
+type BattlePodium = { event: "podium"; leaderboard: LeaderRow[] };     // top 3
 // presence payload (clients): { nickname: string; avatar_preset?: string }
 
 // room:{room_id}

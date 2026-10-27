@@ -226,3 +226,115 @@ export function activeMinutesByStudyDay(
   }
   return out;
 }
+
+// ---------- achievements (MOT-01.8; spec 13 §8.5) ----------
+
+/**
+ * Canonical achievement catalog (v1). `code` is the value stored in achievements.code (migration
+ * 20260103000000_phase2: `^[a-z][a-z0-9_]{1,40}$`). `computable: false` marks achievements whose
+ * condition needs data the schema does not hold yet; the worker never unlocks those.
+ */
+export const ACHIEVEMENTS = [
+  { code: 'first_material', name: 'Primeiro material', criterion: 'Enviar o primeiro material.', metric: 'documents', threshold: 1, computable: true },
+  { code: 'first_review', name: 'Primeira revisão', criterion: 'Revisar o primeiro cartão.', metric: 'reviews', threshold: 1, computable: true },
+  { code: 'streak_7', name: '7 dias', criterion: 'Chegar a 7 dias de sequência.', metric: 'longestStreak', threshold: 7, computable: true },
+  { code: 'streak_30', name: '30 dias', criterion: 'Chegar a 30 dias de sequência.', metric: 'longestStreak', threshold: 30, computable: true },
+  { code: 'streak_100', name: '100 dias', criterion: 'Chegar a 100 dias de sequência.', metric: 'longestStreak', threshold: 100, computable: true },
+  { code: 'cards_100', name: '100 cartões', criterion: 'Revisar 100 cartões no total.', metric: 'reviews', threshold: 100, computable: true },
+  { code: 'cards_1000', name: '1.000 cartões', criterion: 'Revisar 1.000 cartões no total.', metric: 'reviews', threshold: 1000, computable: true },
+  { code: 'questions_500', name: '500 questões', criterion: 'Responder 500 questões no total.', metric: 'questions', threshold: 500, computable: true },
+  { code: 'first_mock', name: 'Primeiro simulado', criterion: 'Concluir um simulado.', metric: 'mockExams', threshold: 1, computable: true },
+  { code: 'clean_notebook', name: 'Caderno limpo', criterion: 'Resolver 20 erros do Caderno de Erros.', metric: 'mistakesResolved', threshold: 20, computable: true },
+  { code: 'calibrated', name: 'Calibrado(a)', criterion: 'Ficar bem calibrado nas últimas 50 respostas com confiança (PRA-05).', metric: 'calibrated', threshold: 1, computable: true },
+  { code: 'duelist', name: 'Duelista', criterion: 'Terminar 10 duelos.', metric: 'duelsFinished', threshold: 10, computable: true },
+  { code: 'rematch', name: 'Revanche!', criterion: 'Vencer uma revanche.', metric: 'rematchWins', threshold: 1, computable: true },
+  { code: 'bug_hunter', name: 'Caçador de erros', criterion: '3 relatos de erro aceitos (TRU-02).', metric: 'errorReportsAccepted', threshold: 3, computable: true },
+  {
+    code: 'week_won',
+    name: 'Semana vencida',
+    criterion: 'Terminar todas as provas de uma Semana de Provas com todos os dias do plano contados ou de descanso.',
+    metric: null,
+    threshold: 1,
+    computable: false,
+  },
+  { code: 'consistent_week', name: 'Semana consistente', criterion: 'Bater a meta do dia em 4 dias de uma mesma semana.', metric: 'bestWeekGoalDays', threshold: 4, computable: true },
+] as const;
+
+export type AchievementDefinition = (typeof ACHIEVEMENTS)[number];
+export type AchievementCode = AchievementDefinition['code'];
+export type AchievementMetricName = Exclude<AchievementDefinition['metric'], null>;
+
+/** Measured values per metric, read by the worker from the tables named in the catalog comments. */
+export interface AchievementMetrics {
+  /** documents (not deleted) uploaded by the user. */
+  documents: number;
+  /** review_logs rows. */
+  reviews: number;
+  /** streaks.longest_length. */
+  longestStreak: number;
+  /** attempt_answers rows (not deleted). */
+  questions: number;
+  /** Submitted attempts of mock_exam / enem_simulado quizzes. */
+  mockExams: number;
+  /** mistakes with resolved_at set. */
+  mistakesResolved: number;
+  /** calibration(last 50 rated answers).calibrated. */
+  calibrated: boolean;
+  /** Duels finished where the user took part. */
+  duelsFinished: number;
+  /** Duels won that were rematches (rematch_of set). */
+  rematchWins: number;
+  /** content_flags reported by the user and accepted. */
+  errorReportsAccepted: number;
+  /** Most days with the daily goal met in one study week (Monday start). */
+  bestWeekGoalDays: number;
+}
+
+export interface AchievementProgress {
+  code: AchievementCode;
+  name: string;
+  /** Measured value, capped at the threshold (what achievements.progress stores). */
+  progress: number;
+  threshold: number;
+  unlocked: boolean;
+  computable: boolean;
+}
+
+/**
+ * Progress and unlock state for every catalog entry. A non-computable entry is never unlocked.
+ * `calibrated` counts as 1 when true, 0 otherwise.
+ */
+export function achievementProgress(metrics: AchievementMetrics): AchievementProgress[] {
+  return ACHIEVEMENTS.map((def) => {
+    if (!def.computable || def.metric === null) {
+      return { code: def.code, name: def.name, progress: 0, threshold: def.threshold, unlocked: false, computable: false };
+    }
+    const raw = metrics[def.metric];
+    const value = typeof raw === 'boolean' ? (raw ? 1 : 0) : Math.max(0, Number(raw) || 0);
+    return {
+      code: def.code,
+      name: def.name,
+      progress: Math.min(value, def.threshold),
+      threshold: def.threshold,
+      unlocked: value >= def.threshold,
+      computable: true,
+    };
+  });
+}
+
+/** Most days with goal_met in one study week (Monday to Sunday, local dates). Days not in the list count as unmet. */
+export function bestWeekGoalDays(days: ReadonlyArray<{ day: LocalDate; goalMet: boolean }>): number {
+  const perWeek = new Map<LocalDate, number>();
+  for (const d of days) {
+    if (!d.goalMet) continue;
+    const week = mondayOf(d.day);
+    perWeek.set(week, (perWeek.get(week) ?? 0) + 1);
+  }
+  return Math.max(0, ...perWeek.values());
+}
+
+function mondayOf(day: LocalDate): LocalDate {
+  const [y, m, d] = day.split('-').map(Number);
+  const dow = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+  return addDays(day, -((dow + 6) % 7));
+}

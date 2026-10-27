@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACHIEVEMENTS,
+  achievementProgress,
   activeMinutesByStudyDay,
   autoRestDays,
+  bestWeekGoalDays,
   evaluateStreak,
   initialStreakState,
   levelFor,
@@ -149,5 +152,74 @@ describe('active minutes (§17.4)', () => {
   it('a gap over 90 s is idle: only the minutes that hold an interaction count', () => {
     const minutes = activeMinutesByStudyDay([at('2026-10-27T13:00:00Z'), at('2026-10-27T13:02:00Z')], 'America/Sao_Paulo');
     expect(minutes).toEqual({ '2026-10-27': 2 });
+  });
+});
+
+describe('achievement catalog (MOT-01.8, spec 13 §8.5)', () => {
+  const codes = [
+    'first_material', 'first_review', 'streak_7', 'streak_30', 'streak_100', 'cards_100', 'cards_1000', 'questions_500',
+    'first_mock', 'clean_notebook', 'calibrated', 'duelist', 'rematch', 'bug_hunter', 'week_won', 'consistent_week',
+  ];
+  const zero = {
+    documents: 0, reviews: 0, longestStreak: 0, questions: 0, mockExams: 0, mistakesResolved: 0, calibrated: false,
+    duelsFinished: 0, rematchWins: 0, errorReportsAccepted: 0, bestWeekGoalDays: 0,
+  };
+
+  it('has exactly the 16 canonical codes, unique, matching the achievements.code check, with PT-BR names', () => {
+    expect(ACHIEVEMENTS.map((a) => a.code)).toEqual(codes);
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const a of ACHIEVEMENTS) {
+      expect(a.code).toMatch(/^[a-z][a-z0-9_]{1,40}$/);
+      expect(a.name.length).toBeGreaterThan(0);
+      expect(a.criterion.length).toBeGreaterThan(0);
+    }
+    expect(ACHIEVEMENTS.find((a) => a.code === 'cards_1000')?.name).toBe('1.000 cartões');
+    expect(ACHIEVEMENTS.find((a) => a.code === 'rematch')?.name).toBe('Revanche!');
+  });
+
+  it('nothing is unlocked for an empty account, and week_won is never computed', () => {
+    const progress = achievementProgress(zero);
+    expect(progress.filter((p) => p.unlocked)).toEqual([]);
+    expect(progress.find((p) => p.code === 'week_won')).toMatchObject({ computable: false, unlocked: false });
+  });
+
+  it('thresholds: unlocks at the threshold and caps the stored progress', () => {
+    const progress = Object.fromEntries(achievementProgress({ ...zero, reviews: 1000, longestStreak: 30, documents: 5 }).map((p) => [p.code, p]));
+    expect(progress.first_review).toMatchObject({ unlocked: true, progress: 1 });
+    expect(progress.cards_100).toMatchObject({ unlocked: true, progress: 100 });
+    expect(progress.cards_1000).toMatchObject({ unlocked: true, progress: 1000 });
+    expect(progress.streak_30).toMatchObject({ unlocked: true });
+    expect(progress.streak_100).toMatchObject({ unlocked: false, progress: 30, threshold: 100 });
+    expect(progress.first_material).toMatchObject({ unlocked: true, progress: 1 });
+  });
+
+  it('boolean and count metrics map to their codes', () => {
+    const progress = Object.fromEntries(
+      achievementProgress({ ...zero, calibrated: true, duelsFinished: 10, rematchWins: 1, errorReportsAccepted: 2, bestWeekGoalDays: 4, mistakesResolved: 20 }).map((p) => [p.code, p]),
+    );
+    expect(progress.calibrated?.unlocked).toBe(true);
+    expect(progress.duelist?.unlocked).toBe(true);
+    expect(progress.rematch?.unlocked).toBe(true);
+    expect(progress.bug_hunter?.unlocked).toBe(false);
+    expect(progress.bug_hunter?.progress).toBe(2);
+    expect(progress.consistent_week?.unlocked).toBe(true);
+    expect(progress.clean_notebook?.unlocked).toBe(true);
+  });
+
+  it('bestWeekGoalDays counts goal days per Monday-start week', () => {
+    // 2026-10-26 is a Monday, so Sunday 2026-11-01 still belongs to that week: five met days there.
+    // Monday 2026-11-02 starts the next week, which has one.
+    const days = [
+      { day: '2026-10-26', goalMet: true },
+      { day: '2026-10-27', goalMet: true },
+      { day: '2026-10-28', goalMet: false },
+      { day: '2026-10-29', goalMet: true },
+      { day: '2026-10-31', goalMet: true },
+      { day: '2026-11-01', goalMet: true },
+      { day: '2026-11-02', goalMet: true },
+    ];
+    expect(bestWeekGoalDays(days)).toBe(5);
+    expect(bestWeekGoalDays([])).toBe(0);
+    expect(bestWeekGoalDays([{ day: '2026-10-25', goalMet: true }, { day: '2026-10-26', goalMet: true }])).toBe(1);
   });
 });

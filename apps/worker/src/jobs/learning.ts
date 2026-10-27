@@ -240,7 +240,8 @@ export async function handleNotesPrefetch(ctx: JobContext): Promise<{ users: num
   for (const [subjectId, nodes] of bySubject) {
     await ctx.enqueue(
       'ingest.topic_content',
-      { subject_id: subjectId, node_ids: [...nodes].sort(), kinds: ['notes'], depth: 'deep' },
+      // Content job contract (jobs/content.ts): stage S4 with kinds ['deep'] writes Aprofundado notes as a Batch wave.
+      { stage: 'S4', subject_id: subjectId, node_ids: [...nodes].sort(), kinds: ['deep'], force: false },
       { singletonKey: `prefetch-deep:${subjectId}:${today}` },
     );
   }

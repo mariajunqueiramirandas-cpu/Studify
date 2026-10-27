@@ -386,8 +386,20 @@ export function fakeClaude(): FakeClaude {
   } as FakeClaude;
 }
 
+/** One Realtime broadcast sent through a channel's httpSend (api §8.2). */
+export interface FakeBroadcast {
+  topic: string;
+  private: boolean;
+  event: string;
+  payload: Record<string, unknown>;
+}
+
 export interface FakeEnv {
   ctx: JobContext;
+  /** Broadcasts sent through supabase.channel(topic).httpSend, in order. */
+  broadcasts: FakeBroadcast[];
+  /** Every httpSend fails with this message (failure path: the transition still commits). */
+  failBroadcast: string | null;
   db: FakeDatabase;
   storage: FakeStorage;
   claude: FakeClaude;
@@ -417,8 +429,21 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
       return { rows: [], rowCount: 1 };
     },
   };
+  const broadcasts: FakeBroadcast[] = [];
+  const realtime = {
+    failBroadcast: null as string | null,
+  };
   const supabase = {
     from: (table: string) => db.from(table),
+    channel: (topic: string, opts: { config?: { private?: boolean } } = {}) => ({
+      topic,
+      httpSend: async (event: string, payload: Record<string, unknown>) => {
+        if (realtime.failBroadcast) throw new Error(realtime.failBroadcast);
+        broadcasts.push({ topic, private: opts.config?.private === true, event, payload });
+        return { success: true };
+      },
+    }),
+    removeChannel: async () => 'ok',
     storage,
     auth: {
       admin: {
@@ -449,6 +474,13 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
   } as unknown as JobContext;
   return {
     ctx,
+    broadcasts,
+    get failBroadcast() {
+      return realtime.failBroadcast;
+    },
+    set failBroadcast(v: string | null) {
+      realtime.failBroadcast = v;
+    },
     db,
     storage,
     claude,

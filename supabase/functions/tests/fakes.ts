@@ -15,6 +15,8 @@ const UNIQUE: Record<string, string[][]> = {
   review_logs: [['id']],
   attempt_answers: [['id'], ['attempt_id', 'question_id']],
   card_states: [['user_id', 'card_id']],
+  card_overrides: [['user_id', 'card_id']],
+  xp_events: [['id'], ['user_id', 'ref_type', 'ref_id', 'source_feature']],
   node_user_settings: [['user_id', 'node_id']],
   subject_user_settings: [['user_id', 'subject_id']],
   quiz_attempts: [['id']],

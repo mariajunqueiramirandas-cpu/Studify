@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SOCIAL,
+  battleChoiceOf,
+  battleDistributionOf,
+  battlePodiumEvent,
   battlePoints,
+  battlePublicQuestion,
+  battleRevealEvent,
+  battleStateEvent,
+  battleTopic,
   classInsightDisplay,
   duelAnswerSeconds,
   duelPoints,
   isBattleAnswerRejected,
   isDuelTimeout,
+  leaderboardTop,
   topicInsight,
 } from '../../src/learning/index.ts';
 
@@ -28,9 +37,85 @@ describe('duel scoring (§18.1, SOC-02)', () => {
     expect(duelAnswerSeconds(0, 120_000)).toBe(30);
   });
 
-  it('answers after the deadline plus 3 s are timeouts', () => {
-    expect(isDuelTimeout(4000, 1000)).toBe(false);
-    expect(isDuelTimeout(4001, 1000)).toBe(true);
+  it('the deadline grace is 1.5 s (api §4.7, data-model §5.7): later receipts are timeouts', () => {
+    expect(SOCIAL.duelDeadlineGraceMs).toBe(1500);
+    expect(isDuelTimeout(2500, 1000)).toBe(false);
+    expect(isDuelTimeout(2501, 1000)).toBe(true);
+  });
+});
+
+describe('battle Realtime payloads (api §8.2, SOC-03.10)', () => {
+  const players = [
+    { user_id: 'u-b', nickname: 'Bia', score: 900 },
+    { user_id: 'u-a', nickname: 'Ana', score: 1200 },
+    { user_id: 'u-c', nickname: 'Caio', score: 900 },
+    { user_id: 'u-d', nickname: 'Davi', score: 300 },
+    { user_id: 'u-e', nickname: 'Eva', score: 100 },
+    { user_id: 'u-f', nickname: 'Fabi', score: 50 },
+  ];
+
+  it('topic is the private channel battle:{id}', () => {
+    expect(battleTopic('b-1')).toBe('battle:b-1');
+  });
+
+  it('leaderboard: best first, competition ranking, only the top N are sent', () => {
+    const top = leaderboardTop(players, 5);
+    expect(top.map((e) => [e.nickname, e.rank])).toEqual([
+      ['Ana', 1],
+      ['Bia', 2],
+      ['Caio', 2],
+      ['Davi', 4],
+      ['Eva', 5],
+    ]);
+    expect(top.some((e) => e.nickname === 'Fabi')).toBe(false);
+    expect(leaderboardTop(players, 3)).toHaveLength(3);
+  });
+
+  it('distribution is null below 5 answers and in whole percent from 5', () => {
+    expect(battleDistributionOf(['A', 'B', null, 'A'], ['A', 'B', 'C'])).toBeNull();
+    expect(battleDistributionOf(['A', 'A', 'B', 'C', 'A', null], ['A', 'B', 'C', 'D'])).toEqual({ A: 60, B: 20, C: 20, D: 0 });
+    expect(battleDistributionOf(['A', 'A', 'A', 'B', 'B', 'C'], ['A', 'B', 'C'])).toEqual({ A: 50, B: 33, C: 17 });
+  });
+
+  it('choice of a practice response and public question strip the answer key', () => {
+    expect(battleChoiceOf({ choice: 'B' })).toBe('B');
+    expect(battleChoiceOf({ value: true })).toBeNull();
+    const pub = battlePublicQuestion({
+      id: 'q1',
+      type: 'mcq_single',
+      stem: 'Qual?',
+      stimulus: null,
+      payload: { options: [{ id: 'A', text: 'x' }, { id: 'B', text: 'y' }], correct: 'B', rationale: 'secret' },
+    });
+    expect(JSON.stringify(pub)).not.toContain('secret');
+    expect(JSON.stringify(pub)).not.toContain('correct');
+    expect(pub).toEqual({ id: 'q1', type: 'mcq_single', stem: 'Qual?', stimulus: null, payload: { options: [{ id: 'A', text: 'x' }, { id: 'B', text: 'y' }] } });
+  });
+
+  it('state event carries the window only when a question is open', () => {
+    const opens = new Date('2026-10-27T15:00:01.500Z');
+    const closes = new Date('2026-10-27T15:00:21.500Z');
+    expect(battleStateEvent({ status: 'question_open', currentIndex: 2, total: 5, question: { id: 'q' }, opensAt: opens, closesAt: closes, players: 4 })).toEqual({
+      event: 'state',
+      payload: { status: 'question_open', current_index: 2, total: 5, question: { id: 'q' }, opens_at: opens.toISOString(), closes_at: closes.toISOString(), players: 4 },
+    });
+    expect(battleStateEvent({ status: 'reveal', currentIndex: 2, total: 5 })).toEqual({ event: 'state', payload: { status: 'reveal', current_index: 2, total: 5 } });
+  });
+
+  it('reveal event: correct response, explanation only when present, distribution may be null', () => {
+    const board = leaderboardTop(players, 5);
+    const withExplanation = battleRevealEvent({ index: 1, correctResponse: { choice: 'B' }, explanation: 'Porque sim.', distribution: null, leaderboard: board });
+    expect(withExplanation).toEqual({
+      event: 'reveal',
+      payload: { index: 1, correct_response: { choice: 'B' }, explanation: 'Porque sim.', distribution: null, leaderboard: board },
+    });
+    const without = battleRevealEvent({ index: 0, correctResponse: { value: true }, explanation: null, distribution: { A: 100 }, leaderboard: [] });
+    expect(without.payload).not.toHaveProperty('explanation');
+    expect(without.payload.distribution).toEqual({ A: 100 });
+  });
+
+  it('podium event sends the given standings as leaderboard', () => {
+    expect(battlePodiumEvent(leaderboardTop(players, 3))).toEqual({ event: 'podium', payload: { leaderboard: leaderboardTop(players, 3) } });
   });
 });
 

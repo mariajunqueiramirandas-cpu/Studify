@@ -68,7 +68,8 @@ export const pastTestExtract = defineTask<PastTestInput, ReturnType<typeof PastT
       contentLanguageLines(input.contentLanguage, false),
       'Retorne apenas o objeto estruturado pedido.',
     );
-    const messages: PromptMessage[] = [userTurn([outline, ...media, text(body)])];
+    // Media first, text last (ai-pipeline §2.2): the outline text follows the document or image blocks.
+    const messages: PromptMessage[] = [userTurn([...media, outline, text(body)])];
     return docs ? { messages, documents: { labels: docs.labels, allowedPages: docs.allowedPages } } : { messages };
   },
 });

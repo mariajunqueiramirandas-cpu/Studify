@@ -94,7 +94,8 @@ export const NODE_KIND = ['unit', 'topic', 'concept'] as const;
 export type NodeKind = (typeof NODE_KIND)[number];
 export const NodeKindSchema = z.enum(NODE_KIND);
 
-export const CONTENT_STATUS = ['pending', 'generating', 'ready', 'failed', 'skipped_excluded'] as const;
+// `ai_refused`: the model refused this topic (spec 01 §7); the rest of the material still proceeds.
+export const CONTENT_STATUS = ['pending', 'generating', 'ready', 'failed', 'skipped_excluded', 'ai_refused'] as const;
 export type ContentStatus = (typeof CONTENT_STATUS)[number];
 export const ContentStatusSchema = z.enum(CONTENT_STATUS);
 
@@ -383,6 +384,8 @@ export const PLAN_TRIGGER = [
   'material_added',
   'desperate_on',
   'desperate_off',
+  'mastery_shift',
+  'manual_edit',
 ] as const;
 export type PlanTrigger = (typeof PLAN_TRIGGER)[number];
 export const PlanTriggerSchema = z.enum(PLAN_TRIGGER);
@@ -450,7 +453,8 @@ export const QUIZ_KIND = [
 export type QuizKind = (typeof QUIZ_KIND)[number];
 export const QuizKindSchema = z.enum(QUIZ_KIND);
 
-export const QUIZ_MODE = ['practice', 'exam_conditions', 'relaxed'] as const;
+// `diagnostic`: the GOL-12.3 quick check of Modo Desespero (a practice quiz with this mode).
+export const QUIZ_MODE = ['practice', 'exam_conditions', 'relaxed', 'diagnostic'] as const;
 export type QuizMode = (typeof QUIZ_MODE)[number];
 export const QuizModeSchema = z.enum(QUIZ_MODE);
 

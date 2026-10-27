@@ -211,6 +211,9 @@ export async function buildKindCall(
         languageSubject,
       });
       break;
+    case 'deep':
+      built = getTask(taskId).build({ topic: topicInput(bundle), slices, contentLanguage, languageSubject });
+      break;
     case 'glossary':
       built = getTask(taskId).build({
         topicTitle: bundle.title,
@@ -309,6 +312,8 @@ export function featureOf(kind: TopicKind): string {
     case 'study':
     case 'glossary':
       return 'LRN-01';
+    case 'deep':
+      return 'LRN-01.4';
     case 'cards':
       return 'MEM-01';
     case 'questions':
@@ -412,7 +417,7 @@ async function addSource(sql: Sql, nodeId: string, documentId: string, pageStart
 /** Note with inline citation markers (spec 02 §7; ai-pipeline §5.2). Notes table added by a later migration. */
 export async function writeNote(
   ctx: WriteContext,
-  depth: 'tldr' | 'study',
+  depth: 'tldr' | 'study' | 'deep',
   text: string,
   citations: readonly MappedCitation[],
 ): Promise<{ written: boolean }> {

@@ -2599,6 +2599,14 @@ exports[`builders > pastTest.extract > matches the stored snapshot (schema exclu
     {
       "content": [
         {
+          "source": {
+            "file_id": "file_bio_slice_1",
+            "type": "file",
+          },
+          "title": "Documento D1 — Biologia — Apostila — páginas originais 12–15",
+          "type": "document",
+        },
+        {
           "cache_control": {
             "ttl": "5m",
             "type": "ephemeral",
@@ -2624,14 +2632,6 @@ exports[`builders > pastTest.extract > matches the stored snapshot (schema exclu
   "subject": "Biologia"
 }",
           "type": "text",
-        },
-        {
-          "source": {
-            "file_id": "file_bio_slice_1",
-            "type": "file",
-          },
-          "title": "Documento D1 — Biologia — Apostila — páginas originais 12–15",
-          "type": "document",
         },
         {
           "text": "Professor(a) informado(a): Prof. Ana.

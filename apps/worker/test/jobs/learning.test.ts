@@ -89,7 +89,7 @@ describe('notes.prefetch_deep (LRN-01.4)', () => {
     const result = await handleNotesPrefetch(env.ctx);
     expect(result).toEqual({ users: 1, subjects: 1, nodes: 1 });
     expect(env.enqueued).toEqual([
-      expect.objectContaining({ name: 'ingest.topic_content', data: { subject_id: SUBJECT, node_ids: [TOPIC], kinds: ['notes'], depth: 'deep' } }),
+      expect.objectContaining({ name: 'ingest.topic_content', data: { stage: 'S4', subject_id: SUBJECT, node_ids: [TOPIC], kinds: ['deep'], force: false } }),
     ]);
   });
 });

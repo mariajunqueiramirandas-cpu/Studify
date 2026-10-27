@@ -446,6 +446,7 @@ async function existingKinds(sql: Sql, topicId: string): Promise<Set<TopicKind>>
     for (const r of rows) {
       if (r.depth === 'tldr') found.add('tldr');
       if (r.depth === 'study') found.add('study');
+      if (r.depth === 'deep') found.add('deep');
     }
   }
   if (await tableExists(sql, 'public.glossary_terms')) {

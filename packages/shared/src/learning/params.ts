@@ -132,7 +132,7 @@ export const MOTIVATION = {
 /** Social scoring (§18). */
 export const SOCIAL = {
   duelMaxSeconds: 30,
-  duelDeadlineGraceMs: 3_000,
+  duelDeadlineGraceMs: 1_500,
   battleMaxSeconds: 30,
   battleClosesGraceMs: 1_000,
   battleStreakStep: 50,

@@ -268,28 +268,27 @@ Total XP needed to reach level `L` (L ≥ 1): `threshold(L) = 50 × L × (L + 1)
 
 ### 8.5 Achievement catalog (v1)
 
-| Code | Name (PT-BR) | Criterion |
-|---|---|---|
-| `first_upload` | Primeiro material | Upload the first document |
-| `first_review` | Primeira revisão | Review the first card |
-| `streak_7` / `streak_30` / `streak_100` | 7 / 30 / 100 dias | Streak length reached |
-| `cards_100` / `cards_1000` | 100 / 1.000 cartões | Total reviews |
-| `questions_500` | 500 questões | Total questions answered |
-| `mock_first` | Primeiro simulado | Complete a mock exam |
-| `boss_first` | Caçador de chefões | Defeat a boss |
-| `mistakes_20` | Caderno limpo | Resolve 20 mistakes |
-| `calibrated` | Calibrado(a) | Calibration score in the "bem calibrado" band over 50 rated answers (PRA-05) |
-| `lucas_90` | Nasceu pra ensinar | Lucas score ≥ 90 |
-| `debate_5` | Bom de argumento | Finish 5 argumentation sessions |
-| `duel_10` | Duelista | Finish 10 duels |
-| `rematch_win` | Revanche! | Win a rematch |
-| `turma_10` | Líder da turma | Create a Turma that reaches 10 members |
-| `bug_hunter` | Caçador de erros | 3 accepted error reports |
-| `focus_10` | Foco total | Complete 10 focus cycles |
-| `exam_week_done` | Semana vencida | Finish all exams of a Semana de Provas with every plan day counted or rested |
-| `consistent_week` | Semana consistente | Daily goal met on ≥ 4 days in a week |
+The canonical catalog is `ACHIEVEMENTS` in `packages/shared` (learning, motivation). `code` is the value stored in `achievements.code`. The worker measures each criterion from the tables named in the shared catalog and unlocks it once (`unlocked_at` is kept on later runs).
+
+| Code | Name (PT-BR) | Criterion | Computed from |
+|---|---|---|---|
+| `first_material` | Primeiro material | Upload the first material | `documents` (uploaded_by) |
+| `first_review` | Primeira revisão | Review the first card | `review_logs` |
+| `streak_7` / `streak_30` / `streak_100` | 7 / 30 / 100 dias | Streak length reached (longest streak) | `streaks.longest_length` |
+| `cards_100` / `cards_1000` | 100 / 1.000 cartões | Total reviews | `review_logs` |
+| `questions_500` | 500 questões | Total questions answered | `attempt_answers` |
+| `first_mock` | Primeiro simulado | Complete a mock exam (`mock_exam` or `enem_simulado` quiz submitted) | `quiz_attempts` |
+| `clean_notebook` | Caderno limpo | Resolve 20 mistakes | `mistakes.resolved_at` |
+| `calibrated` | Calibrado(a) | "Bem calibrado" over the last 50 rated answers (PRA-05) | `attempt_answers.confidence` + `calibration()` |
+| `duelist` | Duelista | Finish 10 duels | `duels` (status `finished`) |
+| `rematch` | Revanche! | Win a rematch | `duels.winner_id` with `rematch_of` set |
+| `bug_hunter` | Caçador de erros | 3 accepted error reports (TRU-02) | `content_flags` (status `accepted`) |
+| `week_won` | Semana vencida | Finish all exams of a Semana de Provas with every plan day counted or rested | not computed yet (no Semana de Provas entity in the schema) |
+| `consistent_week` | Semana consistente | Daily goal met on ≥ 4 days in one week | `daily_activity.goal_met` (Monday-start weeks) |
 
 No achievement rewards studying late, long single sessions, or total hours in one day.
+
+Later (Phase 5 features, not in the v1 catalog): `boss_first` (Caçador de chefões), `lucas_90` (Nasceu pra ensinar), `debate_5` (Bom de argumento), `turma_10` (Líder da turma), `focus_10` (Foco total).
 
 ### 8.6 Skill tree node states
 

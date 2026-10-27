@@ -159,8 +159,8 @@ describe('fix validation (TRU-02.9)', () => {
 describe('social scoring (SOC-03, SOC-04)', () => {
   it('battle.tick steps only from the status the battle is in', () => {
     expect(battleStep({ status: 'question_open', current_index: 1 }, 1, 3)).toEqual({ kind: 'close' });
-    expect(battleStep({ status: 'question_reveal', current_index: 1 }, 1, 3)).toEqual({ kind: 'advance', nextIndex: 2 });
-    expect(battleStep({ status: 'question_reveal', current_index: 2 }, 2, 3)).toEqual({ kind: 'podium' });
+    expect(battleStep({ status: 'reveal', current_index: 1 }, 1, 3)).toEqual({ kind: 'advance', nextIndex: 2 });
+    expect(battleStep({ status: 'reveal', current_index: 2 }, 2, 3)).toEqual({ kind: 'podium' });
     expect(battleStep({ status: 'question_open', current_index: 2 }, 1, 3)).toEqual({ kind: 'noop' });
   });
 

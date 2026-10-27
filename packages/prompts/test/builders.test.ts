@@ -56,6 +56,17 @@ describe('builders', () => {
         expect(Object.keys(built.documents?.allowedPages ?? {})).toHaveLength(blocks.length);
       });
 
+      it('puts document and image blocks before any text block in each user turn (ai-pipeline §2.2)', () => {
+        const built = task.build(input);
+        for (const message of built.messages) {
+          if (typeof message.content === 'string' || message.role !== 'user') continue;
+          const firstText = message.content.findIndex((b) => b.type === 'text');
+          if (firstText === -1) continue;
+          const lastMedia = message.content.reduce((acc, b, i) => (b.type === 'document' || b.type === 'image' ? i : acc), -1);
+          expect(lastMedia, `${task.id}: media after text`).toBeLessThan(firstText);
+        }
+      });
+
       it('attaches the task JSON schema as output_config.format for structured tasks', () => {
         const built = task.build(input);
         expect(built.outputFormat?.schema ?? null).toEqual(task.jsonSchema ?? null);

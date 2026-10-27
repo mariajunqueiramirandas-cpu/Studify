@@ -57,12 +57,6 @@ const KNOWN_DIFFERENCES: KnownDifference[] = [
     reason: 'CHECK in 20260102000000_phase1.sql mirrors TUTOR_MODE; ENUMS only registers tutor_threads.mode',
   },
   {
-    key: 'quizzes.mode',
-    onlyInSql: ['diagnostic'],
-    onlyInEnums: [],
-    reason: 'SQL adds diagnostic (GOL-12.3, comment in 20260102000000_phase1.sql:294); QUIZ_MODE omits it and data-model §5.5 lists three modes',
-  },
-  {
     key: 'nudge_events.kind',
     onlyInSql: [],
     onlyInEnums: ['prerequisite_detective', 'long_session', 'daily_load', 'late_night', 'performance_drop', 'overload_trend', 'checkin_low'],
@@ -192,32 +186,64 @@ interface ParsedSchema {
   checkCount: number;
 }
 
-/** Reads every migration in apply order and extracts the enum-style CHECK constraints. */
+const ALTER_DROP = /\balter\s+table\s+(?:only\s+)?(?:\w+\.)?(\w+)\s+drop\s+constraint\b/gi;
+const ALTER_ADD = /\balter\s+table\s+(?:only\s+)?(?:\w+\.)?(\w+)\s+add\s+constraint\b/i;
+
+/**
+ * Reads every migration in apply order and extracts the enum-style CHECK constraints. A CHECK inside a
+ * `create table` defines its column. A CHECK added by `alter table <t> add constraint` replaces the column's
+ * CHECK only when the same migration chain dropped a constraint of that table first (`drop constraint`).
+ */
 function parseMigrations(dir: string): ParsedSchema {
   const files = readdirSync(dir)
     .filter((f) => f.endsWith('.sql'))
     .sort();
   const enums = new Map<string, string[]>();
   const problems: string[] = [];
+  const droppedTables = new Set<string>();
   let checkCount = 0;
 
   for (const file of files) {
     const sql = stripSqlComments(readFileSync(`${dir}/${file}`, 'utf8'));
     const bodies = findTableBodies(sql);
-    for (const check of findEnumChecks(sql)) {
+    const drops = [...sql.matchAll(ALTER_DROP)].map((m) => ({ offset: m.index ?? 0, table: m[1]! }));
+    const checks = findEnumChecks(sql).map((check) => ({ offset: check.offset, check }));
+    const events = [...drops.map((d) => ({ offset: d.offset, drop: d.table, check: null as SqlEnumCheck | null })), ...checks.map((c) => ({ offset: c.offset, drop: null as string | null, check: c.check }))].sort(
+      (a, b) => a.offset - b.offset,
+    );
+
+    for (const event of events) {
+      if (event.drop !== null) {
+        droppedTables.add(event.drop);
+        continue;
+      }
+      const check = event.check!;
       checkCount += 1;
       const body = bodies.find((b) => check.offset > b.start && check.offset < b.end);
-      if (!body) {
+      if (body) {
+        const key = `${body.table}.${check.column}`;
+        if (enums.has(key)) {
+          problems.push(`${file}: ${key} has more than one enum CHECK`);
+          continue;
+        }
+        enums.set(key, check.values);
+        continue;
+      }
+      // Not inside a create table: must be an `alter table <t> add constraint` statement.
+      const statementStart = sql.lastIndexOf(';', check.offset) + 1;
+      const alter = ALTER_ADD.exec(sql.slice(statementStart, check.offset));
+      if (!alter) {
         problems.push(`${file}: check on "${check.column}" is outside any create table (values ${check.values.join(',')})`);
         continue;
       }
-      const key = `${body.table}.${check.column}`;
-      const previous = enums.get(key);
-      if (previous) {
-        problems.push(`${file}: ${key} has more than one enum CHECK`);
+      const table = alter[1]!;
+      const key = `${table}.${check.column}`;
+      if (enums.has(key) && !droppedTables.has(table)) {
+        problems.push(`${file}: ${key} has more than one enum CHECK (add a drop constraint before replacing it)`);
         continue;
       }
       enums.set(key, check.values);
+      droppedTables.delete(table);
     }
   }
   return { enums, problems, checkCount };
@@ -286,6 +312,8 @@ describe('ENUMS vs supabase/migrations CHECK constraints', () => {
     expect(parsed.enums.get('documents.status')).toEqual(['uploaded', 'processing', 'ready', 'failed', 'waiting_budget']);
     expect(parsed.enums.get('review_logs.reason')).toEqual(['scheduled', 'exam_boost', 'early']);
     expect(parsed.enums.get('moderation_actions.action')).toContain('appeal_rejected');
+    expect(parsed.enums.get('plan_runs.trigger')).toContain('manual_edit');
+    expect(parsed.enums.get('knowledge_nodes.content_status')).toContain('ai_refused');
   });
 
   it('every enum-style CHECK is attributed to a create table statement, once per column', () => {

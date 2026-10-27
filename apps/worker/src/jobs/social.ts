@@ -4,7 +4,34 @@
 import { z } from 'zod';
 import type { JobContext, JobDefinition } from '../framework/types.ts';
 import { chunk, unwrap, unwrapRows, uniq, IN_CHUNK } from '../lib/db.ts';
-import { aggregateInsights, battleStep, scoreBattleAnswer, type AnswerRow, type BattleAnswerFact } from '../lib/social.ts';
+import {
+  battleDistributionOf,
+  battlePodiumEvent,
+  battlePublicQuestion,
+  battleRevealEvent,
+  battleStateEvent,
+  battleTopic,
+  isBattleAnswerRejected,
+  LEADERBOARD_SIZE,
+  leaderboardTop,
+  PODIUM_SIZE,
+  type BattlePlayerScore,
+} from '@studify/shared';
+import {
+  aggregateInsights,
+  battleStep,
+  BATTLE_ENDED,
+  BATTLE_OPEN,
+  BATTLE_PODIUM,
+  BATTLE_REVEAL,
+  choiceIdOf,
+  correctResponseOf,
+  optionIdsOf,
+  scoreBattleAnswer,
+  type AnswerRow,
+  type BattleAnswerFact,
+} from '../lib/social.ts';
+import { broadcastPrivate } from '../lib/realtime.ts';
 
 const DuelPayload = z.object({ duel_id: z.string().min(1) });
 const BattlePayload = z.object({ battle_id: z.string().min(1), index: z.number().int().min(0) });
@@ -43,9 +70,31 @@ export interface BattleTickOutcome {
   scored?: number;
 }
 
+interface BattleForTick {
+  id: string;
+  class_group_id: string;
+  quiz_id: string;
+  status: string;
+  current_index: number;
+  question_opens_at: string | null;
+  question_closes_at: string | null;
+  seconds_per_question: number;
+}
+
+interface QuestionForBattle {
+  id: string;
+  type: string;
+  stem: string;
+  stimulus: Record<string, unknown> | null;
+  payload: Record<string, unknown>;
+  explanation: string | null;
+}
+
 /**
  * battle.tick (SOC-03.4): drives the battle state machine for (battle_id, index). The status and
  * current_index in the WHERE clause make each transition happen once; a stale tick is a no-op.
+ * Every applied transition broadcasts on the private channel `battle:{id}` (api §8.2): `state`, then
+ * `reveal` (close), `state` + `podium` (podium), or `state` (end).
  */
 export async function handleBattleTick(ctx: JobContext, raw: Record<string, unknown>): Promise<BattleTickOutcome> {
   const payload = BattlePayload.parse(raw);
@@ -56,21 +105,13 @@ export async function handleBattleTick(ctx: JobContext, raw: Record<string, unkn
       .eq('id', payload.battle_id)
       .maybeSingle(),
     'battles',
-  ) as {
-    id: string;
-    class_group_id: string;
-    quiz_id: string;
-    status: string;
-    current_index: number;
-    question_opens_at: string | null;
-    question_closes_at: string | null;
-    seconds_per_question: number;
-  } | null;
+  ) as BattleForTick | null;
   if (!battle) return { status: 'noop' };
   const quiz = unwrap(await ctx.supabase.from('quizzes').select('question_ids').eq('id', battle.quiz_id).maybeSingle(), 'quizzes') as
     | { question_ids: string[] }
     | null;
   const questionIds = quiz?.question_ids ?? [];
+  const total = questionIds.length;
   const step = battleStep(battle, payload.index, questionIds.length);
   const now = ctx.now();
 
@@ -83,11 +124,13 @@ export async function handleBattleTick(ctx: JobContext, raw: Record<string, unkn
   if (step.kind === 'end' && !(elapsed >= REVEAL_MS + PODIUM_MS - TOLERANCE_MS)) return { status: 'noop' };
   if (step.kind === 'close') {
     const claimed = unwrapRows<{ id: string }>(
-      await ctx.supabase.from('battles').update({ status: 'question_reveal' }).eq('id', battle.id).eq('status', 'question_open').eq('current_index', payload.index).select('id'),
+      await ctx.supabase.from('battles').update({ status: BATTLE_REVEAL }).eq('id', battle.id).eq('status', BATTLE_OPEN).eq('current_index', payload.index).select('id'),
       'battles',
     );
     if (claimed.length === 0) return { status: 'noop' };
-    const scored = await scoreQuestion(ctx, battle, questionIds[payload.index] ?? '');
+    await broadcastPrivate(ctx, battleTopic(battle.id), [battleStateEvent({ status: 'reveal', currentIndex: payload.index, total })]);
+    const question = await loadQuestionFor(ctx, questionIds[payload.index]);
+    const scored = await scoreQuestion(ctx, battle, question, payload.index);
     await ctx.enqueue('battle.tick', { battle_id: battle.id, index: payload.index }, {
       singletonKey: `battle.tick:${battle.id}:${payload.index}:reveal`,
       startAfter: new Date(now.getTime() + REVEAL_MS),
@@ -97,17 +140,30 @@ export async function handleBattleTick(ctx: JobContext, raw: Record<string, unkn
   if (step.kind === 'advance') {
     const opens = new Date(now.getTime() + OPEN_DELAY_MS);
     const closes = new Date(opens.getTime() + battle.seconds_per_question * 1000);
+    const nextQuestion = await loadQuestionFor(ctx, questionIds[step.nextIndex]);
     const moved = unwrapRows<{ id: string }>(
       await ctx.supabase
         .from('battles')
-        .update({ status: 'question_open', current_index: step.nextIndex, question_opens_at: opens.toISOString(), question_closes_at: closes.toISOString() })
+        .update({ status: BATTLE_OPEN, current_index: step.nextIndex, question_opens_at: opens.toISOString(), question_closes_at: closes.toISOString() })
         .eq('id', battle.id)
-        .eq('status', 'question_reveal')
+        .eq('status', BATTLE_REVEAL)
         .eq('current_index', payload.index)
         .select('id'),
       'battles',
     );
     if (moved.length === 0) return { status: 'noop' };
+    const players = (await loadRoster(ctx, battle.id)).length;
+    await broadcastPrivate(ctx, battleTopic(battle.id), [
+      battleStateEvent({
+        status: 'question_open',
+        currentIndex: step.nextIndex,
+        total,
+        question: nextQuestion ? battlePublicQuestion(nextQuestion) : null,
+        opensAt: opens,
+        closesAt: closes,
+        players,
+      }),
+    ]);
     await ctx.enqueue('battle.tick', { battle_id: battle.id, index: step.nextIndex }, {
       singletonKey: `battle.tick:${battle.id}:${step.nextIndex}:close`,
       startAfter: closes,
@@ -116,10 +172,15 @@ export async function handleBattleTick(ctx: JobContext, raw: Record<string, unkn
   }
   if (step.kind === 'podium') {
     const moved = unwrapRows<{ id: string }>(
-      await ctx.supabase.from('battles').update({ status: 'podium' }).eq('id', battle.id).eq('status', 'question_reveal').eq('current_index', payload.index).select('id'),
+      await ctx.supabase.from('battles').update({ status: BATTLE_PODIUM }).eq('id', battle.id).eq('status', BATTLE_REVEAL).eq('current_index', payload.index).select('id'),
       'battles',
     );
     if (moved.length === 0) return { status: 'noop' };
+    const board = leaderboardTop(await loadRoster(ctx, battle.id), PODIUM_SIZE);
+    await broadcastPrivate(ctx, battleTopic(battle.id), [
+      battleStateEvent({ status: 'podium', currentIndex: payload.index, total }),
+      battlePodiumEvent(board),
+    ]);
     await ctx.enqueue('battle.tick', { battle_id: battle.id, index: payload.index }, {
       singletonKey: `battle.tick:${battle.id}:${payload.index}:podium`,
       startAfter: new Date(now.getTime() + PODIUM_MS),
@@ -128,45 +189,92 @@ export async function handleBattleTick(ctx: JobContext, raw: Record<string, unkn
   }
   // end
   const ended = unwrapRows<{ id: string }>(
-    await ctx.supabase.from('battles').update({ status: 'ended', ended_at: now.toISOString() }).eq('id', battle.id).eq('status', 'podium').eq('current_index', payload.index).select('id'),
+    await ctx.supabase.from('battles').update({ status: BATTLE_ENDED, ended_at: now.toISOString() }).eq('id', battle.id).eq('status', BATTLE_PODIUM).eq('current_index', payload.index).select('id'),
     'battles',
   );
   if (ended.length === 0) return { status: 'noop' };
+  await broadcastPrivate(ctx, battleTopic(battle.id), [battleStateEvent({ status: 'ended', currentIndex: payload.index, total })]);
   await ctx.enqueue('insights.recompute', { class_group_id: battle.class_group_id }, { singletonKey: `insights:${battle.class_group_id}` });
   return { status: 'ended' };
 }
 
-/** Scores every player's answer to the question (SOC-03.6) and writes the new totals and streaks. */
+async function loadQuestionFor(ctx: JobContext, questionId: string | undefined): Promise<QuestionForBattle | null> {
+  if (!questionId) return null;
+  return unwrap(
+    await ctx.supabase.from('questions').select('id,type,stem,stimulus,payload,explanation').eq('id', questionId).is('deleted_at', null).maybeSingle(),
+    'questions',
+  ) as QuestionForBattle | null;
+}
+
+/** Everyone in the battle, with the nickname the Realtime leaderboard shows. */
+async function loadRoster(ctx: JobContext, battleId: string): Promise<BattlePlayerScore[]> {
+  const rows = unwrapRows<{ user_id: string; nickname: string; score: number }>(
+    await ctx.supabase.from('battle_players').select('user_id,nickname,score').eq('battle_id', battleId),
+    'battle_players',
+  );
+  return rows.map((r) => ({ user_id: r.user_id, nickname: r.nickname, score: Number(r.score ?? 0) }));
+}
+
+/**
+ * Scores every player's answer to the question (SOC-03.6), writes the new totals and streaks, and broadcasts
+ * the `reveal` event: the correct response, the explanation, the distribution (null below 5 answers) and the
+ * top of the leaderboard. Answers received after the grace are timeouts: they score 0 and are left out of the
+ * distribution. Without a known question window nothing is scored, but the reveal is still sent.
+ */
 async function scoreQuestion(
   ctx: JobContext,
   battle: { id: string; question_opens_at: string | null; question_closes_at: string | null; seconds_per_question: number },
-  questionId: string,
+  question: QuestionForBattle | null,
+  index: number,
 ): Promise<number> {
-  const players = unwrapRows<{ user_id: string; score: number; answer_streak: number; quiz_attempt_id: string | null }>(
-    await ctx.supabase.from('battle_players').select('user_id,score,answer_streak,quiz_attempt_id').eq('battle_id', battle.id),
+  const players = unwrapRows<{ user_id: string; nickname: string; score: number; answer_streak: number; quiz_attempt_id: string | null }>(
+    await ctx.supabase.from('battle_players').select('user_id,nickname,score,answer_streak,quiz_attempt_id').eq('battle_id', battle.id),
     'battle_players',
   );
-  if (!battle.question_opens_at || !battle.question_closes_at || !questionId) return 0;
   const attemptIds = players.map((p) => p.quiz_attempt_id).filter((id): id is string => id !== null);
-  const answers = new Map<string, BattleAnswerFact>();
-  for (const part of chunk(attemptIds, IN_CHUNK)) {
-    for (const a of unwrapRows<{ attempt_id: string; correct: boolean | null; answered_at: string }>(
-      await ctx.supabase.from('attempt_answers').select('attempt_id,correct,answered_at').eq('question_id', questionId).in('attempt_id', part),
-      'attempt_answers',
-    )) {
-      answers.set(a.attempt_id, { correct: a.correct === true, receivedAtMs: Date.parse(a.answered_at) });
+  const answers = new Map<string, BattleAnswerFact & { choice: string | null }>();
+  if (question) {
+    for (const part of chunk(attemptIds, IN_CHUNK)) {
+      for (const a of unwrapRows<{ attempt_id: string; correct: boolean | null; answered_at: string; response: unknown }>(
+        await ctx.supabase.from('attempt_answers').select('attempt_id,correct,answered_at,response').eq('question_id', question.id).in('attempt_id', part),
+        'attempt_answers',
+      )) {
+        answers.set(a.attempt_id, { correct: a.correct === true, receivedAtMs: Date.parse(a.answered_at), choice: choiceIdOf(question.type, a.response) });
+      }
     }
   }
-  const opensMs = Date.parse(battle.question_opens_at);
-  const closesMs = Date.parse(battle.question_closes_at);
+  const opensMs = battle.question_opens_at ? Date.parse(battle.question_opens_at) : NaN;
+  const closesMs = battle.question_closes_at ? Date.parse(battle.question_closes_at) : NaN;
+  const windowKnown = question !== null && Number.isFinite(opensMs) && Number.isFinite(closesMs);
+
+  const choices: Array<string | null> = [];
+  const standings: BattlePlayerScore[] = [];
   for (const p of players) {
-    const answer = p.quiz_attempt_id ? (answers.get(p.quiz_attempt_id) ?? null) : null;
-    const result = scoreBattleAnswer(answer, p.answer_streak, opensMs, closesMs, battle.seconds_per_question);
-    unwrap(
-      await ctx.supabase.from('battle_players').update({ score: p.score + result.points, answer_streak: result.nextStreak }).eq('battle_id', battle.id).eq('user_id', p.user_id),
-      'battle_players',
-    );
+    const fact = p.quiz_attempt_id ? (answers.get(p.quiz_attempt_id) ?? null) : null;
+    const accepted = fact !== null && fact.receivedAtMs !== null && !isBattleAnswerRejected(fact.receivedAtMs, closesMs);
+    choices.push(accepted && fact ? fact.choice : null);
+    let score = p.score;
+    if (windowKnown) {
+      const result = scoreBattleAnswer(fact, p.answer_streak, opensMs, closesMs, battle.seconds_per_question);
+      score = p.score + result.points;
+      unwrap(
+        await ctx.supabase.from('battle_players').update({ score, answer_streak: result.nextStreak }).eq('battle_id', battle.id).eq('user_id', p.user_id),
+        'battle_players',
+      );
+    }
+    standings.push({ user_id: p.user_id, nickname: p.nickname, score });
   }
+
+  const optionIds = question ? optionIdsOf(question.type, question.payload) : [];
+  await broadcastPrivate(ctx, battleTopic(battle.id), [
+    battleRevealEvent({
+      index,
+      correctResponse: question ? correctResponseOf(question.type, question.payload) : null,
+      explanation: question?.explanation ?? null,
+      distribution: optionIds.length > 0 ? battleDistributionOf(choices, optionIds) : null,
+      leaderboard: leaderboardTop(standings, LEADERBOARD_SIZE),
+    }),
+  ]);
   return players.length;
 }
 
