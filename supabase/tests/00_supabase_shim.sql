@@ -1,7 +1,8 @@
 -- Local stand-in for the Supabase platform surface that the migrations rely on.
 -- NOT a migration: applied only by supabase/tests/run.sh, before supabase/migrations. Idempotent.
 -- Covers: API roles, auth.users + auth.uid()/role()/jwt(), storage tables + foldername(),
--- the supabase_realtime publication, and Supabase's default privileges on public.
+-- the supabase_realtime publication, Supabase's default privileges on public, and pgcrypto
+-- preinstalled in the extensions schema (so the migrations' `create extension` is a no-op, as there).
 
 do $$
 begin
@@ -24,6 +25,9 @@ grant anon, authenticated, service_role to authenticator;
 
 create schema if not exists auth;
 create schema if not exists storage;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+grant usage on schema extensions to anon, authenticated, service_role;
 
 grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema auth to anon, authenticated, service_role;
