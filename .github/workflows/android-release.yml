@@ -281,11 +281,15 @@ jobs:
           fi
           # assetlinks.json wants the uppercase, colon-separated form.
           fingerprint=$(printf '%s' "$cert_sha256" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
+          # Google sign-in matches the Android OAuth client on the SHA-1 instead (RELEASING.md §7).
+          cert_sha1=$(grep 'certificate SHA-1 digest' "$out_dir/verify.txt" | head -n 1 | grep -oE '[0-9a-f]{40}' || true)
+          sha1_fingerprint=$(printf '%s' "$cert_sha1" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
           apk_sha256=$(sha256sum "$signed" | cut -d' ' -f1)
 
           {
             echo "RELEASE_APK=$signed"
             echo "CERT_SHA256_FINGERPRINT=$fingerprint"
+            echo "CERT_SHA1_FINGERPRINT=$sha1_fingerprint"
             echo "APK_SHA256=$apk_sha256"
           } >> "$GITHUB_ENV"
 
@@ -361,5 +365,13 @@ jobs:
             echo
             echo '```'
             echo "$CERT_SHA256_FINGERPRINT"
+            echo '```'
+            echo
+            echo "### Signing certificate SHA-1"
+            echo
+            echo "Google sign-in fails with DEVELOPER_ERROR unless an Android OAuth client for \`com.studify.app\` has this SHA-1 (apps/mobile/RELEASING.md §7):"
+            echo
+            echo '```'
+            echo "${CERT_SHA1_FINGERPRINT:-not printed by apksigner}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

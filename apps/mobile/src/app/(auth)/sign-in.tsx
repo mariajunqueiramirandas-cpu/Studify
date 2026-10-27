@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Image, Linking, View } from 'react-native';
 import { supabase } from '../../api/supabase';
 import { ActionBar, Banner, Button, Screen, Spacer, Text, TextField, useOnline, useOverlay } from '../../components';
-import { signInWithGoogle, googleAvailable } from '../../features/auth/google';
+import { classifyGoogleError, signInWithGoogle, googleAvailable } from '../../features/auth/google';
 import { t } from '../../i18n';
 import { sitePage } from '../../features/common/links';
 import { space } from '../../theme';
@@ -22,9 +22,12 @@ export default function SignIn() {
     setBusy(true);
     try {
       // Same e-mail carries the magic link and the 6-digit code (mobile-app.md §12).
-      await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true, emailRedirectTo: 'studify://auth/callback' } });
+      const { error } = await supabase.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true, emailRedirectTo: 'studify://auth/callback' } });
+      // Generic response otherwise so e-mails can't be enumerated (security §3). The rate limit says nothing
+      // about the address, and without it a repeat request looks sent when no e-mail went out.
+      if (error?.status === 429) overlay.snack(t('auth.code.rate_limited'));
     } catch {
-      // Generic response either way so e-mails can't be enumerated (security §3).
+      // Network failures get the same generic response.
     } finally {
       setBusy(false);
       router.push({ pathname: '/verify', params: { email: email.trim().toLowerCase() } });
@@ -35,8 +38,11 @@ export default function SignIn() {
     setBusy(true);
     try {
       await signInWithGoogle();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (error) {
+      const failure = classifyGoogleError(error);
+      if (failure === 'misconfigured') overlay.snack(t('auth.google_misconfigured'));
+      else if (failure === 'play_services') overlay.snack(t('auth.google_play_services'));
+      else if (failure === 'failed') overlay.snack(t('error.generic'));
     } finally {
       setBusy(false);
     }

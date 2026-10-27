@@ -31,7 +31,8 @@ export default function Verify() {
   const resend = async () => {
     if (!email) return;
     setCooldown(60);
-    await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: 'studify://auth/callback' } }).catch(() => undefined);
+    const res = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: 'studify://auth/callback' } }).catch(() => null);
+    setError(res?.error?.status === 429 ? t('auth.code.rate_limited') : null);
   };
 
   return (
