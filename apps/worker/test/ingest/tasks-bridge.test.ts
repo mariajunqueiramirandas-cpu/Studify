@@ -29,7 +29,7 @@ describe('prompts to @studify/ai bridge', () => {
     expect(prepared.call.system.length).toBeGreaterThan(0);
     expect(prepared.call.system.at(-1)?.cacheTtl).toBe('1h');
     // Citations on every document block (all-or-none, ai-pipeline §5.2).
-    const first = (prepared.call.messages[0]?.content as Array<Record<string, unknown>>)[0];
+    const first = (prepared.call.messages[0]?.content as unknown as Array<Record<string, unknown>>)[0];
     expect(first).toMatchObject({ type: 'document', citations: { enabled: true } });
   });
 
