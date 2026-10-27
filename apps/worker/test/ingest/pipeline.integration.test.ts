@@ -53,6 +53,9 @@ function respond(req: MockRequest): MockResponse | undefined {
   const isMembrana = topic === TOPIC_MEMBRANA;
   const text = (value: unknown): MockResponse => ({ kind: 'message', message: { text: JSON.stringify(value) } });
 
+  if (body.includes('transcreva fielmente as páginas enviadas')) {
+    return text({ pages: [1, 2, 3].map((page) => ({ page, text: `Página ${page} lida pela IA.`, confidence: 'high' })) });
+  }
   if (body.includes('organize o material em um mapa de conhecimento') && body.includes('Slides Aula 2')) {
     return text({
       is_study_material: true,
@@ -279,7 +282,8 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     return { userId, subjectId, docId, storagePath, bytes };
   }
 
-  function runtime(store: FakeObjectStore) {
+  /** useBatch mirrors AI_USE_BATCH: content waves on the Message Batches API instead of standard calls. */
+  function runtime(store: FakeObjectStore, opts: { useBatch?: boolean } = {}) {
     const log = createLogger('silent');
     const backend = new InMemoryQueue();
     const expo = captureExpo();
@@ -302,7 +306,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
         return registry.enqueue(name, data, opts);
       },
     });
-    registry = new JobRegistry({ backend, pool, supabase: fakeSupabase(store), claude, push, log, now });
+    registry = new JobRegistry({ backend, pool, supabase: fakeSupabase(store), claude, push, log, now, useBatch: opts.useBatch ?? false });
     return { backend, registry, expo, push };
   }
 
@@ -310,7 +314,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const store = new FakeObjectStore();
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
-    const { backend, registry, expo, push } = runtime(store);
+    const { backend, registry, expo, push } = runtime(store, { useBatch: true });
     await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
     const requestsBefore = mock.requests.length;
 
@@ -324,8 +328,14 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     );
     expect(doc.rows[0]).toMatchObject({ status: 'ready', error_code: null, page_count: 3 });
 
-    const pages = await pool.query<{ n: string }>(`select count(*)::text as n from public.document_pages where document_id = $1 and text_source = 'pdf_text_layer'`, [docId]);
-    expect(Number(pages.rows[0]?.n)).toBe(3);
+    // Every page is read by the AI; the text layer's spans stay for the citation highlights.
+    const pages = await pool.query<{ text_source: string; text: string; text_items_path: string | null }>(
+      `select text_source, text, text_items_path from public.document_pages where document_id = $1 order by page_number`,
+      [docId],
+    );
+    expect(pages.rows.map((r) => r.text_source)).toEqual(['ai_transcription', 'ai_transcription', 'ai_transcription']);
+    expect(pages.rows[0]?.text).toBe('Página 1 lida pela IA.');
+    expect(pages.rows.every((r) => r.text_items_path !== null)).toBe(true);
 
     const nodes = await pool.query<{ kind: string; n: string }>(
       `select kind, count(*)::text as n from public.knowledge_nodes where subject_id = $1 group by kind`,
@@ -397,7 +407,8 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const requests = mock.requests.slice(requestsBefore);
     expect(requests.some((r) => r.path === '/v1/files' && r.method === 'POST')).toBe(true);
     expect(requests.some((r) => r.method === 'DELETE' && r.path.startsWith('/v1/files/'))).toBe(true);
-    expect(requests.filter((r) => r.path === '/v1/messages/batches' && r.method === 'POST').length).toBe(2);
+    // Concepts, content and the page transcription.
+    expect(requests.filter((r) => r.path === '/v1/messages/batches' && r.method === 'POST').length).toBe(3);
 
     expect(expo.sent.some((m) => m.data.type === 'material_ready')).toBe(true);
 
@@ -409,6 +420,46 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const nodesAfter = await pool.query<{ n: string }>(`select count(*)::text as n from public.knowledge_nodes where subject_id = $1`, [subjectId]);
     expect(nodesAfter.rows[0]?.n).toBe(nodesBefore.rows[0]?.n);
     expect(mock.requests.length).toBe(callsBefore);
+  }, 180_000);
+
+  it('runs S2 and S4 as standard calls when the Batch API is off (the default)', async () => {
+    const store = new FakeObjectStore();
+    const { userId, subjectId, docId, storagePath, bytes } = await seed();
+    store.put('documents', storagePath, bytes, 'application/pdf');
+    const { backend, registry, expo, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    const requestsBefore = mock.requests.length;
+
+    await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
+    await backend.drain(4000);
+    expect(backend.failedJobs).toEqual([]);
+
+    const doc = await pool.query<{ status: string; error_code: string | null }>(`select status, error_code from public.documents where id = $1`, [docId]);
+    expect(doc.rows[0]).toMatchObject({ status: 'ready', error_code: null });
+    const topicStatus = await pool.query<{ content_status: string }>(
+      `select content_status from public.knowledge_nodes where subject_id = $1 and kind = 'topic'`,
+      [subjectId],
+    );
+    expect(topicStatus.rows.map((r) => r.content_status)).toEqual(['ready', 'ready']);
+    const concepts = await pool.query<{ n: string }>(`select count(*)::text as n from public.knowledge_nodes where subject_id = $1 and kind = 'concept'`, [subjectId]);
+    expect(Number(concepts.rows[0]?.n)).toBe(2);
+    const cards = await pool.query<{ n: string }>(`select count(*)::text as n from public.cards where subject_id = $1 and origin = 'generated'`, [subjectId]);
+    expect(Number(cards.rows[0]?.n)).toBe(2);
+    const notes = await pool.query<{ n: string }>(`select count(*)::text as n from public.notes where subject_id = $1`, [subjectId]);
+    expect(Number(notes.rows[0]?.n)).toBe(4);
+    const glossary = await pool.query<{ n: string }>(`select count(*)::text as n from public.glossary_terms where subject_id = $1`, [subjectId]);
+    expect(Number(glossary.rows[0]?.n)).toBe(2);
+
+    // Every call is a standard one: nothing in ai_usage is marked batch and no batch was created.
+    const usage = await pool.query<{ task: string; batch: boolean }>(`select task, batch from public.ai_usage where subject_id = $1`, [subjectId]);
+    expect(usage.rows.map((r) => r.task)).toEqual(expect.arrayContaining(['ingest.topicDetail', 'notes.tldr', 'cards.generate', 'questions.generate']));
+    expect(usage.rows.every((r) => r.batch === false)).toBe(true);
+    const requests = mock.requests.slice(requestsBefore);
+    expect(requests.some((r) => r.path.startsWith('/v1/messages/batches'))).toBe(false);
+
+    const job = await pool.query<{ status: string }>(`select status from public.ai_jobs where document_id = $1 and type = 'ingest.document'`, [docId]);
+    expect(job.rows[0]?.status).toBe('succeeded');
+    expect(expo.sent.some((m) => m.data.type === 'material_ready')).toBe(true);
   }, 180_000);
 
   it('re-runs a refused batch item on the standard API and still writes its output', async () => {
@@ -424,7 +475,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       return respond(req);
     });
     try {
-      const { backend, registry, push } = runtime(store);
+      const { backend, registry, push } = runtime(store, { useBatch: true });
       await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
       await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
       await backend.drain(4000);

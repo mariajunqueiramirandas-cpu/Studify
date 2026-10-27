@@ -61,6 +61,26 @@ export function getAppDbSync(): AppDb {
   return handle.db;
 }
 
+/**
+ * Empties every table (account reset): local copies, the outbox and the sync cursors, so nothing old is pushed back
+ * and the next sync starts from scratch. The schema and its migration history stay.
+ */
+export async function wipeAppDatabase(): Promise<void> {
+  await ensureAppDatabase();
+  const { client } = openSync();
+  const tables = client.getAllSync<{ name: string }>(
+    "select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name not like '__drizzle%'",
+  );
+  client.execSync('PRAGMA foreign_keys = OFF;');
+  try {
+    client.withTransactionSync(() => {
+      for (const { name } of tables) client.execSync(`DELETE FROM "${name.replace(/"/g, '""')}";`);
+    });
+  } finally {
+    client.execSync('PRAGMA foreign_keys = ON;');
+  }
+}
+
 export function closeAppDatabase(): void {
   if (handle) {
     handle.client.closeSync();

@@ -17,4 +17,5 @@ export type IngestStartRes = z.infer<typeof S.IngestStartResSchema>;
 export type IngestRetryRes = z.infer<typeof S.IngestRetryResSchema>;
 export type UploadPhotosRes = z.infer<typeof S.UploadPhotosResSchema>;
 export type AccountDeleteRes = z.infer<typeof S.AccountDeleteResSchema>;
+export type AccountResetRes = z.infer<typeof S.AccountResetResSchema>;
 export type GuardianLinkRes = z.infer<typeof S.GuardianLinkResSchema>;

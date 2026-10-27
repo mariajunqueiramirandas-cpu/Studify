@@ -25,6 +25,8 @@ export interface JobContext {
   push: (userId: string, message: import('./push.ts').PushMessage) => Promise<void>;
   /** Cloud TTS for podcast audio (INT-01.4). Null: episodes are played with on-device TTS (INT-01.11). */
   tts?: TtsProvider | null;
+  /** Content waves go to the Message Batches API (AI_USE_BATCH); otherwise they run as standard calls. */
+  useBatch?: boolean;
 }
 
 export interface JobDefinition<T = Record<string, unknown>> {

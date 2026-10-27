@@ -93,6 +93,7 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     log,
     now,
     tts: overrides.tts !== undefined ? overrides.tts : ttsFromEnv(process.env),
+    useBatch: config.useBatch,
   } satisfies RuntimeDeps);
   enqueueRef = (name, data, opts) => registry.enqueue(name, data, opts);
   // Live progress (api.md §9.1): each stage change and each terminal state of a job, and at most one

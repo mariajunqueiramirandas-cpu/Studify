@@ -1218,9 +1218,20 @@
     "export": "Baixar meus dados",
     "export_started": "Estou preparando seus dados. Aviso quando o arquivo estiver pronto (o link vale 7 dias).",
     "delete": "Excluir minha conta",
+    "reset": "Recomeçar do zero",
     "guardian": "Responsável",
     "visibility": "Quem vê o quê",
     "visibility_body": "Suas notas, erros e progresso são só seus. A turma vê apenas estatísticas sem nomes (mínimo de 5 pessoas)."
+  },
+  "reset_account": {
+    "title": "Recomeçar do zero",
+    "explain": "Vou apagar tudo o que é seu: matérias, materiais, cartões, revisões, progresso, XP, sequência, metas, planos, conversas e configurações. Isso não dá pra desfazer.",
+    "kept": "Seu login, nome e data de nascimento continuam, então você não precisa de convite novo. Você sai das turmas, e o que compartilhou com elas fica para a turma.",
+    "reauth": "Enviei um código pro seu e-mail pra confirmar que é você.",
+    "type_confirm": "Digite ZERAR para confirmar",
+    "confirm_word": "ZERAR",
+    "button": "Apagar tudo e recomeçar",
+    "done": "Pronto! Sua conta está zerada."
   },
   "delete_account": {
     "title": "Excluir conta",

@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { clearStoredSessions } from '../../api/secure-session-storage';
 import { supabase } from '../../api/supabase';
 import { invalidatePushToken } from '../notifications/push-token';
 
@@ -73,14 +74,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await qc.invalidateQueries({ queryKey: ['profile', userId] });
     },
     signOut: async (scope = 'local') => {
+      // Signing out must never hang on the network: the push-token update and the server logout get a few
+      // seconds each, and when the logout does not finish the stored session is dropped here instead.
       // While still signed in: this install stops receiving pushes for this account.
-      if (session?.user.id) await invalidatePushToken(session.user.id);
-      await supabase.auth.signOut({ scope });
+      if (session?.user.id) await withTimeout(invalidatePushToken(session.user.id), 3000);
+      const result = await withTimeout(supabase.auth.signOut({ scope }).catch(() => null), 5000);
+      if (!result) clearStoredSessions();
+      setSession(null);
       qc.clear();
     },
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+/** Resolves with the promise's value, or undefined once `ms` have passed. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(undefined);
+      },
+    );
+  });
 }
 
 export function useSession(): SessionState {

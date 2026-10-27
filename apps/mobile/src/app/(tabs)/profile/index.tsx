@@ -39,7 +39,11 @@ export default function Profile() {
           onPress={async () => {
             // Unsynced reviews stay on the phone; warn before signing out (spec 00 §5).
             if (sync.pending > 0 && !(await overlay.confirm({ title: 'Você tem revisões que ainda não foram salvas na nuvem. Quer esperar a internet voltar?', confirmLabel: t('profile.sign_out'), cancelLabel: 'Esperar' }))) return;
-            await signOut('local');
+            try {
+              await signOut('local');
+            } catch {
+              overlay.snack(t('error.generic'));
+            }
           }}
         />
       </Card>

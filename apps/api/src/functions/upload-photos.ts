@@ -46,7 +46,7 @@ export const handler = defineFunction<z.infer<typeof UploadPhotosReqSchema>>({
     if (inserted.error) throw inserted.error;
 
     const jobId = await createAiJob(deps, { type: 'ingest.photos_to_pdf', userId, subjectId: subject.id, documentId, stage: 'photos' });
-    await deps.enqueue('ingest.photos_to_pdf', { subject_id: subject.id, image_paths: input.image_paths, document_id: documentId, job_id: jobId }, { retryLimit: 3 });
+    await deps.enqueue('ingest.photos_to_pdf', { subject_id: subject.id, image_paths: input.image_paths, document_id: documentId, ai_job_id: jobId }, { retryLimit: 3 });
 
     const body: UploadPhotosRes = { document_id: documentId, job_id: jobId };
     return ctx.json(body, 202);

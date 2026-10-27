@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleAnalyzePastTest, handleGeneratePredicted, handleScheduleImport } from '../../src/jobs/prova.ts';
-import { handleAccountDelete, handleAccountExport, handleStoragePurge } from '../../src/jobs/account.ts';
+import { handleAccountDelete, handleAccountExport, handleAccountResetFiles, handleStoragePurge } from '../../src/jobs/account.ts';
 import { DOC, EXAM, FakeEnv, GOAL, NOW, SUBJECT, TOPIC, USER, fakeEnv } from './fakes.ts';
 import { seedStudent } from './seed.ts';
 
@@ -235,3 +235,28 @@ describe('storage.purge', () => {
   });
 });
 
+
+describe('account.reset_files', () => {
+  it('removes the reset materials with their pages and slices, the photos and the exports, and nothing else', async () => {
+    const bytes = new Uint8Array([1]);
+    for (const key of [
+      'documents/subj/doc-1.pdf',
+      'page-images/doc-1/1.webp',
+      'page-images/doc-1/thumbs/1.jpg',
+      'page-text/doc-1/1.json',
+      'slices/doc-1/1-3.pdf',
+      `photos/${USER}/cap-1/1.jpg`,
+      'exports/user/export.zip',
+      'documents/turma/doc-2.pdf',
+      'page-images/doc-2/1.webp',
+      'photos/someone-else/cap/1.jpg',
+    ]) env.storage.objects.set(key, bytes);
+    const out = await handleAccountResetFiles(env.ctx, {
+      user_id: USER,
+      documents: [{ id: 'doc-1', storage_path: 'subj/doc-1.pdf' }],
+      exports: ['user/export.zip'],
+    });
+    expect(out.removed).toBe(7);
+    expect([...env.storage.objects.keys()].sort()).toEqual(['documents/turma/doc-2.pdf', 'page-images/doc-2/1.webp', 'photos/someone-else/cap/1.jpg']);
+  });
+});

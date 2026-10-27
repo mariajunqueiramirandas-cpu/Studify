@@ -22,6 +22,8 @@ export interface RuntimeDeps {
   log: Logger;
   now: () => Date;
   tts?: TtsProvider | null;
+  /** AI_USE_BATCH: content waves go to the Message Batches API. */
+  useBatch?: boolean;
 }
 
 const DEFAULT_RETRY_LIMIT = 3;
@@ -116,6 +118,7 @@ export class JobRegistry {
         await deps.push.push(userId, message);
       },
       tts: deps.tts ?? null,
+      useBatch: deps.useBatch ?? false,
     };
   }
 }

@@ -262,6 +262,19 @@ export class FakeStorage {
         return { data: paths, error: null };
       },
       createSignedUrl: async (path: string, ttl: number) => ({ data: { signedUrl: `https://storage.test/${bucket}/${path}?ttl=${ttl}` }, error: null }),
+      /** Like Supabase Storage: the direct children of a folder; files carry an id, sub-folders have id null. */
+      list: async (prefix: string) => {
+        const base = `${bucket}/${prefix}/`;
+        const entries = new Map<string, { name: string; id: string | null }>();
+        for (const key of this.objects.keys()) {
+          if (!key.startsWith(base)) continue;
+          const rest = key.slice(base.length);
+          const slash = rest.indexOf('/');
+          const name = slash === -1 ? rest : rest.slice(0, slash);
+          entries.set(name, { name, id: slash === -1 ? `id-${name}` : null });
+        }
+        return { data: [...entries.values()], error: null };
+      },
     };
   }
 }
