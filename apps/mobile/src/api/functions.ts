@@ -1,9 +1,9 @@
-// Edge Function callers (api.md §2): JSON calls with Idempotency-Key and error-envelope mapping,
+// API function callers (api.md §2; apps/api serves /api/<name>): JSON calls with Idempotency-Key and error-envelope mapping,
 // and SSE streaming via XMLHttpRequest (React Native's fetch does not expose a readable stream).
 import { uuidv7 } from 'uuidv7';
 import { SYNC_SCHEMA_VERSION } from '../db/sync/constants';
 import { getDeviceId } from '../lib/device';
-import { getEnv } from './env';
+import { getApiUrl, getEnv } from './env';
 import { ApiError, apiErrorFromResponse, offlineError } from './errors';
 import { createSseParser } from './sse';
 import { supabase } from './supabase';
@@ -44,7 +44,6 @@ async function authHeaders(idempotencyKey: string | null): Promise<Record<string
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${data.session?.access_token ?? env.anonKey}`,
-    apikey: env.anonKey,
     'x-studify-version': appVersionCode(),
     'x-studify-schema': String(SYNC_SCHEMA_VERSION),
     'x-device-id': getDeviceId(),
@@ -54,12 +53,12 @@ async function authHeaders(idempotencyKey: string | null): Promise<Record<string
 }
 
 /**
- * POST an Edge Function and return its JSON body. Errors become ApiError with the stable `code`.
+ * POST an API function and return its JSON body. Errors become ApiError with the stable `code`.
  * A 401 refreshes the session once and retries with the same Idempotency-Key.
  */
 export async function callFunction<TReq, TRes>(name: string, body: TReq, opts: CallOptions = {}): Promise<TRes> {
   const key = opts.idempotencyKey ?? uuidv7();
-  const url = `${getEnv().url}/functions/v1/${name}`;
+  const url = `${getApiUrl()}/${name}`;
   const send = async (): Promise<Response> =>
     fetch(url, {
       method: 'POST',
@@ -96,7 +95,7 @@ export function streamFunction<TReq>(
   opts: CallOptions = {},
 ): StreamHandle {
   const key = opts.idempotencyKey ?? uuidv7();
-  const url = `${getEnv().url}/functions/v1/${name}`;
+  const url = `${getApiUrl()}/${name}`;
   let cancelled = false;
   let activeXhr: XMLHttpRequest | null = null;
 

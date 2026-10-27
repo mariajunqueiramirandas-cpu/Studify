@@ -128,8 +128,8 @@ All buckets are **private**. Clients access objects only through RLS-checked pat
 
 | Secret | Lives in | Never in |
 |---|---|---|
-| Claude API key | Supabase Edge Function secrets; worker env (host secret store) | App, repo, logs, Sentry |
-| Supabase service-role key | Edge Function env (built-in), worker env | App, repo |
+| Claude API key | API server env (Dokploy environment); worker env (Dokploy environment) | App, repo, logs, Sentry |
+| Supabase service-role key | API server env, worker env (Dokploy environment) | App, repo |
 | Expo push access token | Worker env | App |
 | TTS provider key (Phase 3) | Worker env | App |
 | Sentry DSN | App (public by design) + server | — |

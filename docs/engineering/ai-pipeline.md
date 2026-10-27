@@ -757,7 +757,7 @@ try {
 
 ### 10.2 Timeouts
 
-- Supabase Edge Functions: **150 s** (Free) / **400 s** (paid) wall-clock limit ([security-privacy](security-privacy.md), [mobile-app](mobile-app.md)). Synchronous tasks must finish well inside it: Edge tasks use classes XS–M (and L only when streamed, e.g. `notes.deep`, `camera.solveFull`). Anything that may run longer goes to the worker and reports progress through `ai_jobs` + Realtime (`podcast.script`, `essay.grade`, `predictedTest.generate`, `vespera.cheatsheet`).
+- The API server (Bun, VPS) has no platform wall-clock cap, but a synchronous request still holds a connection, and the server closes idle connections after 255 s. Synchronous tasks must finish well inside that (the former Supabase Edge limit was 150 s Free / 400 s paid): Edge tasks use classes XS–M (and L only when streamed, e.g. `notes.deep`, `camera.solveFull`). Anything that may run longer goes to the worker and reports progress through `ai_jobs` + Realtime (`podcast.script`, `essay.grade`, `predictedTest.generate`, `vespera.cheatsheet`).
 - SDK client timeout: Edge 120 s per attempt; worker 10 min per attempt (streamed).
 - SSE to the app: heartbeat comment every 15 s so mobile networks don't drop idle streams during thinking.
 

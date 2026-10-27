@@ -11,6 +11,7 @@ Each ADR records one significant decision: its context, the decision, the altern
 | [0005](0005-job-worker-pg-boss.md) | Node.js job worker with pg-boss (hosting open) | Accepted (hosting: open) | 2026-10-26 |
 | [0006](0006-retrieval-without-embeddings.md) | Retrieval without embeddings (knowledge-map routing + Postgres FTS) | Accepted | 2026-10-26 |
 | [0007](0007-offline-first-append-only-reviews.md) | Offline-first with append-only review logs | Accepted | 2026-10-26 |
+| [0008](0008-vps-bun-hono-api.md) | API server on a VPS with Bun and Hono (Supabase Edge Functions retired) | Accepted | 2026-10-27 |
 
 ## Template
 

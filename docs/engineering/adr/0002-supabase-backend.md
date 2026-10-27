@@ -1,6 +1,6 @@
 # 0002 — Supabase as the backend
 
-| Status | Accepted |
+| Status | Accepted. The Edge Functions part is superseded by [ADR 0008](0008-vps-bun-hono-api.md) (API server on Bun + Hono on a VPS). |
 |---|---|
 | Date | 2026-10-26 |
 | Related | [Architecture](../architecture.md) · [Data model](../data-model.md) · [Security & privacy](../security-privacy.md) |

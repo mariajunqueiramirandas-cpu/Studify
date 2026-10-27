@@ -27,10 +27,6 @@ file_size_limit = "50MiB"
 [realtime]
 enabled = true
 
-[edge_runtime]
-enabled = true
-policy = "per_worker"
-
 [auth]
 enabled = true
 # Native app: the deep link is the redirect target for OTP and OAuth flows (mobile-app.md §2.3, §12).

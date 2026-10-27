@@ -10,11 +10,12 @@
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint",
     "db:test": "bash supabase/tests/run.sh",
-    "db:rls-coverage": "node scripts/check-rls-coverage.mjs"
+    "db:rls-coverage": "node scripts/check-rls-coverage.mjs",
+    "api:dev": "bun --watch apps/api/src/server.ts",
+    "api:test": "pnpm --filter @studify/api test"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "deno": "^2.9.6",
     "fast-check": "^4.10.2",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",

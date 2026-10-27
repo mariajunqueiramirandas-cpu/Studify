@@ -103,8 +103,8 @@ jobs:
       - name: Every public table has RLS and a pgTAP test
         run: pnpm db:rls-coverage
 
-  edge-functions:
-    name: Edge Functions (Deno check and tests)
+  api:
+    name: API (Bun typecheck and tests)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -114,14 +114,15 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
       - run: pnpm install --frozen-lockfile
-      # deno comes from the root devDependencies; the config lives in supabase/functions/deno.json.
-      - name: Type-check functions and tests
-        run: npx deno check --config supabase/functions/deno.json supabase/functions/*/index.ts supabase/functions/tests/*.ts
-      - name: Run function tests
-        env:
-          DENO_NO_UPDATE_CHECK: "1"
-        run: npx deno test --config supabase/functions/deno.json --allow-all supabase/functions/tests
+      - name: Typecheck the API
+        run: pnpm --filter @studify/api typecheck
+      # The package script runs `bun test --timeout 30000` (the function tests build PDFs and AI fakes).
+      - name: API tests (bun test)
+        run: pnpm --filter @studify/api test
 
   gitleaks:
     name: Secret scan

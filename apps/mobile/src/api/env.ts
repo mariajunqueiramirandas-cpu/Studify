@@ -33,3 +33,16 @@ export function getEnv(): SupabaseEnv {
   };
   return cached;
 }
+
+const DEFAULT_API_URL = 'https://studify.vendua.com.br/api';
+
+/**
+ * Base URL of the backend API (apps/api, Bun + Hono), without a trailing slash. Functions are called as
+ * `${base}/<name>`. Defaults to the production host; set EXPO_PUBLIC_API_URL to point at a local server.
+ */
+export function getApiUrl(): string {
+  // Expo inlines this only when the access is written literally, so keep the exact expression.
+  const raw = process.env.EXPO_PUBLIC_API_URL;
+  const value = raw && raw.trim() !== '' ? raw.trim() : DEFAULT_API_URL;
+  return value.replace(/\/+$/, '');
+}
