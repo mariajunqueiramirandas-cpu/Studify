@@ -41,14 +41,17 @@ otp_length = 6
 otp_expiry = 3600
 
 # The app asks for the 6-digit code, so both e-mails must show {{ .Token }}; Supabase's default templates only
-# carry a link. A new address gets "confirmation", a known one gets "magic_link". The hosted project does not
-# read this file: push it with `supabase config push` or paste the templates under Auth > Email Templates.
+# carry a link. A new address gets "confirmation", a known one gets "magic_link" (sign-in, and the re-auth before
+# Recomeçar do zero and account deletion). The subject carries the code too, so it shows in the notification.
+# The e-mails have no sign-in link on purpose: link scanners (Outlook Safe Links, antivirus) open it and burn the
+# code before the student types it. The hosted project does not read this file: push it with
+# `supabase config push` or paste the templates under Auth > Email Templates.
 [auth.email.template.confirmation]
-subject = "Seu código do Studify"
+subject = "{{ .Token }} é seu código do Studify"
 content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.magic_link]
-subject = "Seu código do Studify"
+subject = "{{ .Token }} é seu código do Studify"
 content_path = "./supabase/templates/magic_link.html"
 
 # Hosted project only (`supabase link --project-ref pwigsfpkyxdtorxvwpnt`, then `supabase config push`). Local runs

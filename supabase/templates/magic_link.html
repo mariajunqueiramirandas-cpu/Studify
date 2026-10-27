@@ -1,5 +1,100 @@
-<h2>Seu código do Studify</h2>
-<p>Digite este código no app pra entrar:</p>
-<p style="font-size:32px;font-weight:bold;letter-spacing:8px;margin:24px 0">{{ .Token }}</p>
-<p>Ele vale por 1 hora. Se não foi você que pediu, pode ignorar este e-mail.</p>
-<p style="color:#666;font-size:13px">No celular com o Studify instalado, você também pode <a href="{{ .ConfirmationURL }}">tocar aqui pra entrar</a>.</p>
+<!doctype html>
+<html lang="pt-BR" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Seu código do Studify</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  body { margin: 0 !important; padding: 0 !important; width: 100% !important; -webkit-text-size-adjust: 100%; }
+  a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+  .code a { color: inherit !important; text-decoration: none !important; }
+  @media (max-width: 520px) {
+    .card-pad { padding: 28px 22px !important; }
+    .code { font-size: 34px !important; letter-spacing: 8px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .bg { background-color: #0F1115 !important; }
+    .card { background-color: #171A21 !important; border-color: #2D3340 !important; border-top-color: #818CF8 !important; }
+    .text { color: #F3F4F6 !important; }
+    .muted { color: #9CA3AF !important; }
+    .code-box { background-color: #1E2140 !important; border-color: #3B3F7A !important; }
+    .code { color: #C7D2FE !important; }
+    .note { background-color: #1F232C !important; }
+    .rule { border-color: #2D3340 !important; }
+  }
+  [data-ogsc] .text { color: #F3F4F6 !important; }
+  [data-ogsc] .muted { color: #9CA3AF !important; }
+  [data-ogsc] .code { color: #C7D2FE !important; }
+</style>
+</head>
+<body class="bg" style="margin:0;padding:0;background-color:#F7F7FA;">
+<!-- Preheader: the line inbox and lock-screen previews show next to the subject. -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Vale por 1 hora e só funciona uma vez. Não passe pra ninguém.&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
+<table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F7FA;">
+  <tr>
+    <td align="center" style="padding:32px 12px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <!-- Brand -->
+        <tr>
+          <td style="padding:0 4px 20px 4px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;background-color:#4F46E5;border-radius:11px;font-family:Nunito,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:23px;font-weight:800;line-height:40px;color:#FFFFFF;">S</td>
+                <td class="text" style="padding-left:10px;font-family:Nunito,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;color:#111827;letter-spacing:-0.2px;">Studify</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Card -->
+        <tr>
+          <td class="card" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-top:4px solid #4F46E5;border-radius:16px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td class="card-pad" style="padding:36px 32px 32px 32px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <h1 class="text" style="margin:0 0 10px 0;font-family:Nunito,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:800;color:#111827;">Seu código do Studify</h1>
+                  <p class="muted" style="margin:0 0 24px 0;font-size:16px;line-height:24px;color:#4B5563;">Digite este código no app pra continuar:</p>
+
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td class="code-box" align="center" style="background-color:#EEF2FF;border:1px solid #C7D2FE;border-radius:14px;padding:22px 12px;">
+                        <span class="code" style="font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums;font-size:42px;line-height:48px;font-weight:700;letter-spacing:12px;padding-left:12px;color:#3730A3;white-space:nowrap;">{{ .Token }}</span>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p class="muted" style="margin:14px 0 28px 0;font-size:14px;line-height:20px;color:#4B5563;text-align:center;">Vale por <strong class="text" style="color:#111827;">1 hora</strong> e só funciona uma vez.</p>
+
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td class="note" style="background-color:#F7F7FA;border-radius:12px;padding:16px 18px;">
+                        <p class="text" style="margin:0 0 4px 0;font-size:14px;line-height:20px;font-weight:600;color:#111827;">&#128274; Esse código é só seu</p>
+                        <p class="muted" style="margin:0;font-size:14px;line-height:20px;color:#4B5563;">Não passe pra ninguém. A equipe do Studify nunca pede esse código, nem por mensagem, nem por ligação.</p>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p class="muted" style="margin:24px 0 0 0;font-size:14px;line-height:20px;color:#4B5563;">Não foi você que pediu? Pode ignorar este e&#8209;mail. Sem o código, ninguém entra na sua conta.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 8px 0 8px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9CA3AF;text-align:center;">
+            <span class="muted">Enviado para {{ .Email }} porque alguém pediu um código do Studify com este e-mail.</span><br>
+            <a href="https://studify.vendua.com.br" style="color:#9CA3AF;text-decoration:underline;">studify.vendua.com.br</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
