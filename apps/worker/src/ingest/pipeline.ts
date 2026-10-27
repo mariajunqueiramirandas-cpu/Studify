@@ -17,7 +17,7 @@ import { renderPages } from './pdf-render.ts';
 import { spansFile } from './pdf-spans.ts';
 import { writeOutline, runOutlineCalls } from './outline.ts';
 import { runPrerequisites } from './prereq.ts';
-import { topicItem, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type WavePlan } from './waves.ts';
+import { topicItem, runWaveNow, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type SubmitInput, type WavePlan } from './waves.ts';
 import { loadTopicBundle, sourcesOf, topicSliceRefs, contentLanguageOf, isQuantitativeTopic, type TopicBundle } from './topics.ts';
 import { expandKinds, type TopicKind } from './custom-id.ts';
 import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
@@ -205,6 +205,33 @@ export async function runIngestDocument(ctx: JobContext, store: ObjectStore, pay
   }
 }
 
+/**
+ * Runs a concepts, content or transcription wave. With AI_USE_BATCH it goes to the Message Batches API and batch.poll
+ * continues the pipeline when it ends; otherwise the calls run now and the same continuation follows.
+ */
+async function runWave(stage: Stage, input: SubmitInput): Promise<void> {
+  if (stage.ctx.useBatch) {
+    await submitWave(stage.env, input);
+    return;
+  }
+  const summary = await runWaveNow(stage.env, input);
+  const plan: WavePlan = {
+    batchId: 'standard',
+    reservationId: '',
+    estimateMicroUsd: 0,
+    submittedAt: stage.ctx.now().toISOString(),
+    purpose: input.purpose,
+    aiJobId: input.aiJobId,
+    userId: input.userId,
+    subjectId: input.subjectId,
+    documentId: input.documentId,
+    topicIds: input.topicIds,
+    pollCount: 0,
+    items: input.items.map((i) => i.item),
+  };
+  await onWaveCollected(stage.ctx, stage.store, plan, summary);
+}
+
 async function pageCountOf(sql: Sql, documentId: string): Promise<number> {
   const { rows } = await sql.query<{ n: string }>(`select count(*)::text as n from public.document_pages where document_id = $1`, [documentId]);
   return Number(rows[0]?.n ?? '0');
@@ -310,7 +337,7 @@ export async function runTranscription(ctx: JobContext, store: ObjectStore, payl
         }),
       );
     }
-    await submitWave(stage.env, {
+    await runWave(stage, {
       purpose: 'transcription',
       aiJobId: payload.aiJobId,
       userId: payload.userId ?? doc.uploadedBy,
@@ -397,7 +424,7 @@ async function runConcepts(stage: Stage, payload: TopicContentPayload, genBatchI
       );
     }
     if (items.length > 0) {
-      await submitWave(env, {
+      await runWave(stage, {
         purpose: 'concepts',
         aiJobId: payload.aiJobId,
         userId: payload.userId,
@@ -512,7 +539,7 @@ async function runContent(stage: Stage, payload: TopicContentPayload, genBatchId
     return;
   }
   await setContentStatus(sql, topicIds, 'generating');
-  await submitWave(env, {
+  await runWave(stage, {
     purpose: 'content',
     aiJobId: payload.aiJobId,
     userId: payload.userId,

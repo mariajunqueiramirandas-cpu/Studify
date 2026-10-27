@@ -17,6 +17,8 @@ const EnvSchema = z.object({
   WORKER_LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   /** Per-attempt Claude timeout. The worker allows 10 min (ai-pipeline §10.2). */
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
+  /** Send content waves (S2 concepts, S4 content, transcription) to the Message Batches API. Off: standard calls. */
+  AI_USE_BATCH: z.enum(['true', 'false', '1', '0']).default('false'),
 });
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
@@ -32,6 +34,7 @@ export interface WorkerConfig {
   pgBossSchema: string;
   logLevel: LogLevel;
   aiTimeoutMs: number;
+  useBatch: boolean;
 }
 
 /** Empty strings in the environment mean "unset". */
@@ -61,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     pgBossSchema: v.PG_BOSS_SCHEMA,
     logLevel: v.WORKER_LOG_LEVEL,
     aiTimeoutMs: v.AI_TIMEOUT_MS,
+    useBatch: v.AI_USE_BATCH === 'true' || v.AI_USE_BATCH === '1',
   };
 }
 

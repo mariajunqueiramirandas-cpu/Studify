@@ -24,6 +24,7 @@ import {
 } from './topics.ts';
 import { TRANSCRIPTION_PAGES } from './limits.ts';
 import { pagesToSpans } from './slice-plan.ts';
+import { mapLimit } from './concurrency.ts';
 import { applyProgress } from '../framework/progress.ts';
 import { PermanentJobError } from '../framework/errors.ts';
 import type { LabelMap } from './mappers.ts';
@@ -163,6 +164,48 @@ export async function submitWave(env: PipelineEnv, input: SubmitInput): Promise<
     });
   }
   return plan;
+}
+
+/** Parallel standard calls per wave when the Batch API is off (AI_USE_BATCH). */
+export const STANDARD_WAVE_CONCURRENCY = 6;
+
+/**
+ * Runs a wave now on the standard API (AI_USE_BATCH off): every item is called, written by the same writers as a
+ * collected batch, and tried twice like a batch item and its standard rerun. Progress counts items as they finish.
+ */
+export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<PollOutcomeSummary> {
+  const summary: PollOutcomeSummary = { done: true, topicsOk: new Set(), topicsFailed: new Set(), budgetExceeded: false };
+  const stage = input.purpose === 'concepts' ? 'S2' : input.purpose === 'content' ? 'S4' : 'transcription';
+  let finished = 0;
+  if (input.aiJobId) {
+    await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: input.items.length, items_done: 0 });
+  }
+  await mapLimit(input.items, STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
+    let handled = false;
+    for (let attempt = 1; attempt <= 2 && !handled && !summary.budgetExceeded; attempt++) {
+      try {
+        const result = await callClaude(env.ctx.ai, call);
+        if (result.status === 'ok') {
+          handled = await writeOutcome(env, item, result.data, result.text, result.citations);
+        } else {
+          env.ctx.log.warn({ customId: item.customId, status: result.status, attempt }, 'standard call did not produce output');
+        }
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          summary.budgetExceeded = true;
+        } else {
+          env.ctx.log.warn({ customId: item.customId, attempt, err: err instanceof Error ? err.name : 'unknown' }, 'standard call failed');
+        }
+      }
+    }
+    if (item.topicId) {
+      if (handled) summary.topicsOk.add(item.topicId);
+      else summary.topicsFailed.add(item.topicId);
+    }
+    finished += 1;
+    if (input.aiJobId) await applyProgress(env.ctx.db, input.aiJobId, { items_done: finished });
+  });
+  return summary;
 }
 
 /** Builds a PlanItem and the TaskCall for one topic kind. */
