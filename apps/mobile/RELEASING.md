@@ -108,9 +108,9 @@ Perfil → Notificações → Ver exemplos sends every layout to the shade witho
 
 ## Build speed
 
-The release APK contains `armeabi-v7a` and `arm64-v8a` only (`ANDROID_ABIS` in the workflow). x86 and x86_64 are left
-out because they are almost only emulators and each ABI compiles every native library again, so the release does not
-install on an x86 emulator; add them to `ANDROID_ABIS` if one is needed. The workflow also gives Gradle more memory,
+The release APK contains `arm64-v8a` only (`ANDROID_ABIS` in the workflow), because each ABI compiles every native
+library again. It does not install on 32-bit phones (`armeabi-v7a`, including Android Go phones with a 32-bit system)
+or on x86 emulators; add those ABIs to `ANDROID_ABIS`, comma-separated, if one of them is needed. The workflow also gives Gradle more memory,
 turns on the Gradle build cache, keeps compiled C++ between runs with ccache, and skips release lint and PNG crunching.
 The first run after a cache reset is the slowest; later runs reuse the caches written by `main`.
 
