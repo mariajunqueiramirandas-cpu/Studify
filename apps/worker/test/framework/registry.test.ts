@@ -148,7 +148,7 @@ describe('ai_jobs mirror', () => {
     await registry.register([
       {
         name: 'test.observer',
-        observesAiJob: true,
+        tracksProgress: false,
         handler: async (_ctx, _data, meta) => {
           seen = meta.aiJobId;
         },

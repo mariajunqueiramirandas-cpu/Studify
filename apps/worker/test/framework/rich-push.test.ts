@@ -170,9 +170,10 @@ describe('rich payload builders', () => {
     const now = new Date('2026-10-27T15:10:00Z');
     const job: LiveJobRow = { id: 'j1', type: 'ingest.document', stage: 'S2', status: 'running', progress: 0.6, user_id: USER, subject_id: SUBJECT, document_id: DOC, started_at: '2026-10-27T15:04:00Z' };
     const rich = liveRich(job, null, now)!;
-    expect(rich).toMatchObject({ key: `doc:${DOC}`, channel: 'live', template: 'progress', body: 'Resumos…' });
-    expect(rich.progress!.fraction).toBe(0.6);
-    expect(rich.progress!.eta_s).toBe(240);
+    expect(rich).toMatchObject({ key: `doc:${DOC}`, channel: 'live', template: 'progress', body: 'Encontrando conceitos…' });
+    // S2 owns 0.25–0.5 of the bar; 60% of the stage is 0.40 overall, so 6 minutes in leaves about 9.
+    expect(rich.progress!.fraction).toBe(0.4);
+    expect(rich.progress!.eta_s).toBe(540);
     expect(liveRich({ ...job, type: 'mastery.recompute' }, null, now)).toBeNull();
     expect(liveRich({ ...job, status: 'succeeded' }, null, now)).toBeNull();
   });

@@ -99,9 +99,10 @@ export function findingRows(
 
 export async function handleMaterialCheck(ctx: JobContext, data: { document_id: string; force?: boolean }): Promise<{ status: 'done' | 'skipped'; findings?: number }> {
   const sb = ctx.supabase;
-  const doc = unwrap(await sb.from('documents').select('id, subject_id, title, page_count, status, deleted_at, language').eq('id', data.document_id).maybeSingle(), 'documents') as {
+  const doc = unwrap(await sb.from('documents').select('id, subject_id, uploaded_by, title, page_count, status, deleted_at, language').eq('id', data.document_id).maybeSingle(), 'documents') as {
     id: string;
     subject_id: string;
+    uploaded_by: string | null;
     title: string;
     page_count: number | null;
     deleted_at: string | null;
@@ -111,10 +112,11 @@ export async function handleMaterialCheck(ctx: JobContext, data: { document_id: 
   const existing = unwrapRows(await sb.from('material_findings').select('id').eq('document_id', doc.id).limit(1), 'material_findings');
   if (existing.length && !data.force) return { status: 'skipped' };
 
-  const subject = unwrap(await sb.from('subjects').select('id, owner_class_group_id, content_language').eq('id', doc.subject_id).maybeSingle(), 'subjects') as {
+  const subject = unwrap(await sb.from('subjects').select('id, owner_class_group_id, content_language, created_by').eq('id', doc.subject_id).maybeSingle(), 'subjects') as {
     id: string;
     owner_class_group_id: string | null;
     content_language: string | null;
+    created_by: string;
   } | null;
   if (!subject) return { status: 'skipped' };
 
@@ -161,7 +163,8 @@ export async function handleMaterialCheck(ctx: JobContext, data: { document_id: 
         otherDocuments,
         contentLanguage: subject.content_language ?? doc.language ?? 'pt-BR',
       },
-      scope: { userId: null, classGroupId: subject.owner_class_group_id, subjectId: subject.id, documentId: doc.id, feature: 'ING-06' },
+      // Content calls are charged to a student (the budget refuses them without one): the uploader.
+      scope: { userId: doc.uploaded_by ?? subject.created_by, classGroupId: subject.owner_class_group_id, subjectId: subject.id, documentId: doc.id, feature: 'ING-06' },
     });
     if (result.status !== 'ok') {
       ctx.log.warn({ status: result.status, start }, 'material.check slice skipped');
@@ -557,7 +560,8 @@ export async function handleEnergyWindows(ctx: JobContext, data: { user_ids?: st
 }
 
 export const jobs: JobDefinition<any>[] = [
-  { name: 'ingest.material_check', retryLimit: 2, expireInSeconds: 3600, handler: async (ctx, data) => void (await handleMaterialCheck(ctx, data)) },
+  // A side job of the material: it has no progress of its own to show next to the material's.
+  { name: 'ingest.material_check', retryLimit: 2, expireInSeconds: 3600, tracksProgress: false, handler: async (ctx, data) => void (await handleMaterialCheck(ctx, data)) },
   { name: 'divide.merge', retryLimit: 2, expireInSeconds: 1800, handler: async (ctx, data) => void (await handleDivideMerge(ctx, data)) },
   // Monday 00:10 Brasília (03:10 UTC): closes the week that just ended.
   { name: 'league.weekly', retryLimit: 2, expireInSeconds: 1800, schedule: '10 3 * * 1', handler: async (ctx, data) => void (await handleLeagueWeekly(ctx, data ?? {})) },

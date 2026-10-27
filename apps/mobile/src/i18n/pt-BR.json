@@ -148,6 +148,7 @@
     "mapping": "Montando o mapa da matéria…",
     "outline_ready": "Pronto! Esse é o mapa da sua matéria. Deu certo? Você pode ajustar.",
     "generating": "Gerando resumos e cartões… {done} de {total} tópicos",
+    "topics_count": "{done} de {total} tópicos",
     "merged": "Juntei o novo material ao mapa: {n_new} tópicos novos, {n_updated} atualizados.",
     "kind_confirm": "Isso parece ser **{kind}**. Tá certo?",
     "not_study": "Hmm, isso não parece material de estudo. Quer usar mesmo assim?",

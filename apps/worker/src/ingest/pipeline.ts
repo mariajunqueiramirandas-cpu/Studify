@@ -342,7 +342,9 @@ export async function runTranscription(ctx: JobContext, store: ObjectStore, payl
     }
     await runWave(stage, {
       purpose: 'transcription',
-      aiJobId: payload.aiJobId,
+      // Transcription runs beside the outline and content stages of the same material: reporting on the material's
+      // job would overwrite its stage (the app showed "Lendo seu material…" while the map was being built).
+      aiJobId: null,
       userId: payload.userId ?? doc.uploadedBy,
       subjectId: doc.subjectId,
       documentId: doc.id,
@@ -455,7 +457,7 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
   }
   // ING-06: the material checker runs once per document after S2; it never blocks generation (ING-06.4).
   if (payload.documentId) {
-    await ctx.enqueue('ingest.material_check', { document_id: payload.documentId }, { singletonKey: `material-check:${payload.documentId}` });
+    await ctx.enqueue('ingest.material_check', { document_id: payload.documentId, user_id: payload.userId }, { singletonKey: `material-check:${payload.documentId}` });
   }
   await ctx.enqueue('ingest.topic_content', {
     stage: 'S4',

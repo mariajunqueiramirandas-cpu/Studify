@@ -3,28 +3,9 @@ import { View } from 'react-native';
 import { Banner, Card, ProgressBar, Row, Text } from '../../components';
 import { t } from '../../i18n';
 import type { AiJob, DocumentRow } from './api';
+import { ingestionView } from './progress';
 
-export function stageLabel(job: AiJob | undefined, doc?: DocumentRow): string {
-  if (doc?.status === 'waiting_budget' || job?.status === 'waiting_budget') return t('ingest.stages.waiting_budget');
-  if (doc?.status === 'failed' || job?.status === 'failed') return t('ingest.stages.failed');
-  if (!job) return doc?.status === 'ready' ? t('ingest.stages.done') : t('ingest.stages.uploaded');
-  if (job.status === 'succeeded') return t('ingest.stages.done');
-  if (job.status === 'waiting_batch') return t('ingest.stages.waiting_batch');
-  switch (job.stage) {
-    case 'S0':
-    case 'transcription':
-      return t('ingest.reading');
-    case 'S1':
-    case 'S1_merge':
-      return t('ingest.mapping');
-    case 'S2':
-    case 'S3':
-    case 'S4':
-      return job.items_total ? t('ingest.generating', { done: job.items_done ?? 0, total: job.items_total }) : t('ingest.stages.content');
-    default:
-      return t('ingest.reading');
-  }
-}
+export { ingestionJob, ingestionView, stageLabel, type IngestionView } from './progress';
 
 export function isJobActive(job: AiJob | undefined): boolean {
   return !!job && !['succeeded', 'failed', 'cancelled'].includes(job.status);
@@ -42,13 +23,13 @@ export function ProcessingCard({ subjectId, job, documents }: { subjectId: strin
     return <Banner kind="danger" message={t('ingest.failed')} action={{ label: t('global.retry'), onPress: () => router.push(`/subjects/${subjectId}/processing`) }} />;
   }
   if (!isJobActive(job) && !pending.length) return null;
-  const progress = job?.items_total ? (job.items_done ?? 0) / job.items_total : (job?.progress ?? 0.05);
+  const view = ingestionView(job, pending[0]);
   return (
-    <Card onPress={() => router.push(`/subjects/${subjectId}/processing`)} accessibilityLabel={stageLabel(job, pending[0])} tone="soft">
+    <Card onPress={() => router.push(`/subjects/${subjectId}/processing`)} accessibilityLabel={view.label} tone="soft">
       <Row>
         <View style={{ flex: 1, gap: 8 }}>
-          <Text variant="label">{stageLabel(job, pending[0])}</Text>
-          <ProgressBar value={progress} label={stageLabel(job, pending[0])} />
+          <Text variant="label">{view.label}</Text>
+          <ProgressBar value={view.fraction} label={view.label} />
         </View>
       </Row>
     </Card>

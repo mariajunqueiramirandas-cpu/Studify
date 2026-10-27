@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { liveJobProgress, parseRichNotification, RichNotificationSchema, type RichNotificationInput } from '../../src/index.ts';
+import { LIVE_JOB_STEPS, liveJobProgress, parseRichNotification, RichNotificationSchema, type RichNotificationInput } from '../../src/index.ts';
 
 const base: RichNotificationInput = { v: 1, key: 'k1', template: 'basic', channel: 'plan', title: 'Oi', body: 'Corpo' };
 
@@ -41,12 +41,26 @@ describe('rich notification payloads (PLT-05)', () => {
 });
 
 describe('live job progress', () => {
-  it('maps ingestion stages to steps and keeps the bar inside the current step', () => {
-    const p = liveJobProgress('ingest.document', 'S2', 'running', 0.9);
+  it('maps ingestion stages to steps and fills the current step\'s band with its stage progress', () => {
+    const p = liveJobProgress('ingest.document', 'S2', 'running', 0.5);
     expect(p.steps.map((s) => s.state)).toEqual(['done', 'done', 'active', 'pending']);
-    expect(p.fraction).toBe(0.75);
+    // Bands: reading 0–0.1, map 0.1–0.25, concepts 0.25–0.5, content 0.5–1.
+    expect(p.fraction).toBe(0.38);
     expect(p.state).toBe('running');
-    expect(liveJobProgress('ingest.document', 'S0', 'running', null).fraction).toBe(0.13);
+    expect(liveJobProgress('ingest.document', 'S0', 'running', null).fraction).toBe(0.01);
+    expect(liveJobProgress('ingest.document', 'S3', 'running', 0).steps[2]!.state).toBe('active');
+    expect(liveJobProgress('ingest.document', 'transcription', 'running', null).steps[0]!.state).toBe('active');
+  });
+
+  it('keeps every step label within the notification\'s 24 characters', () => {
+    for (const steps of Object.values(LIVE_JOB_STEPS)) for (const s of steps) expect(s.label.length).toBeLessThanOrEqual(24);
+  });
+
+  it('only moves forward across ingestion stages', () => {
+    const points: Array<[string, number]> = [['S0', 0], ['S0', 1], ['S1', 0], ['S1', 1], ['S2', 0], ['S2', 1], ['S4', 0], ['S4', 0.5], ['S4', 1]];
+    const fractions = points.map(([stage, progress]) => liveJobProgress('ingest.document', stage, 'running', progress).fraction);
+    for (let i = 1; i < fractions.length; i++) expect(fractions[i]!).toBeGreaterThanOrEqual(fractions[i - 1]!);
+    expect(fractions.at(-1)).toBe(0.99);
   });
 
   it('finishes and fails cleanly', () => {
