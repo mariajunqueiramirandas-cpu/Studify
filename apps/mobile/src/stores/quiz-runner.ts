@@ -9,6 +9,8 @@ import { enqueueOutbox } from '../db/outbox';
 import { quizAttempts } from '../db/schema';
 import { syncNow } from '../db/sync';
 import { kvStateStorage } from '../lib/kv';
+import { flushPendingQuizSubmits, queuePendingQuizSubmit } from '../features/practice/finalize';
+import type { AttemptAnswerInput } from '@studify/shared';
 
 export type Confidence = 1 | 2 | 3 | 4;
 
@@ -41,7 +43,10 @@ export interface QuizRunnerState {
   resume: (now?: number) => void;
   /** Whole seconds elapsed on the clock (pauses excluded). */
   elapsedSeconds: (now?: number) => number;
-  /** Writes the attempt and its answers to the outbox, syncs, then clears the runner. */
+  /**
+   * Writes the attempt and its answers to the outbox and a pending quiz-submit to MMKV (durable until
+   * the server grades it), syncs, then clears the runner.
+   */
   submit: (db: AppDb, now?: number) => Promise<string | null>;
   clear: () => void;
 }
@@ -119,6 +124,17 @@ export const useQuizRunnerStore = create<QuizRunnerState>()(
         const attemptId = state.attemptId;
         const elapsed = get().elapsedSeconds(now);
 
+        // Durable first: the pending finalization outlives a kill before or after the outbox write.
+        const answers: AttemptAnswerInput[] = Object.entries(state.answers).map(([questionId, draft]) => ({
+          id: draft.clientId,
+          question_id: questionId,
+          response: draft.response ?? null,
+          ...(draft.confidence !== null ? { confidence: draft.confidence } : {}),
+          time_spent_ms: Math.max(0, Math.round(draft.timeSpentMs)),
+          hints_used: Math.max(0, Math.round(draft.hintsUsed)),
+        }));
+        queuePendingQuizSubmit({ attemptId, finishedAt: new Date(now).toISOString(), answers, now });
+
         db.transaction((tx) => {
           tx.insert(quizAttempts)
             .values({
@@ -177,7 +193,7 @@ export const useQuizRunnerStore = create<QuizRunnerState>()(
           }
         });
 
-        void syncNow();
+        void syncNow().then(() => flushPendingQuizSubmits());
         set({ ...initial });
         return attemptId;
       },

@@ -23,6 +23,7 @@ import { observeServerTime, parseInstantMs } from './clock';
 import { SyncTransportError, backoffDelayMs } from './errors';
 import { dbColumnName, isInstantColumn, keyValues, selectColumnsFor, serverRowToValues } from './mapping';
 import { OVERLAY_TABLE_BY_KIND, PULL_TABLES, planWindowAround, type PullContext, type PullTableDef } from './registry';
+import { questionVersionLookup, toWirePayload, type WireContext } from './wire';
 import type { PullCursor, PullFilter, PushItem, PushResponse, SyncTransport } from './transport';
 import { localDateOf } from '../../lib/dates';
 
@@ -71,6 +72,8 @@ export interface SyncEngineOptions {
   /** Overrides for tests (defaults: PUSH_BATCH_SIZE / PULL_PAGE_SIZE). */
   pushBatchSize?: number;
   pullPageSize?: number;
+  /** Called after every successful push phase (before the pull). Errors are ignored. */
+  onPushed?: () => void;
 }
 
 export interface SyncEngine {
@@ -95,6 +98,7 @@ const defaultTimer = (fn: () => void, ms: number) => {
 
 export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
   const { db, transport, deviceId } = options;
+  const wire: WireContext = { deviceId, questionVersion: questionVersionLookup(db) };
   const now = options.now ?? (() => Date.now());
   const setTimer = options.setTimer ?? defaultTimer;
   const pushBatchSize = options.pushBatchSize ?? PUSH_BATCH_SIZE;
@@ -184,7 +188,7 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
       const response = await transport.push({
         schema_version: SYNC_SCHEMA_VERSION,
         device_id: deviceId,
-        items: rows.map(toPushItem),
+        items: rows.map((row) => toPushItem(row, wire)),
       });
       observeServerTime(response.server_time, now());
       applyPushResponse(rows, response);
@@ -332,6 +336,14 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
     return last;
   }
 
+  function notifyPushed(): void {
+    try {
+      options.onPushed?.();
+    } catch {
+      // A hook must never fail the sync.
+    }
+  }
+
   async function runOnce(reason: SyncReason): Promise<boolean> {
     const bypass = BACKOFF_BYPASS.has(reason);
     if (!bypass && nextRetryAt !== null && now() < nextRetryAt) {
@@ -342,6 +354,7 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
     setState('syncing');
     try {
       await pushAll();
+      notifyPushed();
       await pullAll();
       failures = 0;
       lastError = null;
@@ -400,11 +413,11 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
 
 // ---------- helpers ----------
 
-function toPushItem(row: OutboxRow): PushItem {
+function toPushItem(row: OutboxRow, wire: WireContext): PushItem {
   return {
     id: row.id,
     kind: row.kind,
-    payload: row.payload,
+    payload: toWirePayload(row, wire),
     created_at: new Date(row.createdAt).toISOString(),
   };
 }

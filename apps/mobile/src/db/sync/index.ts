@@ -7,6 +7,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { getAppDbSync } from '../client';
 import { createSupabaseSyncTransport } from '../../api/sync-transport';
 import { getDeviceId } from '../../lib/device';
+import { flushPendingQuizSubmits } from '../../features/practice/finalize';
 import { PERIODIC_SYNC_MS } from './constants';
 import { subscribeLocalWrites } from './bus';
 import { createSyncEngine, type SyncEngine, type SyncStatus } from './engine';
@@ -57,6 +58,8 @@ export function startSync(): () => void {
     db: getAppDbSync(),
     transport: createSupabaseSyncTransport(),
     deviceId: getDeviceId(),
+    // Attempts whose rows just reached the server can now be graded (quiz-submit).
+    onPushed: () => void flushPendingQuizSubmits(),
   });
   engine = current;
   setView(toView(current.getStatus()));

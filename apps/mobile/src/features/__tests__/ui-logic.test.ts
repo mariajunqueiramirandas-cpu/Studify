@@ -7,6 +7,8 @@ import { matchSpans } from '../subjects/highlight';
 import { renderCloze } from '../../components/Flashcard';
 
 jest.mock('../../api/supabase', () => ({ supabase: {} }));
+// api/functions reaches lib/kv (MMKV, a native module that Jest cannot load); these tests never use storage.
+jest.mock('../../lib/kv', () => ({ getKv: () => ({ getString: () => undefined, set: () => undefined, remove: () => undefined }) }));
 jest.mock('react-native-webview', () => ({ WebView: () => null }));
 
 describe('pt-BR formatting (copy-pt-br §2)', () => {
