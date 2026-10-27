@@ -3,6 +3,15 @@
 // delays the screen until its next event or refetch.
 import type { Broadcaster, BroadcastMessage } from './deps.ts';
 
+/**
+ * Headers for a Supabase API key. New-format keys (sb_secret_…, sb_publishable_…) are not JWTs and belong
+ * only in `apikey` (Supabase's migration guide). Legacy JWT keys keep the Bearer copy until they are switched off.
+ */
+export function apiKeyHeaders(key: string): Record<string, string> {
+  const isNewFormat = key.startsWith('sb_secret_') || key.startsWith('sb_publishable_');
+  return isNewFormat ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+}
+
 export function makeRestBroadcaster(
   supabaseUrl: string,
   serviceKey: string,
@@ -15,8 +24,7 @@ export function makeRestBroadcaster(
       const res = await fetchImpl(url, {
         method: 'POST',
         headers: {
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
+          ...apiKeyHeaders(serviceKey),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ messages }),

@@ -60,7 +60,7 @@ Settings > Secrets and variables > Actions.
 | `SENTRY_AUTH_TOKEN` | Secret | no | Uploads source maps and native symbols. Without it the upload is skipped (`SENTRY_DISABLE_AUTO_UPLOAD=true`). |
 | `GOOGLE_SERVICES_JSON_BASE64` | Secret | for remote push | Base64 of the Firebase `google-services.json` (step 6). Without it the build gets no push token. |
 | `EXPO_PUBLIC_SUPABASE_URL` | Variable | yes | Supabase project URL |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Variable | yes | Supabase anon key (public by design; RLS protects the data) |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Variable | yes | Supabase publishable key (`sb_publishable_...`), or the legacy anon key until it is turned off. Public by design; RLS protects the data. |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Variable | recommended | Google sign-in web client id (empty disables Google sign-in) |
 | `EXPO_PUBLIC_SENTRY_DSN` | Variable | recommended | Sentry DSN (public ingest URL) |
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | Variable | for remote push | The Expo project the push tokens belong to (step 6); also enables the expo-updates URL. |
