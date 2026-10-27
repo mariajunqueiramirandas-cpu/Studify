@@ -188,8 +188,9 @@ async function audioFor(ctx: JobContext, episode: EpisodeRow, requester: string,
       error_code: null,
     });
     const object = episode.owner_user_id ? `answers/${episode.owner_user_id}/${episode.id}.mp3` : `${episode.subject_id}/${episode.id}.mp3`;
-    const uploaded = await ctx.supabase.storage.from('audio').upload(object, concatMp3(results.map((r) => r.audio)), { contentType: 'audio/mpeg', upsert: true });
-    if (uploaded.error) throw new JobDataError(`audio upload failed: ${uploaded.error.message}`, 'storage');
+    await ctx.storage.upload('audio', object, concatMp3(results.map((r) => r.audio)), 'audio/mpeg').catch((err: unknown) => {
+      throw new JobDataError(`audio upload failed: ${err instanceof Error ? err.message : String(err)}`, 'storage');
+    });
     return { path: `audio/${object}`, results, provider: tts };
   } finally {
     await ctx.ai.budget.settle(reservation.reservationId, spent);

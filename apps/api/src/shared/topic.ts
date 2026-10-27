@@ -101,7 +101,7 @@ export async function topicSlices(deps: Deps, bundle: TopicBundle): Promise<{ sl
   if (bundle.sources.length === 0) throw new ApiFailure('not_found', { message: 'Esse tópico não tem páginas de material.' });
   const prepared: PreparedSlice[] = [];
   for (const source of bundle.sources) {
-    const parts = await prepareSlices(deps.db, {
+    const parts = await prepareSlices(deps, {
       documentId: source.documentId,
       title: source.title,
       storagePath: source.storagePath,

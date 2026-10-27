@@ -203,7 +203,7 @@ export const handler = defineFunction<{ essay_id: string }>({
       question: { stem, rubric, modelAnswer, maxPoints },
       studentAnswer: essay.text,
       pages,
-      images: essay.image_paths.length > 0 ? await captureImages(db, essay.image_paths, 2) : [],
+      images: essay.image_paths.length > 0 ? await captureImages(deps.storage, essay.image_paths, 2) : [],
       transcription: essay.capture_id ? { heavilyEdited, illegibleSegments: markers.illegible } : null,
       contentLanguage: subject?.content_language ?? 'pt-BR',
       languageSubject: subject?.is_language_subject ?? false,

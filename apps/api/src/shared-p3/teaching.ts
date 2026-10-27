@@ -13,6 +13,7 @@ import {
 } from '@studify/shared';
 import type { StoredSlice } from '../shared/retrieval.ts';
 import { downloadBytes } from '../shared/storage.ts';
+import type { ObjectStorage } from '@studify/storage';
 import { toBase64 } from '../shared/slices.ts';
 
 /** Model-facing plan (doc labels, concept keys), as returned by lucas.plan. */
@@ -147,7 +148,7 @@ export function toStoredTurns(turns: readonly RawTurn[], slices: readonly Stored
 }
 
 /** Inverse of toStoredTurns: rebuilds base64 document sources from Storage (same bytes as the first turn). */
-export async function restoreTurns(db: SupabaseClient, turns: readonly RawTurn[], slices: readonly StoredSlice[]): Promise<RawTurn[]> {
+export async function restoreTurns(storage: ObjectStorage, turns: readonly RawTurn[], slices: readonly StoredSlice[]): Promise<RawTurn[]> {
   const cache = new Map<number, string>();
   const out: RawTurn[] = [];
   for (const turn of turns) {
@@ -163,7 +164,7 @@ export async function restoreTurns(db: SupabaseClient, turns: readonly RawTurn[]
         if (!stored) continue;
         let data = cache.get(source.slice);
         if (!data) {
-          data = toBase64(await downloadBytes(db, stored.storage_path));
+          data = toBase64(await downloadBytes(storage, stored.storage_path));
           cache.set(source.slice, data);
         }
         content.push({ ...block, source: { type: 'base64', media_type: 'application/pdf', data } });

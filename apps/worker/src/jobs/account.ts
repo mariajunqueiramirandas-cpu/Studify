@@ -126,8 +126,9 @@ export async function handleAccountExport(ctx: JobContext, raw: Record<string, u
     const zip = buildZip(entries);
     await ctx.progress({ stage: 'upload', status: 'running', progress: 0.8 });
     const path = `${row.user_id}/${row.id}.zip`;
-    const upload = await ctx.supabase.storage.from('exports').upload(path, zip, { contentType: 'application/zip', upsert: true });
-    if (upload.error) throw new JobDataError(`exports upload: ${upload.error.message}`, 'storage');
+    await ctx.storage.upload('exports', path, zip, 'application/zip').catch((err: unknown) => {
+      throw new JobDataError(`exports upload: ${err instanceof Error ? err.message : String(err)}`, 'storage');
+    });
     const now = ctx.now();
     unwrap(
       await ctx.supabase
@@ -138,9 +139,9 @@ export async function handleAccountExport(ctx: JobContext, raw: Record<string, u
     );
     await ctx.enqueue('notify.dispatch', { user_id: row.user_id, type: 'export_ready', data: { export_id: row.id } }, { singletonKey: `export_ready:${row.id}` });
     // The link is handed out for the download window only; it is not stored (the row keeps the path).
-    const signed = await ctx.supabase.storage.from('exports').createSignedUrl(path, Math.floor(EXPORT_TTL_MS / 1000));
+    const signedUrl = await ctx.storage.signedUrl('exports', path, Math.floor(EXPORT_TTL_MS / 1000));
     await ctx.progress({ stage: 'done', status: 'succeeded', progress: 1 });
-    return { status: 'ready', path, files: Object.keys(manifest.files).length, signedUrl: signed.data?.signedUrl ?? null };
+    return { status: 'ready', path, files: Object.keys(manifest.files).length, signedUrl };
   } catch (err) {
     unwrap(await ctx.supabase.from('data_exports').update({ status: 'failed' }).eq('id', row.id), 'data_exports');
     throw err;
@@ -197,7 +198,7 @@ export async function handleAccountDelete(ctx: JobContext, raw: Record<string, u
 
     const exportsOf = unwrapRows<{ storage_path: string | null }>(await ctx.supabase.from('data_exports').select('storage_path').eq('user_id', row.user_id), 'data_exports');
     const paths = uniq(exportsOf.map((e) => e.storage_path).filter((p): p is string => !!p));
-    if (paths.length > 0) await ctx.supabase.storage.from('exports').remove(paths);
+    if (paths.length > 0) await bestEffortRemove(ctx, 'exports', paths);
 
     const removed = await ctx.supabase.auth.admin.deleteUser(row.user_id);
     if (removed.error) throw new JobDataError(`auth deleteUser: ${removed.error.message}`, 'auth');
@@ -231,26 +232,24 @@ export async function handleAccountResetFiles(ctx: JobContext, raw: Record<strin
 }
 
 async function removeObjects(ctx: JobContext, bucket: string, paths: string[]): Promise<number> {
-  for (const part of chunk(paths, 100)) {
-    const res = await ctx.supabase.storage.from(bucket).remove(part);
-    if (res.error) throw new JobDataError(`storage remove ${bucket}: ${res.error.message}`, 'storage');
-  }
+  await ctx.storage.remove(bucket, paths).catch((err: unknown) => {
+    throw new JobDataError(`storage remove ${bucket}: ${err instanceof Error ? err.message : String(err)}`, 'storage');
+  });
   return paths.length;
 }
 
-/** Removes every object under `prefix/`, sub-folders included (Storage lists one level at a time). */
+/** A removal that must not fail its job (the row goes either way): a storage error is only logged. */
+async function bestEffortRemove(ctx: JobContext, bucket: string, paths: string[]): Promise<void> {
+  await ctx.storage.remove(bucket, paths).catch((err: unknown) => {
+    ctx.log.warn({ bucket, count: paths.length, err: err instanceof Error ? err.message : String(err) }, 'storage remove failed');
+  });
+}
+
+/** Removes every object under `prefix/`, sub-folders included. */
 async function removeFolder(ctx: JobContext, bucket: string, prefix: string): Promise<number> {
-  const files: string[] = [];
-  const folders = [prefix];
-  while (folders.length > 0) {
-    const folder = folders.pop() as string;
-    const res = await ctx.supabase.storage.from(bucket).list(folder, { limit: 1000 });
-    if (res.error) throw new JobDataError(`storage list ${bucket}: ${res.error.message}`, 'storage');
-    for (const entry of res.data ?? []) {
-      if (entry.id === null) folders.push(`${folder}/${entry.name}`);
-      else files.push(`${folder}/${entry.name}`);
-    }
-  }
+  const files = await ctx.storage.list(bucket, prefix).catch((err: unknown) => {
+    throw new JobDataError(`storage list ${bucket}: ${err instanceof Error ? err.message : String(err)}`, 'storage');
+  });
   return removeObjects(ctx, bucket, files);
 }
 
@@ -283,7 +282,7 @@ export async function handleStoragePurge(ctx: JobContext, raw: Record<string, un
     'data_exports',
   );
   for (const e of expired) {
-    if (e.storage_path) await ctx.supabase.storage.from('exports').remove([e.storage_path]);
+    if (e.storage_path) await bestEffortRemove(ctx, 'exports', [e.storage_path]);
     unwrap(await ctx.supabase.from('data_exports').update({ status: 'expired', storage_path: null }).eq('id', e.id), 'data_exports');
   }
   const idempotency = await ctx.db.query("delete from private.idempotency_keys where created_at < now() - interval '24 hours'");
@@ -307,7 +306,7 @@ export async function purgeCaptures(ctx: JobContext, now: Date): Promise<number>
   );
   for (const capture of expired) {
     const objects = capture.image_paths.filter((p) => p.startsWith('photos/')).map((p) => p.slice('photos/'.length));
-    if (objects.length > 0) await ctx.supabase.storage.from('photos').remove(objects);
+    if (objects.length > 0) await bestEffortRemove(ctx, 'photos', objects);
     unwrap(await ctx.supabase.from('camera_captures').delete().eq('id', capture.id), 'camera_captures');
   }
   return expired.length;

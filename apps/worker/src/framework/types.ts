@@ -5,11 +5,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import type { ClaudeDeps } from '@studify/ai';
 import type { TtsProvider } from '@studify/speech';
+import type { ObjectStorage } from '@studify/storage';
 import type { Logger } from 'pino';
 
 export interface JobContext {
   /** Service-role client (bypasses RLS) — authorize from job data, never trust it blindly. */
   supabase: SupabaseClient;
+  /** Stored files: R2 or Supabase Storage (STORAGE_PROVIDER, packages/storage). */
+  storage: ObjectStorage;
   /** Direct Postgres pool for transactions and private.* functions. */
   db: pg.Pool;
   /** Claude dependencies (client, BudgetStore over private.ai_budget_*, UsageSink → ai_usage). */

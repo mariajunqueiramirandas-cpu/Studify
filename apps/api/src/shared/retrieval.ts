@@ -78,7 +78,7 @@ export async function prepareTurnSlices(deps: Deps, docs: Map<string, { title: s
     const doc = docs.get(documentId);
     if (!doc) continue;
     prepared.push(
-      ...(await prepareSlices(deps.db, { documentId, title: doc.title, storagePath: doc.storagePath, pages, purpose: 'tutor', newId: deps.newId })),
+      ...(await prepareSlices(deps, { documentId, title: doc.title, storagePath: doc.storagePath, pages, purpose: 'tutor', newId: deps.newId })),
     );
   }
   const stored = prepared.map((p) => ({ row_id: p.rowId, document_id: p.documentId, title: p.title, pages: p.pages, storage_path: p.storagePath }));
@@ -91,7 +91,7 @@ export async function slicesFromStored(deps: Deps, stored: StoredSlice[], cache:
   for (const s of stored) {
     let data = cache.get(s.row_id);
     if (!data) {
-      data = toBase64(await downloadBytes(deps.db, s.storage_path));
+      data = toBase64(await downloadBytes(deps.storage, s.storage_path));
       cache.set(s.row_id, data);
     }
     out.push({ documentId: s.document_id, title: s.title, pages: s.pages, source: { type: 'base64', media_type: 'application/pdf', data } });

@@ -11,6 +11,7 @@ import { claudeDepsFor, type Deps } from '../shared/deps.ts';
 import { ftsPages, searchTerms } from '../shared/retrieval.ts';
 import { prepareSlices, toBase64, toPdfSlice } from '../shared/slices.ts';
 import { downloadBytes } from '../shared/storage.ts';
+import type { ObjectStorage } from '@studify/storage';
 
 export interface CaptureRow {
   id: string;
@@ -53,21 +54,20 @@ function mediaTypeOf(path: string): CaptureImage['mediaType'] {
 }
 
 /** The capture's photos (already resized, EXIF-free and face-blurred on device, CAM-00.6), as image blocks. */
-export async function captureImages(db: SupabaseClient, paths: readonly string[], max: number): Promise<CaptureImage[]> {
+export async function captureImages(storage: ObjectStorage, paths: readonly string[], max: number): Promise<CaptureImage[]> {
   const out: CaptureImage[] = [];
   for (const path of paths.slice(0, max)) {
-    out.push({ data: toBase64(await downloadBytes(db, path)), mediaType: mediaTypeOf(path) });
+    out.push({ data: toBase64(await downloadBytes(storage, path)), mediaType: mediaTypeOf(path) });
   }
   if (out.length === 0) throw new ApiFailure('photo_unreadable');
   return out;
 }
 
 /** Removes the capture's photos from Storage (not study content, refusal, retention; spec 11 §8.4). */
-export async function deleteCapturePhotos(db: SupabaseClient, paths: readonly string[]): Promise<void> {
+export async function deleteCapturePhotos(storage: ObjectStorage, paths: readonly string[]): Promise<void> {
   const objects = paths.filter((p) => p.startsWith('photos/')).map((p) => p.slice('photos/'.length));
   if (objects.length === 0) return;
-  const storage = db.storage.from('photos') as unknown as { remove?: (paths: string[]) => Promise<unknown> };
-  await storage.remove?.(objects);
+  await storage.remove('photos', objects);
 }
 
 const SUBJECT_COLUMNS = 'id, owner_profile_id, owner_class_group_id, created_by, content_language, is_language_subject, enem_area, name';
@@ -216,7 +216,7 @@ export async function matchedSlices(deps: Deps, nodeId: string | null, maxPages 
     const doc = await db.from('documents').select('title, storage_path, deleted_at').eq('id', documentId).maybeSingle();
     if (doc.error) throw doc.error;
     if (!doc.data || doc.data.deleted_at) continue;
-    const prepared = await prepareSlices(db, {
+    const prepared = await prepareSlices(deps, {
       documentId,
       title: doc.data.title as string,
       storagePath: doc.data.storage_path as string,

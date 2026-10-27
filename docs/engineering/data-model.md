@@ -1378,7 +1378,9 @@ create policy enem_items_read on public.enem_items for select to authenticated u
 
 ## 7. Storage buckets
 
-All buckets are private; objects are read through RLS-checked paths or signed URLs (TTL 1 h). The first path segment is the authorization key.
+All buckets are private. The app gets a signed URL for every upload (`storage-upload`) and download (`storage-sign`, TTL 1 h); it never writes to storage with its own credentials. The first path segment is the authorization key.
+
+Files live in **Cloudflare R2** when `R2_BUCKET` is set (one R2 bucket, each logical bucket below is a key prefix, so the path `documents/{subject_id}/{document_id}.pdf` is also the R2 key), otherwise in Supabase Storage (local runs, tests). R2 has no row-level security: the API applies the policies below before it signs (`apps/api/src/shared/storage-access.ts`), and the limits below when it signs an upload (`packages/storage/src/buckets.ts`). On Supabase Storage the same policies also exist as RLS on `storage.objects`.
 
 | Bucket | Path | Read | Write | Notes |
 |---|---|---|---|---|

@@ -20,6 +20,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { callFunction, streamFunction } from '../../api/functions';
+import { signedUrls } from '../../api/storage';
 import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
 import { row, rows } from '../common/query';
@@ -412,9 +413,8 @@ export function useCropUrls(paths: string[] | undefined) {
     enabled: !!paths && paths.length > 0,
     staleTime: 50 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from('enem').createSignedUrls(paths!, 3600);
-      if (error) throw error;
-      return (data ?? []).map((d) => d.signedUrl).filter((u): u is string => !!u);
+      const urls = await signedUrls(paths!.map((p) => `enem/${p}`));
+      return urls.filter((u): u is string => !!u);
     },
   });
 }

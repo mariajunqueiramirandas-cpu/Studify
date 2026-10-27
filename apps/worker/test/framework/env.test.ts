@@ -35,4 +35,11 @@ describe('loadConfig', () => {
     expect(() => assertRuntimeConfig(cfg)).not.toThrow();
     expect(cfg.anthropicBaseUrl).toBe('http://127.0.0.1:4010');
   });
+
+  it('keeps files on Supabase Storage until R2_BUCKET is set, and names what a partial R2 setup lacks', () => {
+    expect(loadConfig({}).storage).toEqual({ provider: 'supabase' });
+    const r2 = { R2_ACCOUNT_ID: '0123456789abcdef0123456789abcdef', R2_ACCESS_KEY_ID: 'id', R2_SECRET_ACCESS_KEY: 's', R2_BUCKET: 'studify' };
+    expect(loadConfig(r2).storage).toEqual({ provider: 'r2', r2: { accountId: r2.R2_ACCOUNT_ID, accessKeyId: 'id', secretAccessKey: 's', bucket: 'studify' } });
+    expect(() => loadConfig({ R2_BUCKET: 'studify', PG_BOSS_SCHEMA: 'Drop Table' })).toThrow(/PG_BOSS_SCHEMA.*R2_ACCOUNT_ID is missing/);
+  });
 });

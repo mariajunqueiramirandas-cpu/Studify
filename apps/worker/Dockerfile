@@ -15,6 +15,7 @@ COPY packages/ai/package.json packages/ai/
 COPY packages/prompts/package.json packages/prompts/
 COPY packages/shared/package.json packages/shared/
 COPY packages/speech/package.json packages/speech/
+COPY packages/storage/package.json packages/storage/
 RUN pnpm install --frozen-lockfile --prod --filter @studify/worker...
 COPY . .
 

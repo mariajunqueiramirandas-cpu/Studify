@@ -1,8 +1,8 @@
 // Storage paths, downloads and PDF slices (ai-pipeline §4.1; data-model §5.2 document_slices).
 // A storage path in the database is `<bucket>/<object path>`, e.g. `documents/{subject}/{doc}.pdf`.
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { PDFDocument } from 'pdf-lib';
 import { ApiFailure } from '@studify/shared';
+import { isNotFound, type ObjectStorage } from '@studify/storage';
 
 export const KNOWN_BUCKETS = ['documents', 'slices', 'photos', 'exports', 'media', 'audio'] as const;
 
@@ -23,25 +23,25 @@ export function documentObjectPath(storagePath: string): string {
 }
 
 /** True when the object exists. Storage errors other than "not found" are rethrown. */
-export async function objectExists(db: SupabaseClient, path: string): Promise<boolean> {
+export async function objectExists(storage: ObjectStorage, path: string): Promise<boolean> {
   const { bucket, object } = splitStoragePath(path);
-  const { error } = await db.storage.from(bucket).info(object);
-  if (!error) return true;
-  if (/not.?found|404|does not exist/i.test(error.message ?? '')) return false;
-  throw error;
+  return storage.exists(bucket, object);
 }
 
-export async function downloadBytes(db: SupabaseClient, path: string): Promise<Uint8Array> {
+/** The object's bytes; a missing object is the API's not_found. */
+export async function downloadBytes(storage: ObjectStorage, path: string): Promise<Uint8Array> {
   const { bucket, object } = splitStoragePath(path);
-  const { data, error } = await db.storage.from(bucket).download(object);
-  if (error || !data) throw new ApiFailure('not_found');
-  return new Uint8Array(await data.arrayBuffer());
+  try {
+    return await storage.download(bucket, object);
+  } catch (err) {
+    if (isNotFound(err)) throw new ApiFailure('not_found');
+    throw err;
+  }
 }
 
-export async function uploadBytes(db: SupabaseClient, path: string, bytes: Uint8Array): Promise<void> {
+export async function uploadBytes(storage: ObjectStorage, path: string, bytes: Uint8Array): Promise<void> {
   const { bucket, object } = splitStoragePath(path);
-  const { error } = await db.storage.from(bucket).upload(object, bytes, { contentType: 'application/pdf', upsert: true });
-  if (error) throw error;
+  await storage.upload(bucket, object, bytes, 'application/pdf');
 }
 
 /**

@@ -55,7 +55,7 @@ async function segmentSlices(p2: P2Deps, script: PodcastScriptDoc, index: number
     const doc = await p2.db.from('documents').select('title, storage_path, deleted_at').eq('id', documentId).maybeSingle();
     if (doc.error) throw doc.error;
     if (!doc.data || doc.data.deleted_at) continue;
-    const prepared = await prepareSlices(p2.db, { documentId, title: doc.data.title as string, storagePath: doc.data.storage_path as string, pages, purpose: 'tutor', newId: p2.newId });
+    const prepared = await prepareSlices(p2, { documentId, title: doc.data.title as string, storagePath: doc.data.storage_path as string, pages, purpose: 'tutor', newId: p2.newId });
     out.push(...prepared.map(toPdfSlice));
   }
   return out;

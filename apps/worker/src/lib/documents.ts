@@ -28,9 +28,11 @@ export interface SliceRow {
 }
 
 export async function downloadBase64(ctx: JobContext, bucket: string, path: string): Promise<string> {
-  const res = await ctx.supabase.storage.from(bucket).download(path);
-  if (res.error || !res.data) throw new JobDataError(`storage download failed (${bucket}/${path}): ${res.error?.message ?? 'empty'}`, 'storage');
-  return Buffer.from(await res.data.arrayBuffer()).toString('base64');
+  try {
+    return Buffer.from(await ctx.storage.download(bucket, path)).toString('base64');
+  } catch (err) {
+    throw new JobDataError(`storage download failed (${bucket}/${path}): ${err instanceof Error ? err.message : String(err)}`, 'storage');
+  }
 }
 
 export function rangePages(start: number, end: number): number[] {

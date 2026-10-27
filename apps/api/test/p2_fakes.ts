@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AiDeps } from '../src/shared/deps.ts';
 import type { BroadcastMessage, P2Deps, UserRpc } from '../src/shared-p2/deps.ts';
 import { uuidV7 } from '@studify/shared';
+import { supabaseStorage } from '@studify/storage';
 
 export type Row = Record<string, unknown>;
 type Err = { code?: string; message: string; hint?: string | null; details?: string | null } | null;
@@ -300,6 +301,8 @@ export function createFakeDeps(opts: FakeDepsOptions): FakeEnv {
   } as unknown as AiDeps;
   const deps: P2Deps = {
     db: opts.db,
+    // This FakeDb has no storage surface: a test that reaches storage fails loudly.
+    storage: supabaseStorage(opts.db),
     supabaseUrl: 'https://example.supabase.test',
     anonKey: 'anon',
     asUser: () => opts.db,

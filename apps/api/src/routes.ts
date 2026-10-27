@@ -55,6 +55,8 @@ import { handler as roomControl } from './functions/room-control.ts';
 import { handler as scheduleImport } from './functions/schedule-import.ts';
 import { handler as scopeResolve } from './functions/scope-resolve.ts';
 import { handler as signupComplete } from './functions/signup-complete.ts';
+import { handler as storageSign } from './functions/storage-sign.ts';
+import { handler as storageUpload } from './functions/storage-upload.ts';
 import { handler as syncPush } from './functions/sync-push.ts';
 import { handler as teachingFinish } from './functions/teaching-finish.ts';
 import { handler as teachingStart } from './functions/teaching-start.ts';
@@ -120,6 +122,8 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['schedule-import', scheduleImport],
   ['scope-resolve', scopeResolve],
   ['signup-complete', signupComplete],
+  ['storage-sign', storageSign],
+  ['storage-upload', storageUpload],
   ['sync-push', syncPush],
   ['teaching-finish', teachingFinish],
   ['teaching-start', teachingStart],

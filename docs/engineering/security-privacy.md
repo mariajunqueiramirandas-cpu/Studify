@@ -113,7 +113,7 @@ S = select, I = insert, U = update, D = delete. "Svc" = service role (worker/Edg
 
 ## 5. Storage buckets
 
-All buckets are **private**. Clients access objects only through RLS-checked paths or **signed URLs (TTL 1 h)**.
+All buckets are **private**. Clients access objects only through **signed URLs (TTL 1 h)** that the API issues after checking the rules below (`storage-upload`, `storage-sign`; data-model §7). Files are stored in Cloudflare R2 (Supabase Storage without R2 configuration). R2 has no RLS, so the API check is the gate; upload URLs sign the content type and exact size. The R2 API token lives only in the API and worker environment.
 
 | Bucket | Path pattern | Read | Write | Limits |
 |---|---|---|---|---|
@@ -130,6 +130,7 @@ All buckets are **private**. Clients access objects only through RLS-checked pat
 |---|---|---|
 | Claude API key | API server env (Dokploy environment); worker env (Dokploy environment) | App, repo, logs, Sentry |
 | Supabase service-role key | API server env, worker env (Dokploy environment) | App, repo |
+| R2 API token (Object Read & Write on the Studify bucket) | API server env, worker env (Dokploy environment) | App, repo |
 | Expo push access token | Worker env | App |
 | TTS provider key (Phase 3) | Worker env | App |
 | Sentry DSN | App (public by design) + server | — |

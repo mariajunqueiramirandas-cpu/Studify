@@ -64,13 +64,13 @@ async function createDocument(deps: Deps, userId: string, input: IngestStartInpu
   const subject = await requireSubject(deps.db, userId, input.subject_id, 'upload');
   const storagePath = `${subject.id}/${input.document_id}.pdf`;
   const objectPath = documentObjectPath(storagePath);
-  if (!(await objectExists(deps.db, objectPath))) {
+  if (!(await objectExists(deps.storage, objectPath))) {
     throw new ApiFailure('not_found', { message: 'O arquivo não chegou no servidor. Tenta enviar de novo.' });
   }
   const discard = async () => {
-    await deps.db.storage.from('documents').remove([storagePath]);
+    await deps.storage.remove('documents', [storagePath]);
   };
-  const bytes = await downloadBytes(deps.db, objectPath);
+  const bytes = await downloadBytes(deps.storage, objectPath);
   if (bytes.byteLength > MAX_BYTES) {
     await discard();
     throw new ApiFailure('file_too_large');
@@ -142,7 +142,7 @@ export const handler = defineFunction<z.infer<typeof IngestStartReqSchema>>({
     if (!['uploaded', 'failed', 'waiting_budget'].includes(doc.status as string)) {
       throw new ApiFailure('already_exists', { message: 'Esse material já está sendo lido ou já ficou pronto.' });
     }
-    if (!(await objectExists(deps.db, documentObjectPath(doc.storage_path as string)))) {
+    if (!(await objectExists(deps.storage, documentObjectPath(doc.storage_path as string)))) {
       throw new ApiFailure('not_found', { message: 'O arquivo não chegou no servidor. Tenta enviar de novo.' });
     }
     if (Number(doc.size_bytes) > MAX_BYTES) throw new ApiFailure('file_too_large');

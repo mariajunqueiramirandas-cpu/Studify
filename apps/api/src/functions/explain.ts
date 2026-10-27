@@ -131,7 +131,7 @@ export const handler = defineFunction<Req>({
     const slices: PreparedSlice[] = [];
     for (const [documentId, entry] of target.pages) {
       slices.push(
-        ...(await prepareSlices(db, {
+        ...(await prepareSlices(deps, {
           documentId,
           title: entry.title,
           storagePath: entry.storagePath,

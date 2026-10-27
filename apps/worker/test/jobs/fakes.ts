@@ -4,6 +4,7 @@
 import pino from 'pino';
 import type { AnthropicLike, BudgetStore, ClaudeDeps, UsageSink, AiUsageRow } from '@studify/ai';
 import type { JobContext } from '../../src/framework/types.ts';
+import { supabaseStorage } from '@studify/storage';
 
 export type Row = Record<string, any>;
 type Result = { data: any; error: { message: string } | null };
@@ -476,6 +477,7 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
   };
   const ctx = {
     supabase: supabase as unknown as JobContext['supabase'],
+    storage: supabaseStorage(supabase as unknown as JobContext['supabase']),
     db: pg as unknown as JobContext['db'],
     ai: claude.deps,
     log: pino({ enabled: false }),

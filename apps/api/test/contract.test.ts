@@ -11,6 +11,8 @@ import { handler as accountReset } from '../src/functions/account-reset.ts';
 import { handler as ingestStart } from '../src/functions/ingest-start.ts';
 import { handler as ingestRetry } from '../src/functions/ingest-retry.ts';
 import { handler as uploadPhotos } from '../src/functions/upload-photos.ts';
+import { handler as storageUpload } from '../src/functions/storage-upload.ts';
+import { handler as storageSign } from '../src/functions/storage-sign.ts';
 import { handler as noteGenerate } from '../src/functions/note-generate.ts';
 import { handler as explain } from '../src/functions/explain.ts';
 import { handler as cardsGenerateMore } from '../src/functions/cards-generate-more.ts';
@@ -40,6 +42,8 @@ const FUNCTIONS: Array<[string, Handler, boolean, unknown]> = [
   ['ingest-start', ingestStart, true, {}],
   ['ingest-retry', ingestRetry, true, {}],
   ['upload-photos', uploadPhotos, true, {}],
+  ['storage-upload', storageUpload, false, { path: 'documents/x.pdf' }],
+  ['storage-sign', storageSign, false, { paths: [] }],
   ['note-generate', noteGenerate, true, {}],
   ['explain', explain, true, {}],
   ['cards-generate-more', cardsGenerateMore, true, {}],

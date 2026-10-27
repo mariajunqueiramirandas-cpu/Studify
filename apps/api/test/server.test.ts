@@ -62,6 +62,25 @@ test('config: a malformed DATABASE_URL and an unsafe schema name are rejected', 
   }
 });
 
+test('config: files stay on Supabase Storage until R2_BUCKET is set; a partial R2 setup is listed with the rest', () => {
+  assertEquals(loadConfig(VALID_ENV).storage, { provider: 'supabase' });
+  const r2 = { R2_ACCOUNT_ID: '0123456789abcdef0123456789abcdef', R2_ACCESS_KEY_ID: 'id', R2_SECRET_ACCESS_KEY: 'secret', R2_BUCKET: 'studify' };
+  assertEquals(loadConfig({ ...VALID_ENV, ...r2 }).storage, {
+    provider: 'r2',
+    r2: { accountId: r2.R2_ACCOUNT_ID, accessKeyId: 'id', secretAccessKey: 'secret', bucket: 'studify' },
+  });
+  try {
+    loadConfig({ ...VALID_ENV, ANTHROPIC_API_KEY: '', R2_BUCKET: 'studify' });
+    throw new Error('expected a ConfigError');
+  } catch (err) {
+    assertInstanceOf(err, ConfigError);
+    const problems = (err as ConfigError).problems.join('\n');
+    assertStringIncludes(problems, 'ANTHROPIC_API_KEY is missing');
+    assertStringIncludes(problems, 'R2_ACCESS_KEY_ID is missing');
+    assertStringIncludes(problems, 'R2_SECRET_ACCESS_KEY is missing');
+  }
+});
+
 test('health: 200 with the package version', async () => {
   const res = await app().request('/api/health');
   assertEquals(res.status, 200);

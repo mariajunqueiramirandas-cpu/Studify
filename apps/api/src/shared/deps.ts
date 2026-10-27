@@ -2,6 +2,7 @@
 // clients, and tests build fakes. Nothing in a handler reads the environment or creates a client.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AnthropicLike, BudgetStore, ClaudeDeps, UsageSink } from '@studify/ai';
+import type { ObjectStorage } from '@studify/storage';
 
 /** Enqueues a pg-boss job (ai-pipeline, api §7). Resolves the job id, or null when a singleton already exists. */
 export type Enqueue = (queue: string, data: Record<string, unknown>, options?: EnqueueOptions) => Promise<string | null>;
@@ -27,6 +28,8 @@ export interface AiDeps {
 export interface Deps {
   /** Service-role client. Only used after the caller is authorized explicitly (security §3). */
   db: SupabaseClient;
+  /** Stored files (R2 or Supabase Storage, STORAGE_PROVIDER). Clients only get signed URLs, after an access check. */
+  storage: ObjectStorage;
   /** Public URL and anon key, for calls that must run as the signed-in user (join_class_group). */
   supabaseUrl: string;
   anonKey: string;

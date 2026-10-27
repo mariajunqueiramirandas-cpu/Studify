@@ -3,7 +3,6 @@
 import { z } from 'zod';
 import type { JobDefinition } from '../framework/types.ts';
 import { parsePayload } from '../framework/errors.ts';
-import { supabaseStore } from '../ingest/store.ts';
 import { runPrereqJob, runRegenerate, runTopicContent } from '../ingest/pipeline.ts';
 
 const uuid = z.uuid();
@@ -42,7 +41,7 @@ export const jobs: JobDefinition<any>[] = [
     expireInSeconds: 3600,
     handler: async (ctx, data, meta) => {
       const p = parsePayload(TopicContentPayload, data, 'ingest.topic_content');
-      await runTopicContent(ctx, supabaseStore(ctx.supabase), {
+      await runTopicContent(ctx, ctx.storage, {
         stage: p.stage,
         subjectId: p.subject_id,
         documentId: p.document_id,
