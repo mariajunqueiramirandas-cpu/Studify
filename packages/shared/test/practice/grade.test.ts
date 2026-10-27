@@ -213,14 +213,17 @@ describe('gradeAnswer: problem (PRA-08.3–08.4)', () => {
     expect(gradeAnswer('problem', F.PROBLEM_CHOICE, { answer: 'A' })).toMatchObject({ score: 0 });
   });
 
-  it('leaves expression answers pending (no symbolic engine on the shared path)', () => {
-    expect(gradeAnswer('problem', F.PROBLEM_EXPRESSION, { answer: 'x^2+1' })).toEqual({
-      correct: null,
-      score: null,
+  it('grades expression answers by numeric equivalence (PRA-08.4)', () => {
+    expect(gradeAnswer('problem', F.PROBLEM_EXPRESSION, { answer: '1 + x*x' })).toEqual({
+      correct: true,
+      score: 1,
       typo: null,
-      pending: true,
+      pending: false,
     });
-    expect(isLocallyGraded('problem', F.PROBLEM_EXPRESSION)).toBe(false);
+    expect(gradeAnswer('problem', F.PROBLEM_EXPRESSION, { answer: 'x^2 - 1' })).toMatchObject({ score: 0, pending: false });
+    expect(gradeAnswer('problem', F.PROBLEM_EXPRESSION, { answer: '' })).toMatchObject({ score: 0 });
+    expect(gradeAnswer('problem', F.PROBLEM_EXPRESSION, { answer: 'x^2+1' }, { hintsUsed: 2 })).toMatchObject({ score: 0.5 });
+    expect(isLocallyGraded('problem', F.PROBLEM_EXPRESSION)).toBe(true);
     expect(isLocallyGraded('problem', F.PROBLEM_NUMERIC)).toBe(true);
   });
 });

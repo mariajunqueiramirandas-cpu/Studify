@@ -30,6 +30,7 @@ export {
   QUESTION_RESPONSE_SCHEMAS,
   QuestionResponseSchema,
   parseQuestionResponse,
+  FIND_ERROR_TYPES,
 } from './payloads.ts';
 export type {
   QuestionPayload,
@@ -45,6 +46,7 @@ export type {
   OrderingPayload,
   FindErrorPayload,
   ProblemPayload,
+  FindErrorType,
 } from './payloads.ts';
 
 export { gradeAnswer, hintCredit, isLocallyGraded, withinTolerance } from './grade.ts';
@@ -54,4 +56,16 @@ export { foldAnswer, stripAccents, damerauLevenshtein, maxTypoDistance, matchAcc
 export type { AnswerMatch } from './text.ts';
 
 export { suggestMistakeCause, deriveAnswerFacts, hasNegativeQualifier } from './cause.ts';
+
+export {
+  parseExpression,
+  evaluateExpression,
+  evaluateText,
+  expressionVariables,
+  expressionsEquivalent,
+  checkProblemConsistency,
+  ExpressionError,
+  MAX_EXPRESSION_LENGTH,
+} from './expression.ts';
+export type { ExprNode, EquivalenceOptions, ProblemConsistencyInput } from './expression.ts';
 export type { MistakeCauseInput } from './cause.ts';

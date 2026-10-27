@@ -2,7 +2,7 @@
 // Server-only: never imported by apps/mobile. Builders are deterministic and perform no I/O.
 
 export type * from './types.ts';
-export { defineTask, strictTool } from './define.ts';
+export { defineTask, strictTool, CODE_EXECUTION_TOOL, webSearchTool } from './define.ts';
 export type { TaskConfig, TaskDef, BuildContext, BuildResult, OutputConfig } from './define.ts';
 export * from './blocks.ts';
 export * from './pages.ts';

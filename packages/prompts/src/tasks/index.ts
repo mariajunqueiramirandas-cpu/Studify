@@ -8,6 +8,9 @@ import * as feed from './feed.ts';
 import * as goals from './goals.ts';
 import * as prova from './prova.ts';
 import * as trust from './trust.ts';
+import * as camera from './camera.ts';
+import * as practice3 from './practice3.ts';
+import * as interactive from './interactive.ts';
 
 export * from './shared.ts';
 export * from './ingest.ts';
@@ -19,11 +22,14 @@ export * from './feed.ts';
 export * from './goals.ts';
 export * from './prova.ts';
 export * from './trust.ts';
+export * from './camera.ts';
+export * from './practice3.ts';
+export * from './interactive.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTaskDef = TaskDef<any, any>;
 
-/** Every Phase 0–2 task. Order is the registry order (stable, used by snapshots). */
+/** Every task of Phases 0–3. Order is the registry order (stable, used by snapshots). */
 export const TASKS: readonly AnyTaskDef[] = [
   ingest.ingestOutline,
   ingest.ingestOutlineMerge,
@@ -63,6 +69,21 @@ export const TASKS: readonly AnyTaskDef[] = [
   prova.predictedTestGenerate,
   trust.flagTriage,
   trust.moderationClassify,
+  // Phase 3
+  camera.cameraUnderstand,
+  camera.cameraMatchTiebreak,
+  camera.cameraExplain,
+  camera.cameraSolveLadder,
+  camera.cameraSolveFull,
+  camera.cameraTranscribe,
+  practice3.gradeEssayQuestion,
+  practice3.acheOErroGenerate,
+  practice3.problemsGenerate,
+  practice3.problemsFirstWrongStep,
+  interactive.podcastScript,
+  interactive.podcastHandAnswer,
+  interactive.lucasPlan,
+  interactive.lucasTurn,
 ];
 
 function buildIndex(tasks: readonly AnyTaskDef[]): ReadonlyMap<string, AnyTaskDef> {

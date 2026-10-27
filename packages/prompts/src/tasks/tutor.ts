@@ -21,10 +21,12 @@ export interface RawTurn {
 
 /** TUT-03 scope of the thread or of this message (stored per message). */
 export interface TutorScope {
-  kind: 'subject' | 'goal' | 'topic' | 'passage';
+  kind: 'subject' | 'goal' | 'topic' | 'passage' | 'capture';
   label: string;
   /** Passage scope (TUT-03.3): the selected text, sent as data. */
   passageText?: string | null;
+  /** Capture scope (CAM-01.4): the photo's transcription, sent as data. */
+  captureText?: string | null;
   /** Goal scope (TUT-03.4): titles of topics marked "não cai na prova" inside the scope. */
   excludedTopicTitles?: readonly string[];
   /** TUT-03.5: percentage of the scope's documents already read, when still processing. */
@@ -49,7 +51,13 @@ export interface TutorTurnInput {
   meTestaNodeKeys?: readonly string[];
   contentLanguage: string;
   languageSubject: boolean;
+  /** TUT-06.4: the message came from on-device speech recognition and the answer will be spoken. */
+  voice?: boolean;
 }
+
+/** TUT-06.4 mid-conversation system message for voice turns. */
+export const VOICE_MODE_MESSAGE =
+  'Modo voz: a resposta será falada em voz alta. No máximo 90 palavras, sem tabelas, sem Markdown e sem listas; fórmulas por extenso ("x ao quadrado"). Continue citando as páginas.';
 
 const TUTOR_RULES = [
   'Você é o tutor do Studify. Responda só com base nos documentos fornecidos e cite cada afirmação factual.',
@@ -69,6 +77,9 @@ function scopeLines(scope: TutorScope): string[] {
   const out = [`Escopo: ${scope.label} (${scope.kind}).`];
   if (scope.kind === 'passage' && scope.passageText) {
     out.push(section('Trecho selecionado (dado):', wrapUntrusted(TAG.trecho, scope.passageText)));
+  }
+  if (scope.kind === 'capture' && scope.captureText) {
+    out.push(section('Transcrição da foto da Câmera Mágica (dado):', wrapUntrusted(TAG.material, scope.captureText)));
   }
   if (scope.excludedTopicTitles?.length) {
     out.push(
@@ -137,6 +148,7 @@ export const tutorTurn = defineTask<TutorTurnInput>({
     messages.push(userTurn([...docs.blocks, text(body, ctx.ttl)]));
     // Mode changes are a mid-conversation system message placed after a user turn (ai-pipeline §6.3).
     if (input.modeChanged) messages.push({ role: 'system', content: `Modo atual: ${input.mode}` });
+    if (input.voice) messages.push({ role: 'system', content: VOICE_MODE_MESSAGE });
     return {
       messages,
       tools: [TOOL_REGISTRAR, TOOL_FORA],

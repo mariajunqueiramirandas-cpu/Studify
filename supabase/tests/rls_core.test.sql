@@ -121,10 +121,11 @@ select is(
     where n.nspname in ('public','private') and c.relkind in ('r','p') and not c.relrowsecurity),
   0, 'every table in public and private has row level security enabled');
 
-select is(
+-- Later phases add tables; their suites (rls_phase3.test.sql, ...) assert their own counts.
+select cmp_ok(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('public','private') and c.relkind in ('r','p')),
-  88, 'the foundation, Phase 1 and Phase 2 create 88 tables (81 public, 7 private)');
+  '>=', 88, 'the foundation, Phase 1 and Phase 2 create 88 tables (81 public, 7 private)');
 
 -- =====================================================================
 -- 1. profiles and public views (data-model §4.1, §5.1, §6.2)

@@ -645,6 +645,64 @@ export const DELETION_STATUS = ['pending', 'running', 'done', 'failed'] as const
 export type DeletionStatus = (typeof DELETION_STATUS)[number];
 export const DeletionStatusSchema = z.enum(DELETION_STATUS);
 
+// ---------------------------------------------------------------- camera, interactive learning, rooms (§5.7–5.8, Phase 3)
+
+// CAM-00.2: what the student wants from the photo.
+export const CAPTURE_INTENT = ['explain', 'solve', 'add_to_subject', 'grade_answer', 'grade_essay'] as const;
+export type CaptureIntent = (typeof CAPTURE_INTENT)[number];
+export const CaptureIntentSchema = z.enum(CAPTURE_INTENT);
+
+// CAM-01.1 Step A classification.
+export const CAPTURE_CONTENT_TYPE = ['book_page', 'whiteboard', 'handwritten_notes', 'exercise', 'essay', 'other'] as const;
+export type CaptureContentType = (typeof CAPTURE_CONTENT_TYPE)[number];
+export const CaptureContentTypeSchema = z.enum(CAPTURE_CONTENT_TYPE);
+
+export const CAPTURE_STATUS = ['queued', 'processing', 'ready', 'failed'] as const;
+export type CaptureStatus = (typeof CAPTURE_STATUS)[number];
+export const CaptureStatusSchema = z.enum(CAPTURE_STATUS);
+
+// INT-01.2: Resumão, Aprofundado, Revisão pra prova.
+export const PODCAST_STYLE = ['overview', 'deep', 'exam_review'] as const;
+export type PodcastStyle = (typeof PODCAST_STYLE)[number];
+export const PodcastStyleSchema = z.enum(PODCAST_STYLE);
+
+// data-model §5.8 (api §4.8): 5, 10 or 15 minutes. Numeric, so not part of the CHECK registry below.
+export const PODCAST_LENGTHS = [5, 10, 15] as const;
+export type PodcastLength = (typeof PODCAST_LENGTHS)[number];
+
+export const PODCAST_STATUS = ['queued', 'scripting', 'synthesizing', 'ready', 'failed'] as const;
+export type PodcastStatus = (typeof PODCAST_STATUS)[number];
+export const PodcastStatusSchema = z.enum(PODCAST_STATUS);
+
+// INT-01.8, WEL-04.9: how a question reached the server (the text of on-device STT, or typed).
+export const VOICE_INPUT_MODE = ['voice', 'text'] as const;
+export type VoiceInputMode = (typeof VOICE_INPUT_MODE)[number];
+export const VoiceInputModeSchema = z.enum(VOICE_INPUT_MODE);
+
+// INT-02.2: Rápido (6 turns) or Completo (12 turns).
+export const TEACHING_LENGTH = ['short', 'full'] as const;
+export type TeachingLength = (typeof TEACHING_LENGTH)[number];
+export const TeachingLengthSchema = z.enum(TEACHING_LENGTH);
+
+export const TEACHING_STATUS = ['active', 'finished', 'abandoned'] as const;
+export type TeachingStatus = (typeof TEACHING_STATUS)[number];
+export const TeachingStatusSchema = z.enum(TEACHING_STATUS);
+
+// SOC-05 study rooms.
+export const ROOM_STATUS = ['open', 'closed'] as const;
+export type RoomStatus = (typeof ROOM_STATUS)[number];
+export const RoomStatusSchema = z.enum(ROOM_STATUS);
+
+// SOC-05.2: presence shows what the member studies, or only "Estudando".
+export const ROOM_STATUS_MODE = ['auto', 'hidden'] as const;
+export type RoomStatusMode = (typeof ROOM_STATUS_MODE)[number];
+export const RoomStatusModeSchema = z.enum(ROOM_STATUS_MODE);
+
+// SOC-05.5: the only interaction in a room.
+export const ROOM_REACTIONS = ['👏', '🔥', '💪', '☕', '😴', '🎉'] as const;
+export type RoomReaction = (typeof ROOM_REACTIONS)[number];
+export const RoomReactionSchema = z.enum(ROOM_REACTIONS);
+
 // ---------------------------------------------------------------- feature IDs (PRD §5 catalog)
 
 // Every PRD feature ID. `ai_usage.feature` and `xp_events.source_feature` store these (data-model §1.1).
@@ -784,4 +842,15 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'data_exports.status': EXPORT_STATUS,
   'account_deletions.requested_by': DELETION_REQUESTER,
   'account_deletions.status': DELETION_STATUS,
+  // Phase 3
+  'camera_captures.intent': CAPTURE_INTENT,
+  'camera_captures.content_type': CAPTURE_CONTENT_TYPE,
+  'camera_captures.status': CAPTURE_STATUS,
+  'podcast_episodes.style': PODCAST_STYLE,
+  'podcast_episodes.status': PODCAST_STATUS,
+  'podcast_interactions.input_mode': VOICE_INPUT_MODE,
+  'teaching_sessions.length': TEACHING_LENGTH,
+  'teaching_sessions.status': TEACHING_STATUS,
+  'study_rooms.status': ROOM_STATUS,
+  'study_room_members.status_mode': ROOM_STATUS_MODE,
 };

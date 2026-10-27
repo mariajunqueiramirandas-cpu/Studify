@@ -9,3 +9,4 @@ export * from './feed.ts';
 export * from './goals.ts';
 export * from './prova.ts';
 export * from './trust.ts';
+export * from './phase3.ts';

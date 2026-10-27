@@ -159,3 +159,19 @@ export function defineTask<I, O = undefined>(config: TaskConfig<I, O>): TaskDef<
 export function strictTool(name: string, description: string, schema: z.ZodType): ToolDef {
   return { name, description, strict: true, input_schema: toJsonSchema(schema) };
 }
+
+/** Code execution server tool (ai-pipeline §12): checks arithmetic and algebra (CAM-02.6, PRA-08). */
+export const CODE_EXECUTION_TOOL: ToolDef = { type: 'code_execution_20260521', name: 'code_execution' };
+
+/**
+ * Web search server tool (ai-pipeline §12, ENM-09, ENM-05.5). Isolated calls only: no user data, no
+ * other tools in the same request; `allowed_domains` is the admin allowlist.
+ */
+export function webSearchTool(maxUses: number, allowedDomains?: readonly string[]): ToolDef {
+  return {
+    type: 'web_search_20260209',
+    name: 'web_search',
+    max_uses: maxUses,
+    ...(allowedDomains && allowedDomains.length > 0 ? { allowed_domains: [...allowedDomains] } : {}),
+  };
+}

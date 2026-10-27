@@ -114,6 +114,76 @@ const pageRef = (doc = 'D1') => ({ doc, page_start: 3, page_end: 4 });
 
 const feedItemValid = { type: 'diagram', concept_key: 'c1', title: 'Célula', body: 'Organelas.', formula_latex: null, question: null, figure_page: 13, caption: 'Figura 1', external_knowledge: false, source_pages: [ref] };
 
+// ---------------------------------------------------------------- Phase 3 (camera, PRA-06/07/08, INT-01/02)
+
+const understanding = {
+  content_type: 'exercise', language: 'pt-BR', is_study_content: true, contains_people: false,
+  transcription_md: '1) Calcule 2 + 2.', key_concepts: ['soma'], subject_guess: { subject_key: 'S1', confidence: 0.8 },
+  detected_questions: [{ label: '1', preview: 'Calcule 2 + 2', text_md: 'Calcule 2 + 2.', complete: true, has_figure: false }],
+  quality_issues: [],
+};
+const ladder = {
+  question_md: 'Calcule 2 + 2.', trivial: false, quantitative: true,
+  hints: [1, 2, 3, 4].map((level) => ({ level, text_md: `Dica ${level}` })),
+  final_answer: '4', answer_format: 'numeric', why_others_wrong: [], assumptions: [], uncertain_step: null, source_pages: [ref],
+};
+const transcription = { lines: [{ n: 1, text: 'A resposta é ⟦fotosintese?⟧.' }], uncertain: [{ line: 1, word: 'fotosintese', alternatives: ['fotossíntese'] }], illegible_count: 0, line_count_estimate: 1, title_present: false };
+const essayGrade = {
+  built_rubric: false,
+  criteria: [{ id: 'r1', criterion: 'Tese', points_max: 5, points: 3, verdict: 'partial', justification: 'Tese pouco clara.' }],
+  strengths: ['Boa introdução.'], missing: [{ point: 'Exemplo', source_pages: [ref] }], model_answer: 'Resposta modelo.',
+  misconceptions: [], suggested_cause: 'didnt_know', grader_confidence: 'medium', feedback: 'Bom começo.', remediation_card: null,
+};
+const acheItem = {
+  statement_kind: 'statement', segments: [{ id: 'S1', text: 'a' }, { id: 'S2', text: 'b' }, { id: 'S3', text: 'c' }],
+  error_segment_id: 'S2', error_type: 'conceitual', explanation: 'Conceito trocado.', corrected_text: 'b certo',
+  concept_keys: ['c1'], difficulty: 2, source_pages: [ref],
+};
+const acheNoError = { ...acheItem, error_segment_id: null, error_type: null, corrected_text: null };
+const problemItem = {
+  statement: 'Um corpo de 2 kg acelera a 3 m/s². Qual a força?', given: [{ name: 'm', value: '2' }, { name: 'a', value: '3' }],
+  final_answer: '6', answer_format: 'numeric', unit: 'N', tolerance: 0.01, check_expression: 'm*a',
+  solution_steps: ['F = m·a', 'F = 2·3 = 6 N'], hints: ['Segunda lei.', 'Monte F = m·a.', 'Substitua.'], difficulty: 1,
+  concept_keys: ['c1'], source_pages: [ref],
+};
+const worked = { statement: 'Exemplo.', steps: ['Passo 1', 'Passo 2'], answer: '6 N' };
+const podcastSegment = (id: string, kind: string) => ({
+  id, kind, node_keys: kind === 'topic' ? ['t1'] : [], title: 'Parte', source_pages: kind === 'topic' ? [ref] : [],
+  lines: [{ speaker: 'bia', text: 'Oi!', pause_after_ms: null }], recall_question: null,
+});
+const podcastScriptValid = { title: 'Episódio', segments: [podcastSegment('seg1', 'hook'), podcastSegment('seg2', 'topic'), podcastSegment('seg3', 'outro')] };
+const lucasPlanValid = {
+  key_concepts: [
+    { id: 'k1', statement: 'A glicólise ocorre no citoplasma.', concept_key: 'c1', source_pages: [ref] },
+    { id: 'k2', statement: 'Produz piruvato.', concept_key: null, source_pages: [ref] },
+  ],
+  misconceptions: [{ id: 'm1', lucas_belief: 'Ocorre na mitocôndria.', correct_concept: 'Ocorre no citoplasma.', fix_criteria: ['citoplasma'], trigger: 'early', source_pages: [ref] }],
+  naive_questions: ['Por quê?', 'Onde?'],
+};
+const lucasTurnValid = {
+  lucas_reply: 'Ah, então é no citoplasma?', safety: 'ok',
+  evaluation: {
+    misconception_updates: [{ id: 'm1', status: 'revealed' }], concepts_covered: [{ id: 'k1', quality: 'partial' }],
+    errors_taught: [], clarity_signals: { used_example: false, used_analogy: false, checked_understanding: true },
+  },
+};
+
+const PHASE3_CASES: SchemaCase[] = [
+  { name: 'CaptureUnderstanding', schema: S.CaptureUnderstanding, valid: understanding, invalid: { ...understanding, subject_guess: { subject_key: 'Biologia', confidence: 0.8 } } },
+  { name: 'HintLadder', schema: S.HintLadder, valid: ladder, invalid: { ...ladder, trivial: true } },
+  { name: 'FaithfulTranscription', schema: S.FaithfulTranscription, valid: transcription, invalid: { ...transcription, lines: [{ n: 2, text: 'x' }] } },
+  { name: 'EssayQuestionGrade', schema: S.EssayQuestionGrade, valid: essayGrade, invalid: { ...essayGrade, criteria: [] } },
+  { name: 'AcheOErroItem', schema: S.AcheOErroItem, valid: acheItem, invalid: { ...acheItem, error_type: null } },
+  { name: 'AcheOErroItems', schema: S.AcheOErroItems, valid: { items: [acheItem, acheItem, acheNoError] }, invalid: { items: [acheItem, acheNoError, acheNoError] } },
+  { name: 'WorkedExample', schema: S.WorkedExample, valid: worked, invalid: { ...worked, steps: ['só um'] } },
+  { name: 'GeneratedProblem', schema: S.GeneratedProblem, valid: problemItem, invalid: { ...problemItem, given: [{ name: '1x', value: '2' }] } },
+  { name: 'ProblemSet', schema: S.ProblemSet, valid: { worked_examples: [worked], problems: [problemItem, problemItem, { ...problemItem, difficulty: 3 }] }, invalid: { worked_examples: [], problems: [{ ...problemItem, difficulty: 3 }, problemItem, problemItem] } },
+  { name: 'FirstWrongStep', schema: S.FirstWrongStep, valid: { student_steps: ['F = m/a'], first_wrong_step_index: 0, what_went_wrong: 'Dividiu em vez de multiplicar.', nudge: 'Releia a segunda lei.' }, invalid: { student_steps: [], first_wrong_step_index: -1, what_went_wrong: 'x', nudge: 'y' } },
+  { name: 'PodcastScriptSchema', schema: S.PodcastScriptSchema, valid: podcastScriptValid, invalid: { ...podcastScriptValid, segments: [podcastSegment('seg1', 'hook'), podcastSegment('seg1', 'topic'), podcastSegment('seg3', 'outro')] } },
+  { name: 'LucasPlanSchema', schema: S.LucasPlanSchema, valid: lucasPlanValid, invalid: { ...lucasPlanValid, naive_questions: ['só uma'] } },
+  { name: 'LucasTurnSchema', schema: S.LucasTurnSchema, valid: lucasTurnValid, invalid: { ...lucasTurnValid, safety: 'unknown' } },
+];
+
 /** Payload schemas are exercised through their question variant (same payload object). */
 export const PAYLOAD_ALIASES: Record<string, string> = {
   McqSinglePayload: 'question variant mcq_single',
@@ -175,4 +245,5 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'TeacherPatterns', schema: S.TeacherPatterns, valid: { patterns: [{ text: 'Pede justificativa.', evidence_question_ids: ['q1', 'q2'] }], style_notes: 'Cobra justificativa.', typical_command_verbs: ['justifique'] }, invalid: { patterns: [{ text: 'x', evidence_question_ids: ['q1'] }], style_notes: 'x', typical_command_verbs: [] } },
   { name: 'FlagVerdict', schema: S.FlagVerdict, valid: { verdict: 'error_confirmed', confidence: 'high', explanation_pt: 'A página 4 diz outra coisa.', evidence_pages: [ref], corrected_item: { fields: [{ name: 'back', value: 'Correto' }] }, answer_changed: true }, invalid: { verdict: 'not_an_error', confidence: 'high', explanation_pt: 'x', evidence_pages: [], corrected_item: { fields: [{ name: 'back', value: 'x' }] }, answer_changed: false } },
   { name: 'ModerationVerdict', schema: S.ModerationVerdict, valid: { allowed: true, category: 'ok' }, invalid: { allowed: true, category: 'offensive' } },
+  ...PHASE3_CASES,
 ];
