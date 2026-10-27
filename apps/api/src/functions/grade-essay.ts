@@ -4,8 +4,12 @@
 // model cannot raise it by itself. ENEM redações are graded by the worker (essay.grade) and announced by push.
 import {
   ApiFailure,
+  ENEM_ESSAYS_PER_WEEK,
   GradeEssayReqSchema,
   HEAVY_EDIT_RATIO,
+  estimateHandwrittenLines,
+  redacaoLineCheck,
+  transcriptionLineCount,
   parseQuestionPayload,
   parseTranscriptionMarkers,
   type GradeEssayRes,
@@ -26,8 +30,10 @@ interface EssayRow {
   id: string;
   user_id: string;
   kind: 'enem_redacao' | 'school_answer';
+  theme_id: string | null;
+  input_mode: 'typed' | 'photo';
   question_id: string | null;
-  prompt: { question_text?: string; max_points?: number; subject_id?: string | null; node_id?: string | null } | null;
+  prompt: { question_text?: string; max_points?: number; subject_id?: string | null; node_id?: string | null; theme?: string } | null;
   text: string;
   image_paths: string[];
   capture_id: string | null;
@@ -118,9 +124,31 @@ export const handler = defineFunction<{ essay_id: string }>({
 
     if (essay.kind === 'enem_redacao') {
       if (essay.status === 'grading') throw new ApiFailure('already_exists', { message: 'Sua redação já está sendo corrigida.' });
+      if (!essay.theme_id && !essay.prompt?.theme) throw new ApiFailure('invalid_request', { message: 'Escolha o tema da redação antes de corrigir.' });
+      // ENM-05.2: up to 7 lines is "texto insuficiente", decided here without a model call.
+      const check = redacaoLineCheck(essay.text, essay.input_mode);
+      const lineFields = {
+        line_count: essay.input_mode === 'photo' ? transcriptionLineCount(essay.text) : null,
+        est_handwritten_lines: essay.input_mode === 'typed' ? estimateHandwrittenLines(essay.text) : null,
+      };
+      if (check.tooShort) {
+        const zero = await db
+          .from('essays')
+          .update({ status: 'graded', total: 0, is_zero: true, zero_reasons: ['texto_insuficiente'], competencias: null, ...lineFields })
+          .eq('id', essay.id);
+        if (zero.error) throw zero.error;
+        return ctx.json({ mode: 'zero', essay: { id: essay.id, status: 'graded', total: 0, zero_reasons: ['texto_insuficiente'], lines: check.lines } } satisfies GradeEssayRes);
+      }
+      // ENM-05.9: weekly correction budget (graded or grading in the last 7 days).
+      const since = new Date(ctx.now.getTime() - 7 * 86_400_000).toISOString();
+      const recent = await db.from('essays').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('kind', 'enem_redacao').in('status', ['grading', 'graded']).gte('updated_at', since).is('deleted_at', null);
+      if (recent.error) throw recent.error;
+      if ((recent.count ?? 0) >= ENEM_ESSAYS_PER_WEEK) {
+        throw new ApiFailure('rate_limited', { message: `Você já usou as ${ENEM_ESSAYS_PER_WEEK} correções de redação desta semana. Na próxima semana tem mais!` });
+      }
       if ((await activeJobCount(deps, userId)) >= 3) throw new ApiFailure('rate_limited', { message: 'Você já tem 3 correções em andamento. Espera uma terminar.' });
       const jobId = await createAiJob(deps, { type: 'essay.grade', userId, stage: 'essay' });
-      const marked = await db.from('essays').update({ status: 'grading' }).eq('id', essay.id);
+      const marked = await db.from('essays').update({ status: 'grading', ...lineFields }).eq('id', essay.id);
       if (marked.error) throw marked.error;
       await deps.enqueue('essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, { singletonKey: `essay.grade:${essay.id}` });
       return ctx.json({ mode: 'async', job_id: jobId, eta_s: 90 } satisfies GradeEssayRes, 202);

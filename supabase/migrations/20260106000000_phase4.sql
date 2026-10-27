@@ -317,6 +317,7 @@ create table public.argument_sessions (
   rounds           jsonb not null default '[]'::jsonb check (jsonb_typeof(rounds) = 'array'),     -- what the app shows
   round_limit      smallint not null default 4 check (round_limit between 3 and 5),
   raw_turns        jsonb not null default '[]'::jsonb check (jsonb_typeof(raw_turns) = 'array'),  -- server-only replay
+  context          jsonb not null default '{}'::jsonb check (jsonb_typeof(context) = 'object'),   -- server-only: node, stored slices
   rubric           jsonb,
   summary          jsonb,
   outline          jsonb,

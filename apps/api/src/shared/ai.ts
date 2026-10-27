@@ -25,6 +25,13 @@ import {
   FirstWrongStep,
   LucasPlanSchema,
   LucasTurnSchema,
+  ModerationVerdict,
+  EnemGeneratedItems,
+  EssayThemePromptOut,
+  ArgumentRoundFeedback,
+  ThesisFeedback,
+  ArgumentSummary,
+  ArgumentThemes,
   type AnyTaskDef,
   type BuiltPrompt,
   type PromptMessage,
@@ -53,6 +60,14 @@ export const OUTPUT_SCHEMAS: Readonly<Record<string, ZodType>> = {
   'problems.firstWrongStep': FirstWrongStep,
   'lucas.plan': LucasPlanSchema,
   'lucas.turn': LucasTurnSchema,
+  // Phase 4
+  'moderation.classify': ModerationVerdict,
+  'enem.question.generate': EnemGeneratedItems,
+  'essay.themePrompt': EssayThemePromptOut,
+  'argument.feedback': ArgumentRoundFeedback,
+  'argument.thesis': ThesisFeedback,
+  'argument.summary': ArgumentSummary,
+  'argument.themes': ArgumentThemes,
 };
 
 export function taskDef(id: string): AnyTaskDef {

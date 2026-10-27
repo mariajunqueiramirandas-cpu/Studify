@@ -30,7 +30,7 @@ import {
   type QuestionType,
 } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
-import { canReadSubject, loadSubject, type SubjectRow } from '../shared/access.ts';
+import { canReadSubject, isPublicQuestion, loadSubject, type SubjectRow } from '../shared/access.ts';
 import type { Deps } from '../shared/deps.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { gradeOffline } from '../shared/grading.ts';
@@ -69,6 +69,8 @@ interface PushState {
   touchedCards: Set<string>;
   cards: Map<string, CardRow | null>;
   subjects: Map<string, boolean>;
+  /** Readable system subjects (ENEM bank, Atualidades): their questions must also be public. */
+  systemSubjects: Set<string>;
 }
 
 interface CardRow {
@@ -113,13 +115,14 @@ async function subjectReadable(st: PushState, subjectId: string): Promise<boolea
   if (cached !== undefined) return cached;
   const { data, error } = await st.db
     .from('subjects')
-    .select('id, owner_profile_id, owner_class_group_id, created_by, name, content_language, is_language_subject, enem_area')
+    .select('id, owner_profile_id, owner_class_group_id, created_by, name, content_language, is_language_subject, enem_area, system_kind')
     .eq('id', subjectId)
     .is('deleted_at', null)
     .maybeSingle();
   if (error) throw error;
   const ok = data ? await canReadSubject(st.db, st.userId, data as SubjectRow) : false;
   st.subjects.set(subjectId, ok);
+  if (ok && (data as SubjectRow).system_kind) st.systemSubjects.add(subjectId);
   return ok;
 }
 
@@ -405,6 +408,11 @@ async function pushAnswers(st: PushState, items: AnswerItem[]): Promise<void> {
       continue;
     }
     if (!(await subjectReadable(st, question.data.subject_id as string))) {
+      reject(st, item.id, 'forbidden', true);
+      continue;
+    }
+    // ENEM bank and Atualidades questions: only published ones (ENM-02.9, spec 09 §9 withdrawn items).
+    if (st.systemSubjects.has(question.data.subject_id as string) && !(await isPublicQuestion(st.db, p.question_id))) {
       reject(st, item.id, 'forbidden', true);
       continue;
     }
@@ -994,6 +1002,7 @@ export const handler = defineFunction<z.infer<typeof SyncPushEnvelopeSchema>>({
       touchedCards: new Set(),
       cards: new Map(),
       subjects: new Map(),
+      systemSubjects: new Set(),
     };
 
     // Validate each row with its own schema. A row that fails is rejected; the batch goes on.

@@ -178,7 +178,9 @@ test('grade-essay: an ENEM redação goes to the worker (202, essay.grade)', asy
   await seedWorld(h);
   const { ALICE } = await import('./fakes.ts');
   const essayId = v7(701);
-  h.db.seed('essays', { id: essayId, user_id: ALICE.id, kind: 'enem_redacao', question_id: null, prompt: null, text: 'Texto da redação.', image_paths: [], capture_id: null, transcription_original: null, edited_ratio: null, status: 'draft', feedback: null, parent_essay_id: null, deleted_at: null });
+  // Phase 4 rules: a theme is required and the text must be longer than 7 handwritten lines.
+  const text = 'A mobilidade urbana brasileira enfrenta desafios históricos de planejamento e investimento. '.repeat(12);
+  h.db.seed('essays', { id: essayId, user_id: ALICE.id, kind: 'enem_redacao', question_id: null, theme_id: null, prompt: { theme: 'Mobilidade urbana' }, text, input_mode: 'typed', image_paths: [], capture_id: null, transcription_original: null, edited_ratio: null, status: 'draft', feedback: null, parent_essay_id: null, deleted_at: null });
   const res = await gradeEssay(request('grade-essay', { body: { essay_id: essayId } }), h.deps);
   assertEquals(res.status, 202);
   assertEquals(h.enqueued.find((e) => e.queue === 'essay.grade')?.data.essay_id, essayId);

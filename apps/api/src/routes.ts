@@ -5,6 +5,12 @@ import type { P2Deps } from './shared-p2/deps.ts';
 
 import { handler as accountDelete } from './functions/account-delete.ts';
 import { handler as accountExport } from './functions/account-export.ts';
+import { handler as adminAtualidadesPublish } from './functions/admin-atualidades-publish.ts';
+import { handler as adminEnemImport } from './functions/admin-enem-import.ts';
+import { handler as argumentFinish } from './functions/argument-finish.ts';
+import { handler as argumentStart } from './functions/argument-start.ts';
+import { handler as argumentThemes } from './functions/argument-themes.ts';
+import { handler as argumentTurn } from './functions/argument-turn.ts';
 import { handler as battleAnswer } from './functions/battle-answer.ts';
 import { handler as battleControl } from './functions/battle-control.ts';
 import { handler as battleJoin } from './functions/battle-join.ts';
@@ -16,6 +22,8 @@ import { handler as duelAnswer } from './functions/duel-answer.ts';
 import { handler as duelCreate } from './functions/duel-create.ts';
 import { handler as duelNext } from './functions/duel-next.ts';
 import { handler as duelRespond } from './functions/duel-respond.ts';
+import { handler as enemSimuladoCreate } from './functions/enem-simulado-create.ts';
+import { handler as essayThemeGenerate } from './functions/essay-theme-generate.ts';
 import { handler as explain } from './functions/explain.ts';
 import { handler as flagCreate } from './functions/flag-create.ts';
 import { handler as gradeAnswer } from './functions/grade-answer.ts';
@@ -54,6 +62,12 @@ export type Handler = (req: Request, deps: P2Deps) => Promise<Response>;
 export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['account-delete', accountDelete],
   ['account-export', accountExport],
+  ['admin-atualidades-publish', adminAtualidadesPublish],
+  ['admin-enem-import', adminEnemImport],
+  ['argument-finish', argumentFinish],
+  ['argument-start', argumentStart],
+  ['argument-themes', argumentThemes],
+  ['argument-turn', argumentTurn],
   ['battle-answer', battleAnswer],
   ['battle-control', battleControl],
   ['battle-join', battleJoin],
@@ -65,6 +79,9 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['duel-create', duelCreate],
   ['duel-next', duelNext],
   ['duel-respond', duelRespond],
+  ['enem-questions-generate', questionsGenerateMore],
+  ['enem-simulado-create', enemSimuladoCreate],
+  ['essay-theme-generate', essayThemeGenerate],
   ['explain', explain],
   ['flag-create', flagCreate],
   ['grade-answer', gradeAnswer],

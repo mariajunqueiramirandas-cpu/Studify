@@ -242,6 +242,23 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
     this.#filters.push((r) => r[col] != null && compare(r[col], value) <= 0);
     return this;
   }
+  /** jsonb/array containment (`@>`): every element of `value` is in the column (objects compared as JSON subsets). */
+  contains(col: string, value: readonly unknown[]) {
+    const subset = (want: unknown, have: unknown): boolean => {
+      if (want && typeof want === 'object' && have && typeof have === 'object') {
+        return Object.entries(want as Record<string, unknown>).every(([k, v]) => subset(v, (have as Record<string, unknown>)[k]));
+      }
+      return want === have;
+    };
+    this.#filters.push((r) => Array.isArray(r[col]) && value.every((v) => (r[col] as unknown[]).some((h) => subset(v, h))));
+    return this;
+  }
+  /** Only `not(col, 'is', null)` is used by the handlers. */
+  not(col: string, op: string, value: unknown) {
+    if (op !== 'is' || value !== null) throw new Error(`fake: unsupported not(${col}, ${op})`);
+    this.#filters.push((r) => r[col] !== null && r[col] !== undefined);
+    return this;
+  }
   textSearch(col: string, query: string) {
     const words = normalize(query).split(/\s+/).filter((w) => w.length > 0);
     this.#filters.push((r) => {

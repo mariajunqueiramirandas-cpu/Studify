@@ -135,6 +135,8 @@ export type SchoolEssayFeedback = z.infer<typeof SchoolEssayFeedbackSchema>;
 export const GradeEssayResSchema = z.union([
   z.object({ mode: z.literal('sync'), essay: z.object({ id: UuidSchema, status: z.literal('graded'), feedback: SchoolEssayFeedbackSchema }) }),
   z.object({ mode: z.literal('async'), job_id: UuidSchema, eta_s: z.int().min(1) }),
+  /** ENM-05.2: an ENEM redação with ≤ 7 lines is zero without a model call. */
+  z.object({ mode: z.literal('zero'), essay: z.object({ id: UuidSchema, status: z.literal('graded'), total: z.literal(0), zero_reasons: z.array(z.string()), lines: z.int().min(0) }) }),
 ]);
 export type GradeEssayRes = z.infer<typeof GradeEssayResSchema>;
 

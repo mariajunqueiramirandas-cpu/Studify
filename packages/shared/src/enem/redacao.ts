@@ -6,6 +6,9 @@ export const COMPETENCIA_SCORES = [0, 40, 80, 120, 160, 200] as const;
 export type CompetenciaScore = (typeof COMPETENCIA_SCORES)[number];
 export const COMPETENCIA_IDS = [1, 2, 3, 4, 5] as const;
 
+/** ENM-05.9 default weekly correction budget per student (owner-configurable). */
+export const ENEM_ESSAYS_PER_WEEK = 3;
+
 /** Lines on the official answer sheet. */
 export const REDACAO_MAX_LINES = 30;
 /** Up to 7 lines is "texto insuficiente": zero, decided before any model call (ENM-05.2). */
