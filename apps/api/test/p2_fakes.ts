@@ -303,6 +303,7 @@ export function createFakeDeps(opts: FakeDepsOptions): FakeEnv {
     supabaseUrl: 'https://example.supabase.test',
     anonKey: 'anon',
     asUser: () => opts.db,
+    verifyEmailCode: () => Promise.resolve(false),
     ai: aiStub,
     enqueue: (queue, data, options) => {
       sent.push({ queue, data, options });

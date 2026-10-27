@@ -88,6 +88,11 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
         global: { headers: { Authorization: `Bearer ${jwt}` } },
         auth: { persistSession: false, autoRefreshToken: false },
       }),
+    verifyEmailCode: async (email: string, code: string) => {
+      const once = createClient(config.supabaseUrl, config.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { error } = await once.auth.verifyOtp({ email, token: code, type: 'email' });
+      return !error;
+    },
     ai: { client, budget: makeBudgetStore(db), usage: makeUsageSink(db), timeoutMs: 120_000, maxRetries: 2 },
     enqueue: makePgBossEnqueue(boss, ready),
     now: () => new Date(),

@@ -112,10 +112,6 @@ export class FakeDb {
         if (!user) return { data: { user: null }, error: { message: 'invalid jwt' } };
         return { data: { user: { id: user.id, email: user.email } }, error: null };
       },
-      verifyOtp: async (params: { email: string; token: string }) => {
-        if (db.otpCode !== null && params.token === db.otpCode) return { data: { user: {} }, error: null };
-        return { data: { user: null }, error: { message: 'Token has expired or is invalid' } };
-      },
       admin: {
         signOut: async (jwt: string, scope: string) => {
           db.signedOut.push(`${jwt}:${scope}`);
@@ -542,6 +538,8 @@ export function makeHarness(reply: ReplyFn | FakeReply = { content: [{ type: 'te
     supabaseUrl: 'http://supabase.test',
     anonKey: 'anon-key',
     asUser: () => db.asClient(),
+    // Separate from db.auth on purpose: the service client must never verify a code (it would keep the session).
+    verifyEmailCode: async (_email: string, code: string) => db.otpCode !== null && code === db.otpCode,
     ai: { client: claude, budget, usage, maxRetries: 0 },
     enqueue,
     now: () => new Date(NOW),

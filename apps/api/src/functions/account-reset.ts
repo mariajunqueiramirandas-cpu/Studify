@@ -21,8 +21,7 @@ export const handler = defineFunction<z.infer<typeof AccountResetReqSchema>>({
     const user = ctx.user;
     if (!user.email) throw new ApiFailure('forbidden', { message: 'Sua conta não tem e-mail pra confirmar.' });
 
-    const otp = await db.auth.verifyOtp({ email: user.email, token: ctx.input.otp_code, type: 'email' });
-    if (otp.error) throw new ApiFailure('forbidden', { message: 'Código inválido. Pede um novo no seu e-mail.' });
+    if (!(await ctx.deps.verifyEmailCode(user.email, ctx.input.otp_code))) throw new ApiFailure('forbidden', { message: 'Código inválido. Pede um novo no seu e-mail.' });
 
     const { data, error } = await db.schema('private').rpc('reset_account', { p_user: user.userId });
     if (error) {

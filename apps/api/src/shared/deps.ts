@@ -32,6 +32,12 @@ export interface Deps {
   anonKey: string;
   /** A client that acts as the student (their JWT), for RPCs that read auth.uid(). */
   asUser(jwt: string): SupabaseClient;
+  /**
+   * Checks a fresh e-mail sign-in code (re-authentication for account reset and deletion) on a single-use
+   * client. Never call auth.verifyOtp on `db`: the client keeps the session it returns and every later query
+   * of the process then runs as that student instead of the service role.
+   */
+  verifyEmailCode(email: string, code: string): Promise<boolean>;
   ai: AiDeps;
   enqueue: Enqueue;
   now(): Date;
