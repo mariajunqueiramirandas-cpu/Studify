@@ -106,6 +106,33 @@ are drawn by the `studify-notify` module.
 Check: on a release build, sign in, allow notifications, and look for a row in `push_tokens` for your user.
 Perfil → Notificações → Ver exemplos sends every layout to the shade without the server.
 
+### 7. Google sign-in
+
+The account picker opening proves only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is set. After the pick, Google checks
+that an **Android** OAuth client in the same Google Cloud project matches the installed app's package and
+signing key. Without it the app gets `DEVELOPER_ERROR` (code 10) and says Google sign-in is not available yet.
+
+1. In the Google Cloud console (the Firebase project from step 6 if you use one), open APIs & Services →
+   Credentials. Configure the OAuth consent screen if it asks, and publish it (or add your testers) so
+   accounts outside your own can sign in.
+2. Create an OAuth client of type **Web application**. Its client id is `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
+3. Create an OAuth client of type **Android** with package `com.studify.app` and the release key's **SHA-1**.
+   The job summary of each release prints it; the same value comes from
+   `keytool -list -v -keystore studify-release.keystore -alias studify` (the `SHA1:` line). Add a second
+   Android client with the debug key's SHA-1 if you also sign in from local debug builds.
+4. In Supabase, Authentication → Sign In / Providers → Google: enable it and enter the web client id and its
+   secret. Supabase rejects ID tokens issued to any client id it does not list there.
+
+Changes in Google Cloud can take a few minutes to apply; the APK does not need a rebuild.
+
+### 8. E-mail sign-in
+
+The app asks for the 6-digit code from the e-mail, so the hosted project needs the templates in
+`supabase/templates` (Supabase's default ones carry only a link). Push them with `supabase config push`, or
+paste each file under Authentication → Email Templates (Confirm signup and Magic Link) with the subject from
+`supabase/config.toml`. Supabase's built-in sender is meant for testing and sends only a few e-mails per hour;
+set up custom SMTP under Authentication → Emails before real users sign in.
+
 ## Build speed
 
 The release APK contains `arm64-v8a` only (`ANDROID_ABIS` in the workflow), because each ABI compiles every native
