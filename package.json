@@ -1,0 +1,22 @@
+{
+  "name": "studify",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "lint": "pnpm -r --if-present lint",
+    "db:test": "bash supabase/tests/run.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "deno": "^2.9.6",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
