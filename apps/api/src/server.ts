@@ -25,7 +25,7 @@ async function main(): Promise<void> {
 
   const runtime = buildP2Runtime(config);
   await runtime.start();
-  const app = createApp(runtime.deps, config.siteDir);
+  const app = createApp(runtime.deps, config.siteDir, config.apkUrl);
 
   // idleTimeout 255 s (the Bun maximum): AI calls can run past the default 10 s without writing bytes,
   // and SSE streams send a heartbeat every 15 s (shared/sse.ts).

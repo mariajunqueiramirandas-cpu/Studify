@@ -1,9 +1,12 @@
 // HTTP surface: health, dispatch to the function handlers, the JSON envelopes for unknown routes, the static
 // link site and environment validation. Handlers themselves are covered by the suites next to this file.
 import { test, expect } from 'bun:test';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ConfigError, DEFAULT_SITE_DIR, loadConfig } from '../src/config.ts';
 import { VERSION, createApp } from '../src/app.ts';
+import { DEFAULT_APK_URL } from '../src/site.ts';
 import type { P2Deps } from '../src/shared-p2/deps.ts';
 import { makeHarness } from './fakes.ts';
 import { assertEquals, assertInstanceOf, assertStringIncludes } from './assert.ts';
@@ -38,7 +41,7 @@ test('config: defaults for port, pg-boss schema, base URL and site directory', (
   assertEquals(cfg.port, 3000);
   assertEquals(cfg.pgBossSchema, 'pgboss');
   assertEquals(cfg.baseUrl, undefined);
-  assertEquals(cfg.siteDir, path.resolve(import.meta.dir, '../../site/public'));
+  assertEquals(cfg.siteDir, path.resolve(import.meta.dir, '../../site/dist'));
 });
 
 test('config: an empty BASE_URL is kept (custom-scheme links); empty optional values count as unset', () => {
@@ -94,16 +97,39 @@ test('unknown function: 404 with the error envelope, including names that only l
   }
 });
 
-test('site: the landing page, the link route and the App Links file are served with their types', async () => {
-  const a = app();
+/** A built site as Vite lays it out (apps/site/dist is not built in the API job). */
+function siteFixture(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'studify-site-'));
+  mkdirSync(path.join(dir, 'assets'));
+  mkdirSync(path.join(dir, '.well-known'));
+  writeFileSync(path.join(dir, 'index.html'), '<!doctype html><div id="root"></div>');
+  writeFileSync(path.join(dir, 'assets', 'index-abc123.js'), 'console.log(1)');
+  writeFileSync(path.join(dir, 'favicon.svg'), '<svg/>');
+  writeFileSync(path.join(dir, '_redirects'), '/c/* /index.html 200');
+  writeFileSync(path.join(dir, '.well-known', 'assetlinks.json'), '[]');
+  return dir;
+}
+
+function siteApp(apkUrl?: string) {
+  return createApp(makeHarness().deps as unknown as P2Deps, siteFixture(), apkUrl);
+}
+
+test('site: the landing page, the link routes, the bundle and the App Links file are served with their types', async () => {
+  const a = siteApp();
   const home = await a.request('/');
   assertEquals(home.status, 200);
   assertStringIncludes(home.headers.get('content-type') ?? '', 'text/html');
+  assertEquals(home.headers.get('cache-control'), 'no-cache');
 
   const link = await a.request('/c/ABCDEFGH');
   assertEquals(link.status, 200);
-  const linkHtml = await Bun.file(path.join(DEFAULT_SITE_DIR, 'link.html')).text();
-  assertEquals(await link.text(), linkHtml);
+  assertEquals(await link.text(), '<!doctype html><div id="root"></div>');
+  assertEquals(link.headers.get('x-robots-tag'), 'noindex');
+
+  const bundle = await a.request('/assets/index-abc123.js');
+  assertEquals(bundle.status, 200);
+  assertStringIncludes(bundle.headers.get('content-type') ?? '', 'text/javascript');
+  assertStringIncludes(bundle.headers.get('cache-control') ?? '', 'immutable');
 
   const assetlinks = await a.request('/.well-known/assetlinks.json');
   assertEquals(assetlinks.status, 200);
@@ -111,10 +137,26 @@ test('site: the landing page, the link route and the App Links file are served w
   assertEquals(typeof (await assetlinks.json()), 'object');
 });
 
+test('site: /download redirects to the newest release APK, or to APK_URL when set', async () => {
+  const res = await siteApp().request('/download');
+  assertEquals(res.status, 302);
+  assertEquals(res.headers.get('location'), DEFAULT_APK_URL);
+  assertEquals(res.headers.get('cache-control'), 'no-store');
+
+  const custom = await siteApp('https://example.com/s.apk').request('/download');
+  assertEquals(custom.headers.get('location'), 'https://example.com/s.apk');
+  assertEquals(loadConfig({ ...VALID_ENV, APK_URL: 'https://example.com/s.apk' }).apkUrl, 'https://example.com/s.apk');
+  assertEquals(loadConfig(VALID_ENV).apkUrl, DEFAULT_APK_URL);
+});
+
 test('site: files outside the allow-list and unknown paths are 404, not read from disk', async () => {
-  const a = app();
+  const a = siteApp();
   assertEquals((await a.request('/_redirects')).status, 404);
   assertEquals((await a.request('/vercel.json')).status, 404);
   assertEquals((await a.request('/../../package.json')).status, 404);
+  assertEquals((await a.request('/assets/..%2Findex.html')).status, 404);
+  assertEquals((await a.request('/assets/%2e%2e%2f..%2fpackage.json')).status, 404);
+  assertEquals((await a.request('/assets/missing.js')).status, 404);
+  assertEquals((await a.request('/assets/index-abc123.exe')).status, 404);
   assertEquals((await a.request('/nope')).status, 404);
 });

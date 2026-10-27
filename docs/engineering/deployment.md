@@ -11,7 +11,7 @@
 | Piece | Where | Notes |
 |---|---|---|
 | Postgres, Auth, Storage, Realtime | **Supabase cloud**, free tier, region **sa-east-1 (São Paulo)** (SP-16) | Schema comes from `supabase/migrations`. |
-| API server (`apps/api`, Bun + Hono) | **VPS**, Dokploy Compose app, service `api`, port 3000 | Serves `/api/<name>`, `/api/health`, and the static link site at `/`, `/c/*`, `/i/*`, `/q/*`, `/b/*`, `/.well-known/assetlinks.json`. |
+| API server (`apps/api`, Bun + Hono) | **VPS**, Dokploy Compose app, service `api`, port 3000 | Serves `/api/<name>`, `/api/health`, the React link site (`apps/site`, built into the image) at `/`, `/c/*`, `/i/*`, `/q/*`, `/b/*`, `/assets/*`, `/.well-known/assetlinks.json`, and `/download` (302 to the newest release APK; `APK_URL` overrides it). |
 | Worker (`apps/worker`, Bun + pg-boss) | VPS, same Compose app, service `worker` | No domain. One replica. |
 | Public domain | `studify.vendua.com.br` (HTTPS, Let's Encrypt via Dokploy) | The API is under `https://studify.vendua.com.br/api`. |
 
@@ -55,7 +55,8 @@ Free-tier limits to keep in mind:
 5. **Deploy**. Both images build from the repository root (`apps/api/Dockerfile`, `apps/worker/Dockerfile`).
    The API image runs `bun apps/api/src/server.ts`; the worker image runs `bun apps/worker/src/index.ts`.
 6. **Check**: `curl https://studify.vendua.com.br/api/health` returns `{"ok":true,"version":"0.1.0"}`, and
-   `https://studify.vendua.com.br/c/ABCDEFGH` returns the link page.
+   `https://studify.vendua.com.br/c/ABCDEFGH` returns the link page, and `https://studify.vendua.com.br/download` redirects to
+   the newest `studify.apk`.
 
 The compose file joins both services to the external `dokploy-network`, uses `expose` instead of host ports, and has
 no `container_name`. Do not add published ports: Traefik reaches the API through the network.

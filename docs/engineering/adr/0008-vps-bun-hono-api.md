@@ -27,7 +27,7 @@ Supabase stays for Postgres, Auth, Storage and Realtime. The free tier is enough
   Request and response behaviour (CORS, 401/405/426 envelopes, Idempotency-Key replay, SSE) is unchanged.
 - The server runs on the owner's **VPS through Dokploy** as a Docker Compose app built from this repository
   (`docker-compose.yml`, `apps/api/Dockerfile`, `apps/worker/Dockerfile`). The public domain is
-  `studify.vendua.com.br`; the same container serves the static link site (`apps/site/public`) and `/api`.
+  `studify.vendua.com.br`; the same container serves the link site (`apps/site`, a React build) and `/api`.
 - The **worker moves to Bun as well** (checked locally: pg-boss 12, pdfjs-dist legacy build and @napi-rs/canvas
   run under Bun). The worker's own tests stay on Vitest under Node.
 - **pg-boss enqueue** uses the real pg-boss client (same version as the worker) started with `supervise`,

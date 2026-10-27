@@ -1,5 +1,7 @@
 # Keep the build context small and free of secrets. Both images build from the repository root.
 **/node_modules
+# The image builds the link site itself (apps/api/Dockerfile, stage site).
+apps/site/dist
 .git
 .github
 .env
