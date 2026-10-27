@@ -4,7 +4,10 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.studify.app",
-      "sha256_cert_fingerprints": ["DE:FE:77:C2:42:AA:83:7D:B3:07:92:C0:BA:2E:07:F7:67:4D:6D:D9:19:F5:4D:BF:9F:13:21:0A:F6:26:1A:90"]
+      "sha256_cert_fingerprints": [
+        "9B:62:43:44:68:4C:D5:1D:C0:04:39:03:21:C7:98:08:3B:D1:D6:9A:FB:CA:E8:BE:E3:54:FE:1F:D1:4D:5B:3B",
+        "DE:FE:77:C2:42:AA:83:7D:B3:07:92:C0:BA:2E:07:F7:67:4D:6D:D9:19:F5:4D:BF:9F:13:21:0A:F6:26:1A:90"
+      ]
     }
   }
 ]
