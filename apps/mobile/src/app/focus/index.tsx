@@ -25,6 +25,7 @@ import { useBlocklist } from '../../features/focus/blocklist';
 import { finishFocus, syncFocusNative, type FocusSummary } from '../../features/focus/session';
 import { updatePlanItem } from '../../features/goals/api';
 import { useCapi } from '../../features/motivation/capi';
+import { CapiCheer } from '../../features/motivation/CapiCheer';
 import { t } from '../../i18n';
 import { focusBlocker } from '../../platform/focus';
 import { requestNotificationPermission } from '../../platform/notifications';
@@ -259,6 +260,7 @@ function SummaryView({ summary }: { summary: FocusSummary & { planItemId: string
         </ActionBar>
       }
     >
+      <CapiCheer happy={summary.cycles > 0} />
       <Celebrate text={summary.cycles >= summary.cyclesPlanned ? '🎉' : '💪'} />
       <Text variant="title" align="center">
         {t('focus.summary_cycles', { n: summary.cycles, total: summary.cyclesPlanned })}

@@ -26,6 +26,7 @@ import { startActivityTracking } from '../features/wellbeing/activity';
 import { initSentry } from '../lib/sentry';
 import { setupNotificationChannels } from '../platform/notifications';
 import { attachNotificationActions, registerReviewCategories } from '../platform/notification-actions';
+import { attachNotificationLinks } from '../platform/notification-links';
 import { refreshFeatureFlags } from '../lib/flags';
 import { useDb } from '../db/DatabaseProvider';
 import { Platform } from 'react-native';
@@ -81,6 +82,7 @@ function AuthGate() {
     void refreshFeatureFlags(db).catch(() => undefined);
     const stopSync = startSync();
     const stopActivity = startActivityTracking();
+    const detachLinks = attachNotificationLinks();
     let detach: (() => void) | undefined;
     if (Platform.OS === 'android') {
       void registerReviewCategories();
@@ -89,6 +91,7 @@ function AuthGate() {
     return () => {
       stopSync();
       stopActivity();
+      detachLinks();
       detach?.();
     };
   }, [session, profile, db]);

@@ -109,3 +109,16 @@ describe('weekly check-in (WEL-03.4)', () => {
     expect(db.select().from(wellbeingCheckins).where(eq(wellbeingCheckins.weekStart, '2026-10-26')).all()).toHaveLength(1);
   });
 });
+
+describe('notification deep links', () => {
+  it('maps catalog links to app paths', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { pathForDeepLink } = require('../../platform/notification-links') as typeof import('../../platform/notification-links');
+    expect(pathForDeepLink('studify://retro')).toBe('/retro');
+    expect(pathForDeepLink('studify://class/g1/duel/d1')).toBe('/duel/d1');
+    expect(pathForDeepLink('studify://class/g1/battle/b1')).toBe('/battle/b1');
+    expect(pathForDeepLink('studify://class/g1/divide/p1')).toBe('/class/g1/divide/p1');
+    expect(pathForDeepLink('studify://class/g1?tab=members')).toBe('/class/g1?tab=members');
+    expect(pathForDeepLink('https://evil.example')).toBeNull();
+  });
+});
