@@ -11,7 +11,7 @@ import type { P2Deps } from './shared-p2/deps.ts';
 
 export const VERSION: string = pkg.version;
 
-export function createApp(deps: P2Deps, siteDir: string): Hono {
+export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string): Hono {
   const app = new Hono();
 
   app.use('*', async (c, next) => {
@@ -37,7 +37,7 @@ export function createApp(deps: P2Deps, siteDir: string): Hono {
     return handler(c.req.raw, deps);
   });
 
-  mountSite(app, siteDir);
+  mountSite(app, siteDir, apkUrl);
 
   app.notFound((c) => {
     if (new URL(c.req.url).pathname.startsWith('/api/')) {

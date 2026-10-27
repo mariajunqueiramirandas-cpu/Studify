@@ -1,0 +1,97 @@
+import { useState, type ReactNode } from 'react';
+import { DOWNLOAD_URL } from './config.ts';
+
+export function Page({ brandHref, children }: { brandHref?: string; children: ReactNode }) {
+  const mark = (
+    <>
+      <span className="brand-mark" aria-hidden="true">S</span>Studify
+    </>
+  );
+  return (
+    <main>
+      {brandHref ? (
+        <a className="brand" href={brandHref}>
+          {mark}
+        </a>
+      ) : (
+        <span className="brand">{mark}</span>
+      )}
+      {children}
+      <footer>studify.vendua.com.br</footer>
+    </main>
+  );
+}
+
+export function Hero({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <section>
+      <h1>{title}</h1>
+      <p>{subtitle}</p>
+    </section>
+  );
+}
+
+export function DownloadButton() {
+  return (
+    <a className="btn btn-primary" href={DOWNLOAD_URL}>
+      Baixar o app (Android)
+    </a>
+  );
+}
+
+/** Install help. The link page adds the Play Protect step and the "paste the code" step. */
+export function InstallSteps({ withCode }: { withCode: boolean }) {
+  return (
+    <details>
+      <summary>Como instalar no Android</summary>
+      <ol>
+        <li>
+          Toque em <strong>Baixar o app (Android)</strong> e abra o arquivo quando o download terminar.
+        </li>
+        {withCode ? (
+          <li>
+            Se aparecer "Por segurança, seu celular não permite instalar apps desta fonte", toque em{' '}
+            <strong>Configurações</strong> e ative <strong>Permitir desta fonte</strong>.
+          </li>
+        ) : (
+          <li>
+            Se o celular pedir, ative <strong>Permitir desta fonte</strong> nas configurações.
+          </li>
+        )}
+        {withCode ? (
+          <li>
+            Volte e toque em <strong>Instalar</strong>. Se o Play Protect avisar, toque em{' '}
+            <strong>Mais detalhes → Instalar assim mesmo</strong>.
+          </li>
+        ) : (
+          <li>
+            Volte e toque em <strong>Instalar</strong>.
+          </li>
+        )}
+        {withCode && <li>Abra o Studify, entre com seu e-mail e cole o código acima.</li>}
+      </ol>
+    </details>
+  );
+}
+
+export function CodeCard({ label, code }: { label: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(code).then(
+      () => setCopied(true),
+      () => {},
+    );
+  };
+  return (
+    <section className="card">
+      <span className="label">{label}</span>
+      <span className="code" aria-live="polite">
+        {code}
+      </span>
+      <button className="btn btn-soft" type="button" onClick={copy}>
+        {copied ? 'Copiado ✓' : 'Copiar'}
+      </button>
+      <p>Depois de instalar, cole este código no app.</p>
+    </section>
+  );
+}

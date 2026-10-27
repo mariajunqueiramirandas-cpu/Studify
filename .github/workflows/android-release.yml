@@ -345,7 +345,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          url=$(gh release create "$RELEASE_TAG" "$RELEASE_APK" \
+          # The same APK under a fixed name, so releases/latest/download/studify.apk always resolves to the newest
+          # build (studify.vendua.com.br/download redirects there, apps/site/README.md).
+          stable="$RUNNER_TEMP/stable/studify.apk"
+          mkdir -p "$(dirname "$stable")"
+          cp "$RELEASE_APK" "$stable"
+          url=$(gh release create "$RELEASE_TAG" "$RELEASE_APK" "$stable" \
             --target "$GITHUB_SHA" \
             --title "Studify $APP_VERSION (build $BUILD_NUMBER)" \
             --notes-file "$RUNNER_TEMP/release-notes.md" \

@@ -39,6 +39,10 @@ jobs:
         run: pnpm --filter @studify/worker test
       - name: Unit tests (mobile)
         run: pnpm --filter @studify/mobile test
+      - name: Unit tests (site)
+        run: pnpm --filter @studify/site test
+      - name: Build the link site
+        run: pnpm --filter @studify/site build
 
   database:
     name: Database migrations and pgTAP suite

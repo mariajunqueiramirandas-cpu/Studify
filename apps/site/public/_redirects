@@ -1,5 +1,7 @@
-# Netlify / Cloudflare Pages: every link route renders the same landing page.
-/c/*  /link.html  200
-/i/*  /link.html  200
-/q/*  /link.html  200
-/b/*  /link.html  200
+# Netlify / Cloudflare Pages (the API serves the same routes itself, apps/api/src/site.ts).
+# Every link route renders the React app, which reads the path.
+/c/*  /index.html  200
+/i/*  /index.html  200
+/q/*  /index.html  200
+/b/*  /index.html  200
+/download  https://github.com/mariajunqueiramirandas-cpu/Studify/releases/latest/download/studify.apk  302
