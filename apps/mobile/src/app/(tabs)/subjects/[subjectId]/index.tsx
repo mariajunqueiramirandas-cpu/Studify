@@ -114,6 +114,8 @@ export default function SubjectHome() {
 
       <Section title={t('subjects.shortcuts')}>
         <Card>
+          <ListItem icon="map-outline" title={t('map.title')} subtitle={t('map.entry_hint')} onPress={() => router.push({ pathname: '/subjects/[subjectId]/map', params: { subjectId } })} />
+          <ListItem icon="timer-outline" title={t('focus.title')} subtitle={t('focus.entry_hint')} onPress={() => router.push({ pathname: '/focus', params: { subjectId, ...(s?.name ? { label: s.name } : {}) } })} />
           <ListItem icon="document-text-outline" title={t('subjects.documents')} subtitle={docs.data ? `${docs.data.length}` : undefined} onPress={() => router.push(`/subjects/${subjectId}/documents`)} />
           <ListItem icon="albums-outline" title={t('subjects.cards')} onPress={() => router.push(`/subjects/${subjectId}/cards`)} />
           <ListItem icon="text-outline" title={t('subjects.glossary')} onPress={() => router.push(`/subjects/${subjectId}/glossary`)} />

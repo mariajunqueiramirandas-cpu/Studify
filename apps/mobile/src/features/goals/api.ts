@@ -237,6 +237,8 @@ export async function updatePlanItem(itemId: string, patch: Partial<Pick<PlanIte
 export interface StudyPreferences {
   user_id: string;
   minutes_by_weekday: number[];
+  window_start?: string;
+  window_end?: string;
   quiet_start: string;
   quiet_end: string;
   vespera_time: string;

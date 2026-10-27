@@ -15,6 +15,7 @@ import { options, t } from '../i18n';
 import { useSessionStore } from '../stores/session';
 import { space } from '../theme';
 import { ReadAloudButton } from '../features/voice/VoiceButtons';
+import { WellbeingNudge } from '../features/wellbeing/WellbeingNudge';
 
 const LEECH_LAPSES = 6;
 
@@ -25,6 +26,8 @@ export default function Review() {
   const { userId } = useSession();
   const overlay = useOverlay();
   const store = useSessionStore();
+  // WEL-03 performance drop: Errei counts as a miss.
+  const sessionItems = useMemo(() => store.history.map((h) => ({ correct: h.rating > 1, ms: h.ms })), [store.history]);
   const [queue, setQueue] = useState<ReviewCard[] | null>(null);
   const [menu, setMenu] = useState(false);
   const [flag, setFlag] = useState(false);
@@ -108,6 +111,7 @@ export default function Review() {
       {queue && queue.length > 150 && store.index === 0 ? (
         <Banner kind="info" message={t('review.recovery', { n: queue.length, d: Math.ceil(queue.length / 100) })} />
       ) : null}
+      <WellbeingNudge surface="review" sessionItems={sessionItems} />
       {current ? (
         <View style={{ flex: 1, gap: space.md, paddingVertical: space.md }}>
           <Flashcard

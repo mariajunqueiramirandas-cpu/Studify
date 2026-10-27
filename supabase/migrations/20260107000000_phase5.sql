@@ -1,5 +1,5 @@
 -- Phase 5: the rest (roadmap Phase 5). Auto visuals (LRN-05), material checker (ING-06), Estúdio de Mnemônicos
--- (MEM-06), energy-aware scheduling (GOL-10; GOL-09 calendar sync is device-only), Dividir e conquistar (SOC-06),
+-- (MEM-06), energy-aware scheduling (GOL-10) and calendar availability (GOL-09), Dividir e conquistar (SOC-06),
 -- Perguntas da turma (SOC-07), Ligas semanais (SOC-08), Chefões (MOT-02), Retrospectiva (MOT-04) and the nudge log
 -- shared by the prerequisite detective and the burnout guard (LRN-04.7, WEL-03; data-model R10).
 -- Source: data-model.md §5.2, §5.3, §5.5, §5.7, §5.9 and §6.2. Conventions as in the earlier migrations.
@@ -18,6 +18,9 @@
 --     of quizzes, which only take approved questions.
 --   * contributions are private to their author and the Turma moderators; the divisão screen reads the claim
 --     and submission state through divide_progress().
+--   * Calendar sync (GOL-09) stays on the phone except for free minutes per date, written with source 'calendar'
+--     through set_calendar_availability() (direct writes are limited to source 'user'); the student's own
+--     exceptions win over the calendar.
 
 -- =====================================================================
 -- LRN-05 Auto visuals
@@ -633,15 +636,59 @@ begin
    order by r.rank, r.nickname;
 end $$;
 
+-- GOL-09.2: free minutes per date, computed on the phone from the busy calendars (event titles never leave it).
+-- The student's own exceptions and Modo Desespero rows win over the calendar; null minutes clears a calendar row.
+create or replace function public.set_calendar_availability(p_days jsonb)
+returns int
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := auth.uid();
+  v_day jsonb;
+  v_date date;
+  v_min int;
+  v_n int := 0;
+begin
+  if v_uid is null then
+    raise exception 'not signed in' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_days) is distinct from 'array' or jsonb_array_length(p_days) > 62 then
+    raise exception 'p_days must be an array of at most 62 days' using errcode = '22023';
+  end if;
+  for v_day in select value from jsonb_array_elements(p_days) loop
+    v_date := (v_day ->> 'local_date')::date;
+    if v_date is null or v_date < current_date - 1 or v_date > current_date + 62 then
+      raise exception 'local_date out of range' using errcode = '22023';
+    end if;
+    if jsonb_typeof(v_day -> 'minutes') is distinct from 'number' then
+      update public.availability_exceptions set deleted_at = now()
+       where user_id = v_uid and local_date = v_date and source = 'calendar' and deleted_at is null;
+    else
+      v_min := (v_day ->> 'minutes')::int;
+      if v_min < 0 or v_min > 1440 then
+        raise exception 'minutes out of range' using errcode = '22023';
+      end if;
+      insert into public.availability_exceptions as a (user_id, local_date, minutes, source)
+      values (v_uid, v_date, v_min, 'calendar')
+      on conflict (user_id, local_date) do update
+        set minutes = excluded.minutes, source = 'calendar', deleted_at = null
+        where a.source = 'calendar' or a.deleted_at is not null;
+    end if;
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $$;
+
 revoke all on function public.vote_material_finding(uuid, text) from public, anon;
 revoke all on function public.claim_divide_topic(uuid, uuid, boolean) from public, anon;
 revoke all on function public.divide_progress(uuid) from public, anon;
 revoke all on function public.vote_peer_question(uuid) from public, anon;
 revoke all on function public.review_peer_question(uuid, boolean) from public, anon;
 revoke all on function public.league_board(uuid, date) from public, anon;
+revoke all on function public.set_calendar_availability(jsonb) from public, anon;
 grant execute on function public.vote_material_finding(uuid, text) to authenticated;
 grant execute on function public.claim_divide_topic(uuid, uuid, boolean) to authenticated;
 grant execute on function public.divide_progress(uuid) to authenticated;
 grant execute on function public.vote_peer_question(uuid) to authenticated;
 grant execute on function public.review_peer_question(uuid, boolean) to authenticated;
 grant execute on function public.league_board(uuid, date) to authenticated;
+grant execute on function public.set_calendar_availability(jsonb) to authenticated;

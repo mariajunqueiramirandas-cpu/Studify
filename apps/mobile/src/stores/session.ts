@@ -10,6 +10,8 @@ export interface AnsweredCard {
   logId: string;
   cardId: string;
   rating: Grade;
+  /** Answer time, for the burnout guard's performance-drop check (WEL-03). */
+  ms: number;
 }
 
 export interface SessionState {
@@ -58,7 +60,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
     set((s) => ({
       index: s.index + 1,
       revealed: false,
-      history: [...s.history, { logId: result.logId, cardId, rating }],
+      history: [...s.history, { logId: result.logId, cardId, rating, ms: opts.durationMs ?? 0 }],
     }));
     return result.logId;
   },

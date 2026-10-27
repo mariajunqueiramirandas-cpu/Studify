@@ -3,6 +3,8 @@ import {
   blockingAllowed,
   burnoutNudges,
   completedFocusCycles,
+  focusCreditedMs,
+  focusPhaseWindows,
   focusPhases,
   focusPositionAt,
   focusTotalMinutes,
@@ -39,6 +41,26 @@ describe('Modo foco (WEL-01)', () => {
     expect(done.done).toBe(true);
     expect(completedFocusCycles(phases, done)).toBe(2);
     expect(completedFocusCycles(phases, focusPositionAt(phases, 26 * 60_000))).toBe(1);
+  });
+
+  it('each skip ends exactly one phase', () => {
+    const phases = focusPhases({ focusMin: 25, breakMin: 5, cycles: 2 });
+    // Skipping the first focus at 10 min, then the break right away.
+    const w = focusPhaseWindows(phases, [10 * 60_000, 10 * 60_000 + 1_000]);
+    expect(w.map((x) => [x.start, x.end])).toEqual([
+      [0, 10 * 60_000],
+      [10 * 60_000, 10 * 60_000 + 1_000],
+      [10 * 60_000 + 1_000, 35 * 60_000 + 1_000],
+    ]);
+  });
+
+  it('credits only the time inside focus phases, never twice (WEL-01.6)', () => {
+    const phases = focusPhases({ focusMin: 25, breakMin: 5, cycles: 2 });
+    const min = 60_000;
+    // On Studify 0–20 and 18–28 (overlap), break 25–30 does not count, then 30–40 of the second focus.
+    expect(focusCreditedMs(phases, [], [[0, 20 * min], [18 * min, 28 * min], [30 * min, 40 * min]], 60 * min)).toBe(35 * min);
+    // Nothing after `until`.
+    expect(focusCreditedMs(phases, [], [[0, 60 * min]], 10 * min)).toBe(10 * min);
   });
 });
 

@@ -320,5 +320,32 @@ select test_helpers.check_rows('bob cannot read alice''s nudges', 'authenticated
 select test_helpers.check_sqlstate('an unknown nudge kind is rejected',
   $$insert into public.nudge_events (user_id, kind) values ('11111111-1111-4111-8111-111111111111', 'guilt_trip')$$, '23514');
 
+-- ---------- GOL-09.2 calendar availability ----------
+insert into public.availability_exceptions (user_id, local_date, minutes, source) values
+  ('11111111-1111-4111-8111-111111111111', current_date + 3, 15, 'user');
+select test_helpers.check_err('alice cannot write a calendar row directly', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.availability_exceptions (user_id, local_date, minutes, source) values ('11111111-1111-4111-8111-111111111111', current_date + 1, 30, 'calendar')$$);
+select test_helpers.check_scalar('alice sends free minutes for three days', 'authenticated', pg_temp.u('alice'),
+  $$public.set_calendar_availability(jsonb_build_array(
+      jsonb_build_object('local_date', current_date + 1, 'minutes', 30),
+      jsonb_build_object('local_date', current_date + 2, 'minutes', 0),
+      jsonb_build_object('local_date', current_date + 3, 'minutes', 45)))$$, '3');
+select test_helpers.check_scalar('the calendar row is stored with source calendar', 'authenticated', pg_temp.u('alice'),
+  $$(select source || ':' || minutes from public.availability_exceptions where local_date = current_date + 1)$$, 'calendar:30');
+select test_helpers.check_scalar('her own exception wins over the calendar', 'authenticated', pg_temp.u('alice'),
+  $$(select source || ':' || minutes from public.availability_exceptions where local_date = current_date + 3)$$, 'user:15');
+select test_helpers.check_scalar('a day without busy time clears the calendar row', 'authenticated', pg_temp.u('alice'),
+  $$public.set_calendar_availability(jsonb_build_array(jsonb_build_object('local_date', current_date + 1, 'minutes', null)))$$, '1');
+select test_helpers.check_rows('the cleared row is soft-deleted', 'authenticated', pg_temp.u('alice'),
+  $$select 1 from public.availability_exceptions where local_date = current_date + 1 and deleted_at is null$$, 0);
+select test_helpers.check_rows('bob cannot see alice''s calendar availability', 'authenticated', pg_temp.u('bob'),
+  $$select 1 from public.availability_exceptions where user_id = '11111111-1111-4111-8111-111111111111'$$, 0);
+select test_helpers.check_err('dates far in the future are rejected', 'authenticated', pg_temp.u('alice'),
+  $$select public.set_calendar_availability(jsonb_build_array(jsonb_build_object('local_date', current_date + 90, 'minutes', 30)))$$);
+select test_helpers.check_err('minutes above a day are rejected', 'authenticated', pg_temp.u('alice'),
+  $$select public.set_calendar_availability(jsonb_build_array(jsonb_build_object('local_date', current_date + 1, 'minutes', 2000)))$$);
+select test_helpers.check_err('anon cannot call it', 'anon', null,
+  $$select public.set_calendar_availability('[]'::jsonb)$$);
+
 select * from finish();
 rollback;

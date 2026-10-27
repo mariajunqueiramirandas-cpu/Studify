@@ -201,13 +201,15 @@ export {
   focusTotalMinutes,
   blockingAllowed,
   focusPositionAt,
+  focusPhaseWindows,
+  focusCreditedMs,
   completedFocusCycles,
   BURNOUT,
   isLateNight,
   burnoutNudges,
   HELP_CARD,
 } from './wellbeing.ts';
-export type { FocusConfig, FocusPhase, FocusPosition, BurnoutNudgeKind, BurnoutInput, BurnoutNudge } from './wellbeing.ts';
+export type { FocusConfig, FocusPhase, FocusPosition, FocusWindow, BurnoutNudgeKind, BurnoutInput, BurnoutNudge } from './wellbeing.ts';
 
 export { MNEMONICS, acronymOf, encodesItems, placeOnLoci, isMnemonicList } from './mnemonics.ts';
 

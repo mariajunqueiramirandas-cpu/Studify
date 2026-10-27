@@ -1,0 +1,40 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
+  <!-- WEL-01 Modo foco: the countdown runs in a foreground service (spec 13 §8.8). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <!-- WEL-01.4 optional Não perturbe; the user grants policy access in system settings. -->
+  <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+  <!-- WEL-02 opt-in app blocking (spec 13 §8.9 option B): special access the user grants in system settings. -->
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+  <!-- The app picker lists launcher apps only (no QUERY_ALL_PACKAGES); dialer, clock and settings are resolved
+       to keep them out of the list (WEL-02.4). -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.DIAL" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.SHOW_ALARMS" />
+    </intent>
+    <intent>
+      <action android:name="android.settings.SETTINGS" />
+    </intent>
+  </queries>
+
+  <application>
+    <service
+      android:name="com.studify.focus.FocusService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Focus timer the student starts: countdown with pause, skip and stop, and optional blocking of apps the student chose." />
+    </service>
+  </application>
+</manifest>

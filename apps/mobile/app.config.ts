@@ -53,6 +53,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     predictiveBackGestureEnabled: false,
     // mobile-app.md §16: request only what each phase needs; no broad storage, no exact alarms.
     // RECORD_AUDIO: voice questions to the tutor, the podcast ✋ and Ensine o Lucas (TUT-06, WEL-04), asked on first use.
+    // Phase 5: READ/WRITE_CALENDAR come from the expo-calendar plugin (GOL-09, opt-in). The local focus module
+    // (modules/studify-focus) declares its foreground service, Não perturbe access, usage access and overlay
+    // permissions (WEL-01/02); the special-access ones are granted by the student in system settings.
     permissions: ['INTERNET', 'ACCESS_NETWORK_STATE', 'POST_NOTIFICATIONS', 'RECEIVE_BOOT_COMPLETED', 'VIBRATE', 'CAMERA', 'RECORD_AUDIO'],
     blockedPermissions: [
       'android.permission.READ_EXTERNAL_STORAGE',
@@ -91,6 +94,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-camera', { cameraPermission: 'Para fotografar páginas, exercícios e suas respostas escritas à mão. As fotos ficam só com você, a menos que você compartilhe.', recordAudioAndroid: false }],
     // INT-01 podcast: background playback with lock-screen controls (mobile-app.md §10, decided at Phase 3).
     ['expo-audio', { recordAudioAndroid: false, enableBackgroundPlayback: true }],
+    // GOL-09 calendar sync (opt-in): busy calendars are read on the phone; only free minutes per day leave it.
+    ['expo-calendar', { calendarPermission: 'Para ver seus horários ocupados e colocar provas e blocos de estudo na agenda "Studify". Os títulos dos seus compromissos não saem do celular.' }],
     // TUT-06 / WEL-04 voice input: Android's on-device speech recognizer.
     [
       'expo-speech-recognition',

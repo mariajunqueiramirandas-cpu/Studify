@@ -14,6 +14,7 @@ import { buildLocalQueue } from '../../features/memory/local';
 import { createQuiz } from '../../features/practice/api';
 import { t } from '../../i18n';
 import { space, useTheme } from '../../theme';
+import { WellbeingNudge } from '../../features/wellbeing/WellbeingNudge';
 
 interface Block {
   key: string;
@@ -147,6 +148,7 @@ export default function SessionRunner() {
       }
     >
       <ProgressBar value={progress} label={t('session.title')} />
+      <WellbeingNudge surface="session" />
       {blocks.length === 0 ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
       {blocks.map((b, i) => {
         const isDone = done.has(b.key);

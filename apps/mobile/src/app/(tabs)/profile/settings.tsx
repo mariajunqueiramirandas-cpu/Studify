@@ -30,6 +30,7 @@ export default function Settings() {
       </Section>
       <Card>
         <ListItem icon="notifications-outline" title={t('settings.notifications')} onPress={() => router.push('/profile/notifications')} />
+        <ListItem icon="calendar-outline" title={t('calendar.title')} subtitle={t('calendar.entry_hint')} onPress={() => router.push('/profile/calendar')} />
         <ListItem icon="albums-outline" title={t('settings.memory')} onPress={() => router.push('/profile/memory')} />
         <ListItem icon="cloud-download-outline" title={t('settings.storage')} onPress={() => router.push('/profile/storage')} />
         <ListItem icon="sync-outline" title={t('settings.sync')} onPress={() => router.push('/profile/sync')} />

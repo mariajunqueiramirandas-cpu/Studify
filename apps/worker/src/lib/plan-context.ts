@@ -113,7 +113,7 @@ export async function loadPlanContext(ctx: JobContext, userId: string): Promise<
 
   const masteries = computeMasteries(learning, now, paramsFor(retention, timeZone));
   const exceptions = unwrapRows<{ local_date: string; minutes: number }>(
-    await ctx.supabase.from('availability_exceptions').select('local_date,minutes').eq('user_id', userId).gte('local_date', today),
+    await ctx.supabase.from('availability_exceptions').select('local_date,minutes').eq('user_id', userId).gte('local_date', today).is('deleted_at', null),
     'availability_exceptions',
   );
 

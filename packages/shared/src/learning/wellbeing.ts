@@ -69,23 +69,61 @@ export interface FocusPosition {
   done: boolean;
 }
 
+export interface FocusWindow {
+  phase: FocusPhase;
+  /** Running time (pauses excluded) at which the phase starts and ends. */
+  start: number;
+  end: number;
+}
+
 /**
- * Where a session is after `elapsedMs` of running time (pauses already excluded by the caller), with
- * `skipped` phases ended early: skipping a phase moves its end to the moment of the skip.
+ * Each phase's span in running time, with `skippedAtMs` phases ended early: skipping a phase moves its end to the
+ * moment of the skip, and each skip ends exactly one phase (the one running at that moment).
  */
-export function focusPositionAt(phases: readonly FocusPhase[], elapsedMs: number, skippedAtMs: readonly number[] = []): FocusPosition {
-  let start = 0;
-  // Each skip ends exactly one phase: the one running at that moment.
+export function focusPhaseWindows(phases: readonly FocusPhase[], skippedAtMs: readonly number[] = []): FocusWindow[] {
+  const out: FocusWindow[] = [];
   const skips = [...skippedAtMs].sort((a, b) => a - b);
+  let start = 0;
   let next = 0;
-  for (let i = 0; i < phases.length; i++) {
-    let end = start + phases[i]!.minutes * 60_000;
+  for (const phase of phases) {
+    let end = start + phase.minutes * 60_000;
     while (next < skips.length && skips[next]! < start) next++;
     if (next < skips.length && skips[next]! < end) end = Math.max(start, skips[next++]!);
-    if (elapsedMs < end) return { index: i, phase: phases[i]!, remainingMs: end - elapsedMs, done: false };
+    out.push({ phase, start, end });
     start = end;
   }
+  return out;
+}
+
+/** Where a session is after `elapsedMs` of running time (pauses already excluded by the caller). */
+export function focusPositionAt(phases: readonly FocusPhase[], elapsedMs: number, skippedAtMs: readonly number[] = []): FocusPosition {
+  for (const [index, w] of focusPhaseWindows(phases, skippedAtMs).entries()) {
+    if (elapsedMs < w.end) return { index, phase: w.phase, remainingMs: w.end - elapsedMs, done: false };
+  }
   return { index: phases.length, phase: null, remainingMs: 0, done: true };
+}
+
+/**
+ * WEL-01.6 credited focus time: the parts of `intervals` (running time, e.g. while the student was on Studify or,
+ * for a plan item, had the screen off) that fall inside focus phases and before `untilMs`.
+ */
+export function focusCreditedMs(
+  phases: readonly FocusPhase[],
+  skippedAtMs: readonly number[],
+  intervals: ReadonlyArray<readonly [number, number]>,
+  untilMs: number,
+): number {
+  const focus = focusPhaseWindows(phases, skippedAtMs).filter((w) => w.phase.kind === 'focus');
+  // Merge overlapping intervals first so time is never counted twice.
+  const merged: Array<[number, number]> = [];
+  for (const [a, b] of [...intervals].map(([a, b]) => [Math.max(0, a), Math.min(untilMs, b)] as [number, number]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0])) {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  let total = 0;
+  for (const w of focus) for (const [a, b] of merged) total += Math.max(0, Math.min(w.end, b) - Math.max(w.start, a));
+  return total;
 }
 
 /** Focus cycles fully completed (each one earns XP, spec 13 §8.1). */

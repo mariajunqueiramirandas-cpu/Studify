@@ -19,3 +19,53 @@ export interface LocalReminderScheduler {
   schedule(candidates: ReminderCandidate[]): Promise<ScheduleResult>;
   requestPermission(): Promise<boolean>;
 }
+
+export interface FocusPermissionState {
+  /** UsageStats special access: needed to see which app is in front (WEL-02.2). */
+  usage: boolean;
+  /** "Sobrepor a outros apps": needed for the Bloqueio overlay (WEL-02.3). */
+  overlay: boolean;
+  /** Notification policy access: needed for Não perturbe (WEL-01.4). */
+  dnd: boolean;
+}
+
+export interface InstalledApp {
+  packageName: string;
+  label: string;
+}
+
+/** What the native side needs to run the countdown, alerts, Não perturbe and blocking without the JS runtime. */
+export interface FocusNativeState {
+  sessionId: string;
+  phases: { kind: 'focus' | 'break' | 'long_break'; ms: number }[];
+  index: number;
+  phaseEndsAt: number;
+  paused: boolean;
+  remainingMs: number;
+  blocked: string[];
+  dnd: boolean;
+  openUrl: string;
+  strings: Record<string, string>;
+}
+
+export type FocusNativeAction = 'pause' | 'resume' | 'skip' | 'stop';
+
+/** WEL-01/02 (mobile-app.md §19 `FocusBlocker`): the Android focus service; a no-op elsewhere (soft focus only). */
+export interface FocusBlocker {
+  readonly available: boolean;
+  start(state: FocusNativeState): void;
+  stop(): void;
+  isRunning(): boolean;
+  /** Actions taken from the notification or the overlay since the last call, oldest first. */
+  consumeActions(): { action: FocusNativeAction; at: number }[];
+  blockedAttempts(): number;
+  /** Screen on: leaving Studify now is an interruption. null when unknown (no native module). */
+  isInteractive(): boolean | null;
+  permissions(): FocusPermissionState;
+  openUsageAccessSettings(): void;
+  openOverlaySettings(): void;
+  openDndSettings(): void;
+  installedApps(): Promise<InstalledApp[]>;
+  /** Called when the native side queued an action. Returns the unsubscribe function. */
+  onAction(listener: () => void): () => void;
+}
