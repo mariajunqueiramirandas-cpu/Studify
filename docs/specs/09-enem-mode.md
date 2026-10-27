@@ -272,7 +272,7 @@ Specified in [08 — Prova Provável](08-prova-provavel.md#enm-08--prova-prováv
 
 ## 7. AI behavior
 
-All calls: model `claude-opus-5-5`; PLT-04 budget checks (global jobs bill to the system budget, not to students); `ai_usage` rows with the feature ID; `stop_reason` handled, including `refusal`, with server-side fallbacks (`fallbacks: "default"`); Zod validation with one retry, then flag.
+All calls: model `claude-opus-5-5`; PLT-04 budget checks (global jobs bill to the system budget, not to students); `ai_usage` rows with the feature ID; `stop_reason` handled, including `refusal`, with server-side fallbacks (`fallbacks: "default"`) on synchronous (non-Batch) calls only — Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md R1](../engineering/ai-pipeline.md#14-reconciliations)); Zod validation with one retry, then flag.
 
 | # | Task | Feature | Runs | Inputs | Effort | Output (structured unless noted) |
 |---|---|---|---|---|---|---|

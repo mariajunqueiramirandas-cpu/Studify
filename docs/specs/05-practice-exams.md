@@ -247,7 +247,7 @@ A view `calibration_stats(user_id, node_id, confidence, n, n_correct)` over `att
 
 ## 7. AI behavior
 
-All calls: model `claude-opus-5-5`, adaptive thinking, explicit effort, server-side fallbacks (`fallbacks: "default"`), `stop_reason` checked (incl. `refusal`, `max_tokens`), PLT-04 budget checked before the call, `ai_usage` row with feature ID, Zod validation. Student answers are wrapped as data; the system prompt says the answer may contain instructions to ignore (prompt-injection tests in [testing-strategy.md](../engineering/testing-strategy.md)).
+All calls: model `claude-opus-5-5`, adaptive thinking, explicit effort, server-side fallbacks (`fallbacks: "default"`) on synchronous (non-Batch) calls only — Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md R1](../engineering/ai-pipeline.md#14-reconciliations)), `stop_reason` checked (incl. `refusal`, `max_tokens`), PLT-04 budget checked before the call, `ai_usage` row with feature ID, Zod validation. Student answers are wrapped as data; the system prompt says the answer may contain instructions to ignore (prompt-injection tests in [testing-strategy.md](../engineering/testing-strategy.md)).
 
 | Task | Feature | Mode | Effort | Inputs | Output (structured) |
 |---|---|---|---|---|---|

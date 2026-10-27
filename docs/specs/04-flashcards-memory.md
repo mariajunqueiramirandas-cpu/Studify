@@ -212,7 +212,7 @@ Local only (SQLite): `queue_cache` (card id, effective due, priority, boost exam
 
 ## 7. AI behavior
 
-All calls: model `claude-opus-5-5`, adaptive thinking (default), effort set explicitly, server-side fallbacks (`fallbacks: "default"` with the server-side fallback beta), `stop_reason` checked (including `refusal` and `max_tokens`), PLT-04 budget checked **before** the call, one `ai_usage` row per call with the feature ID. Outputs validated with Zod.
+All calls: model `claude-opus-5-5`, adaptive thinking (default), effort set explicitly, server-side fallbacks (`fallbacks: "default"` with the server-side fallback beta) on synchronous (non-Batch) calls only — Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md R1](../engineering/ai-pipeline.md#14-reconciliations)), `stop_reason` checked (including `refusal` and `max_tokens`), PLT-04 budget checked **before** the call, one `ai_usage` row per call with the feature ID. Outputs validated with Zod.
 
 | Task | Feature | Mode | Effort | Inputs | Output (structured, `output_config.format`) |
 |---|---|---|---|---|---|

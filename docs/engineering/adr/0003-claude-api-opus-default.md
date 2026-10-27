@@ -23,14 +23,14 @@ Trust (PRD principle 3, TRU-01) depends on reliable page citations. The owner wa
 4. **Two output modes, because citations and structured outputs can't be combined in one request** (the API returns 400):
    - **Citations mode** (`citations: {enabled: true}` on document blocks): for prose that must cite exact pages, such as tutor answers, notes and explanations. Citation `page_location` values are mapped from slice pages back to original page numbers.
    - **Structured-output mode** (`output_config.format` with JSON schemas, validated again with Zod): for the knowledge map, cards, questions and grades. These include a `source_pages` field, checked server-side to fall inside the slice's page range.
-5. **Thinking and effort:** adaptive thinking (it can't be disabled on Opus 5.5). **Effort set explicitly per task**, because the Opus 5.5 default is `medium`: `high` for knowledge maps, grading and Prova Provável; `medium` for generation and tutor; `low` for moderation and classification. The levels are tuned by evals.
+5. **Thinking and effort:** adaptive thinking (it can't be disabled on Opus 5.5). **Effort set explicitly per task**, because the Opus 5.5 default is `medium`: `low`/`medium` for the knowledge map (the outline must appear in under 2 minutes; raised only if outline evals fail), `high` for grading and Prova Provável, `medium` for generation and tutor, `low` for moderation and classification. Per-task levels are listed in [ai-pipeline.md §3](../ai-pipeline.md#3-task-catalog) and tuned by evals.
 6. **Cost controls:**
    - **Prompt caching** of document blocks and stable system prompts, since every generation for a subject re-reads the same slices.
    - **Message Batches API** (50% price) for non-urgent bulk generation after the outline.
-   - **Files API** to upload a PDF once and reference it across requests. Files are deleted after processing to avoid extending retention.
+   - **Files API** to upload each PDF slice once and reference it across requests. Because Files API objects persist until deleted (beyond the API's default 30-day retention), files are kept only while in use and deleted by the worker when idle or when the document is deleted ([ai-pipeline.md §4.2](../ai-pipeline.md#42-files-api)).
    - Per-user, per-Turma and global budgets (PLT-04).
 7. **Refusals:**
-   - Every request uses the **server-side fallback**: beta header `server-side-fallback-2026-07-01` with `fallbacks: "default"`, which routes refusals by category.
+   - Every **synchronous** request uses the **server-side fallback**: beta header `server-side-fallback-2026-07-01` with `fallbacks: "default"`, which routes refusals by category. Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md §7.4](../ai-pipeline.md#74-why-no-fallbacks-in-batch)).
    - Code always checks `stop_reason` (including `"refusal"`) before reading content.
    - The user sees a friendly PT-BR message when a refusal stands.
 8. **Streaming** for long outputs and the tutor. SDK helpers (`finalMessage()`) for complete results.

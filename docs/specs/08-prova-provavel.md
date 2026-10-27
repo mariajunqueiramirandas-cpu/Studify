@@ -145,7 +145,7 @@ Both are **predictions, never guarantees**, and the UI always says so.
 
 ## 7. AI behavior
 
-All calls: model `claude-opus-5-5`, PLT-04 budget check, `ai_usage` row with feature ID (`PRA-09` / `ENM-08`), `stop_reason` handled (incl. `refusal`, with `fallbacks: "default"`), Zod validation with one retry.
+All calls: model `claude-opus-5-5`, PLT-04 budget check, `ai_usage` row with feature ID (`PRA-09` / `ENM-08`), `stop_reason` handled (incl. `refusal`, with `fallbacks: "default"` on synchronous (non-Batch) calls only — Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md R1](../engineering/ai-pipeline.md#14-reconciliations))), Zod validation with one retry.
 
 ### 7.1 `pastTest.extract` (PRA-09.2)
 

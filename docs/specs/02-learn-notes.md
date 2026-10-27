@@ -193,7 +193,7 @@ Notes are deliberately short and end with a retrieval prompt, because the produc
 
 ## 7. AI behavior
 
-All tasks: model `claude-opus-5-5`, adaptive thinking, `fallbacks: "default"`, `stop_reason` checked (incl. `refusal`), logged in `ai_usage` with the feature ID, PLT-04 budget checked before the call. Prose tasks use the **Citations API** (`citations: {enabled: true}` on every `document` block) and therefore cannot use structured outputs; structured tasks use `output_config.format` with `source_pages` validated per TRU-01.2. Topic slices are the cached prefix ([01 §7](01-ingestion-knowledge-map.md#7-ai-behavior)).
+All tasks: model `claude-opus-5-5`, adaptive thinking, `fallbacks: "default"` on synchronous (non-Batch) calls only — Batch requests don't accept `fallbacks`; refused batch results are re-run on the standard API ([ai-pipeline.md R1](../engineering/ai-pipeline.md#14-reconciliations)), `stop_reason` checked (incl. `refusal`), logged in `ai_usage` with the feature ID, PLT-04 budget checked before the call. Prose tasks use the **Citations API** (`citations: {enabled: true}` on every `document` block) and therefore cannot use structured outputs; structured tasks use `output_config.format` with `source_pages` validated per TRU-01.2. Topic slices are the cached prefix ([01 §7](01-ingestion-knowledge-map.md#7-ai-behavior)).
 
 | Task | Feature | Mode | Effort | Input | Output |
 |---|---|---|---|---|---|
@@ -202,7 +202,7 @@ All tasks: model `claude-opus-5-5`, adaptive thinking, `fallbacks: "default"`, `
 | **L3 Aprofundado** | LRN-01.4 | Standard, **streaming** (Edge Function) | `high` | Same as L2 + concept list with formulas | Prose Markdown, with citations |
 | **L4 Resumo da matéria** | LRN-01.7 | Standard | `low` | Text only: topic titles + `tldr` notes | Prose ≤ 300 words; topic references by key → rendered as topic chips |
 | **L5 Glossary definitions** | LRN-02 | **Batch** (S4) | `low` | Topic slice(s) (cached); key terms of the topic's concepts | Structured: `{terms: [{term, definition, example?, aliases[], concept_key, source_pages[{page_start, page_end}]}]}` |
-| **L6 Explica de outro jeito** | LRN-03 | Standard, **streaming** | `low` (Mais simples, Com uma analogia, Com um exemplo) · `medium` (Passo a passo) | The target text + its cited pages as a slice (cached when the topic slice is warm); style; `content_language`; for language subjects, explanation language PT-BR | Prose with citations |
+| **L6 Explica de outro jeito** | LRN-03 | Standard, **streaming** | `low` (Mais simples, Com uma analogia, Com um exemplo) · `medium` (Passo a passo) | The target text (sent as plain text — cited answers can't be reused as citation-bearing input, [ai-pipeline.md R9](../engineering/ai-pipeline.md#14-reconciliations)) + its cited pages as a slice (cached when the topic slice is warm); style; `content_language`; for language subjects, explanation language PT-BR | Prose with citations |
 | **L7 Relations** | LRN-04.1 | Standard (extends T3 of [01](01-ingestion-knowledge-map.md)) | `medium` | Text only: outline with concepts | Structured: `{relations: [{from_key, to_key, kind: related|contrast, reason}]}` |
 | **L8 Visual spec** | LRN-05 | Standard | `medium` | Topic slice(s) (cached); Resumo text | Structured: `{fits: bool, type?, title?, alt_text?, nodes?/edges?/events?/columns?/rows?, source_pages[]}` (one schema per type, discriminated by `type`) |
 
