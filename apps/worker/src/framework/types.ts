@@ -27,6 +27,8 @@ export interface JobContext {
   tts?: TtsProvider | null;
   /** Content waves go to the Message Batches API (AI_USE_BATCH); otherwise they run as standard calls. */
   useBatch?: boolean;
+  /** Standard calls a content wave runs at once (AI_WAVE_CONCURRENCY). */
+  waveConcurrency?: number;
 }
 
 export interface JobDefinition<T = Record<string, unknown>> {

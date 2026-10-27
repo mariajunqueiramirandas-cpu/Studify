@@ -23,11 +23,11 @@ function base(messages: BetaMessageParam[], extra: Partial<BetaCreateParams> = {
 const userText: BetaMessageParam = { role: "user", content: [{ type: "text", text: "oi" }] };
 
 describe("buildParams", () => {
-  it("sends Haiku 5.5 at effort high, with no fallbacks or betas, and never sampling or thinking params", () => {
+  it("sends Haiku 5.5 at the declared effort, with no fallbacks or betas, and never sampling or thinking params", () => {
     const params = buildParams(structuredCall(), { batch: false, maxTokensClass: "S", messages: structuredCall().messages });
     expect(params.model).toBe("claude-haiku-5-5");
     expect(params.max_tokens).toBe(8_000);
-    expect(params.output_config?.effort).toBe("high");
+    expect(params.output_config?.effort).toBe("medium");
     expect("fallbacks" in params).toBe(false);
     expect("betas" in params).toBe(false);
     for (const key of ["temperature", "top_p", "top_k", "thinking"]) {

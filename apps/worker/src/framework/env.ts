@@ -19,6 +19,8 @@ const EnvSchema = z.object({
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).default(600_000),
   /** Send content waves (S2 concepts, S4 content, transcription) to the Message Batches API. Off: standard calls. */
   AI_USE_BATCH: z.enum(['true', 'false', '1', '0']).default('false'),
+  /** Standard Claude calls a content wave runs at once (S2 concepts, S4 content, transcription). */
+  AI_WAVE_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(24),
 });
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
@@ -35,6 +37,7 @@ export interface WorkerConfig {
   logLevel: LogLevel;
   aiTimeoutMs: number;
   useBatch: boolean;
+  waveConcurrency: number;
 }
 
 /** Empty strings in the environment mean "unset". */
@@ -65,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
     logLevel: v.WORKER_LOG_LEVEL,
     aiTimeoutMs: v.AI_TIMEOUT_MS,
     useBatch: v.AI_USE_BATCH === 'true' || v.AI_USE_BATCH === '1',
+    waveConcurrency: v.AI_WAVE_CONCURRENCY,
   };
 }
 

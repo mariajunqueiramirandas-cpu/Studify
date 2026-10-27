@@ -7,6 +7,7 @@ import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import type { JobContext, JobDefinition } from './types.ts';
 import { PermanentJobError } from './errors.ts';
+import { STANDARD_WAVE_CONCURRENCY } from './concurrency-defaults.ts';
 import { applyProgress, ensureAiJob, isUuid, type ProgressPatch } from './progress.ts';
 import type { PushService, PushMessage } from './push.ts';
 import { policyFor, type QueueBackend, type QueueJob, type QueueOptions, type SendOptions } from './queue.ts';
@@ -24,6 +25,8 @@ export interface RuntimeDeps {
   tts?: TtsProvider | null;
   /** AI_USE_BATCH: content waves go to the Message Batches API. */
   useBatch?: boolean;
+  /** AI_WAVE_CONCURRENCY: standard calls a content wave runs at once. */
+  waveConcurrency?: number;
 }
 
 const DEFAULT_RETRY_LIMIT = 3;
@@ -120,6 +123,7 @@ export class JobRegistry {
       },
       tts: deps.tts ?? null,
       useBatch: deps.useBatch ?? false,
+      waveConcurrency: deps.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY,
     };
   }
 }
