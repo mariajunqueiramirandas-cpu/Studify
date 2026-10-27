@@ -1,8 +1,13 @@
+import type { OcclusionCardMedia } from '@studify/shared';
 import { useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Pressable, StyleSheet, View } from 'react-native';
 import { t } from '../i18n';
 import { radius, space, useTheme } from '../theme';
 import { RichContent } from './MarkdownView';
+import { OcclusionCardImage } from './OcclusionImage';
+import { renderCloze } from './cloze';
+
+export { renderCloze };
 import { Text } from './Text';
 
 interface FlashcardProps {
@@ -14,23 +19,16 @@ interface FlashcardProps {
   type?: string;
   clozeIndex?: number | null;
   footer?: React.ReactNode;
-}
-
-/** Turns "{{c1::mitocôndria}}" into a blank on the front and bold on the back (MEM-01 cloze). */
-export function renderCloze(text: string, side: 'front' | 'back', index?: number | null): string {
-  return text.replace(/\{\{c(\d+)::([^}]+?)(?:::([^}]+))?\}\}/g, (_, n: string, answer: string, hint?: string) => {
-    const active = index == null || Number(n) === index;
-    if (!active) return answer;
-    if (side === 'front') return hint ? `[… ${hint}]` : '[…]';
-    return `**${answer}**`;
-  });
+  /** MEM-03: occlusion media and a signed URL of its image. */
+  media?: OcclusionCardMedia | null;
+  mediaUri?: string | null;
 }
 
 /**
  * Front/back card. The back is rendered off-screen before the flip so flipping stays < 100 ms
  * (mobile-app.md §8). Reduced motion → crossfade instead of a flip (ux §10).
  */
-export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex, footer }: FlashcardProps) {
+export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex, footer, media, mediaUri }: FlashcardProps) {
   const { colors: c, reduceMotion } = useTheme();
   const anim = useRef(new Animated.Value(flipped ? 1 : 0)).current;
 
@@ -40,6 +38,7 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
   }, [flipped, anim, reduceMotion]);
 
   const isCloze = type === 'cloze';
+  const occlusion = type === 'image_occlusion' && media ? media : null;
   const frontText = isCloze ? renderCloze(front, 'front', clozeIndex) : front;
   const backText = isCloze ? renderCloze(front, 'back', clozeIndex) + (back ? `\n\n${back}` : '') : back;
 
@@ -75,7 +74,8 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
             {t('review.front')}
           </Text>
           <View style={styles.content}>
-            <RichContent text={frontText} variant="cardFace" align="center" />
+            {occlusion ? <OcclusionCardImage media={occlusion} uri={mediaUri ?? null} revealed={false} /> : null}
+            <RichContent text={frontText} variant={occlusion ? 'body' : 'cardFace'} align="center" />
           </View>
         </Animated.View>
         <Animated.View style={[styles.face, styles.back, { backgroundColor: c.surface1, borderColor: c.primary }, backStyle]} pointerEvents={flipped ? 'auto' : 'none'}>
@@ -83,6 +83,7 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
             {t('review.back')}
           </Text>
           <View style={styles.content}>
+            {occlusion ? <OcclusionCardImage media={occlusion} uri={mediaUri ?? null} revealed /> : null}
             <RichContent text={backText} variant="cardFace" align="center" />
           </View>
           {footer}

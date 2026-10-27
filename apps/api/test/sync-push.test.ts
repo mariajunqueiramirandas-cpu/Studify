@@ -14,8 +14,8 @@ function review(id: string, cardId: string, reviewedAt: string, rating = 3) {
   };
 }
 
-function push(items: unknown[], token?: string) {
-  return request('sync-push', { token, idem: '0190a000-0000-7000-8000-0000000000c1', body: { schema_version: 1, device_id: 'device-1', items } });
+function push(items: unknown[], token?: string, idem = '0190a000-0000-7000-8000-0000000000c1') {
+  return request('sync-push', { token, idem, body: { schema_version: 1, device_id: 'device-1', items } });
 }
 
 test('sync-push: a review is stored once, acked, and the card state is returned', async () => {
@@ -86,13 +86,31 @@ test('sync-push: an invalid row is rejected, the rest of the batch still lands',
   assertEquals(body.rejected, [{ id: bad.id, code: 'invalid', drop: true }]);
 });
 
-test('sync-push: podcast_play has no table yet, so the row is dropped (drop=true), not retried forever', async () => {
+test('sync-push: podcast_play keeps the newest resume position; an unknown or private episode is dropped', async () => {
   const h = makeHarness();
   await seedWorld(h);
-  const play = { id: v7(18), kind: 'podcast_play', created_at: NOW.toISOString(), payload: { episode_id: v7(19), position_ms: 1200, updated_at: NOW.toISOString() } };
-  const body = await json(await handler(push([play]), h.deps));
-  assertEquals(body.acked, []);
-  assertEquals(body.rejected, [{ id: play.id, code: 'invalid', drop: true }]);
+  const episode = v7(19);
+  const personal = v7(23);
+  h.db.seed('podcast_episodes', [
+    { id: episode, subject_id: IDS.subject, owner_user_id: null },
+    { id: personal, subject_id: IDS.bobSubject, owner_user_id: BOB.id },
+  ]);
+  const play = (id: number, ep: string, position: number, at: number) => ({ id: v7(id), kind: 'podcast_play', created_at: NOW.toISOString(), payload: { episode_id: ep, position_ms: position, updated_at: new Date(at).toISOString() } });
+  const first = await json(await handler(push([play(18, episode, 1200, NOW_MS - 1000)]), h.deps));
+  assertEquals(first.acked, [v7(18)]);
+  // An older write arriving late does not move the position back.
+  const late = await json(await handler(push([play(20, episode, 300, NOW_MS - 5000)], undefined, v7(120)), h.deps));
+  assertEquals(late.acked, [v7(20)]);
+  assertEquals(h.db.rows('podcast_plays')[0]!.position_ms, 1200);
+  const newer = await json(await handler(push([play(21, episode, 4000, NOW_MS)], undefined, v7(121)), h.deps));
+  assertEquals(newer.acked, [v7(21)]);
+  assertEquals(h.db.rows('podcast_plays')[0]!.position_ms, 4000);
+
+  const bad = await json(await handler(push([play(22, v7(99), 1, NOW_MS), play(24, personal, 1, NOW_MS)], undefined, v7(122)), h.deps));
+  assertEquals(bad.rejected, [
+    { id: v7(22), code: 'not_found', drop: true },
+    { id: v7(24), code: 'forbidden', drop: true },
+  ]);
 });
 
 test('sync-push: a last-writer-wins plan edit clamps its timestamp and only moves forward', async () => {

@@ -35,6 +35,7 @@ import { FlagSheet } from '../../../../../features/trust/FlagSheet';
 import { openTutor } from '../../../../../features/tutor/open';
 import { options, t } from '../../../../../i18n';
 import { space } from '../../../../../theme';
+import { ReadAloudButton } from '../../../../../features/voice/VoiceButtons';
 
 type Tab = 'notes' | 'cards' | 'questions' | 'glossary';
 
@@ -228,6 +229,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
           <Row wrap>
             <AiBadge />
             <View style={{ flex: 1 }} />
+            <ReadAloudButton id={`note:${note.id}`} text={note.body} />
             <Button compact variant="text" label={t('global.report_error')} onPress={() => setFlag(true)} />
           </Row>
           <Button variant="tonal" icon="bulb-outline" label={t('notes.explain')} disabled={!online} onPress={() => setExplain(true)} />

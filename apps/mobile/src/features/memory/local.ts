@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNull, lte, notInArray } from 'drizzle-orm';
 import { createEmptyCard, Rating, State, type Card } from 'ts-fsrs';
+import type { OcclusionCardMedia } from '@studify/shared';
 import type { AppDb } from '../../db/client';
 import { currentUserId, schedulerFor } from '../../db/hooks/review';
 import { cardOverrides, cards, cardStates, exams, examScopeNodes, profiles, subjects, subjectUserSettings } from '../../db/schema';
@@ -12,6 +13,8 @@ export interface ReviewCard {
   front: string;
   back: string;
   clozeIndex: number | null;
+  /** Image-occlusion cards (MEM-03): image path, size, masks and the asked mask. */
+  media: OcclusionCardMedia | null;
   sourcePages: { document_id: string; page_start: number; page_end: number }[];
   isNew: boolean;
   isLeech: boolean;
@@ -113,6 +116,7 @@ export function buildLocalQueue(db: AppDb, opts: { subjectId?: string; limit?: n
       front: o?.front ?? c.front,
       back: o?.back ?? c.back,
       clozeIndex: c.clozeIndex,
+      media: c.type === 'image_occlusion' ? (((o?.media as unknown) ?? c.media) as OcclusionCardMedia | null) : null,
       sourcePages: c.sourcePages ?? [],
       isNew,
       isLeech,

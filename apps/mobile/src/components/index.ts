@@ -13,3 +13,4 @@ export * from './Flashcard';
 export * from './RatingBar';
 export * from './QuestionView';
 export * from './Practice';
+export * from './OcclusionImage';

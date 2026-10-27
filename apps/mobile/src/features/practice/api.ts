@@ -172,3 +172,12 @@ export function useCalibration() {
     queryFn: () => rows<CalibrationRow>(supabase.from('calibration_stats').select('node_id,confidence,n,n_correct').eq('user_id', userId!)),
   });
 }
+
+/** PRA-08.5 "Mostrar meu raciocínio": the first wrong step of the student's working and a nudge. */
+export function checkProblemWork(questionId: string, working: string) {
+  return callFunction<{ question_id: string; working: string }, { first_wrong_step_index: number | null; what_went_wrong: string; nudge: string }>(
+    'problem-check-work',
+    { question_id: questionId, working },
+    { idempotencyKey: uuidv7() },
+  );
+}

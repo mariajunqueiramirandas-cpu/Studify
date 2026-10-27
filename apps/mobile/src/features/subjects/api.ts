@@ -251,3 +251,16 @@ export async function signedUrl(bucket: string, path: string): Promise<string | 
   const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
   return data?.signedUrl ?? null;
 }
+
+/** Signed URL of a stored `bucket/path` (refreshed before the 1 h TTL ends); null path → null. */
+export function useStorageUrl(path: string | null | undefined) {
+  return useQuery({
+    queryKey: ['signedUrl', path],
+    enabled: !!path,
+    staleTime: 50 * 60 * 1000,
+    queryFn: () => {
+      const slash = path!.indexOf('/');
+      return signedUrl(path!.slice(0, slash), path!.slice(slash + 1));
+    },
+  });
+}

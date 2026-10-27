@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import type { Option, QuestionResponse, QuestionRow } from '../features/practice/types';
 import { radius, space, touch, useTheme } from '../theme';
 import { IconButton } from './Button';
+import { FindErrorQuestion, ProblemQuestion } from './QuestionTypes3';
 import { RichContent } from './MarkdownView';
 import { Text } from './Text';
 
@@ -18,15 +19,18 @@ interface Props {
   submitOnTap?: (r: QuestionResponse) => void;
   /** Battle reveal: per-option distribution, only when ≥ 5 answered (SOC-03.10). */
   distribution?: Record<string, number> | null;
+  /** problem (PRA-08.3): hints revealed so far and the "Dica" action; omitted where hints are not offered. */
+  hintsUsed?: number;
+  onHint?: () => void;
 }
 
-export function QuestionView({ question, response, onChange, revealed, submitOnTap, distribution }: Props) {
+export function QuestionView({ question, response, onChange, revealed, submitOnTap, distribution, hintsUsed, onHint }: Props) {
   return (
     <View style={{ gap: space.lg }}>
       {question.stimulus?.markdown ? <Stimulus text={question.stimulus.markdown} /> : null}
       {question.stimulus?.table_markdown ? <Stimulus text={question.stimulus.table_markdown} /> : null}
       {question.type !== 'fill_blank' && question.type !== 'true_false' ? <RichContent text={question.stem} /> : null}
-      <Body question={question} response={response} onChange={onChange} revealed={revealed} submitOnTap={submitOnTap} distribution={distribution} />
+      <Body question={question} response={response} onChange={onChange} revealed={revealed} submitOnTap={submitOnTap} distribution={distribution} hintsUsed={hintsUsed} onHint={onHint} />
     </View>
   );
 }
@@ -40,7 +44,7 @@ function Stimulus({ text }: { text: string }) {
   );
 }
 
-function Body({ question, response, onChange, revealed, submitOnTap, distribution }: Props) {
+function Body({ question, response, onChange, revealed, submitOnTap, distribution, hintsUsed, onHint }: Props) {
   const p = question.payload as Record<string, unknown>;
   switch (question.type) {
     case 'mcq_single':
@@ -116,6 +120,10 @@ function Body({ question, response, onChange, revealed, submitOnTap, distributio
       );
     case 'ordering':
       return <Ordering items={(p.items as { id: string; text: string }[]) ?? []} correct={revealed ? (p.correct_order as string[]) : undefined} response={response} onChange={onChange} seed={question.id} />;
+    case 'find_error':
+      return <FindErrorQuestion payload={p as never} response={response} onChange={onChange} revealed={revealed} />;
+    case 'problem':
+      return <ProblemQuestion question={question} response={response} onChange={onChange} revealed={revealed} hintsUsed={hintsUsed} onHint={onHint} />;
     case 'short_answer':
     case 'essay_question':
     default:

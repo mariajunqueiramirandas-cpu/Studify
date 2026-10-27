@@ -9,6 +9,9 @@ import { createUserCard, type Citation } from '../../features/learn/api';
 import { useSubject } from '../../features/subjects/api';
 import { rateMessage, sendTutorMessage, stripSafetyMarkers, useThreadMessages, useThreads, type TutorMode } from '../../features/tutor/api';
 import type { TutorScope } from '../../features/tutor/open';
+import { MicButton, voiceErrorText } from '../../features/voice/VoiceButtons';
+import { appendTranscript } from '../../features/voice/speech-text';
+import { readAloud, stopReading, useReadAloud, useVoiceInput } from '../../features/voice/voice';
 import { options, t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
 
@@ -26,7 +29,7 @@ interface UiMessage {
 
 const MAX_CHARS = 4000;
 
-/** S-TUT-02 Tutor (modal): scope, modes, streaming answer with 📄 chips, follow-ups (TUT-01…05). */
+/** S-TUT-02 Tutor (modal): scope, modes, streaming answer with 📄 chips, follow-ups, voice (TUT-01…06). */
 export default function TutorThread() {
   const params = useLocalSearchParams<{ threadId: string; scope?: string; mode?: TutorMode; prefill?: string }>();
   const insets = useSafeAreaInsets();
@@ -52,6 +55,12 @@ export default function TutorThread() {
   const [blocked, setBlocked] = useState<'limit' | null>(null);
   const handle = useRef<{ cancel: () => void } | null>(null);
   const list = useRef<FlatList<UiMessage>>(null);
+  // TUT-06 Conversa por voz: answers are spoken, then the app listens again; Me testa is text-only (TUT-06.5).
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceModeRef = useRef(false);
+  voiceModeRef.current = voiceMode;
+  const speech = useReadAloud('tutor.answer');
+  const handsFree = useVoiceInput((text) => send(text, false, true));
   const modeLabels = options('tutor.modes');
   const followups = options('tutor.followups');
 
@@ -71,9 +80,10 @@ export default function TutorThread() {
 
   const scopeLabel = scope?.type === 'passage' ? 'Este trecho' : scope?.type === 'topic' ? 'Este tópico' : (subject.data?.name ?? '');
 
-  const send = (text: string, allowGeneral = false) => {
+  const send = (text: string, allowGeneral = false, spoken = false) => {
     const body = text.trim();
     if (!body || !online) return;
+    stopReading();
     setInput('');
     const assistantId = `a-${Date.now()}`;
     setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', text: body, citations: [], general: false, status: 'complete' }, { id: assistantId, role: 'assistant', text: '', citations: [], general: allowGeneral, status: 'streaming' }]);
@@ -81,7 +91,7 @@ export default function TutorThread() {
     const patch = (fn: (m: UiMessage) => UiMessage) => setMessages((all) => all.map((m) => (m.id === assistantId ? fn(m) : m)));
     const timer = setTimeout(() => setStatus(t('tutor.thinking')), 3000);
     const { handle: h } = sendTutorMessage(
-      { ...(threadId ? { thread_id: threadId } : { scope: scope ?? undefined }), mode, message: body, allow_general_answer: allowGeneral || undefined },
+      { ...(threadId ? { thread_id: threadId } : { scope: scope ?? undefined }), mode, message: body, allow_general_answer: allowGeneral || undefined, voice: spoken || voiceModeRef.current || undefined },
       {
         onMeta: (d) => {
           if (d.thread_id) setThreadId(String(d.thread_id));
@@ -103,7 +113,10 @@ export default function TutorThread() {
           setStatus(null);
           patch((m) => {
             const s = stripSafetyMarkers(m.text);
-            return { ...m, text: d.stop_reason === 'refusal' ? t('ai.refusal') : s.text, distress: s.distress, status: d.stop_reason === 'refusal' ? 'refused' : 'complete' };
+            const done = { ...m, text: d.stop_reason === 'refusal' ? t('ai.refusal') : s.text, distress: s.distress, status: d.stop_reason === 'refusal' ? 'refused' as const : 'complete' as const };
+            // TUT-06.3: in voice mode the answer is spoken, then the app listens for the next question.
+            if (voiceModeRef.current && done.text) readAloud('tutor.answer', done.text, { onDone: () => voiceModeRef.current && void handsFree.start() });
+            return done;
           });
           if (typeof d.usage_pct_today === 'number' && d.usage_pct_today >= 80) setLimitLeft(Math.max(0, Math.round((100 - d.usage_pct_today) / 1.6)));
         },
@@ -128,7 +141,24 @@ export default function TutorThread() {
       <AppBar
         title={t('tutor.title')}
         closeIcon
-        onBack={() => router.back()}
+        onBack={() => (stopReading(), router.back())}
+        actions={
+          <IconButton
+            icon={voiceMode ? 'headset' : 'headset-outline'}
+            label={voiceMode ? t('tutor.voice_mode_off') : t('tutor.voice_mode_on')}
+            onPress={() => {
+              const next = !voiceMode;
+              setVoiceMode(next);
+              if (next) {
+                if (mode === 'quiz') setMode('answer');
+                void handsFree.start();
+              } else {
+                handsFree.stop();
+                stopReading();
+              }
+            }}
+          />
+        }
         context={
           <View style={{ gap: space.sm }}>
             <Text variant="bodySmall" tone="secondary">
@@ -136,7 +166,10 @@ export default function TutorThread() {
             </Text>
             <SegmentedControl<TutorMode>
               value={mode}
-              onChange={setMode}
+              onChange={(m) => {
+                if (m === 'quiz' && voiceMode) overlay.snack(t('tutor.voice_no_quiz'));
+                else setMode(m);
+              }}
               options={[
                 { value: 'answer', label: modeLabels[0] ?? 'Responder' },
                 { value: 'socratic', label: modeLabels[1] ?? 'Socrático' },
@@ -224,6 +257,18 @@ export default function TutorThread() {
             )
           }
         />
+        {voiceMode ? (
+          <View style={{ paddingHorizontal: space.lg, gap: space.xs }}>
+            {speech.speaking ? (
+              <Button variant="tonal" icon="hand-left-outline" label={t('tutor.tap_to_stop')} onPress={() => (stopReading(), void handsFree.start())} />
+            ) : (
+              <Text variant="bodySmall" tone="secondary" align="center">
+                {handsFree.listening ? handsFree.partial || t('voice.listening') : t('tutor.voice_mode_hint')}
+              </Text>
+            )}
+            {handsFree.error ? <Text variant="caption" tone="warning" align="center">{voiceErrorText(handsFree.error)}</Text> : null}
+          </View>
+        ) : null}
         {blocked === 'limit' ? <Banner kind="warning" message={t('tutor.limit_reached')} action={{ label: t('review.start'), onPress: () => router.replace('/review') }} /> : null}
         {limitLeft !== null && !blocked ? <Text variant="bodySmall" tone="secondary" align="center">{t('tutor.limit_warning', { n: limitLeft })}</Text> : null}
         {mode === 'socratic' && messages.length > 1 ? (
@@ -242,6 +287,7 @@ export default function TutorThread() {
             accessibilityLabel={t('tutor.placeholder_generic')}
             style={[styles.input, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface1 }]}
           />
+          <MicButton disabled={!online || blocked === 'limit'} onText={(said) => setInput((v) => appendTranscript(v, said).slice(0, MAX_CHARS))} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('tutor.send')}

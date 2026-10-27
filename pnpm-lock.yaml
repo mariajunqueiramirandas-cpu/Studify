@@ -90,6 +90,12 @@ importers:
       '@react-native-google-signin/google-signin':
         specifier: ^16.1.5
         version: 16.1.5(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@react-native-ml-kit/face-detection':
+        specifier: ^2.0.1
+        version: 2.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@react-native-ml-kit/text-recognition':
+        specifier: ^2.0.0
+        version: 2.0.0(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       '@sentry/react-native':
         specifier: ~8.28.0
         version: 8.28.0(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.8(typescript@6.0.3))(@expo/env@2.5.3)(dotenv@17.4.2)(expo-router@58.0.26)(expo-updates@58.0.18(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(expo@58.0.19)(metro-config@0.87.2)(metro-resolver@0.87.2)(metro@0.87.2)(open@8.4.2)(promise@8.3.0)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -114,6 +120,9 @@ importers:
       expo:
         specifier: ~58.0.19
         version: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      expo-audio:
+        specifier: ~58.0.10
+        version: 58.0.10(expo-asset@58.0.18(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       expo-background-task:
         specifier: ~58.0.11
         version: 58.0.11(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
@@ -147,6 +156,9 @@ importers:
       expo-image:
         specifier: ~58.0.17
         version: 58.0.17(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      expo-image-manipulator:
+        specifier: ~58.0.15
+        version: 58.0.15(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       expo-image-picker:
         specifier: ~58.0.10
         version: 58.0.10(expo@58.0.19)
@@ -171,6 +183,12 @@ importers:
       expo-sharing:
         specifier: ~58.0.20
         version: 58.0.20(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      expo-speech:
+        specifier: ~58.0.3
+        version: 58.0.3(expo@58.0.19)
+      expo-speech-recognition:
+        specifier: ^58.0.0
+        version: 58.0.0(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       expo-splash-screen:
         specifier: ~58.0.11
         version: 58.0.11(expo@58.0.19)(typescript@6.0.3)
@@ -195,6 +213,9 @@ importers:
       i18next:
         specifier: ^26.5.11
         version: 26.5.11(typescript@6.0.3)
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
       katex:
         specifier: ^0.19.1
         version: 0.19.1
@@ -2141,6 +2162,18 @@ packages:
       react: '>=16'
       react-native: '>=0.57'
 
+  '@react-native-ml-kit/face-detection@2.0.1':
+    resolution: {integrity: sha512-TOUwO90LRnJ3VhJYTS2VJbxtzDeaKjm6UjGufgqYjQbPsFCOwRtnmwBbjXZ0v5ih/Fmfjffb0W1I3c1773Q85Q==}
+    peerDependencies:
+      react: '>=16.8.1'
+      react-native: '>=0.60.0-rc.0 <1.0.x'
+
+  '@react-native-ml-kit/text-recognition@2.0.0':
+    resolution: {integrity: sha512-RHefLYKndSyoDtgqHQptYQe+mftFk6/H30IQDenKX7PgMlJqoDejX+HdZ8gnP1kVNAt3iH+wyl/P6vCOkLMW9Q==}
+    peerDependencies:
+      react: '>=16.8.1'
+      react-native: '>=0.60.0-rc.0 <1.0.x'
+
   '@react-native/asset-utils@0.88.0':
     resolution: {integrity: sha512-Bj1DxQt5f4OrjdlgSVkZT37Z3hx5hUIN5AUDSqL/e99vgtTcqj5vnm067epZL1EF/QiqsniZO8Q1GSkItOakDg==}
     engines: {node: ^22.13.0 || ^24.3.0 || >= 26.0.0}
@@ -3606,6 +3639,14 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-audio@58.0.10:
+    resolution: {integrity: sha512-GoOyd1JAb7l/bJ/UNc5QIrXqSK9QrEFF3ahjdONGt8V6PN3RXRsTcOJDMN6RmDc9kb0XPP34DJIxEd/ushH1RQ==}
+    peerDependencies:
+      expo: '*'
+      expo-asset: '*'
+      react: '*'
+      react-native: '*'
+
   expo-background-task@58.0.11:
     resolution: {integrity: sha512-dseg1bJg2gkzJxQ1qYgK3UNenBgibFP3oOVIXOpwMexwbKgEVc6sIwCrlWazpyZpYjE5Lj8siEjQwCIBTT778g==}
     peerDependencies:
@@ -3682,6 +3723,13 @@ packages:
     resolution: {integrity: sha512-zlHudxC8OObyqCHmvdxJqURI7886KJ0cUJyn7R/a8FOD9fP837xKDN+u4SIt7XsSSVPNXzMd4Y7mN0pmup8NGA==}
     peerDependencies:
       expo: '*'
+
+  expo-image-manipulator@58.0.15:
+    resolution: {integrity: sha512-+DGAK+T3Q1W4AJnStC/tM+NufU4wK36Yw7XPyUUCrBkXpdlno7+t2mw+8apBH/WDkrkWSR0v0bwEWFaSAYQy0Q==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-image-picker@58.0.10:
     resolution: {integrity: sha512-yqQC9UYMWSUxk6U0jaS1vE1w+b9Ru0FJmQ3KjUf9Q9oVg5xBxmg8+Ts+usazMAuPoskNIXJ++VZ+uK6br9yUGQ==}
@@ -3829,6 +3877,18 @@ packages:
       expo: '*'
       react: '*'
       react-native: '*'
+
+  expo-speech-recognition@58.0.0:
+    resolution: {integrity: sha512-EchjKQWQ0H+rDg8ku1Lk2kOkiRXbSha7xouMYJKSeINMDs+OhVRjoamBSeBxmYmwWOVZLbUVzoDfHPhHcGRv9A==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
+
+  expo-speech@58.0.3:
+    resolution: {integrity: sha512-jdMTqWL6ciDM8aVJe2/l2g6GTVaK7i/zBOVUhTq+l0Y+DOCz3Nh4HqNrMwmIKzXrlsxRv3ejmjSQPlX1lfOTOA==}
+    peerDependencies:
+      expo: '*'
 
   expo-splash-screen@58.0.11:
     resolution: {integrity: sha512-Xg0VnPcFMzfjyFKgqb8nZWdZEX6AqNmr88wcIKgtS1iNtBxwh/Rg6IO+JYcgx8lRxgav6dzoHffSslOgUqpsFA==}
@@ -4420,6 +4480,9 @@ packages:
 
   jimp-compact@0.16.1:
     resolution: {integrity: sha512-dZ6Ra7u1G8c4Letq/B5EzAxj4tLFHL+cGtdpR+PVm4yzPDj+lCk+AbivWt1eOM+ikzkowtyV7qSqX6qr3t71Ww==}
+
+  jpeg-js@0.4.4:
+    resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -7991,6 +8054,16 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
+  '@react-native-ml-kit/face-detection@2.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+      react-native: 0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
+  '@react-native-ml-kit/text-recognition@2.0.0(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+      react-native: 0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
   '@react-native/asset-utils@0.88.0': {}
 
   '@react-native/babel-plugin-codegen@0.88.0(@babel/core@7.29.7)':
@@ -9399,6 +9472,13 @@ snapshots:
       - supports-color
       - typescript
 
+  expo-audio@58.0.10(expo-asset@58.0.18(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3))(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+    dependencies:
+      expo: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      expo-asset: 58.0.18(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      react: 19.3.0
+      react-native: 0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
   expo-background-task@58.0.11(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)):
     dependencies:
       expo: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
@@ -9470,6 +9550,13 @@ snapshots:
   expo-image-loader@58.0.3(expo@58.0.19):
     dependencies:
       expo: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+
+  expo-image-manipulator@58.0.15(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+    dependencies:
+      expo: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      expo-image-loader: 58.0.3(expo@58.0.19)
+      react: 19.3.0
+      react-native: 0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
   expo-image-picker@58.0.10(expo@58.0.19):
     dependencies:
@@ -9634,6 +9721,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-speech-recognition@58.0.0(expo@58.0.19)(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+    dependencies:
+      expo: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
+      react: 19.3.0
+      react-native: 0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
+  expo-speech@58.0.3(expo@58.0.19):
+    dependencies:
+      expo: 58.0.19(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.15)(expo-router@58.0.26)(react-dom@19.3.1(react@19.3.0))(react-native-webview@14.0.1(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)
 
   expo-splash-screen@58.0.11(expo@58.0.19)(typescript@6.0.3):
     dependencies:
@@ -10488,6 +10585,8 @@ snapshots:
       - ts-node
 
   jimp-compact@0.16.1: {}
+
+  jpeg-js@0.4.4: {}
 
   js-tokens@4.0.0: {}
 

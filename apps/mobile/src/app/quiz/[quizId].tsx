@@ -55,6 +55,7 @@ export default function QuizRunner() {
   const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [result, setResult] = useState<GradeResult | null>(null);
   const [cause, setCause] = useState<MistakeCause | null>(null);
+  const [hints, setHints] = useState(0);
   const [suggested, setSuggested] = useState<MistakeCause | null>(null);
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [navigator, setNavigator] = useState(false);
@@ -77,6 +78,7 @@ export default function QuizRunner() {
     const saved = runner.answers[q.id];
     setResponse((saved?.response as QuestionResponse | undefined) ?? null);
     setConfidence(saved?.confidence ?? null);
+    setHints(saved?.hintsUsed ?? 0);
     setResult(null);
     setCause(null);
     shownAt.current = Date.now();
@@ -106,7 +108,8 @@ export default function QuizRunner() {
   const confirm = () => {
     if (!q) return;
     persist(response, confidence);
-    const g = gradeAnswer(q.type as never, q.payload as never, response as never) as GradeResult;
+    // PRA-08.3: each hint lowers the credit of a correct problem answer.
+    const g = gradeAnswer(q.type as never, q.payload as never, response as never, { hintsUsed: hints }) as GradeResult;
     setResult(g);
     if (g.correct === false || (g.score != null && g.score < 1 && !g.pending)) {
       // PRA-04 §8.5: no AI call at answer time — the cause is suggested deterministically.
@@ -205,7 +208,19 @@ export default function QuizRunner() {
         </ActionBar>
       }
     >
-      <QuestionView question={q} response={response} onChange={(r) => (setResponse(r), exam && persist(r, null))} revealed={!!result && !result.pending} />
+      <QuestionView
+        question={q}
+        response={response}
+        onChange={(r) => (setResponse(r), exam && persist(r, null))}
+        revealed={!!result && !result.pending}
+        hintsUsed={hints}
+        // Hints are a practice aid (PRA-08.3); simulados run without them.
+        onHint={exam ? undefined : () => {
+          const n = hints + 1;
+          setHints(n);
+          runner.answer(q.id, { response, confidence, hintsUsed: n });
+        }}
+      />
       {needsConfidence ? (
         <View style={{ gap: space.xs }}>
           <ConfidencePicker value={confidence} onChange={setConfidence} />

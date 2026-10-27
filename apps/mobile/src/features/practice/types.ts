@@ -55,7 +55,9 @@ export type QuestionResponse =
   | { number: number; unit?: string }
   | { pairs: [string, string][] }
   | { order: string[] }
-  | { text: string };
+  | { text: string }
+  | { segment_id: string | null; error_type?: string; explanation?: string } // find_error (PRA-06)
+  | { answer: string }; // problem (PRA-08)
 
 export interface GradeResult {
   correct: boolean | null;
@@ -82,5 +84,7 @@ export function isAnswered(type: QuestionType, r: QuestionResponse | null | unde
   if ('pairs' in r) return r.pairs.length > 0;
   if ('order' in r) return r.order.length > 0;
   if ('text' in r) return r.text.trim().length > 0 || type !== 'short_answer';
+  if ('segment_id' in r) return true; // null is the explicit "Não tem erro" choice
+  if ('answer' in r) return r.answer.trim().length > 0;
   return false;
 }

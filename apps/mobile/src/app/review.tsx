@@ -2,16 +2,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { Grade } from 'ts-fsrs';
-import { ActionBar, Banner, BottomSheet, Button, EmptyState, Flashcard, IconButton, ListItem, PageChips, ProgressBar, RatingBar, Screen, Text, useOverlay } from '../components';
+import { ActionBar, Banner, BottomSheet, Button, EmptyState, Flashcard, IconButton, ListItem, PageChips, ProgressBar, RatingBar, Row, Screen, Text, useOverlay } from '../components';
 import { useDb } from '../db/DatabaseProvider';
 import { formatMinutes } from '../features/common/format';
 import { buildLocalQueue, previewIntervals, type ReviewCard } from '../features/memory/local';
+import { useStorageUrl } from '../features/subjects/api';
 import { setCardFlag } from '../features/learn/api';
 import { useSession } from '../features/auth/session';
 import { FlagSheet } from '../features/trust/FlagSheet';
 import { options, t } from '../i18n';
 import { useSessionStore } from '../stores/session';
 import { space } from '../theme';
+import { ReadAloudButton } from '../features/voice/VoiceButtons';
 
 const LEECH_LAPSES = 6;
 
@@ -37,6 +39,7 @@ export default function Review() {
   }, [db, subjectId]);
 
   const current = queue?.[store.index] ?? null;
+  const mediaUrl = useStorageUrl(current?.media?.path);
   const intervals = useMemo(() => (current ? previewIntervals(db, current.id) : undefined), [db, current]);
   const menuLabels = options('review.menu');
 
@@ -107,10 +110,19 @@ export default function Review() {
             back={current.back}
             type={current.type}
             clozeIndex={current.clozeIndex}
+            media={current.media}
+            mediaUri={mediaUrl.data ?? null}
             flipped={store.revealed}
             onFlip={store.reveal}
             tags={tags}
-            footer={<PageChips sources={current.sourcePages} subjectId={current.subjectId} />}
+            footer={
+              <Row>
+                <View style={{ flex: 1 }}>
+                  <PageChips sources={current.sourcePages} subjectId={current.subjectId} />
+                </View>
+                <ReadAloudButton id={`card:${current.id}`} text={store.revealed ? current.back : current.front} />
+              </Row>
+            }
           />
         </View>
       ) : null}
