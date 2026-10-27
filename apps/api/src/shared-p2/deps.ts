@@ -26,7 +26,7 @@ export interface BroadcastMessage {
 /** Sends broadcast messages through the Realtime REST endpoint (service key). Never throws to the caller. */
 export type Broadcaster = (messages: BroadcastMessage[]) => Promise<void>;
 
-/** Guardian verification mail (SP-03). Undefined until the mail provider is wired (see the report). */
+/** Guardian verification mail (SP-03), sent through Resend (mail.ts). Undefined when RESEND_API_KEY is unset. */
 export type GuardianMail = (args: { guardianEmail: string; verifyUrl: string }) => Promise<void>;
 
 export interface P2Deps extends Deps {

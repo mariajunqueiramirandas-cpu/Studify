@@ -30,6 +30,7 @@
    - Redirect URLs: `studify://auth/callback` and `https://studify.vendua.com.br`.
 4. **Google provider** (Authentication > Providers > Google): enter the OAuth client id and secret from the Google
    Cloud console (Web application client, the same one as `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`).
+   E-mail templates and the Resend sender are pushed from `supabase/config.toml` (apps/mobile/RELEASING.md §8).
 5. **Database URL for the API and worker**: Project Settings > Database > **Session pooler**, port **5432**.
    Use this string as `DATABASE_URL`. Do not use the transaction pooler (6543): pg-boss needs session mode. Do not
    use the direct connection either: on the free tier it is IPv6-only, and the VPS needs IPv4.
@@ -46,7 +47,8 @@ Free-tier limits to keep in mind:
 2. **Environment**: paste the variables from [`.env.example`](../../.env.example) into the app's Environment tab with
    real values. Dokploy writes them to `.env` next to the compose file, and both services read it (`env_file`).
    Required: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`, `DATABASE_URL`.
-   Keep `PORT=3000` and `BASE_URL=studify.vendua.com.br`. Never commit real values.
+   Keep `PORT=3000` and `BASE_URL=studify.vendua.com.br`. Set `RESEND_API_KEY` too, or guardian mails are not sent.
+   Never commit real values.
 3. **Domain**: the Domains tab, add `studify.vendua.com.br`, service `api`, container port `3000`, HTTPS on
    (Let's Encrypt). Dokploy adds the Traefik routing; the compose file has the same labels commented out if you need
    them by hand.

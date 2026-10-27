@@ -25,6 +25,10 @@ const Env = z.object({
   SITE_DIR: z.string().min(1).optional(),
   /** Where /download redirects. Default: the newest GitHub Release's studify.apk (site.ts DEFAULT_APK_URL). */
   APK_URL: z.url().optional(),
+  /** Resend key for the guardian mail (SP-03). Unset: no guardian mail is sent. Sign-in codes go through Supabase's SMTP. */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /** Sender of the guardian mail; its domain must be verified in Resend. Default: shared-p2/mail.ts DEFAULT_MAIL_FROM. */
+  MAIL_FROM: z.string().min(3).optional(),
 });
 
 export interface ApiConfig {
@@ -40,6 +44,8 @@ export interface ApiConfig {
   pgBossSchema: string;
   siteDir: string;
   apkUrl: string;
+  resendApiKey: string | undefined;
+  mailFrom: string | undefined;
   /** TTS_PROVIDER, GOOGLE_TTS_API_KEY, TTS_VOICE_*, TTS_USD_PER_MILLION_CHARS (packages/speech ttsFromEnv). */
   ttsEnv: Record<string, string | undefined>;
 }
@@ -86,6 +92,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     pgBossSchema: v.PG_BOSS_SCHEMA,
     siteDir: v.SITE_DIR ?? DEFAULT_SITE_DIR,
     apkUrl: v.APK_URL ?? DEFAULT_APK_URL,
+    resendApiKey: v.RESEND_API_KEY,
+    mailFrom: v.MAIL_FROM,
     ttsEnv: Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('TTS_') || key === 'GOOGLE_TTS_API_KEY')),
   };
 }

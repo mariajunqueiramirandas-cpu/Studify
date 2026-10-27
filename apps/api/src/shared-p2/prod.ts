@@ -4,6 +4,7 @@ import { ttsFromEnv } from '@studify/speech';
 import type { ApiConfig } from '../config.ts';
 import { buildProdRuntime, type ProdRuntime } from '../shared/prod.ts';
 import type { P2Deps } from './deps.ts';
+import { DEFAULT_MAIL_FROM, makeResendGuardianMail } from './mail.ts';
 import { makeRestBroadcaster } from './realtime.ts';
 import { publicBaseUrl } from './util.ts';
 
@@ -28,6 +29,8 @@ export function buildP2Runtime(config: ApiConfig): P2Runtime {
       return (buf[0] ?? 0) % maxExclusive;
     },
     randomBytes: (n: number) => crypto.getRandomValues(new Uint8Array(n)),
+    // SP-03 guardian mail. No RESEND_API_KEY: the link is still created, but no mail goes out.
+    guardianMail: config.resendApiKey ? makeResendGuardianMail(config.resendApiKey, config.mailFrom ?? DEFAULT_MAIL_FROM) : undefined,
     // INT-01.8 ✋ audio. Null (TTS_PROVIDER=device or no key): the app reads answers with on-device TTS.
     tts: ttsFromEnv(config.ttsEnv),
     signedUrl: async (path: string, ttlSeconds: number) => {

@@ -50,3 +50,22 @@ content_path = "./supabase/templates/confirmation.html"
 [auth.email.template.magic_link]
 subject = "Seu código do Studify"
 content_path = "./supabase/templates/magic_link.html"
+
+# Hosted project only (`supabase link --project-ref pwigsfpkyxdtorxvwpnt`, then `supabase config push`). Local runs
+# keep the CLI's built-in mail catcher. Supabase still generates the codes and renders the templates above; Resend
+# only delivers them. RESEND_API_KEY must be set in the shell that runs `config push` (RELEASING.md §8).
+[remotes.production]
+project_id = "pwigsfpkyxdtorxvwpnt"
+
+[remotes.production.auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "nao-responda@studify.vendua.com.br"
+sender_name = "Studify"
+
+# The built-in sender allows 2 e-mails per hour; with custom SMTP the limit is ours to set.
+[remotes.production.auth.rate_limit]
+email_sent = 100

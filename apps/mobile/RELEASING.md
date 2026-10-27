@@ -125,11 +125,29 @@ Changes in Google Cloud can take a few minutes to apply; the APK does not need a
 
 ### 8. E-mail sign-in
 
-The app asks for the 6-digit code from the e-mail, so the hosted project needs the templates in
-`supabase/templates` (Supabase's default ones carry only a link). Push them with `supabase config push`, or
-paste each file under Authentication → Email Templates (Confirm signup and Magic Link) with the subject from
-`supabase/config.toml`. Supabase's built-in sender is meant for testing and sends only a few e-mails per hour;
-set up custom SMTP under Authentication → Emails before real users sign in.
+The app asks for the 6-digit code from the e-mail. Supabase generates the code and renders the e-mail from
+`supabase/templates`; Resend delivers it over SMTP. Supabase's default templates carry only a link, and its
+built-in sender allows 2 e-mails per hour, so both must be replaced before real users sign in.
+
+1. In Resend, Domains → Add Domain: `studify.vendua.com.br`. Add the DNS records it lists (SPF, DKIM, and the MX
+   for bounces) at the DNS provider and wait until the domain shows **Verified**.
+2. In Resend, API Keys → Create API Key with **Sending access**, limited to that domain.
+3. From the repository root, push the templates, the SMTP sender and the e-mail rate limit (the
+   `[remotes.production]` block of `supabase/config.toml`):
+   ```bash
+   supabase login
+   supabase link --project-ref pwigsfpkyxdtorxvwpnt
+   RESEND_API_KEY=re_... supabase config push
+   ```
+   `config push` shows the changes and asks before applying them. Without the CLI, set the same values in the
+   dashboard: Authentication → Emails → SMTP Settings (host `smtp.resend.com`, port `465`, user `resend`,
+   password the API key, sender `nao-responda@studify.vendua.com.br`, name `Studify`), and paste each template
+   under Authentication → Email Templates (Confirm signup and Magic Link) with the subject from `config.toml`.
+4. Sign in with a fresh address: the e-mail comes from `nao-responda@studify.vendua.com.br`, in Portuguese, with
+   the code. Resend → Emails lists each delivery.
+
+The API sends the guardian verification mail through Resend's REST API with the same kind of key
+(`RESEND_API_KEY` in the API environment, `.env.example`).
 
 ## Build speed
 
