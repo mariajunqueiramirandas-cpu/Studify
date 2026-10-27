@@ -2,9 +2,11 @@
 // the end of the window, unrequested notifications are capped at 3 per study day, disabled channels are
 // skipped, and tokens that Expo reports as DeviceNotRegistered are invalidated. Every decision writes a
 // notification_log row (no message text is stored there).
+import type { RichNotification } from '@studify/shared';
 import type { Sql } from './db.ts';
 import type { Logger } from './logger.ts';
 import { quietWindowEnd, studyDayStart } from './timeutil.ts';
+import { richFor } from '../lib/rich.ts';
 
 export type PushChannel = 'reviews' | 'plan' | 'class' | 'processing';
 
@@ -15,6 +17,16 @@ export interface PushMessage {
   data?: Record<string, unknown>;
   /** True when the user asked for it (material ready, export ready): exempt from the daily cap. */
   requested?: boolean;
+  /**
+   * The rich payload (api.md §9.1). Absent: the service builds one from the type and data (lib/rich.ts).
+   * null: none (a cancel message).
+   */
+  rich?: RichNotification | null;
+  /**
+   * Live progress and cancels: sent data-only (only the Android module draws them), never stored in the
+   * inbox, never counted, logged or deferred. In quiet hours they are simply not sent (WEL-03.7).
+   */
+  ephemeral?: boolean;
 }
 
 export type PushOutcome = 'sent' | 'deferred' | 'dropped';
@@ -30,11 +42,13 @@ export interface ExpoLike {
 
 export interface ExpoPushMessage {
   to: string;
-  title: string;
-  body: string;
+  /** Omitted for data-only messages (ephemeral): Expo does not present those by itself. */
+  title?: string;
+  body?: string;
   data: Record<string, unknown>;
-  sound: 'default';
+  sound?: 'default';
   channelId: string;
+  priority?: 'default' | 'high';
 }
 
 export type ExpoPushTicket =
@@ -133,11 +147,31 @@ export function createPushService(deps: PushDeps) {
     return typeof type === 'string' ? type : message.channel;
   }
 
+  /**
+   * The Central de notificações (notification_inbox): one row per key, replaced by newer notifications with
+   * the same key. Written whatever happens to the push, so the app shows it even without a device token.
+   */
+  async function saveInbox(userId: string, type: string, channel: PushChannel, rich: RichNotification): Promise<void> {
+    try {
+      await sql.query(
+        `insert into public.notification_inbox (user_id, key, type, channel, title, body, deep_link, rich)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)
+         on conflict (user_id, key) do update
+           set type = excluded.type, channel = excluded.channel, title = excluded.title, body = excluded.body,
+               deep_link = excluded.deep_link, rich = excluded.rich, read_at = null, created_at = now()`,
+        [userId, rich.key, type.slice(0, 60), channel, rich.title, rich.body, rich.deep_link ?? null, JSON.stringify(rich)],
+      );
+    } catch (err) {
+      log.warn({ type, err: err instanceof Error ? err.message : String(err) }, 'inbox write failed');
+    }
+  }
+
   /** Sends now (no quiet-hour check). Used directly and by the deferred notify.deliver job. */
   async function deliverNow(userId: string, message: PushMessage, scheduledFor: Date): Promise<PushOutcome> {
     const prefs = await loadPrefs(userId);
     const type = typeOf(message);
     const counts = message.requested !== true;
+    if (message.ephemeral) return deliverEphemeral(prefs, message);
     if (!prefs) {
       await writeLog({ userId, type, channel: message.channel, counts, scheduledFor, sentAt: null, droppedReason: 'disabled' });
       return 'dropped';
@@ -170,6 +204,25 @@ export function createPushService(deps: PushDeps) {
       sound: 'default',
       channelId: message.channel,
     }));
+    await sendAll(expo, messages);
+    await writeLog({ userId, type, channel: message.channel, counts, scheduledFor, sentAt: now(), droppedReason: null });
+    return 'sent';
+  }
+
+  /** Data-only delivery of live progress and cancels: no log, no cap, no receipts follow-up beyond tokens. */
+  async function deliverEphemeral(prefs: PushPrefs | null, message: PushMessage): Promise<PushOutcome> {
+    if (!prefs || !deps.expo || prefs.tokens.length === 0 || prefs.notifications[message.channel] === false) return 'dropped';
+    const messages: ExpoPushMessage[] = prefs.tokens.map((to) => ({
+      to,
+      data: { ...(message.data ?? {}), type: typeOf(message) },
+      channelId: message.channel,
+      priority: 'high',
+    }));
+    await sendAll(deps.expo, messages);
+    return 'sent';
+  }
+
+  async function sendAll(expo: ExpoLike, messages: ExpoPushMessage[]): Promise<void> {
     const ticketsByToken: Array<{ token: string; ticket: ExpoPushTicket }> = [];
     for (const chunk of expo.chunkPushNotifications(messages)) {
       const tickets = await expo.sendPushNotificationsAsync(chunk);
@@ -186,11 +239,9 @@ export function createPushService(deps: PushDeps) {
     const receipts = ticketsByToken.flatMap(({ token, ticket }) =>
       ticket.status === 'ok' ? [{ id: ticket.id, token }] : [],
     );
-    await writeLog({ userId, type, channel: message.channel, counts, scheduledFor, sentAt: now(), droppedReason: null });
     if (receipts.length > 0) {
       await deps.enqueue('push.receipts', { receipts, attempt: 1 }, { startAfter: new Date(now().getTime() + RECEIPT_DELAY_MS) });
     }
-    return 'sent';
   }
 
   async function invalidateToken(token: string): Promise<void> {
@@ -204,13 +255,20 @@ export function createPushService(deps: PushDeps) {
    * Entry point for producers (`JobContext.push`). Quiet hours defer the message to the end of the
    * window; the caller's `requested` flag decides whether it counts toward the daily cap.
    */
-  async function push(userId: string, message: PushMessage): Promise<PushOutcome> {
+  async function push(userId: string, original: PushMessage): Promise<PushOutcome> {
+    const type = typeOf(original);
+    // The rich payload rides in the data (Expo delivers it as JSON to the device) and goes to the inbox.
+    const rich = original.rich === undefined
+      ? await richFor(sql, userId, { type, channel: original.channel, title: original.title, body: original.body, data: original.data ?? {} })
+      : original.rich;
+    const message: PushMessage = rich ? { ...original, data: { ...(original.data ?? {}), rich } } : original;
+    if (rich && !message.ephemeral) await saveInbox(userId, type, message.channel, rich);
     const prefs = await loadPrefs(userId);
     const current = now();
     if (prefs) {
       const end = quietWindowEnd(current, prefs.timezone, prefs.quietStart, prefs.quietEnd);
+      if (end && message.ephemeral) return 'dropped';
       if (end) {
-        const type = typeOf(message);
         const counts = message.requested !== true;
         const logId = await writeLog({ userId, type, channel: message.channel, counts, scheduledFor: end, sentAt: null, droppedReason: null });
         const jobId = await deps.enqueue(

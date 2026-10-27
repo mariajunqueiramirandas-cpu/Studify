@@ -1,10 +1,13 @@
-import { Linking } from 'react-native';
+import { router } from 'expo-router';
+import { AppState } from 'react-native';
 import { useEffect, useState } from 'react';
-import { Banner, Button, DateField, Row, Screen, Section, SwitchRow, Text, useOverlay } from '../../../components';
+import { Banner, Button, DateField, ListItem, Row, Screen, Section, SwitchRow, Text, useOverlay } from '../../../components';
 import { isMinor, useSession } from '../../../features/auth/session';
 import { saveStudyPreferences, useStudyPreferences } from '../../../features/goals/api';
 import { updateSettings } from '../../../features/profile/api';
 import { t } from '../../../i18n';
+import { requestNotificationPermission } from '../../../platform/notifications';
+import { richNotifier } from '../../../platform/rich-notify';
 
 type Channel = 'reviews' | 'plan' | 'class' | 'processing';
 const CHANNELS: Channel[] = ['reviews', 'plan', 'class', 'processing'];
@@ -22,7 +25,16 @@ export default function NotificationSettings() {
   const { profile, userId, refreshProfile } = useSession();
   const prefs = useStudyPreferences();
   const overlay = useOverlay();
-  const channels = ((profile?.settings as { notifications?: Partial<Record<Channel, boolean>> } | undefined)?.notifications ?? {}) as Partial<Record<Channel, boolean>>;
+  const settings = (profile?.settings ?? {}) as { notifications?: Partial<Record<Channel, boolean>>; reminders_enabled?: boolean };
+  const channels = (settings.notifications ?? {}) as Partial<Record<Channel, boolean>>;
+  // Re-read when the student comes back from the Android settings.
+  const [caps, setCaps] = useState(() => richNotifier.capabilities());
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setCaps(richNotifier.capabilities());
+    });
+    return () => sub.remove();
+  }, []);
   const [quietStart, setQuietStart] = useState(toDate(undefined, '22:00'));
   const [quietEnd, setQuietEnd] = useState(toDate(undefined, '07:00'));
   const [vespera, setVespera] = useState(toDate(undefined, '19:00'));
@@ -50,9 +62,29 @@ export default function NotificationSettings() {
     overlay.snack(t('global.done'));
   };
 
+  const setReminders = async (v: boolean) => {
+    if (v) await requestNotificationPermission().catch(() => false);
+    await updateSettings({ reminders_enabled: v })
+      .then(refreshProfile)
+      .catch(() => overlay.snack(t('error.generic')));
+  };
+
+  const status = !richNotifier.native ? t('notif.rich_plain') : !caps.enabled ? t('notif.disabled') : t('notif.rich_on');
+  const live = !richNotifier.native || caps.sdk < 36 ? t('notif.live_unsupported') : caps.liveUpdates && caps.promoted ? t('notif.live_on') : t('notif.live_off');
+
   return (
     <Screen title={t('notif.title')}>
+      <Section title={t('notif.rich_title')}>
+        <Banner kind={richNotifier.native && caps.enabled ? 'success' : 'neutral'} message={status} />
+        {richNotifier.native && caps.enabled ? (
+          <Text variant="bodySmall" tone="secondary">
+            {live}
+          </Text>
+        ) : null}
+        <ListItem title={t('notif.preview')} icon="color-palette-outline" onPress={() => router.push('/notifications/preview')} />
+      </Section>
       <Section>
+        <SwitchRow label={t('notif.reminders')} hint={t('notif.reminders_hint')} value={settings.reminders_enabled !== false} onChange={(v) => void setReminders(v)} />
         {CHANNELS.map((c) => (
           <SwitchRow
             key={c}
@@ -74,7 +106,7 @@ export default function NotificationSettings() {
       <Text variant="bodySmall" tone="secondary">
         {t('notif.cap_note')}
       </Text>
-      <Button variant="text" label={t('notif.system_settings')} onPress={() => void Linking.openSettings()} />
+      <Button variant="text" label={t('notif.open_app_settings')} onPress={() => richNotifier.openSettings()} />
     </Screen>
   );
 }

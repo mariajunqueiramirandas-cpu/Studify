@@ -105,6 +105,24 @@ jobs:
             echo "::notice title=Sentry upload skipped::SENTRY_AUTH_TOKEN is not set, so source maps and native symbols are not uploaded."
           fi
 
+      - name: Firebase config for remote push (optional)
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "::warning title=Remote push off::GOOGLE_SERVICES_JSON_BASE64 is not set, so this build gets no push token. Local reminders, live progress while the app is open and the Central de notificações still work. See apps/mobile/RELEASING.md."
+            exit 0
+          fi
+          file="$RUNNER_TEMP/google-services.json"
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > "$file"
+          # The file must be valid JSON and name the app's package, or Gradle fails much later with a vaguer error.
+          if ! node -e 'const j=require(process.argv[1]); const ok=(j.client||[]).some(c=>c.client_info?.android_client_info?.package_name==="com.studify.app"); process.exit(ok?0:1)' "$file"; then
+            echo "::error title=Bad google-services.json::GOOGLE_SERVICES_JSON_BASE64 does not decode to a google-services.json with an Android app for com.studify.app. See apps/mobile/RELEASING.md."
+            exit 1
+          fi
+          echo "GOOGLE_SERVICES_FILE=$file" >> "$GITHUB_ENV"
+
       - name: Resolve version, tag and version code
         env:
           GH_TOKEN: ${{ github.token }}

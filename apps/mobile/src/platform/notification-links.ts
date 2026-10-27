@@ -13,14 +13,42 @@ export function pathForDeepLink(link: string): string | null {
   return path.replace(/^\/class\/[^/?]+\/(battle|duel)\/([^/?]+)/, '/$1/$2');
 }
 
-export function attachNotificationLinks(): () => void {
+/**
+ * A tap on a native rich notification opens its deep link with `notif=<key>` appended (studify-notify
+ * RichRenderer.openIntent). Returns the app path without that parameter and the key, or null for any other
+ * link, which is left alone.
+ */
+export function parseNotificationTap(url: string): { path: string; key: string } | null {
+  const q = url.indexOf('?');
+  if (q < 0) return null;
+  const params = url.slice(q + 1).split('&');
+  const hit = params.find((p) => p.startsWith('notif='));
+  if (!hit) return null;
+  let key: string;
+  try {
+    key = decodeURIComponent(hit.slice('notif='.length).replace(/\+/g, ' '));
+  } catch {
+    return null;
+  }
+  const rest = params.filter((p) => p !== hit);
+  const base = url.slice(0, q);
+  const link = base.startsWith('studify://') ? base : `studify://${base.replace(/^\/+/, '')}`;
+  const path = pathForDeepLink(link) ?? '/';
+  return { path: rest.length ? `${path}?${rest.join('&')}` : path, key };
+}
+
+/** `onOpened` gets the rich key of a plain push that was tapped, so its inbox row can be marked read. */
+export function attachNotificationLinks(onOpened?: (richKey: string) => void): () => void {
   const open = (response: NotificationResponse) => {
     if (response.actionIdentifier !== DEFAULT_ACTION_IDENTIFIER) return;
-    const link = (response.notification.request.content.data as { deep_link?: unknown } | undefined)?.deep_link;
+    const data = response.notification.request.content.data as { deep_link?: unknown; rich?: { key?: unknown }; rich_key?: unknown } | undefined;
+    const link = data?.deep_link;
     if (typeof link !== 'string') return;
     const key = `${response.notification.request.identifier}|${response.notification.date}`;
     if (getKv().getString(OPENED_KEY) === key) return;
     getKv().set(OPENED_KEY, key);
+    const richKey = data?.rich?.key ?? data?.rich_key;
+    if (typeof richKey === 'string') onOpened?.(richKey);
     const path = pathForDeepLink(link);
     if (path) router.push(path as Href);
   };

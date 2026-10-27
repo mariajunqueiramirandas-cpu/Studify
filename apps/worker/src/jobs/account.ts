@@ -219,7 +219,7 @@ export interface PurgeOutcome {
   errors: Record<string, string>;
 }
 
-/** storage.purge (nightly): tombstones older than 30 days, expired export archives and unsaved captures. */
+/** storage.purge (nightly): tombstones older than 30 days, expired export archives, unsaved captures and old inbox rows. */
 export async function handleStoragePurge(ctx: JobContext, raw: Record<string, unknown>): Promise<PurgeOutcome> {
   PurgePayload.parse(raw);
   const now = ctx.now();
@@ -241,6 +241,9 @@ export async function handleStoragePurge(ctx: JobContext, raw: Record<string, un
   }
   const idempotency = await ctx.db.query("delete from private.idempotency_keys where created_at < now() - interval '24 hours'");
   purged.idempotency_keys = idempotency.rowCount ?? 0;
+  // The Central de notificações keeps 60 days (data-model R34).
+  const inbox = await ctx.db.query("delete from public.notification_inbox where created_at < now() - interval '60 days'");
+  purged.notification_inbox = inbox.rowCount ?? 0;
   purged.camera_captures = await purgeCaptures(ctx, now);
   return { purged, exportsExpired: expired.length, errors };
 }

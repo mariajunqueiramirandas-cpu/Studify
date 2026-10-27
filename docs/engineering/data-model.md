@@ -83,6 +83,7 @@ Specs were written in parallel; these are the choices this document makes. Spec 
 | R31 | Contributions | Private to the author and the Turma moderators; progress through `divide_progress()`. Material check and the divisão merge use the standard API, not Batch (they are short and the student is waiting). | 10 SOC-06 |
 | R32 | Yearly Retrospectiva | Generated on December 20, covering January 1 to December 19 (before the holidays). | 13 MOT-04.1 "in December" |
 | R33 | Calendar availability | Clients may only write `availability_exceptions` with `source = user`. Calendar rows go through RPC `set_calendar_availability(days)`; the student's own and Modo Desespero rows win; a cleared day is soft-deleted. | 07 GOL-09.2 |
+| R34 | Central de notificações | Every push that is not ephemeral is kept in `notification_inbox`, one row per `(user_id, key)`: a newer notification with the same key replaces the row and makes it unread again. Written even when no device received the push. Live progress (`live` channel) and local reminders are not kept. Rows are deleted after 60 days. | api.md §9.1 |
 | R22 | Teacher identity | Stored as free text (`exams.teacher_name`, `documents.teacher_name`) and normalized into `teacher_profiles.teacher_key`. Whether real names or aliases are stored is an **open owner decision** (spec 08). | — |
 
 ---
@@ -613,6 +614,21 @@ DDL in [§4.1](#41-identity-and-turma). Redeemed only through the sign-up functi
 
 #### `notification_log` [svc] — PLT-05.3, PLT-05.4
 `user_id`, `type` (catalog in [00 §8.4](../specs/00-platform.md) and later specs), `channel` (`reviews` · `plan` · `class` · `processing`), `counts_toward_cap bool`, `scheduled_for`, `sent_at N`, `dropped_reason N` (`daily_cap` · `quiet_hours_superseded` · `disabled` · `no_token`). Push notifications are logged by the worker; local notifications keep an on-device log only.
+
+#### `notification_inbox` [svc] — PLT-05, R34
+| Column | Type | Null / default | Notes |
+|---|---|---|---|
+| `user_id` | uuid → profiles | — | on delete cascade |
+| `key` | text | — | The rich payload key; unique `(user_id, key)` |
+| `type` | text | — | Notification type (api.md §9) |
+| `channel` | text | — | `reviews` · `plan` · `class` · `processing` |
+| `title`, `body` | text | — | ≤ 80 and ≤ 240 chars |
+| `deep_link` | text | N | `studify://…` |
+| `rich` | jsonb | N | `RichNotificationSchema` payload, ≤ 8 KB |
+| `read_at` | timestamptz | N | The only column the owner may update |
+| `created_at`, `updated_at` | timestamptz | `now()` | `created_at` is reset when the row is replaced and orders the list (index `(user_id, created_at desc)`); partial index on unread rows |
+
+In the `supabase_realtime` publication (unread badge, §8.1).
 
 #### `class_groups`, `class_group_members` — SOC-01
 DDL in [§4.1](#41-identity-and-turma). View **`class_group_members_public`** exposes `class_group_id, user_id, role, nickname, display_name, avatar_path` for active members only.
@@ -1275,6 +1291,7 @@ S/I/U/D = select/insert/update/delete. "own" = `user_id = auth.uid()` (or `id` f
 | `invites` | creator; `is_moderator(class_group_id)` | app admin (pilot); RPC `rotate_invite` (Turma) | RPC (revoke) | — |
 | `guardian_links` | own student | svc | svc | svc |
 | `notification_log` | own | svc | — | — |
+| `notification_inbox` | own | svc | own (`read_at` only) | own |
 | `app_feedback` | app admin | own | — | — |
 | `release_notes` | any authenticated | svc | svc | svc |
 | `push_tokens` | own | own | own | own |
@@ -1402,6 +1419,7 @@ Tables added to the `supabase_realtime` publication — status/progress changes 
 | `essays`, `camera_captures`, `podcast_episodes` | Async grading / analysis / audio ready | `id=eq.{id}` |
 | `duels` | Opponent finished, expired | participant (RLS) |
 | `class_group_members` | Pending join requests (moderators) | `class_group_id=eq.{id}` |
+| `notification_inbox` | Central de notificações list and the Hoje unread badge (R34) | `user_id=eq.{uid}` |
 
 ### 8.2 Broadcast and presence channels (Realtime Authorization)
 

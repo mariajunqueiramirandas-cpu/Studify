@@ -27,6 +27,11 @@ function parseVersionCode(raw: string | undefined): number | undefined {
 }
 const ANDROID_VERSION_CODE = parseVersionCode(process.env.ANDROID_VERSION_CODE);
 
+// Remote push (PLT-05) needs a Firebase project: GOOGLE_SERVICES_FILE points at its google-services.json
+// (the release workflow writes it from the GOOGLE_SERVICES_JSON_BASE64 secret; RELEASING.md). Without it the
+// app still shows local notifications and the in-app Central de notificações, but no push reaches Android.
+const GOOGLE_SERVICES_FILE = process.env.GOOGLE_SERVICES_FILE || undefined;
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: `Studify${nameSuffix}`,
@@ -44,6 +49,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: `com.studify.app${packageSuffix}`,
     versionCode: ANDROID_VERSION_CODE,
+    ...(GOOGLE_SERVICES_FILE ? { googleServicesFile: GOOGLE_SERVICES_FILE } : {}),
     adaptiveIcon: {
       backgroundColor: '#4F46E5',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -127,5 +133,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   experiments: { typedRoutes: true },
-  extra: { env: ENV, baseUrl: BASE_URL ?? null },
+  // eas.projectId is required for Expo push tokens.
+  extra: { env: ENV, baseUrl: BASE_URL ?? null, eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || undefined } },
 });

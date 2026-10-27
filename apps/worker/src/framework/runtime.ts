@@ -15,6 +15,7 @@ import { createExpoClient, createPushService, type PushService } from './push.ts
 import { createPgBossBackend, type QueueBackend } from './queue.ts';
 import { JobRegistry, type RuntimeDeps } from './registry.ts';
 import { builtinJobs } from './builtin.ts';
+import { isTerminalStatus, setProgressListener } from './progress.ts';
 import type pg from 'pg';
 
 export interface Runtime {
@@ -94,6 +95,14 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     tts: overrides.tts !== undefined ? overrides.tts : ttsFromEnv(process.env),
   } satisfies RuntimeDeps);
   enqueueRef = (name, data, opts) => registry.enqueue(name, data, opts);
+  // Live progress (api.md §9.1): each stage change and each terminal state of a job, and at most one
+  // update per minute within a stage, become a notify.live job.
+  setProgressListener((aiJobId, patch) => {
+    const slot = isTerminalStatus(patch.status) ? 'end' : String(Math.floor(now().getTime() / 60_000));
+    void registry
+      .enqueue('notify.live', { ai_job_id: aiJobId }, { singletonKey: `live:${aiJobId}:${patch.stage ?? ''}:${patch.status ?? ''}:${slot}` })
+      .catch(() => undefined);
+  });
   await registry.register(builtinJobs(() => push));
 
   return {
@@ -103,6 +112,7 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     push,
     async shutdown() {
       log.info('shutting down');
+      setProgressListener(null);
       if (boss) await boss.stop({ graceful: true, timeout: 30_000 });
       await pool.end();
     },

@@ -11,3 +11,4 @@ export * from './edge-phase5.ts';
 export * from './rpc.ts';
 export * from './sse.ts';
 export * from './rows.ts';
+export * from './notifications.ts';

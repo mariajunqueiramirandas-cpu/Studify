@@ -626,7 +626,8 @@ Queue: pg-boss on the main Postgres. Every job: payload validated with Zod; `ret
 | `duel.expire` | SOC-02.10 | scheduled at `expires_at` | `{duel_id}` | 3 | idempotent on status |
 | `battle.tick` | SOC-03.4 | scheduled at each `question_closes_at` / reveal end | `{battle_id, index}` | 3 | idempotent on `(battle_id, index, status)` |
 | `insights.recompute` | SOC-04 | nightly + after each battle | `{class_group_id}` | 2 | writes `private.class_insights` |
-| `notify.dispatch` | PLT-05, all push types | any producer | `{user_id, type, data}` | 3 | Applies quiet hours, daily cap, channel toggles; writes `notification_log` |
+| `notify.dispatch` | PLT-05, all push types | any producer | `{user_id, type, data}` | 3 | Applies quiet hours, daily cap, channel toggles; writes `notification_log` and `notification_inbox` (§9.1) |
+| `notify.live` | PLT-05, §9.1 | each stage change / terminal state of a live job, at most 1 per minute within a stage (`singletonKey`) | `{ai_job_id}` | 1 | Ephemeral data-only push with the live progress payload; `rich_cancel` when a non-ingestion job ends |
 | `streaks.rollover` | MOT-01 | hourly (users whose `day_rollover_hour` passed) | `{user_ids}` | 2 | `daily_activity`, `streaks`, shields |
 | `xp.award` | MOT-01 | `sync-push` XP events, server events | `{user_id, events}` | 3 | Unique key prevents double award |
 | `podcast.generate` | INT-01 | `podcast-create` | `{episode_id}` | 2 | Script (streamed, standard API) → TTS → mp3; push `podcast_ready` |
@@ -637,7 +638,7 @@ Queue: pg-boss on the main Postgres. Every job: payload validated with Zod; `ret
 | `account.export` | SP-14 | `account-export` | `{export_id}` | 3 | ZIP to `exports`, push `export_ready` |
 | `account.delete` | SP-14 | `account-delete` | `{deletion_id}` | 5 | ≤ 15 days; anonymizes `ai_usage` |
 | `files.sweep` | R14, security §10 | hourly | `{}` | 1 | Deletes expired Anthropic Files API uploads |
-| `storage.purge` | data-model §1.1 | nightly | `{}` | 1 | Hard-deletes tombstones > 30 days, expired captures/exports |
+| `storage.purge` | data-model §1.1 | nightly | `{}` | 1 | Hard-deletes tombstones > 30 days, expired captures/exports, `notification_inbox` rows > 60 days |
 | `ingest.material_check` | ING-06 (Phase 5) | after ingestion | `{document_id}` | 1 | Standard API (R31); writes `material_findings` (possible errors, never applied by themselves) |
 | `energy.windows` | GOL-10 (Phase 5) | nightly | `{user_ids}` | 1 | Per 2-hour bucket: mean residual (observed − expected) with a 90% interval; `good` once ≥ 14 active days and ≥ 300 events |
 | `divide.merge` | SOC-06 (Phase 5) | `divide-submit` (last topic) / `divide-merge` | `{divide_plan_id}` | 2 | Standard API; one `class_summary` note per topic with credits; push `divide_merged` |
@@ -719,6 +720,33 @@ Sent by `notify.dispatch` through the Expo Push API → FCM. Payload: `{ type, t
 | `retro_ready` | MOT-04 (Phase 5) | plan | push | yes | `studify://retro` |
 
 Tapping a notification opens its `data.deep_link` (`src/platform/notification-links.ts`); duel and battle links are opened at their top-level routes (`/duel/{id}`, `/battle/{id}`). The Modo foco countdown and its end-of-phase alerts are not push notifications: the Android focus service posts them on its own channels (`focus_ongoing`, `focus_alert`).
+
+### 9.1 Rich notifications, live progress and the Central de notificações
+
+Every notification also carries a **rich payload** (`RichNotificationSchema`, `packages/shared/src/core/schemas/notifications.ts`). One payload drives three renderers: the Android module `studify-notify` (custom layouts with drawn graphics, Android 16 Live Updates, actions), the in-app Central de notificações (`RichCard`), and the plain title/body for devices without the module. The title and body alone must still make sense.
+
+| Field | Notes |
+|---|---|
+| `v` | `1` |
+| `key` | ≤ 80 chars. A notification with the same key **replaces** the previous one (shade and inbox); live progress updates in place. |
+| `template` | `basic` · `progress` · `countdown` · `goal` · `duel` · `score` · `card` · `achievement` · `retro` · `media` · `digest` · `message`; each non-basic template needs its block of the same name |
+| `channel` | the four channels of PLT-05.7, plus `live` (silent, low importance; never in the inbox) |
+| `title` ≤ 80, `body` ≤ 240, `sub` ≤ 60 | `sub` is the small line next to the app name ("Biologia", "Turma 2B") |
+| `glyph` | one of 16 icons shipped as vector drawables (`book`, `cards`, `quiz`, `trophy`, `flame`, `calendar`, `podcast`, `pen`, `camera`, `people`, `sparkles`, `timer`, `alert`, `check`, `map`, `news`) |
+| `accent` | `#RRGGBB`, the subject or feature color; defaults per channel |
+| `deep_link` | `studify://…`; the native module appends `notif=<key>` so the app can mark the inbox row read |
+| `group` | notifications sharing a group are bundled under an InboxStyle summary |
+| `actions` | ≤ 3: `open` (needs `deep_link`), `snooze` (`snooze_min` 5–240), `dismiss`, `reveal` (card → answer), `rate_again` / `rate_good` (queued on the phone and recorded by the app with `recordReview`, `source = notification`) |
+
+Blocks: `progress {steps[1..6] {label, state done|active|pending|failed}, fraction, state running|done|failed, eta_s?}` (a running progress must use the `live` channel) · `countdown {target_at, label, readiness?, chips[≤4]}` · `goal {done_min, goal_min, streak, shields}` · `duel {me, them {name, score?}, state challenge|your_turn|waiting|won|lost|draw, subject?}` · `score {value, max, label, delta?, breakdown[≤5] {label, value}}` · `card {card_id, front, back?, due, subject?}` · `achievement {name, criterion, emoji}` · `retro {headline, stats[1..3] {label, value}}` · `media {kind podcast, duration_s}` · `digest {lines[1..6]}` · `message {sender, text, conversation?}`.
+
+**Delivery.** The worker builds the payload in `richFor` (`apps/worker/src/lib/rich.ts`) from the type and the rows it names, validates it and keeps it under 3,000 bytes (FCM data limit 4 KB); if that fails it falls back to a `basic` payload made from the title and body. Expo delivers it as JSON in the FCM data (`data.rich`); `StudifyMessagingService` (a subclass of Expo's FCM service) draws it and falls back to Expo's own presentation for anything it does not recognize. `data.rich_cancel = <key>` removes a notification.
+
+**Live progress (Uber-style).** For `ingest.document`, `podcast.generate`, `essay.grade` and `pp.generate`, each stage change and terminal state (and at most one update per minute within a stage) enqueues `notify.live`, which sends an **ephemeral** data-only push: no inbox row, no sound, not counted toward the cap, dropped in quiet hours. The key is `doc:{document_id}` for ingestion (so the final "Material pronto" replaces the tracker) and `job:{ai_job_id}` otherwise. On Android 16 (API 36) the module posts it as a **Live Update** (`Notification.ProgressStyle` with one segment per step, a tracker icon, the remaining time (or the percentage) as the status-bar chip, promoted to the lock screen when the student allows it); on older versions it is a custom layout with the drawn tracker. While the app is open it mirrors the same payloads from `ai_jobs` itself (`live-jobs.ts`), so progress appears without a Firebase project too.
+
+**Local reminders.** The app plans its own rich reminders (`reminders.ts`): reviews due with the next card (Ver resposta → Errei / Acertei, answered from the shade), the day's plan as a digest, the exam-eve countdown, the streak ring at 19:00 and the grade prompt at 18:00. Quiet hours, "never after 20:00" and the 3/day cap apply as in `notification-policy.ts`. The native module schedules them with inexact alarms (no exact-alarm permission) and re-arms them after a reboot or an update. The plan is redone on start, after each sync, when the app comes back and every 30 minutes. `profiles.settings.reminders_enabled = false` turns them off.
+
+**Central de notificações** (`studify://notifications`). Every non-ephemeral push is saved in `notification_inbox` (data-model R34) whether or not a device received it; same key → same row (moved to the top, unread again). The app lists the last 100 grouped by day with channel filters, keeps the unread count on the Hoje bell through Realtime, and marks rows read when opened from the list or from the shade. Rows are deleted after 60 days.
 
 ---
 

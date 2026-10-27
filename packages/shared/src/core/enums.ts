@@ -942,6 +942,7 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'duels.status': DUEL_STATUS,
   'battles.status': BATTLE_STATUS,
   'notification_log.channel': NOTIFICATION_CHANNEL,
+  'notification_inbox.channel': NOTIFICATION_CHANNEL,
   'notification_log.dropped_reason': DROPPED_REASON,
   'guardian_links.status': GUARDIAN_LINK_STATUS,
   'user_reports.reason': REPORT_REASON,

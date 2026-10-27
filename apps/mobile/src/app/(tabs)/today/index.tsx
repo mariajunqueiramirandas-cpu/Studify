@@ -29,6 +29,7 @@ import { enemRoute } from '../../../features/enem/format';
 import { useTodayPlan, type TodayItem } from '../../../features/goals/today';
 import { dueCount } from '../../../features/memory/local';
 import { useMotivation } from '../../../features/motivation/api';
+import { InboxBell } from '../../../features/notifications/InboxBell';
 import { useCapi } from '../../../features/motivation/capi';
 import { isDemandingUnit, usePerformanceWindows } from '../../../features/energy/api';
 import { useUnseenRetrospective } from '../../../features/retro/api';
@@ -166,7 +167,7 @@ export default function Today() {
         <>
           <IconButton icon="timer-outline" label={t('focus.title')} onPress={() => router.push('/focus')} />
           <IconButton icon="camera-outline" label={t('cam.title')} onPress={() => router.push('/camera')} />
-          <IconButton icon="trophy-outline" label={t('progress.title')} onPress={() => router.push('/profile/progress')} />
+          <InboxBell />
         </>
       }
       context={
@@ -177,11 +178,14 @@ export default function Today() {
                 <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={44} />
               </Pressable>
             ) : null}
-            <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={36} stroke={5} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
-            <Text variant="bodySmall" tone="secondary">
-              {motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}
-              {motivation.data.streak > 0 ? `  ·  ${t('streak.count', { n: motivation.data.streak })}` : ''}
-            </Text>
+            {/* The ring and streak open Progresso (the trophy's old place in the bar is the bell now). */}
+            <Pressable onPress={() => router.push('/profile/progress')} accessibilityRole="button" accessibilityLabel={t('progress.title')} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, flexShrink: 1 }}>
+              <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={36} stroke={5} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
+              <Text variant="bodySmall" tone="secondary" style={{ flexShrink: 1 }}>
+                {motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}
+                {motivation.data.streak > 0 ? `  ·  ${t('streak.count', { n: motivation.data.streak })}` : ''}
+              </Text>
+            </Pressable>
           </Row>
         ) : null
       }

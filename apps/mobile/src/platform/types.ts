@@ -69,3 +69,35 @@ export interface FocusBlocker {
   /** Called when the native side queued an action. Returns the unsubscribe function. */
   onAction(listener: () => void): () => void;
 }
+
+export interface RichNotifyCapabilities {
+  sdk: number;
+  enabled: boolean;
+  /** Android 16+: running jobs show as promoted Live Updates (status bar chip, lock screen). */
+  liveUpdates: boolean;
+  /** The student allows Live Updates for Studify (Android 16 setting). */
+  promoted: boolean;
+}
+
+export interface RichNotifyAction {
+  kind: 'snooze' | 'rate_again' | 'rate_good';
+  key: string;
+  at: number;
+  cardId: string | null;
+}
+
+/** Rich notifications (PLT-05, api.md §9.1): the Android module `studify-notify`, or plain notifications elsewhere. */
+export interface RichNotifier {
+  readonly native: boolean;
+  show(payload: import('@studify/shared').RichNotification): Promise<boolean>;
+  cancel(key: string): void;
+  schedule(id: string, at: Date, payload: import('@studify/shared').RichNotification): Promise<boolean>;
+  cancelScheduled(prefix: string): Promise<number>;
+  scheduledIds(): string[];
+  activeKeys(): string[];
+  consumeActions(): RichNotifyAction[];
+  capabilities(): RichNotifyCapabilities;
+  openSettings(): void;
+  /** Called when the native side showed a notification or queued an action. Returns the unsubscribe function. */
+  onEvent(listener: (e: { type: 'shown' | 'received' | 'action'; key: string }) => void): () => void;
+}

@@ -127,6 +127,9 @@ app/
 │     └─ eve/[examId].tsx           # Modo Véspera (GOL-07)
 ├─ session/[sessionId].tsx          # mixed study session runner launched from Hoje
 ├─ tutor/[threadId].tsx             # presented as modal; scope passed as params
+├─ notifications/index.tsx          # Central de notificações (api.md §9.1), opened from the Hoje bell
+├─ notifications/preview.tsx        # Perfil → Notificações → Ver exemplos
+├─ +native-intent.tsx               # strips `notif=<key>` from notification taps, marks the inbox row read
 ├─ camera/index.tsx                 # Câmera Mágica (Phase 3)
 └─ podcast/[podcastId].tsx          # player (Phase 3)
 ```
@@ -144,6 +147,7 @@ The canonical route list (custom scheme and HTTPS App Links) is [api.md §10](ap
 | `studify://auth/callback#…` | Magic-link callback |
 | `studify://practice/review` | Review session (from notification / widget) |
 | `studify://goal/{goal_id}/eve/{exam_id}` | Modo Véspera (from reminder) |
+| `studify://notifications` | Central de notificações (also the Hoje bell) |
 
 WhatsApp does not make custom schemes clickable, so shareable links must be **HTTPS** (Android App Links) pointing to a small landing page that opens the app if installed or shows the install link otherwise. The domain is `studify.vendua.com.br` (D-05, decided 2026-10-27), so links are `https://studify.vendua.com.br/…`; the `{BASE_URL}` placeholder in the route tables stands for that host.
 
@@ -230,7 +234,18 @@ sequenceDiagram
 
 ## 5. Notifications
 
-Library: `expo-notifications` (local + push). Push transport: Expo Push Service → FCM (the worker calls the Expo Push API with stored Expo push tokens).
+Library: `expo-notifications` (permission, push token, plain fallback) and the local Expo module **`studify-notify`** (`apps/mobile/modules/studify-notify`, Kotlin) that draws the rich notifications. Push transport: Expo Push Service → FCM (the worker calls the Expo Push API with stored Expo push tokens). Payloads, live progress and the inbox are specified in [api.md §9.1](api.md#91-rich-notifications-live-progress-and-the-central-de-notificações).
+
+**`studify-notify`** (Android only; without it the same payloads are shown as plain notifications through expo-notifications, `src/platform/rich-notify.ts`):
+
+- **Custom layouts.** `DecoratedCustomViewStyle` with RemoteViews (collapsed ≤ 48 dp, expanded with a wide graphic, chips and a big chronometer), so the system keeps the app header, actions and dark mode. RemoteViews cannot draw shapes, so rings, the Uber-style step tracker, duel cards, score bars, the podcast waveform and the Retrospectiva banner are drawn as bitmaps (`Graphics.kt`, at most 2× density to keep the parcel small; light and dark variants). Countdowns tick on their own with a `Chronometer`. Messages use `MessagingStyle`, and notifications sharing a `group` get an InboxStyle summary.
+- **Live Updates.** On Android 16 (API 36) running progress uses `Notification.ProgressStyle` (segments per step, tracker icon) with `setRequestPromotedOngoing` and a short status-bar chip; `POST_PROMOTED_NOTIFICATIONS` is declared, and the student can allow promotion in the system settings (Perfil → Notificações shows the state and opens them).
+- **Push.** `StudifyMessagingService` extends Expo's FCM service (higher intent-filter priority): it draws `data.rich` payloads, handles `data.rich_cancel`, and hands everything else back to Expo.
+- **Actions without opening the app.** Snooze (re-shows later), reveal (card → answer with Errei / Acertei) and dismiss run in a broadcast receiver. Ratings are queued in SharedPreferences and recorded by the app (`recordReview`, `source = notification`) on the next start or foreground — offline-first like the widget.
+- **Scheduling.** `schedule(id, at, payload)` with inexact `setAndAllowWhileIdle` alarms; re-armed after `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`. Alarms more than an hour stale are dropped.
+- **Taps** open the deep link with `notif=<key>` appended; `src/app/+native-intent.tsx` strips it, clears the notification and marks the inbox row read.
+
+Remote push needs a Firebase project (`google-services.json` through `GOOGLE_SERVICES_FILE`, and `EXPO_PUBLIC_EAS_PROJECT_ID`); see [RELEASING.md](../../apps/mobile/RELEASING.md) step 6. Without it, local reminders, live progress while the app is open (mirrored from `ai_jobs`) and the Central de notificações still work. The token is registered after sign-in, after the permission is granted and when FCM rotates it; sign-out invalidates it.
 
 ### 5.1 Android channels
 
@@ -240,6 +255,7 @@ Library: `expo-notifications` (local + push). Push transport: Expo Push Service 
 | `plan` | Plano de estudos | Default | Daily plan reminder, Modo Véspera |
 | `class` | Turma | Default | Duel challenges, battle starting, new shared material |
 | `processing` | Processamento | Low | "Seu material está pronto" |
+| `live` | Ao vivo | Low, silent | Live progress of materials, podcasts, essays (created by `studify-notify`) |
 
 ### 5.2 Local vs push
 
@@ -249,8 +265,9 @@ Library: `expo-notifications` (local + push). Push transport: Expo Push Service 
 | Daily plan reminder at the user's chosen time | Duel challenge / turn |
 | Modo Véspera reminder (evening before each exam) | Live battle about to start |
 | Streak-at-risk reminder (Phase 2, opt-in, gentle) | New material shared in the Turma |
+| Grade prompt after a test | Live progress (`notify.live`, ephemeral) |
 
-Local reminders are rescheduled on app start, after every sync and on `BOOT_COMPLETED` (handled by expo-notifications). We use **inexact** scheduling only (no `SCHEDULE_EXACT_ALARM`).
+Local reminders are planned by `src/features/notifications/reminders.ts` (rich layouts: the next card, the plan digest, the exam countdown, the streak ring) and rescheduled on app start, after every sync, when the inputs change, when the app comes back, every 30 minutes and on `BOOT_COMPLETED` (handled by `studify-notify`). We use **inexact** scheduling only (no `SCHEDULE_EXACT_ALARM`). Perfil → Notificações → **Lembretes inteligentes** turns them off; **Ver exemplos** shows every layout and sends it to the shade.
 
 ### 5.3 Limits and quiet hours (protective by default)
 
@@ -277,9 +294,7 @@ Library: `react-native-android-widget` (widgets declared in `app.config.ts`, ren
 
 ### 6.2 Answer from notification
 
-A `reviews` notification can show one card with actions **Ver resposta**. Tapping it replaces the notification (same identifier) with the answer and actions **Errei** / **Acertei**, handled without opening the app (`opensAppToForeground: false`). The response handler runs the same review code path as the widget.
-
-> **Spike required (Phase 2):** confirm expo-notifications action handling when the app process is killed. Fallback: actions open the app directly into the review screen for that card.
+A `reviews` notification can show one card with actions **Ver resposta**. Tapping it replaces the notification (same key) with the answer and actions **Errei** / **Acertei**, handled without opening the app by `studify-notify`'s broadcast receiver, so it works with the app process killed. The rating is queued on the phone and recorded through the same review code path as the widget the next time the app starts or comes to the foreground. The plain expo-notifications path (`notification-actions.ts`, category actions with `opensAppToForeground: false`) remains for builds without the module.
 
 ## 7. PDF viewer and citations (ING-08, TRU-01)
 
@@ -391,6 +406,7 @@ Request each permission **in context**, with a PT-BR rationale shown before the 
 | `INTERNET`, `ACCESS_NETWORK_STATE` | 0 | — (install-time) |
 | `POST_NOTIFICATIONS` | 1 | "Quer que eu avise quando seu material estiver pronto e lembre das suas revisões? Você escolhe os horários." |
 | `RECEIVE_BOOT_COMPLETED` | 1 | — (install-time; reschedules reminders after restart) |
+| `POST_PROMOTED_NOTIFICATIONS` | 1 | — (install-time, Android 16; lets live progress be promoted to a Live Update; the student can still turn promotion off in the system settings) |
 | `VIBRATE` | 1 | — |
 | `CAMERA` | 3 | "Para fotografar páginas, exercícios e suas respostas escritas à mão. As fotos ficam só com você, a menos que você compartilhe." |
 | `RECORD_AUDIO` | 3 | "Para você falar com o tutor. O áudio é usado só para transcrever sua fala e não é guardado." |

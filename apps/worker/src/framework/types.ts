@@ -22,7 +22,7 @@ export interface JobContext {
   /** Injected clock for deterministic tests. */
   now: () => Date;
   /** Push notifications via the Expo Push API (respects quiet hours + 3/day cap). */
-  push: (userId: string, message: { channel: 'reviews' | 'plan' | 'class' | 'processing'; title: string; body: string; data?: Record<string, unknown>; requested?: boolean }) => Promise<void>;
+  push: (userId: string, message: import('./push.ts').PushMessage) => Promise<void>;
   /** Cloud TTS for podcast audio (INT-01.4). Null: episodes are played with on-device TTS (INT-01.11). */
   tts?: TtsProvider | null;
 }

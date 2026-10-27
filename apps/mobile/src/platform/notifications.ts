@@ -31,6 +31,16 @@ export async function setupNotificationChannels(): Promise<void> {
   }
 }
 
+const grantedListeners = new Set<() => void>();
+
+/** Runs when the student grants POST_NOTIFICATIONS in the app (the push token can be registered then). */
+export function onNotificationPermissionGranted(listener: () => void): () => void {
+  grantedListeners.add(listener);
+  return () => {
+    grantedListeners.delete(listener);
+  };
+}
+
 /**
  * Asks for POST_NOTIFICATIONS. Call in context (after the first upload, or when the user turns on
  * reminders), never at first launch (mobile-app.md §5.3).
@@ -41,6 +51,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   if (current.granted) return true;
   if (!current.canAskAgain) return false;
   const requested = await requestPermissionsAsync();
+  if (requested.granted) for (const l of grantedListeners) l();
   return requested.granted;
 }
 

@@ -1124,7 +1124,22 @@
     "quiet_to": "às",
     "quiet_minor_note": "Para quem tem menos de 18 anos, o horário silencioso tem pelo menos 8 horas.",
     "cap_note": "No máximo 3 avisos por dia que você não pediu.",
-    "system_settings": "Abrir configurações do Android"
+    "system_settings": "Abrir configurações do Android",
+    "reminders": "Lembretes inteligentes",
+    "reminders_hint": "Revisões com o próximo cartão, o plano do dia, a véspera da prova e a sua sequência.",
+    "rich_title": "Notificações do Studify",
+    "rich_on": "Layouts com gráficos, progresso ao vivo e respostas direto da notificação.",
+    "rich_plain": "Este aparelho mostra as notificações em formato simples.",
+    "disabled": "As notificações do Studify estão desligadas no Android.",
+    "live_on": "Atualizações ao vivo ligadas: o progresso aparece na tela de bloqueio e na barra de status.",
+    "live_off": "Ligue as atualizações ao vivo nas configurações do Android para ver o progresso na tela de bloqueio.",
+    "live_unsupported": "Atualizações ao vivo chegam no Android 16. Aqui o progresso aparece na barra de notificações.",
+    "open_app_settings": "Abrir configurações de notificação",
+    "preview": "Ver exemplos",
+    "preview_title": "Exemplos de notificações",
+    "preview_hint": "Toque em um exemplo para receber no seu aparelho.",
+    "preview_sent": "Enviado para a barra de notificações.",
+    "preview_unavailable": "Neste aparelho os exemplos aparecem só aqui."
   },
   "memory": {
     "title": "Memória",
@@ -2350,5 +2365,51 @@
       "5": "Muito bem"
     },
     "private": "Sua resposta fica só no seu celular."
+  },
+  "inbox": {
+    "title": "Central de notificações",
+    "open": "Notificações",
+    "open_unread": "Notificações, {n} não lidas",
+    "empty_title": "Tudo em dia",
+    "empty": "Materiais prontos, Turma, provas e conquistas aparecem aqui.",
+    "mark_all": "Marcar todas como lidas",
+    "remove": "Apagar notificação",
+    "remove_confirm": "Apagar esta notificação da central?",
+    "unread": "Não lida",
+    "filters": {
+      "all": "Todas",
+      "reviews": "Revisões",
+      "plan": "Plano",
+      "class": "Turma",
+      "processing": "Materiais"
+    },
+    "sections": {
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "week": "Esta semana",
+      "older": "Antes"
+    },
+    "live_note": "Atualiza sozinho enquanto processa.",
+    "reveal": "Ver resposta",
+    "cards_today_one": "{count} cartão para hoje",
+    "cards_today_other": "{count} cartões para hoje",
+    "eta_soon": "Menos de 1 min",
+    "eta": "Cerca de {n} min",
+    "readiness": "Preparo {n}%",
+    "goal_minutes": "{done} de {goal} min",
+    "days_one": "{count} dia",
+    "days_other": "{count} dias",
+    "shields_one": "{count} escudo",
+    "shields_other": "{count} escudos",
+    "no_shields": "Sem escudos",
+    "vs": "VS",
+    "duel": {
+      "challenge": "Desafio",
+      "your_turn": "Sua vez",
+      "waiting": "Aguardando",
+      "won": "Vitória",
+      "lost": "Derrota",
+      "draw": "Empate"
+    }
   }
 }

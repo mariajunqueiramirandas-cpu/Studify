@@ -22,6 +22,8 @@ import { SessionProvider, useSession } from '../features/auth/session';
 import { ShareIntentHandler } from '../features/subjects/share';
 import { useCalendarAutoSync } from '../features/calendar/useCalendarAutoSync';
 import { FocusRuntime } from '../features/focus/FocusRuntime';
+import { markReadByKey } from '../features/notifications/inbox';
+import { NotificationsRuntime } from '../features/notifications/NotificationsRuntime';
 import { startActivityTracking } from '../features/wellbeing/activity';
 import { initSentry } from '../lib/sentry';
 import { setupNotificationChannels } from '../platform/notifications';
@@ -82,7 +84,7 @@ function AuthGate() {
     void refreshFeatureFlags(db).catch(() => undefined);
     const stopSync = startSync();
     const stopActivity = startActivityTracking();
-    const detachLinks = attachNotificationLinks();
+    const detachLinks = attachNotificationLinks((key) => void markReadByKey(key));
     let detach: (() => void) | undefined;
     if (Platform.OS === 'android') {
       void registerReviewCategories();
@@ -101,6 +103,7 @@ function AuthGate() {
     <>
       <ShareIntentHandler />
       <FocusRuntime />
+      <NotificationsRuntime />
       <CalendarAutoSync />
     </>
   ) : null;
@@ -150,6 +153,7 @@ function Navigator() {
         <Stack.Screen name="share" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="focus/index" options={{ animation: 'fade' }} />
         <Stack.Screen name="retro/[retroId]" options={{ animation: 'fade' }} />
+        <Stack.Screen name="notifications/index" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <AuthGate />
     </>

@@ -2,9 +2,11 @@
 // deep link, whether it counts toward the daily cap) and hands it to ctx.push. The framework push service
 // owns the whole delivery policy (channel toggles, device tokens, quiet hours with deferred delivery, the
 // 3-per-day cap, notification_log), so that logic is not repeated here: it would count every push twice.
+import { isLiveJobType } from '@studify/shared';
 import { z } from 'zod';
 import type { JobContext, JobDefinition } from '../framework/types.ts';
 import { fillTemplate, notifyEntry } from '../lib/notify-catalog.ts';
+import { liveKeyOf, liveRich, type LiveJobRow } from '../lib/rich.ts';
 
 const DispatchPayload = z.object({
   user_id: z.string().min(1),
@@ -40,6 +42,41 @@ function nonEmpty(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
+const LivePayload = z.object({ ai_job_id: z.uuid() });
+
+export type LiveOutcome = 'updated' | 'ended' | 'skipped';
+
+/**
+ * notify.live (api.md §9.1): the Uber-style progress notification of a running job (material processing,
+ * podcast, redação, Prova Provável), sent data-only so only the Android module draws it. When the job ends
+ * the live notification is cancelled, except for materials: their "Material pronto" notification uses the
+ * same key and replaces it in place.
+ */
+export async function handleNotifyLive(ctx: JobContext, raw: Record<string, unknown>): Promise<LiveOutcome> {
+  const { ai_job_id } = LivePayload.parse(raw);
+  const { rows } = await ctx.db.query<LiveJobRow>(
+    `select id, type, stage, status, progress, user_id, subject_id, document_id, started_at::text
+       from public.ai_jobs where id = $1`,
+    [ai_job_id],
+  );
+  const job = rows[0];
+  if (!job?.user_id || !isLiveJobType(job.type)) return 'skipped';
+  if (job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled') {
+    // Materials end with material_ready / material_failed under the same key; the rest cancel the bar.
+    if (job.type === 'ingest.document') return 'ended';
+    await ctx.push(job.user_id, { channel: 'processing', title: 'Studify', body: '', data: { type: 'live_cancel', rich_cancel: liveKeyOf(job) }, rich: null, ephemeral: true, requested: true });
+    return 'ended';
+  }
+  const subject = job.subject_id
+    ? ((await ctx.db.query<{ name: string; color: string }>(`select name, color from public.subjects where id = $1`, [job.subject_id])).rows[0] ?? null)
+    : null;
+  const rich = liveRich(job, subject, ctx.now());
+  if (!rich) return 'skipped';
+  await ctx.push(job.user_id, { channel: 'processing', title: rich.title, body: rich.body, data: { type: 'live_progress' }, rich, ephemeral: true, requested: true });
+  return 'updated';
+}
+
 export const jobs: JobDefinition[] = [
   { name: 'notify.dispatch', retryLimit: 3, handler: async (ctx, data) => void (await handleNotifyDispatch(ctx, data)) },
+  { name: 'notify.live', retryLimit: 1, expireInSeconds: 120, handler: async (ctx, data) => void (await handleNotifyLive(ctx, data)) },
 ];

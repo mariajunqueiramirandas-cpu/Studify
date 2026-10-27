@@ -8,3 +8,6 @@ coverage/
 evals/results/*.json
 .DS_Store
 scratchpad/
+
+# Firebase config for push (written by CI from a secret; apps/mobile/RELEASING.md)
+apps/mobile/google-services.json

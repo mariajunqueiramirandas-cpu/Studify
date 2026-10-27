@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Expanded custom content. Each template fills some blocks and leaves the rest gone. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageView
+      android:id="@+id/sn_graphic"
+      android:layout_width="56dp"
+      android:layout_height="56dp"
+      android:layout_marginEnd="12dp"
+      android:importantForAccessibility="no"
+      android:scaleType="fitCenter" />
+
+    <LinearLayout
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical">
+
+      <TextView
+        android:id="@+id/sn_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+
+      <TextView
+        android:id="@+id/sn_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="4"
+        android:textAppearance="@style/TextAppearance.Compat.Notification" />
+    </LinearLayout>
+
+    <TextView
+      android:id="@+id/sn_trailing"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+      android:textSize="22sp"
+      android:visibility="gone" />
+  </LinearLayout>
+
+  <TextView
+    android:id="@+id/sn_card"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="10dp"
+    android:background="@drawable/sn_card_bg"
+    android:maxLines="6"
+    android:ellipsize="end"
+    android:padding="12dp"
+    android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+    android:visibility="gone" />
+
+  <ImageView
+    android:id="@+id/sn_wide"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="10dp"
+    android:adjustViewBounds="true"
+    android:scaleType="fitCenter"
+    android:visibility="gone" />
+
+  <TextView
+    android:id="@+id/sn_chips"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:ellipsize="end"
+    android:maxLines="2"
+    android:textAppearance="@style/TextAppearance.Compat.Notification.Info"
+    android:visibility="gone" />
+
+  <LinearLayout
+    android:id="@+id/sn_chrono_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:visibility="gone">
+
+    <TextView
+      android:id="@+id/sn_chrono_label"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginEnd="8dp"
+      android:textAppearance="@style/TextAppearance.Compat.Notification" />
+
+    <Chronometer
+      android:id="@+id/sn_chrono_big"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+      android:textSize="22sp" />
+  </LinearLayout>
+</LinearLayout>
