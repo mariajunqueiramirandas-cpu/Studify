@@ -3,7 +3,7 @@ import { documentBlocks, lines, section, text, type PdfSlice } from '../blocks.t
 import { stableStringify } from '../stable-json.ts';
 import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { CITATIONS, FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragments/index.ts';
-import { ContributionReview, MaterialFindings, MnemonicOptions, PeerQuestionValidation, RetroTitle, VisualOut } from '../schemas/phase5.ts';
+import { ContributionReview, MaterialFindings, MnemonicOptions, PeerQuestionValidation, RetroTitle, VisualDraft } from '../schemas/phase5.ts';
 import { contentLanguageLines, feedbackLanguageLines, userTurn } from './shared.ts';
 
 // Phase 5 tasks: auto visuals (LRN-05), material checker (ING-06), Estúdio de Mnemônicos (MEM-06), Dividir e
@@ -28,15 +28,16 @@ export interface VisualInput {
 const VISUAL_RULES = [
   'Tarefa: transforme o tópico em UM diagrama, descrito como dados (JSON), nunca como imagem.',
   '- Tipos: flowchart (processo ou sequência com decisões), cycle (processo cíclico, ex.: ciclo de Krebs), timeline (eventos datados), comparison_table (2 a 4 itens comparados por critérios), hierarchy (classificação em árvore, até 4 níveis).',
-  '- Se o tipo pedido não servir, ou se nenhum tipo representar bem o tópico, responda fits = false, visual = null e reason com uma frase curta ("Esse tópico não fica bom em diagrama: …"). Nunca force um diagrama ruim.',
+  '- Se o tipo pedido não servir, ou se nenhum tipo representar bem o tópico, responda fits = false, type = none, title e alt_text vazios, todas as listas vazias e reason com uma frase curta ("Esse tópico não fica bom em diagrama: …"). Nunca force um diagrama ruim.',
   '- Limites: flowchart e cycle até 12 nós; timeline até 15 eventos; comparison_table até 4 colunas e 8 linhas; hierarchy até 4 níveis e 20 nós.',
   '- Rótulos curtos (até 6 palavras); detail opcional com uma frase. Ids curtos (n1, n2…). Arestas só entre ids existentes. Na hierarquia, exatamente um nó sem parent_id.',
   '- timeline: sort_key é um número que ordena os eventos (ano, ou ano com fração); date_label é o texto mostrado ("1822", "séc. XV").',
   '- source: a página original que sustenta cada nó, evento ou linha, quando houver.',
   '- alt_text: um resumo do diagrama em 2 a 4 frases, para leitor de tela.',
+  '- Formato: type é o tipo escolhido; preencha só as listas desse tipo e deixe as outras []. flowchart: nodes e edges; cycle: nodes; timeline: events; comparison_table: columns e rows (cells na ordem das colunas); hierarchy: nodes com parent_id. Fora da hierarquia, parent_id = null.',
 ].join('\n');
 
-export const visualGenerate = defineTask<VisualInput, ReturnType<typeof VisualOut.parse>>({
+export const visualGenerate = defineTask<VisualInput, ReturnType<typeof VisualDraft.parse>>({
   id: 'visual.generate',
   version: 1,
   features: ['LRN-05.1', 'LRN-05.2', 'LRN-05.3', 'LRN-05.4', 'LRN-05.6'],
@@ -44,7 +45,7 @@ export const visualGenerate = defineTask<VisualInput, ReturnType<typeof VisualOu
   maxTokensClass: 'M',
   runs: 'edge',
   budget: 'user',
-  output: { mode: 'structured', schema: VisualOut },
+  output: { mode: 'structured', schema: VisualDraft },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, VISUAL_RULES],
   cache: '5m',
   build: (input, ctx) => {

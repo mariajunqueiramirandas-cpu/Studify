@@ -176,7 +176,7 @@ function respond(req: MockRequest): MockResponse | undefined {
           concept_keys: ['c1'],
           source_pages: [{ doc: 'D1', page_start: isMembrana ? 3 : 1, page_end: isMembrana ? 3 : 2 }],
           remediation_card: { front: 'Onde se produz ATP?', back: 'Na mitocôndria.' },
-          payload: { options, correct: 'C' },
+          payload_json: JSON.stringify({ options, correct: 'C' }),
         },
       ],
     });

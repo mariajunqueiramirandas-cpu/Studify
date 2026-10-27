@@ -465,7 +465,7 @@ export async function writeOutcome(
     }
     case 'questions': {
       const result = await writeQuestions(ctx, data as Parameters<typeof writeQuestions>[1]);
-      env.ctx.log.info({ written: result.written, dropped: result.dropped }, 'questions written');
+      env.ctx.log.info({ written: result.written, dropped: result.dropped, reasons: result.reasons }, 'questions written');
       return true;
     }
     case 'feed':

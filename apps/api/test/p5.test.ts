@@ -20,6 +20,20 @@ const queue = (...values: unknown[]) => {
   return () => replies.shift() ?? reply('{}');
 };
 
+/** The flat shape the model writes for visual.generate (decodeVisual rebuilds the typed visual). */
+const asDraft = (out: { fits: boolean; reason: string | null; visual: Record<string, unknown> | null }) => ({
+  fits: out.fits,
+  reason: out.reason,
+  type: out.visual?.type ?? 'none',
+  title: out.visual?.title ?? '',
+  alt_text: out.visual?.alt_text ?? '',
+  nodes: ((out.visual?.nodes as Record<string, unknown>[] | undefined) ?? []).map((n) => ({ parent_id: null, ...n })),
+  edges: out.visual?.edges ?? [],
+  events: out.visual?.events ?? [],
+  columns: out.visual?.columns ?? [],
+  rows: out.visual?.rows ?? [],
+});
+
 const ref = { doc: 'D1', page_start: 12, page_end: 12 };
 const FLOW = {
   fits: true,
@@ -41,7 +55,7 @@ const FLOW = {
 };
 
 test('visual-generate: stores the spec with document pages, reuses it, feeds a diagram card; caches "não fica bom"', async () => {
-  const h = makeHarness(queue(FLOW, { fits: false, reason: 'Esse tópico não fica bom em linha do tempo.', visual: null }));
+  const h = makeHarness(queue(asDraft(FLOW), asDraft({ fits: false, reason: 'Esse tópico não fica bom em linha do tempo.', visual: null })));
   await seedWorld(h);
   const res = await visualGenerate(request('visual-generate', { body: { node_id: IDS.topic, type: 'flowchart' }, idem: v7(1) }), h.deps);
   assertEquals(res.status, 201, await res.clone().text());
@@ -64,7 +78,7 @@ test('visual-generate: stores the spec with document pages, reuses it, feeds a d
 });
 
 test('visual-generate: an automatic "no fit" is cached as type none; a broken spec is refused', async () => {
-  const h = makeHarness(queue({ fits: false, reason: 'Esse tópico não fica bom em diagrama.', visual: null }));
+  const h = makeHarness(queue(asDraft({ fits: false, reason: 'Esse tópico não fica bom em diagrama.', visual: null })));
   await seedWorld(h);
   const first = await json(await visualGenerate(request('visual-generate', { body: { node_id: IDS.topic }, idem: v7(1) }), h.deps));
   assertEquals(first, { fits: false, reason: 'Esse tópico não fica bom em diagrama.' });
@@ -73,7 +87,7 @@ test('visual-generate: an automatic "no fit" is cached as type none; a broken sp
   assertEquals(h.claude.calls.length, 1);
   assertEquals(h.db.rows('visuals')[0]!.type, 'none');
 
-  const broken = makeHarness(queue({ ...FLOW, visual: { ...FLOW.visual, edges: [{ from: 'n1', to: 'n9', label: null }] } }));
+  const broken = makeHarness(queue(asDraft({ ...FLOW, visual: { ...FLOW.visual, edges: [{ from: 'n1', to: 'n9', label: null }] } })));
   await seedWorld(broken);
   const res = await visualGenerate(request('visual-generate', { body: { node_id: IDS.topic, type: 'flowchart' }, idem: v7(3) }), broken.deps);
   assertEquals(res.status, 503);

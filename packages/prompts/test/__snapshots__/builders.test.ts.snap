@@ -547,7 +547,7 @@ Regras de segurança (valem sempre):
         "ttl": "5m",
         "type": "ephemeral",
       },
-      "text": "Tarefa: sugira 5 perguntas debatíveis (com dois lados legítimos) ligadas ao mapa da matéria, adequadas a adolescentes. Cada uma indica os nós (chaves) e por que é boa para debate. Nada que exija defender violação de direitos humanos.",
+      "text": "Tarefa: sugira 5 perguntas debatíveis (com dois lados legítimos) ligadas ao mapa da matéria, adequadas a adolescentes. Cada uma indica de 1 a 3 nós (chaves), os mais ligados à pergunta, e por que é boa para debate. Nada que exija defender violação de direitos humanos.",
       "type": "text",
     },
   ],
@@ -3542,6 +3542,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       },
       "text": "Tarefa: monte um diagnóstico rápido: uma questão objetiva por tópico, na ordem da lista.
 - Tipos: mcq_single, true_false ou fill_blank. Dificuldade média (2 a 3).
+- payload_json: o objeto payload do tipo escrito como JSON (uma string). mcq_single: options (4 ou 5, ids A, B, C… com text, rationale e misconception_concept_key) e correct; true_false: statement, correct e justification; fill_blank: text com {{1}}… e blanks com id e accepted.
 - A questão testa a ideia central do tópico, não detalhes raros. Distratores plausíveis, uma resposta certa.
 - concept_keys: use a chave do tópico. source_pages: páginas originais do tópico.
 - Cada questão traz explanation curta e remediation_card (frente e verso sobre a ideia central).
@@ -6531,16 +6532,16 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "ttl": "1h",
         "type": "ephemeral",
       },
-      "text": "Tipos e payload (use exatamente estas chaves):
-- mcq_single: payload.options com 4 ou 5 alternativas (ids A, B, C, D, E em ordem) e payload.correct com um id. Cada alternativa tem rationale (por que está certa ou errada).
-- multi_select: 4 ou 5 alternativas, de 2 a 4 corretas em payload.correct; somatoria = false quando não houver somatória.
-- true_false: statement, correct (boolean), justification.
-- fill_blank: text com {{1}}, {{2}}…; blanks com id e accepted (aceite sinônimos e variações de grafia).
-- numeric: answer, tolerance_abs ou tolerance_rel, unit e unit_required (true só quando a unidade é obrigatória).
-- matching: left e right (com um ou dois distratores à direita); pairs como {left, right} para cada item da esquerda.
-- ordering: items (3 a 7) e correct_order com todos os ids, na ordem certa.
-- short_answer: model_answer, rubric (critérios com id, criterion e points; a soma é igual a max_points), max_points e key_terms.
-- essay_question: model_answer, rubric (soma = max_points), max_points e expected_lines.
+      "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
+- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
+- multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
+- true_false: {"statement":"…","correct":true,"justification":"…"}.
+- fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.
+- numeric: {"answer":12.5,"tolerance_abs":0.1,"tolerance_rel":null,"unit":"m/s","unit_required":true}. unit_required true só quando a unidade é obrigatória.
+- matching: {"left":[{"id":"L1","text":"…"},…],"right":[{"id":"R1","text":"…"},…],"pairs":[{"left":"L1","right":"R2"},…]}. Ids curtos (até 8 caracteres); um ou dois distratores à direita; um par para cada item da esquerda.
+- ordering: {"items":[{"id":"I1","text":"…"},…],"correct_order":["I2","I1","I3"]}. 3 a 7 itens; correct_order tem todos os ids, na ordem certa.
+- short_answer: {"model_answer":"…","rubric":[{"id":"r1","criterion":"…","points":1},…],"max_points":2,"key_terms":["…"]}. A soma dos points é igual a max_points.
+- essay_question: {"model_answer":"…","rubric":[{"id":"r1","criterion":"…","points":2},…],"max_points":10,"expected_lines":10}. A soma dos points é igual a max_points.
 Regras de qualidade:
 - Distratores plausíveis: cada um reflete um erro comum do material. Mesma forma gramatical e tamanho parecido. Sem "todas as anteriores" nem "nenhuma das anteriores".
 - Sem pistas: evite "sempre" e "nunca" só nos distratores; não repita palavras do enunciado só na alternativa certa.
@@ -6683,16 +6684,16 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "ttl": "5m",
         "type": "ephemeral",
       },
-      "text": "Tipos e payload (use exatamente estas chaves):
-- mcq_single: payload.options com 4 ou 5 alternativas (ids A, B, C, D, E em ordem) e payload.correct com um id. Cada alternativa tem rationale (por que está certa ou errada).
-- multi_select: 4 ou 5 alternativas, de 2 a 4 corretas em payload.correct; somatoria = false quando não houver somatória.
-- true_false: statement, correct (boolean), justification.
-- fill_blank: text com {{1}}, {{2}}…; blanks com id e accepted (aceite sinônimos e variações de grafia).
-- numeric: answer, tolerance_abs ou tolerance_rel, unit e unit_required (true só quando a unidade é obrigatória).
-- matching: left e right (com um ou dois distratores à direita); pairs como {left, right} para cada item da esquerda.
-- ordering: items (3 a 7) e correct_order com todos os ids, na ordem certa.
-- short_answer: model_answer, rubric (critérios com id, criterion e points; a soma é igual a max_points), max_points e key_terms.
-- essay_question: model_answer, rubric (soma = max_points), max_points e expected_lines.
+      "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
+- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
+- multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
+- true_false: {"statement":"…","correct":true,"justification":"…"}.
+- fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.
+- numeric: {"answer":12.5,"tolerance_abs":0.1,"tolerance_rel":null,"unit":"m/s","unit_required":true}. unit_required true só quando a unidade é obrigatória.
+- matching: {"left":[{"id":"L1","text":"…"},…],"right":[{"id":"R1","text":"…"},…],"pairs":[{"left":"L1","right":"R2"},…]}. Ids curtos (até 8 caracteres); um ou dois distratores à direita; um par para cada item da esquerda.
+- ordering: {"items":[{"id":"I1","text":"…"},…],"correct_order":["I2","I1","I3"]}. 3 a 7 itens; correct_order tem todos os ids, na ordem certa.
+- short_answer: {"model_answer":"…","rubric":[{"id":"r1","criterion":"…","points":1},…],"max_points":2,"key_terms":["…"]}. A soma dos points é igual a max_points.
+- essay_question: {"model_answer":"…","rubric":[{"id":"r1","criterion":"…","points":2},…],"max_points":10,"expected_lines":10}. A soma dos points é igual a max_points.
 Regras de qualidade:
 - Distratores plausíveis: cada um reflete um erro comum do material. Mesma forma gramatical e tamanho parecido. Sem "todas as anteriores" nem "nenhuma das anteriores".
 - Sem pistas: evite "sempre" e "nunca" só nos distratores; não repita palavras do enunciado só na alternativa certa.
@@ -6820,16 +6821,16 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "ttl": "5m",
         "type": "ephemeral",
       },
-      "text": "Tipos e payload (use exatamente estas chaves):
-- mcq_single: payload.options com 4 ou 5 alternativas (ids A, B, C, D, E em ordem) e payload.correct com um id. Cada alternativa tem rationale (por que está certa ou errada).
-- multi_select: 4 ou 5 alternativas, de 2 a 4 corretas em payload.correct; somatoria = false quando não houver somatória.
-- true_false: statement, correct (boolean), justification.
-- fill_blank: text com {{1}}, {{2}}…; blanks com id e accepted (aceite sinônimos e variações de grafia).
-- numeric: answer, tolerance_abs ou tolerance_rel, unit e unit_required (true só quando a unidade é obrigatória).
-- matching: left e right (com um ou dois distratores à direita); pairs como {left, right} para cada item da esquerda.
-- ordering: items (3 a 7) e correct_order com todos os ids, na ordem certa.
-- short_answer: model_answer, rubric (critérios com id, criterion e points; a soma é igual a max_points), max_points e key_terms.
-- essay_question: model_answer, rubric (soma = max_points), max_points e expected_lines.
+      "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
+- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
+- multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
+- true_false: {"statement":"…","correct":true,"justification":"…"}.
+- fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.
+- numeric: {"answer":12.5,"tolerance_abs":0.1,"tolerance_rel":null,"unit":"m/s","unit_required":true}. unit_required true só quando a unidade é obrigatória.
+- matching: {"left":[{"id":"L1","text":"…"},…],"right":[{"id":"R1","text":"…"},…],"pairs":[{"left":"L1","right":"R2"},…]}. Ids curtos (até 8 caracteres); um ou dois distratores à direita; um par para cada item da esquerda.
+- ordering: {"items":[{"id":"I1","text":"…"},…],"correct_order":["I2","I1","I3"]}. 3 a 7 itens; correct_order tem todos os ids, na ordem certa.
+- short_answer: {"model_answer":"…","rubric":[{"id":"r1","criterion":"…","points":1},…],"max_points":2,"key_terms":["…"]}. A soma dos points é igual a max_points.
+- essay_question: {"model_answer":"…","rubric":[{"id":"r1","criterion":"…","points":2},…],"max_points":10,"expected_lines":10}. A soma dos points é igual a max_points.
 Regras de qualidade:
 - Distratores plausíveis: cada um reflete um erro comum do material. Mesma forma gramatical e tamanho parecido. Sem "todas as anteriores" nem "nenhuma das anteriores".
 - Sem pistas: evite "sempre" e "nunca" só nos distratores; não repita palavras do enunciado só na alternativa certa.
@@ -7962,12 +7963,13 @@ Regras de segurança (valem sempre):
       },
       "text": "Tarefa: transforme o tópico em UM diagrama, descrito como dados (JSON), nunca como imagem.
 - Tipos: flowchart (processo ou sequência com decisões), cycle (processo cíclico, ex.: ciclo de Krebs), timeline (eventos datados), comparison_table (2 a 4 itens comparados por critérios), hierarchy (classificação em árvore, até 4 níveis).
-- Se o tipo pedido não servir, ou se nenhum tipo representar bem o tópico, responda fits = false, visual = null e reason com uma frase curta ("Esse tópico não fica bom em diagrama: …"). Nunca force um diagrama ruim.
+- Se o tipo pedido não servir, ou se nenhum tipo representar bem o tópico, responda fits = false, type = none, title e alt_text vazios, todas as listas vazias e reason com uma frase curta ("Esse tópico não fica bom em diagrama: …"). Nunca force um diagrama ruim.
 - Limites: flowchart e cycle até 12 nós; timeline até 15 eventos; comparison_table até 4 colunas e 8 linhas; hierarchy até 4 níveis e 20 nós.
 - Rótulos curtos (até 6 palavras); detail opcional com uma frase. Ids curtos (n1, n2…). Arestas só entre ids existentes. Na hierarquia, exatamente um nó sem parent_id.
 - timeline: sort_key é um número que ordena os eventos (ano, ou ano com fração); date_label é o texto mostrado ("1822", "séc. XV").
 - source: a página original que sustenta cada nó, evento ou linha, quando houver.
-- alt_text: um resumo do diagrama em 2 a 4 frases, para leitor de tela.",
+- alt_text: um resumo do diagrama em 2 a 4 frases, para leitor de tela.
+- Formato: type é o tipo escolhido; preencha só as listas desse tipo e deixe as outras []. flowchart: nodes e edges; cycle: nodes; timeline: events; comparison_table: columns e rows (cells na ordem das colunas); hierarchy: nodes com parent_id. Fora da hierarquia, parent_id = null.",
       "type": "text",
     },
   ],

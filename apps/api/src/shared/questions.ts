@@ -1,7 +1,7 @@
 // Question generation for one topic (PRA-01.4, questions.more): the model writes questions, this module
 // stores the ones that pass the shared payload schema. Shared by questions-generate-more and quiz-create's
 // top-up step, so both produce the same rows.
-import { getTask, topUpQuotas, type QuestionType as PromptQuestionType } from '@studify/prompts';
+import { decodeQuestion, getTask, topUpQuotas, type QuestionDraft, type QuestionType as PromptQuestionType } from '@studify/prompts';
 import { parseQuestionPayload, type QuestionType } from '@studify/shared';
 import { callTask, unwrapResult } from './ai.ts';
 import { budgetCtxFor } from './ctx.ts';
@@ -73,7 +73,11 @@ export async function generateQuestionsForNode(
     taskId: 'questions.more',
     ctx: budgetCtxFor(options.subject, options.userId, 'PRA-01.4', 'user', { nodeId }),
   });
-  const data = unwrapResult(result) as { questions: GeneratedQuestion[] };
+  const drafts = unwrapResult(result) as { questions: QuestionDraft[] };
+  const data = { questions: drafts.questions.flatMap((d) => {
+    const decoded = decodeQuestion(d);
+    return decoded.ok ? [decoded.question as GeneratedQuestion] : []; // off-schema payloads are dropped (ai-pipeline §5.1)
+  }) };
   const docLabels = built.documents?.labels ?? {};
   const conceptIds = new Set(bundle.concepts.map((c) => c.id));
 

@@ -32,7 +32,7 @@ import {
   ThesisFeedback,
   ArgumentSummary,
   ArgumentThemes,
-  VisualOut,
+  VisualDraft,
   MnemonicOptions,
   ContributionReview,
   PeerQuestionValidation,
@@ -73,7 +73,7 @@ export const OUTPUT_SCHEMAS: Readonly<Record<string, ZodType>> = {
   'argument.summary': ArgumentSummary,
   'argument.themes': ArgumentThemes,
   // Phase 5
-  'visual.generate': VisualOut,
+  'visual.generate': VisualDraft,
   'mnemonics.suggest': MnemonicOptions,
   'divide.review': ContributionReview,
   'peer.validate': PeerQuestionValidation,

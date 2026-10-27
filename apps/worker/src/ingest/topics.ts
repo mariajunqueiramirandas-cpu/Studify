@@ -1,7 +1,7 @@
 // Topic content (S2 concepts, S4 notes, glossary, cards, questions, feed): loads a topic's bundle from the
 // map, builds the prompts input for each kind, and writes the outputs. Calls are built the same way for the
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
-import { cardTargetCount, getTask, topicQuotas } from '@studify/prompts';
+import { cardTargetCount, decodeQuestion, getTask, topicQuotas, type QuestionDraft as ModelQuestionDraft } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
 import { checkProblemConsistency, uuidV7 } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
@@ -636,7 +636,7 @@ export async function writeCards(
 
 export async function writeQuestions(
   ctx: WriteContext,
-  data: { questions: QuestionDraft[] },
+  data: { questions: ModelQuestionDraft[] },
 ): Promise<{ written: number; dropped: number; reasons: Record<string, number> }> {
   let written = 0;
   let dropped = 0;
@@ -650,7 +650,14 @@ export async function writeQuestions(
         [ctx.bundle.topicId],
       );
     }
-    for (const draft of data.questions) {
+    for (const raw of data.questions) {
+      const decoded = decodeQuestion(raw);
+      if (!decoded.ok) {
+        dropped++;
+        reasons[decoded.reason] = (reasons[decoded.reason] ?? 0) + 1;
+        continue;
+      }
+      const draft = decoded.question as QuestionDraft;
       const mapped = mapQuestion(draft, {
         labels: ctx.labels,
         conceptIdByKey: ctx.bundle.conceptIdByKey,

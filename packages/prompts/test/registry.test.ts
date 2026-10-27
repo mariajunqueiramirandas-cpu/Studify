@@ -63,6 +63,27 @@ describe('task registry', () => {
     }
   });
 
+  // A union of object types blows the compiled grammar ("The compiled grammar is too large", a 400 on every
+  // call) well before the 16-union limit: three question variants were enough. Nullable fields are fine.
+  it('has no union of object types in any output schema', () => {
+    for (const task of TASKS) {
+      if (!task.jsonSchema) continue;
+      const offenders: number[] = [];
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) return node.forEach(walk);
+        if (!node || typeof node !== 'object') return;
+        const obj = node as Record<string, unknown>;
+        if (Array.isArray(obj.anyOf)) {
+          const objects = (obj.anyOf as Array<Record<string, unknown>>).filter((branch) => branch.type === 'object').length;
+          if (objects > 1) offenders.push(objects);
+        }
+        Object.values(obj).forEach(walk);
+      };
+      walk(task.jsonSchema);
+      expect(offenders, `${task.id} object unions`).toEqual([]);
+    }
+  });
+
   it('uses citations output only for prose with page citations', () => {
     const citations = TASKS.filter((t) => t.outputMode === 'citations').map((t) => t.id).sort();
     expect(citations).toEqual([

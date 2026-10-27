@@ -58,6 +58,47 @@ export const VisualOut = z
   });
 export type VisualOutput = z.infer<typeof VisualOut>;
 
+// What the model writes. A union of the five visual types is too large for structured outputs ("The compiled
+// grammar is too large"), so the model fills one flat object: `type` plus the lists that type uses, the
+// other lists empty. decodeVisual rebuilds the typed visual and checks it against VisualOut.
+export const VisualDraft = z.strictObject({
+  fits: z.boolean(),
+  reason: z.string().max(200).nullable(),
+  type: z.enum(['flowchart', 'cycle', 'timeline', 'comparison_table', 'hierarchy', 'none']),
+  title: z.string().max(120),
+  alt_text: z.string().max(1000),
+  nodes: z.array(z.strictObject({ id: ItemId, label: Label, detail: Detail, source: Source, parent_id: ItemId.nullable() })).max(20),
+  edges: z.array(z.strictObject({ from: ItemId, to: ItemId, label: z.string().max(60).nullable() })).max(30),
+  events: z
+    .array(z.strictObject({ id: ItemId, date_label: z.string().min(1).max(40), sort_key: z.number(), title: Label, detail: Detail, source: Source }))
+    .max(15),
+  columns: z.array(z.strictObject({ id: ItemId, label: z.string().min(1).max(60) })).max(4),
+  rows: z.array(z.strictObject({ criterion: z.string().min(1).max(80), cells: z.array(z.string().max(200)).max(4), source: Source })).max(8),
+});
+export type VisualDraftOutput = z.infer<typeof VisualDraft>;
+
+/** The typed visual for a model draft, or null when the draft does not make a valid visual of its type. */
+export function decodeVisual(draft: VisualDraftOutput): VisualOutput | null {
+  if (!draft.fits || draft.type === 'none') {
+    const none = VisualOut.safeParse({ fits: false, reason: draft.reason, visual: null });
+    return none.success ? none.data : null;
+  }
+  const head = { type: draft.type, title: draft.title, alt_text: draft.alt_text };
+  const flatNodes = draft.nodes.map(({ parent_id: _parent, ...node }) => node);
+  const visual =
+    draft.type === 'flowchart'
+      ? { ...head, nodes: flatNodes, edges: draft.edges }
+      : draft.type === 'cycle'
+        ? { ...head, nodes: flatNodes }
+        : draft.type === 'timeline'
+          ? { ...head, events: draft.events }
+          : draft.type === 'comparison_table'
+            ? { ...head, columns: draft.columns, rows: draft.rows }
+            : { ...head, nodes: draft.nodes };
+  const parsed = VisualOut.safeParse({ fits: true, reason: draft.reason, visual });
+  return parsed.success ? parsed.data : null;
+}
+
 /** T5 material checker. Findings are possibilities ("Possível erro"), never corrections applied by themselves. */
 export const MaterialFindings = z.strictObject({
   findings: z

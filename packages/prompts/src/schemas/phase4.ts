@@ -356,8 +356,9 @@ export const ArgumentSummary = z.strictObject({
     .nullable(),
 });
 
+// node_keys has no max here: the model often lists more topics than asked, and the caller keeps the first 3.
 export const ArgumentThemes = z.strictObject({
   themes: z
-    .array(z.strictObject({ question: z.string().min(10).max(200), node_keys: z.array(NodeKey).min(1).max(3), why: z.string().min(1).max(200) }))
+    .array(z.strictObject({ question: z.string().min(10).max(200), node_keys: z.array(NodeKey).min(1), why: z.string().min(1).max(200) }))
     .length(5),
 });
