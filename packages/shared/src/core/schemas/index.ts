@@ -6,6 +6,7 @@ export * from './edge-platform.ts';
 export * from './edge-learn.ts';
 export * from './edge-turma.ts';
 export * from './edge-phase3.ts';
+export * from './edge-phase4.ts';
 export * from './rpc.ts';
 export * from './sse.ts';
 export * from './rows.ts';

@@ -6,3 +6,4 @@ export * from './learning/index.ts';
 export * from './planning/index.ts';
 export * from './practice/index.ts';
 export * from './interactive/index.ts';
+export * from './enem/index.ts';
