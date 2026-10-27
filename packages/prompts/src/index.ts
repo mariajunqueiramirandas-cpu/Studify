@@ -12,3 +12,4 @@ export * from './fragments/index.ts';
 export * from './schemas/index.ts';
 export * from './checks/notes.ts';
 export * from './tasks/index.ts';
+export { COMPETENCIA_DESCRIPTORS, ESSAY_ANCHORS, type EssayAnchor } from './anchors/essay-grade.ts';

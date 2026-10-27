@@ -33,7 +33,7 @@ export interface DocumentBlock {
 
 export interface ImageBlock {
   type: 'image';
-  source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png'; data: string };
+  source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string };
   cache_control?: CacheControl;
 }
 

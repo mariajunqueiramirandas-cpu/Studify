@@ -93,3 +93,43 @@ export function pagesAllowed(documents: DocumentMap | null, label: string, start
   for (let p = start; p <= end; p++) if (!allowed.includes(p)) return false;
   return true;
 }
+
+export interface TextRun<I> {
+  task: PromptTaskDef<I, unknown>;
+  input: I;
+  scope: AiScope;
+}
+
+/**
+ * Runs a prose task (plain or citations output) with the tools its builder declares, e.g. the web_search server
+ * tool of atualidades.research and repertorio.verify. The raw content stays on the result (`content`) so the
+ * caller can read the web citations.
+ */
+export async function runText<I>(deps: ClaudeDeps, run: TextRun<I>): Promise<CallResult<string>> {
+  const built = run.task.build(run.input);
+  const call: TaskCall<string> = {
+    task: {
+      id: built.taskId,
+      version: run.task.version,
+      features: run.task.features,
+      effort: built.effort,
+      maxTokensClass: built.maxTokensClass,
+      output: { mode: run.task.outputMode === 'citations' ? 'citations' : 'plain' },
+    },
+    ctx: {
+      userId: run.scope.userId,
+      classGroupId: run.scope.classGroupId ?? null,
+      subjectId: run.scope.subjectId ?? null,
+      documentId: run.scope.documentId ?? null,
+      nodeId: run.scope.nodeId ?? null,
+      jobId: run.scope.jobId ?? null,
+      feature: run.scope.feature,
+      budgetClass: run.task.budget,
+    },
+    system: systemOf(built),
+    messages: built.messages as unknown as TaskCall<string>['messages'],
+    ...(built.tools ? { tools: built.tools as unknown as TaskCall<string>['tools'] } : {}),
+    sources: sourcesOf(built.documents),
+  };
+  return callClaude(deps, call);
+}

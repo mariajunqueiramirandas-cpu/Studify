@@ -121,6 +121,7 @@ create table public.enem_items (
   subject             text,
   explanation_status  text not null default 'pending' check (explanation_status in ('pending','ok','flagged')),
   review_status       text not null default 'needs_review' check (review_status in ('ok','needs_review')),
+  review_notes        text[] not null default '{}',                                                 -- why it waits for review (ENM-02.9)
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),
   unique (edition_year, application, co_item)
@@ -480,3 +481,43 @@ begin
     alter publication supabase_realtime add table public.essays;
   end if;
 end $$;
+
+-- =====================================================================
+-- Storage: the enem bucket also holds the raw INEP files the import reads (enem/{year}/raw/…: booklet PDFs,
+-- the ITENS_PROVA microdata CSV, answer keys, manifest.json). Item crops are WebP, JPEG when WebP encoding is
+-- unavailable. Guarded like 20260101000200_storage.sql.
+-- =====================================================================
+do $$
+begin
+  if to_regnamespace('storage') is null then
+    return;
+  end if;
+  update storage.buckets
+     set allowed_mime_types = array['image/webp','image/jpeg','application/pdf','text/csv','text/plain','application/json']
+   where id = 'enem';
+end $$;
+
+-- =====================================================================
+-- Atualidades source allowlist (ENM-09.3, spec 09 §12 open question 5: initial list as proposed). Admin-maintained;
+-- the weekly research call passes the enabled domains as allowed_domains. Service role only.
+-- =====================================================================
+create table private.atualidades_sources (
+  domain      text primary key check (domain ~ '^[a-z0-9.-]+\.[a-z]{2,}$'),
+  name        text not null,
+  enabled     boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+insert into private.atualidades_sources (domain, name) values
+  ('agenciabrasil.ebc.com.br', 'Agência Brasil'),
+  ('ibge.gov.br', 'IBGE'),
+  ('ipea.gov.br', 'Ipea'),
+  ('fiocruz.br', 'Fiocruz'),
+  ('bbc.com', 'BBC News Brasil'),
+  ('nexojornal.com.br', 'Nexo'),
+  ('g1.globo.com', 'g1'),
+  ('folha.uol.com.br', 'Folha de S.Paulo'),
+  ('estadao.com.br', 'Estadão'),
+  ('brasil.un.org', 'ONU Brasil'),
+  ('unicef.org', 'UNICEF Brasil');
+alter table private.atualidades_sources enable row level security;   -- no policies: service role only
+revoke all on private.atualidades_sources from public;

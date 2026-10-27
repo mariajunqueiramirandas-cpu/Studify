@@ -95,7 +95,7 @@ export interface EnemItemRef {
 
 export interface EnemBankTranscribeInput extends EnemItemRef {
   /** Item crop(s) from the official booklet, base64 JPEG/PNG. */
-  crops: readonly { data: string; mediaType: 'image/jpeg' | 'image/png' }[];
+  crops: readonly { data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' }[];
   /** The booklet page as a one-page PDF slice (text layer for exact characters). */
   page: PdfSlice | null;
 }
@@ -131,7 +131,7 @@ export const enemBankTranscribe = defineTask<EnemBankTranscribeInput, ReturnType
 });
 
 export interface EnemBankExplainInput extends EnemItemRef {
-  crops: readonly { data: string; mediaType: 'image/jpeg' | 'image/png' }[];
+  crops: readonly { data: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' }[];
   transcriptionMd: string;
   officialKey: 'A' | 'B' | 'C' | 'D' | 'E';
   skill: EnemSkillInput | null;

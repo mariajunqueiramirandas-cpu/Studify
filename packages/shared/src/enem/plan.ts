@@ -109,6 +109,8 @@ export interface EnemPlanInput {
   doneThisWeek?: { essays?: number; mocks?: number; minutesByArea?: Partial<Record<EnemArea, number>> };
   /** Units planned before today and not done: placed first this week with priority × 1.2. */
   rollover?: readonly EnemRolloverUnit[];
+  /** Unit keys already done (any week): never planned again (learn units stay done for good). */
+  doneKeys?: readonly string[];
 }
 
 export interface EnemPlanItem {
@@ -189,6 +191,8 @@ export function buildEnemPlan(input: EnemPlanInput): EnemPlanResult {
   const weeks: EnemWeekSummary[] = [];
   const outOfPlan: string[] = [];
   const learnPlanned = new Set<string>();
+  const done = new Set(input.doneKeys ?? []);
+  for (const key of done) if (key.startsWith('enem:learn:')) learnPlanned.add(key.slice('enem:learn:'.length));
   const durations = { day1: input.day1DurationMin ?? DEFAULT_DAY1_MIN, day2: input.day2DurationMin ?? DEFAULT_DAY2_MIN, area: AREA_SIMULADO_MIN };
   const startMin = hhmmToMin(input.startTime);
 
@@ -329,9 +333,11 @@ export function buildEnemPlan(input: EnemPlanInput): EnemPlanResult {
     // ---- Redações (ENM-07.4): 1 per week, 2 in the last 8 weeks; the Dia 1 simulado includes one.
     let essays = dayDiff(ws, day1) <= 56 ? 2 : 1;
     if (day1MockThisWeek) essays -= 1;
-    if (first) essays -= input.doneThisWeek?.essays ?? 0;
+    const essaysDone = first ? (input.doneThisWeek?.essays ?? 0) : 0;
+    essays -= essaysDone;
     const essayDays = new Set<PlanDay>(summary.mocks.map((m) => m.day));
-    for (let n = 1; n <= essays; n++) {
+    // Numbering continues after the essays already done, so a done unit key is never reused.
+    for (let n = essaysDone + 1; n <= essaysDone + essays; n++) {
       const unitKey = `enem:essay:${ws}:${n}`;
       const candidates = days.filter((d) => !essayDays.has(d) && !betweenDays(d) && (remaining.get(d) ?? 0) >= ESSAY_MIN + ESSAY_REVIEW_MIN);
       candidates.sort((a, b) => (remaining.get(b) ?? 0) - (remaining.get(a) ?? 0) || a.localeCompare(b));
@@ -419,6 +425,7 @@ export function buildEnemPlan(input: EnemPlanInput): EnemPlanResult {
     // ---- Placement: highest priority first, on the day with the most room (earliest on ties).
     units.sort((a, b) => b.priority - a.priority || a.unitKey.localeCompare(b.unitKey));
     for (const u of units) {
+      if (done.has(u.unitKey)) continue;
       const allowed = (d: PlanDay) => {
         if (u.unitType === 'learn' && (lastWeekBeforeExam(d) || betweenDays(d))) return false;
         if (betweenDays(d) && u.area !== 'CN' && u.area !== 'MT') return false;

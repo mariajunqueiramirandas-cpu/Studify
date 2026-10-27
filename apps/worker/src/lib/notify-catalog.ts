@@ -31,6 +31,12 @@ export const NOTIFY_CATALOG: Readonly<Record<string, NotifyEntry>> = {
   join_request: { channel: 'class', countsTowardCap: true, delivery: 'push', title: 'Pedido para entrar', body: 'Alguém pediu para entrar na sua turma.', deepLink: 'studify://class/{class_group_id}?tab=members' },
   content_fixed: { channel: 'processing', countsTowardCap: false, delivery: 'push', title: 'Itens corrigidos', body: 'Alguns itens que você estudou foram corrigidos.', deepLink: 'studify://today' },
   streak_at_risk: { channel: 'plan', countsTowardCap: true, delivery: 'local', title: 'Sua sequência está em risco', body: 'Estude um pouco hoje para manter a sequência.', deepLink: 'studify://today' },
+  // Phase 4 (ENM-09.5, ENM-10)
+  atualidades_published: { channel: 'plan', countsTowardCap: true, delivery: 'push', title: 'Atualidades da semana', body: 'O resumo de Atualidades pro ENEM saiu.', deepLink: 'studify://enem/atualidades/{digest_id}' },
+  reta_final_start: { channel: 'plan', countsTowardCap: false, delivery: 'push', title: 'Começou a Reta Final! 🏁', body: 'Seu plano agora foca no que mais cai e nos simulados no horário real.', deepLink: 'studify://enem/reta-final' },
+  enem_eve: { channel: 'plan', countsTowardCap: false, delivery: 'push', title: 'Amanhã é dia de ENEM', body: 'Revisão leve hoje, separe documento e caneta preta transparente, e durma cedo.', deepLink: 'studify://enem/reta-final' },
+  enem_between_days: { channel: 'plan', countsTowardCap: false, delivery: 'push', title: 'Descansa primeiro', body: 'Revisão leve de Natureza e Matemática, sem ficar conferindo gabarito extraoficial.', deepLink: 'studify://enem/reta-final' },
+  enem_exam_day: { channel: 'plan', countsTowardCap: false, delivery: 'push', title: 'Boa prova! 🍀', body: 'Boa prova! Documento e caneta preta transparente na mochila? 🍀', deepLink: 'studify://enem/reta-final' },
   content_flag_review: { channel: 'class', countsTowardCap: true, delivery: 'push', title: 'Denúncia para revisar', body: 'Há um item da turma aguardando revisão.', deepLink: 'studify://class/{class_group_id}?tab=review' },
 };
 
