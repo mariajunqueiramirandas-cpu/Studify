@@ -68,7 +68,7 @@ export function formatGrade(value: number, max?: number, decimals = 2): string {
 export function formatAgo(instant: Date | number, now: Date | number = Date.now()): string {
   const nowMs = now instanceof Date ? now.getTime() : now;
   const thenMs = instant instanceof Date ? instant.getTime() : instant;
-  const minutes = Math.max(0, Math.round((nowMs - thenMs) / 60_000));
+  const minutes = Math.max(0, Math.floor((nowMs - thenMs) / 60_000));
   if (minutes < 1) return 'agora há pouco';
   if (minutes < 60) return `há ${plural(minutes, 'min', 'min')}`;
   const hours = Math.round(minutes / 60);

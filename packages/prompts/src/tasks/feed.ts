@@ -3,7 +3,7 @@ import { documentBlocks, lines, section, text, type PdfSlice } from '../blocks.t
 import { stableStringify } from '../stable-json.ts';
 import { FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragments/index.ts';
 import { FeedItems } from '../schemas/feed.ts';
-import { languageLines, userTurn, type TopicInput } from './shared.ts';
+import { contentLanguageLines, userTurn, type TopicInput } from './shared.ts';
 import type { CacheTtl } from '../types.ts';
 
 const FEED_RULES = [
@@ -38,7 +38,7 @@ function feedMessages(input: FeedInput, ttl: CacheTtl) {
     input.leastCoveredConceptKeys?.length
       ? section('Reforço: conceitos menos cobertos (priorize):', stableStringify(input.leastCoveredConceptKeys))
       : null,
-    languageLines(input.contentLanguage, input.languageSubject),
+    contentLanguageLines(input.contentLanguage, input.languageSubject),
     'Retorne apenas o objeto estruturado pedido.',
   );
   return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };

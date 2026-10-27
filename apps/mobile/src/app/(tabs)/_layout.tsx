@@ -8,7 +8,7 @@ import { usePendingRequestsBadge } from '../../features/class/api';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 function icon(active: IconName, inactive: IconName) {
-  return ({ color, focused }: { color: string; focused: boolean }) => <Ionicons name={focused ? active : inactive} size={24} color={color} />;
+  return ({ color, focused }: { color: unknown; focused: boolean }) => <Ionicons name={focused ? active : inactive} size={24} color={color as string} />;
 }
 
 /** Five bottom tabs with labels always visible (ux §2, §6 BottomTabBar). */

@@ -170,6 +170,7 @@ describe('GOL-04 invariants', () => {
       for (let d = 0; d < 50; d++) forecastMap[addDays(today, d)] = s.reviews[d % s.reviews.length] ?? 0;
       return {
         today,
+        timeZone: 'America/Sao_Paulo',
         exams,
         topics: tps,
         availability: { minutesByWeekday: s.availability },
@@ -356,7 +357,7 @@ describe('GOL-04 snapshots per scenario', () => {
 
   it('triage variant (A = 60)', () => {
     const run = buildPlan(worked(60), 'scope_changed');
-    expect({ triage: run.triage, feasible: run.feasible, items: lines(run) }).toMatchSnapshot();
+    expect({ triage: run.triage, feasible: run.feasible, outOfPlan: run.outOfPlan, items: lines(run) }).toMatchSnapshot();
   });
 
   it('five subjects on consecutive days, a missed day and a test added mid-week', () => {
@@ -381,7 +382,7 @@ describe('GOL-04 snapshots per scenario', () => {
       timeZone: 'America/Sao_Paulo',
       exams,
       topics: tps,
-      availability: { minutesByWeekday: [60, 60, 60, 60, 60, 90, 90] },
+      availability: { minutesByWeekday: [150, 150, 150, 150, 150, 180, 180] },
       reviewForecast: forecast(8, '2026-05-04', '2026-05-12'),
     };
     const first = buildPlan(base, 'scope_changed');
@@ -392,7 +393,11 @@ describe('GOL-04 snapshots per scenario', () => {
       previous: first.items.map((i) => ({ id: i.id, unitKey: i.unitKey, unitType: i.unitType, examIds: i.examIds, topicId: i.topicId, day: i.day, minutes: i.minutes, pinned: false, status: 'planned' as const })),
     };
     const replanned = buildPlan(withExtra, 'exam_changed');
-    expect({ first: lines(first), replanned: lines(replanned), moved: replanned.movedMinutes }).toMatchSnapshot();
+    expect({
+      first: { items: lines(first), triage: first.triage, outOfPlan: first.outOfPlan, feasible: first.feasible },
+      replanned: { items: lines(replanned), triage: replanned.triage, outOfPlan: replanned.outOfPlan, feasible: replanned.feasible },
+      moved: replanned.movedMinutes,
+    }).toMatchSnapshot();
   });
 
   it('a subject already mastered gets no learn unit', () => {

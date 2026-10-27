@@ -112,8 +112,35 @@ const outline = { is_study_material: true, language: 'pt-BR', detected_kind: 'no
 
 const pageRef = (doc = 'D1') => ({ doc, page_start: 3, page_end: 4 });
 
+const feedItemValid = { type: 'diagram', concept_key: 'c1', title: 'Célula', body: 'Organelas.', formula_latex: null, question: null, figure_page: 13, caption: 'Figura 1', external_knowledge: false, source_pages: [ref] };
+
+/** Payload schemas are exercised through their question variant (same payload object). */
+export const PAYLOAD_ALIASES: Record<string, string> = {
+  McqSinglePayload: 'question variant mcq_single',
+  MultiSelectPayload: 'question variant multi_select',
+  TrueFalsePayload: 'question variant true_false',
+  FillBlankPayload: 'question variant fill_blank',
+  NumericPayload: 'question variant numeric',
+  MatchingPayload: 'question variant matching',
+  OrderingPayload: 'question variant ordering',
+  ShortAnswerPayload: 'question variant short_answer',
+  EssayPayload: 'question variant essay_question',
+  FindErrorPayload: 'question variant find_error',
+  ProblemPayload: 'question variant problem',
+};
+
 export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'LanguageTag', schema: S.LanguageTag, valid: 'pt-BR', invalid: 'portugues do brasil' },
+  { name: 'Difficulty', schema: S.Difficulty, valid: 3, invalid: 9 },
+  { name: 'Confidence', schema: S.Confidence, valid: 0.5, invalid: 1.5 },
+  { name: 'BloomLevel', schema: S.BloomLevel, valid: 'apply', invalid: 'memorize' },
+  { name: 'MistakeCause', schema: S.MistakeCause, valid: 'confused', invalid: 'lazy' },
+  { name: 'ConceptKey', schema: S.ConceptKey, valid: 'c1', invalid: '' },
+  { name: 'NodeKey', schema: S.NodeKey, valid: 't1', invalid: '' },
+  { name: 'DocLabel', schema: S.DocLabel, valid: 'D2', invalid: 'doc2' },
+  { name: 'PageNumber', schema: S.PageNumber, valid: 12, invalid: 0 },
+  { name: 'FeedItem', schema: S.FeedItem, valid: feedItemValid, invalid: { ...feedItemValid, figure_page: null } },
+  { name: 'ObjectiveQuestionSchema', schema: S.ObjectiveQuestionSchema, valid: withPayload('mcq_single', payloads.mcq_single), invalid: withPayload('essay_question', payloads.essay_question) },
   { name: 'DocPageRef', schema: S.DocPageRef, valid: ref, invalid: { doc: 'D1', page_start: 4, page_end: 3 } },
   { name: 'SourcePages', schema: S.SourcePages, valid: [ref], invalid: [] },
   { name: 'RemediationCard', schema: S.RemediationCard, valid: remediation, invalid: { front: '', back: 'x' } },
@@ -122,7 +149,7 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'TopicCards', schema: S.TopicCards, valid: { cards: [card, cloze] }, invalid: { cards: [] } },
   { name: 'SelectionCard', schema: S.SelectionCard, valid: { type: 'basic', front: 'Pergunta?', back: 'Resposta.', cloze_text: null, concept_key: null }, invalid: { type: 'basic', front: 'x', back: 'x', cloze_text: 'y', concept_key: null } },
   { name: 'TutorCard', schema: S.TutorCard, valid: { type: 'cloze', front: 'Frase.', back: 'termo', cloze_text: 'Frase com {{c1::termo}}.' }, invalid: { type: 'reverse', front: 'a', back: 'b', cloze_text: null } },
-  { name: 'QuestionSchema (union)', schema: S.QuestionSchema, valid: withPayload('true_false', payloads.true_false), invalid: withPayload('true_false', { ...payloads.true_false, correct: 'x' }) },
+  { name: 'QuestionSchema', schema: S.QuestionSchema, valid: withPayload('true_false', payloads.true_false), invalid: withPayload('true_false', { ...payloads.true_false, correct: 'x' }) },
   ...questionCases,
   { name: 'TopicQuestions', schema: S.TopicQuestions, valid: { questions: [withPayload('true_false', payloads.true_false)] }, invalid: { questions: [] } },
   { name: 'SingleQuestion', schema: S.SingleQuestion, valid: { question: withPayload('true_false', payloads.true_false) }, invalid: { question: withPayload('numeric', payloads.numeric, { payload: { answer: 'x' } }) } },

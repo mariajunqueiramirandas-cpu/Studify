@@ -196,7 +196,7 @@ export const QuestionVariants = {
 export type QuestionType = keyof typeof QuestionVariants;
 export const QUESTION_TYPES = Object.keys(QuestionVariants) as QuestionType[];
 
-export const QuestionSchema = z.discriminatedUnion('type', [
+export const QuestionSchema = z.union([
   QuestionVariants.mcq_single,
   QuestionVariants.multi_select,
   QuestionVariants.true_false,
@@ -210,8 +210,11 @@ export const QuestionSchema = z.discriminatedUnion('type', [
   QuestionVariants.problem,
 ]);
 
+// z.union (not discriminatedUnion) so the JSON Schema uses anyOf, which structured outputs accept.
+// Each variant pins its `type` with z.literal, so validation is equivalent.
+
 /** Objective types only: used by the Modo Desespero diagnostic (spec 07 §8.10.4). */
-export const ObjectiveQuestionSchema = z.discriminatedUnion('type', [
+export const ObjectiveQuestionSchema = z.union([
   QuestionVariants.mcq_single,
   QuestionVariants.true_false,
   QuestionVariants.fill_blank,

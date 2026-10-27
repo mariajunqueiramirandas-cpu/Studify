@@ -238,6 +238,10 @@ export function createFakeServer(options: { serverNow?: () => number; userId?: s
     },
 
     async pull(req: PullRequest): Promise<PullResponse> {
+      const fault = faults.shift();
+      if (fault?.type === 'error') {
+        throw new SyncTransportError(fault.kind, fault.message ?? `fault ${fault.kind}`, fault.code);
+      }
       stats.pulls += 1;
       const rows = [...(tables.get(req.table)?.values() ?? [])].filter((row) => req.filters.every((f) => matches(row, f)));
       const cursorSeq = req.cursor.updatedAt !== null ? seqOf(req.cursor.updatedAt) : null;

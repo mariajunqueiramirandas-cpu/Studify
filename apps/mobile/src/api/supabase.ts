@@ -29,7 +29,7 @@ let appStateSubscription: { remove: () => void } | null = null;
 export function startAuthAutoRefresh(): () => void {
   if (!appStateSubscription) {
     appStateSubscription = AppState.addEventListener('change', onAppStateChange);
-    onAppStateChange(AppState.currentState);
+    onAppStateChange((AppState.currentState as AppStateStatus | null) ?? 'active');
   }
   return () => {
     appStateSubscription?.remove();

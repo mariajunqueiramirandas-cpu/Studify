@@ -5,7 +5,7 @@ import { FORMAT, GROUNDING, PEDAGOGY, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from 
 import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { SingleQuestion, TopicQuestions, type QuestionType } from '../schemas/questions.ts';
 import { ContrastTable, ShortAnswerGrade, WrongAnswerExplanation } from '../schemas/grading.ts';
-import { languageLines, userTurn, type TopicInput } from './shared.ts';
+import { contentLanguageLines, feedbackLanguageLines, userTurn, type TopicInput } from './shared.ts';
 import type { CacheTtl } from '../types.ts';
 
 export type QuotaMap = Partial<Record<QuestionType, number>>;
@@ -107,7 +107,7 @@ function questionsMessages(input: QuestionsInput, ttl: CacheTtl) {
     `Cotas por tipo: ${quotas}.`,
     input.quantitative ? 'Tópico quantitativo: use numeric no lugar de algumas múltiplas escolhas, conforme as cotas.' : null,
     section('Enunciados existentes (não repita):', stableStringify(input.existingStems)),
-    languageLines(input.contentLanguage, input.languageSubject),
+    contentLanguageLines(input.contentLanguage, input.languageSubject),
     'Retorne apenas o objeto estruturado pedido.',
   );
   return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
@@ -146,9 +146,9 @@ export const questionsVariant = defineTask<VariantInput, ReturnType<typeof Singl
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
-      section('Questão original (JSON):', stableStringify(input.original)),
+      section('Questão original (JSON):', wrapUntrusted(TAG.material, stableStringify(input.original))),
       section('Conceito (JSON):', stableStringify(input.concept)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
@@ -192,7 +192,7 @@ export const contrastDrill = defineTask<ContrastInput, ReturnType<typeof Contras
     const body = lines(
       section('Conceito A (JSON):', stableStringify(input.conceptA)),
       section('Conceito B (JSON):', stableStringify(input.conceptB)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
@@ -244,9 +244,9 @@ export const gradeShortAnswer = defineTask<ShortAnswerInput, ReturnType<typeof S
   build: (input, ctx) => {
     const pageText = input.pages.map((p) => `[p. ${p.page}] ${p.text}`).join('\n');
     const pageBlock = text(section('Texto do material (dado):', wrapUntrusted(TAG.material, pageText)), ctx.ttl);
-    const question = text(section('Questão (JSON):', stableStringify(input.question)));
+    const question = text(section('Questão (JSON):', wrapUntrusted(TAG.material, stableStringify(input.question))));
     const answer = text(section('Resposta do estudante:', wrapUntrusted(TAG.resposta, input.studentAnswer)));
-    const tail = text(languageLines(input.contentLanguage, input.languageSubject));
+    const tail = text(feedbackLanguageLines(input.contentLanguage, input.languageSubject));
     const instructions = text('Retorne apenas o objeto estruturado pedido.');
     return { messages: [userTurn([pageBlock, question, answer, tail, instructions])] };
   },
@@ -288,9 +288,9 @@ export const practiceExplainWrong = defineTask<WrongExplanationInput, ReturnType
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
-      section('Questão (JSON):', stableStringify(input.question)),
+      section('Questão (JSON):', wrapUntrusted(TAG.material, stableStringify(input.question))),
       section('Escolha do estudante:', wrapUntrusted(TAG.resposta, input.userChoice)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      feedbackLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };

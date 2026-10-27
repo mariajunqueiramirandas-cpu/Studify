@@ -116,7 +116,12 @@ export const TASK_INPUTS: Record<string, unknown> = {
     ],
     newSlices: [bio],
     message: 'Acho que ocorre na mitocôndria?',
-    scopeLabel: 'Biologia · Respiração celular',
+    scope: {
+      kind: 'goal',
+      label: 'P1 de Biologia',
+      excludedTopicTitles: ['Fotossíntese'],
+      processingPct: 80,
+    },
     socraticAttempts: 1,
     contentLanguage: 'pt-BR',
     languageSubject: false,

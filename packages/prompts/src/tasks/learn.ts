@@ -4,7 +4,7 @@ import { stableStringify } from '../stable-json.ts';
 import { CITATIONS, FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragments/index.ts';
 import { wrapUntrusted, TAG } from '../untrusted.ts';
 import { GlossaryTerms, Relations } from '../schemas/learn.ts';
-import { languageLines, userTurn, type TopicInput } from './shared.ts';
+import { contentLanguageLines, userTurn, type TopicInput } from './shared.ts';
 
 /** Fixed H2 sections of a Resumo (LRN-01.3), in order. Fórmulas only when the topic has formulas. */
 export function studySections(hasFormulas: boolean): string[] {
@@ -53,7 +53,7 @@ export const notesTldr = defineTask<TldrInput>({
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
       section('Tópico (JSON):', stableStringify(input.topic)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
   },
@@ -106,7 +106,7 @@ export const notesStudy = defineTask<StudyNoteInput>({
     const body = lines(
       section('Tópico (JSON):', stableStringify({ ...input.topic, siblings: input.siblingTitles, hasFormulas: input.hasFormulas })),
       `Seções exigidas: ${studySections(input.hasFormulas).join(' · ')}.`,
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
   },
@@ -145,7 +145,7 @@ export const notesDeep = defineTask<DeepNoteInput>({
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
       section('Tópico (JSON):', stableStringify(input.topic)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
   },
@@ -228,7 +228,7 @@ export const glossaryDefine = defineTask<GlossaryInput, ReturnType<typeof Glossa
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
       section('Tópico e termos (JSON):', stableStringify({ topicTitle: input.topicTitle, keyTerms: input.keyTerms })),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
@@ -290,7 +290,7 @@ export const explainRestyle = defineTask<RestyleInput>({
     const body = lines(
       `Estilo: ${STYLE_RULES[input.style]}`,
       wrapUntrusted(TAG.trecho, input.targetText),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
   },

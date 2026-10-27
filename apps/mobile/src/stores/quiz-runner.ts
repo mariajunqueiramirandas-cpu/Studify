@@ -6,7 +6,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { uuidv7 } from 'uuidv7';
 import type { AppDb } from '../db/client';
 import { enqueueOutbox } from '../db/outbox';
-import { attemptAnswers, quizAttempts } from '../db/schema';
+import { quizAttempts } from '../db/schema';
 import { syncNow } from '../db/sync';
 import { kvStateStorage } from '../lib/kv';
 

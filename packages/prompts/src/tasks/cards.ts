@@ -6,7 +6,7 @@ import { FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragme
 import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { SelectionCard, TopicCards } from '../schemas/cards.ts';
 import { RemediationCard } from '../schemas/common.ts';
-import { languageLines, userTurn, type TopicInput } from './shared.ts';
+import { contentLanguageLines, userTurn, type TopicInput } from './shared.ts';
 
 /** MEM-01.1: clamp(3 × concepts, 8, 30). */
 export function cardTargetCount(conceptCount: number): number {
@@ -45,7 +45,7 @@ function buildCards(input: CardsInput, ttl: CacheTtl) {
     section('Tópico (JSON):', stableStringify(input.topic)),
     section('Frentes existentes (não repita):', stableStringify(input.existingFronts)),
     `Quantidade alvo: ${input.targetCount} cartões.`,
-    languageLines(input.contentLanguage, input.languageSubject),
+    contentLanguageLines(input.contentLanguage, input.languageSubject),
     'Retorne apenas o objeto estruturado pedido.',
   );
   return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
@@ -120,7 +120,7 @@ export const cardsFromSelection = defineTask<SelectionCardInput, ReturnType<type
       input.selectionText ? wrapUntrusted(TAG.trecho, input.selectionText) : 'Seleção: a imagem anexada.',
       input.page ? `Página original: ${input.page}.` : null,
       section('Conceitos candidatos (JSON):', stableStringify(input.conceptCandidates)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     parts.push(text(body));
@@ -165,10 +165,10 @@ export const cardsRemediation = defineTask<RemediationInput, ReturnType<typeof R
   cache: '5m',
   build: (input) => {
     const body = lines(
-      section('Questão (JSON):', stableStringify(input.question)),
+      section('Questão (JSON):', wrapUntrusted(TAG.material, stableStringify(input.question))),
       `Causa escolhida: ${input.cause}.`,
       section('Resposta do estudante:', wrapUntrusted(TAG.resposta, input.studentAnswer)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([text(body)])] };

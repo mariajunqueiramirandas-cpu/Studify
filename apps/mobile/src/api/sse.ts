@@ -40,15 +40,17 @@ export function createSseParser(onMessage: (message: SseMessage) => void): SsePa
   return {
     feed(chunk: string) {
       buffer += chunk;
-      const lines = buffer.split(/\r\n|\r|\n/);
-      buffer = lines.pop() ?? '';
+      // A trailing CR may be the first half of a CRLF that continues in the next chunk: hold it back.
+      const hold = buffer.endsWith('\r') ? '\r' : '';
+      const body = hold ? buffer.slice(0, -1) : buffer;
+      const lines = body.split(/\r\n|\r|\n/);
+      buffer = (lines.pop() ?? '') + hold;
       for (const line of lines) handleLine(line);
     },
     flush() {
-      if (buffer.length > 0) {
-        handleLine(buffer);
-        buffer = '';
-      }
+      const rest = buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
+      buffer = '';
+      if (rest.length > 0) handleLine(rest);
       dispatch();
     },
   };

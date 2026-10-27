@@ -42,7 +42,7 @@ export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
 
 function AuthGate() {
   const { session, profile, ready } = useSession();
-  const segments = useSegments();
+  const segments = useSegments() as string[];
   const router = useRouter();
   const sync = useSyncStatus();
 

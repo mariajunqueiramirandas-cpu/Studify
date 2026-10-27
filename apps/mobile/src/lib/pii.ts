@@ -84,8 +84,8 @@ interface SentryEventLike {
 }
 
 /** `beforeSend` for Sentry: removes user identity, request bodies and user content. */
-export function scrubSentryEvent<T extends SentryEventLike>(event: T): T {
-  const copy: SentryEventLike = { ...event };
+export function scrubSentryEvent<T>(event: T): T {
+  const copy: SentryEventLike = { ...(event as unknown as SentryEventLike) };
   delete copy.user;
   delete copy.request;
   if (typeof copy.message === 'string') copy.message = scrubString(copy.message);
@@ -106,7 +106,7 @@ export function scrubSentryEvent<T extends SentryEventLike>(event: T): T {
     const scrubbed = list.map((b) => scrubBreadcrumb(b));
     copy.breadcrumbs = Array.isArray(copy.breadcrumbs) ? scrubbed : { ...copy.breadcrumbs, values: scrubbed };
   }
-  return copy as T;
+  return copy as unknown as T;
 }
 
 export function scrubBreadcrumb<T>(breadcrumb: T): T {

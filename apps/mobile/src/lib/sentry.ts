@@ -28,7 +28,7 @@ export function initSentry(): void {
   });
   setLogBreadcrumbSink((level, message) => {
     if (level === 'warn' || level === 'error') {
-      Sentry.addBreadcrumb({ level, message, category: 'studify' });
+      Sentry.addBreadcrumb({ level: level === 'warn' ? 'warning' : 'error', message, category: 'studify' });
     }
   });
 }

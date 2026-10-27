@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, gap: space.sm, minHeight: 320 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   tag: { borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 4 },
-  face: { ...StyleSheet.absoluteFillObject, borderRadius: radius.xl, borderWidth: 1, padding: space.xl, backfaceVisibility: 'hidden', gap: space.md },
+  face: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: radius.xl, borderWidth: 1, padding: space.xl, backfaceVisibility: 'hidden', gap: space.md },
   back: { borderWidth: 2 },
   content: { flex: 1, justifyContent: 'center' },
 });

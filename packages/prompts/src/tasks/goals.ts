@@ -5,7 +5,7 @@ import { FORMAT, PTBR_STYLE, SAFETY, UNTRUSTED_DATA, GROUNDING } from '../fragme
 import { wrapUntrusted, TAG } from '../untrusted.ts';
 import { Cheatsheet } from '../schemas/goals.ts';
 import { DiagnosticQuestions } from '../schemas/questions.ts';
-import { languageLines, userTurn } from './shared.ts';
+import { contentLanguageLines, userTurn } from './shared.ts';
 
 // ---------------------------------------------------------------------------
 // GOL-07.2 — vespera.cheatsheet (Worker, standard API, not Batch)
@@ -63,7 +63,7 @@ export const vesperaCheatsheet = defineTask<CheatsheetInput, ReturnType<typeof C
         `Prova: ${input.exam.title}, em ${input.exam.date}${input.exam.kind ? ` (${input.exam.kind})` : ''}.`,
         section('Fontes (rótulos das notas):', stableStringify(input.sourceDocs)),
         section('Erros não resolvidos (JSON):', wrapUntrusted(TAG.resposta, stableStringify(input.unresolvedMistakes))),
-        languageLines(input.contentLanguage, false),
+        contentLanguageLines(input.contentLanguage, false),
         'Retorne apenas o objeto estruturado pedido.',
       ),
     );
@@ -108,7 +108,7 @@ export const goalsDiagnostic = defineTask<DiagnosticInput, ReturnType<typeof Dia
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
       section('Tópicos (JSON, nesta ordem):', stableStringify(input.topics)),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };

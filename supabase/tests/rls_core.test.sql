@@ -124,7 +124,7 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('public','private') and c.relkind in ('r','p')),
-  40, 'the foundation creates 40 tables (36 public, 4 private)');
+  73, 'the foundation and Phase 1 create 73 tables (68 public, 5 private)');
 
 -- =====================================================================
 -- 1. profiles and public views (data-model §4.1, §5.1, §6.2)

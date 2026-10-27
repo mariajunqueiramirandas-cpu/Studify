@@ -56,8 +56,14 @@ describe('builders', () => {
         expect(Object.keys(built.documents?.allowedPages ?? {})).toHaveLength(blocks.length);
       });
 
-      it('matches the stored snapshot', () => {
-        expect(task.build(input)).toMatchSnapshot();
+      it('attaches the task JSON schema as output_config.format for structured tasks', () => {
+        const built = task.build(input);
+        expect(built.outputFormat?.schema ?? null).toEqual(task.jsonSchema ?? null);
+      });
+
+      it('matches the stored snapshot (schema excluded: it is covered above and by registry tests)', () => {
+        const { outputFormat: _schema, ...rest } = task.build(input);
+        expect(rest).toMatchSnapshot();
       });
     });
   }

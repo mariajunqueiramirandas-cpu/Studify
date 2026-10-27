@@ -4,7 +4,7 @@ import { stableStringify } from '../stable-json.ts';
 import { FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragments/index.ts';
 import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { PastTestExtraction, PredictedTest, TeacherPatterns } from '../schemas/prova.ts';
-import { languageLines, userTurn, type PromptMessage } from './shared.ts';
+import { contentLanguageLines, feedbackLanguageLines, userTurn, type PromptMessage } from './shared.ts';
 import type { ContentBlock } from '../types.ts';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ export const pastTestExtract = defineTask<PastTestInput, ReturnType<typeof PastT
     }
     const body = lines(
       input.teacherGuess ? `Professor(a) informado(a): ${input.teacherGuess}.` : null,
-      languageLines(input.contentLanguage, false),
+      contentLanguageLines(input.contentLanguage, false),
       'Retorne apenas o objeto estruturado pedido.',
     );
     const messages: PromptMessage[] = [userTurn([outline, ...media, text(body)])];
@@ -120,7 +120,7 @@ export const teacherProfileBuild = defineTask<TeacherProfileInput, ReturnType<ty
       `Professor(a): ${input.teacherName}.`,
       section('Provas (JSON, sem imagens):', wrapUntrusted(TAG.material, stableStringify(input.tests))),
       section('Estatísticas calculadas (JSON):', stableStringify(input.statistics)),
-      languageLines(input.contentLanguage, false),
+      feedbackLanguageLines(input.contentLanguage, false),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([text(body)])] };
@@ -184,7 +184,7 @@ export const predictedTestGenerate = defineTask<PredictedTestInput, ReturnType<t
       section('Plano (JSON, slots):', stableStringify(input.blueprint)),
       section('Perfil do(a) professor(a) (JSON):', wrapUntrusted(TAG.material, stableStringify(input.teacherProfile))),
       section('Exemplos de estilo (dado):', wrapUntrusted(TAG.material, stableStringify(input.examples))),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };

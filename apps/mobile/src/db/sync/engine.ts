@@ -13,7 +13,8 @@
 //    times is stuck: kept, surfaced, skipped by automatic pushes until the user retries it.
 // 8. HTTP 426 stops syncing and reports `upgrade_required`.
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
-import { getTableColumns, type AnySQLiteColumn, type SQLiteTable } from 'drizzle-orm/sqlite-core';
+import { getTableColumns } from 'drizzle-orm';
+import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { AppDb, Db } from '../client';
 import { countOutbox, dropOutboxForEntity, listPushableRows, retryStuckRows, type OutboxRow } from '../outbox';
 import { cardStates, outbox, subjects, subjectUserSettings, syncCursors } from '../schema';
@@ -281,6 +282,15 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
         const key = keyValues(values, def.pk);
         const entityId = String(values[def.pk[def.pk.length - 1]!]);
 
+        const pendingReviews =
+          def.name === 'card_states' &&
+          tx
+            .select({ id: outbox.id })
+            .from(outbox)
+            .where(and(eq(outbox.kind, 'review_log'), eq(outbox.entityId, entityId)))
+            .limit(1)
+            .get() !== undefined;
+
         if (raw['deleted_at'] !== null && raw['deleted_at'] !== undefined) {
           // Tombstone: delete wins over pending edits.
           tx.delete(def.table)
@@ -290,6 +300,9 @@ export function createSyncEngine(options: SyncEngineOptions): SyncEngine {
             tx.delete(cascade.child).where(eq(column(cascade.child, cascade.column), entityId)).run();
           }
           dropOutboxForEntity(tx, entityId);
+        } else if (pendingReviews) {
+          // Unacknowledged reviews make the device prediction newer than the server's state:
+          // keep it until the ack arrives (the ack path follows the same rule).
         } else {
           const merged = applyOverlays(tx, def, entityId, values);
           const setValues = omit(merged, def.pk);

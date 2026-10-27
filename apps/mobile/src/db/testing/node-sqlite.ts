@@ -2,6 +2,7 @@
 // `drizzle-orm/expo-sqlite` (prepareSync -> executeSync / executeForRawResultSync), backed by
 // Node's built-in `node:sqlite`. Lets Jest run the real Drizzle schema, migrations and queries.
 // Not shipped: it lives in `testing/` and is only imported by tests.
+// @ts-ignore node:sqlite typings are not part of this project's @types/node yet (test-only module).
 import { DatabaseSync } from 'node:sqlite';
 
 const ROW_RETURNING = /^\s*(select|with|pragma|values)\b|\breturning\b/i;
@@ -37,7 +38,7 @@ class NodeStatement {
   executeForRawResultSync(params: Params = []) {
     const stmt = this.db.prepare(this.source);
     stmt.setReturnArrays(true);
-    const rows = stmt.all(...(params as never[])) as unknown[][];
+    const rows = stmt.all(...(params as never[])) as unknown as unknown[][];
     return { getAllSync: () => rows };
   }
 }

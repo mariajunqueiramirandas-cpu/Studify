@@ -20,6 +20,9 @@ import type {
 import { attackCoverage, planAttack, type AttackTopic } from './desperate.ts';
 import { addDays, ceil5, clamp, dayDiff, EPS, fnv1a32, stableStringify, weekdayMon0 } from './util.ts';
 
+/** Default study minutes Mon…Sun (open decision D-15: 60 on weekdays, 90 on weekends; editable). */
+export const DEFAULT_AVAILABILITY_MINUTES: readonly number[] = [60, 60, 60, 60, 60, 90, 90];
+
 export const DEFAULT_PLAN_SETTINGS: PlanSettings = {
   maxBlockMin: 30,
   minBlockMin: 10,
@@ -355,7 +358,8 @@ function buildUnits(
   // Mock per test (§11.2): min(45, 3·|N_e| + 15), earliest D − 4, deadline D − 1. Desperate covered tests use the fixed mini-simulado instead.
   for (const e of p.exams) {
     const mockKey = `mock:${e.id}`;
-    if (mockFixedIds.has(mockKey)) continue;
+    // Covered desperate tests get the 20-min mini-simulado (fixed) or none (GOL-12.6).
+    if (mockFixedIds.has(mockKey) || p.covered.has(e.id)) continue;
     const n = (p.topicsOf.get(e.id) ?? []).length;
     const W = p.weightNorm.get(e.id) ?? 1;
     const rho = p.rho.get(e.id) ?? 0.5;
@@ -923,6 +927,9 @@ export function buildPlan(input: PlanInput, trigger: ReplanTrigger): PlanRun {
   let result: PlaceResult = { placed: new Map(), unplaced: [], remaining: new Map(), lastDay: new Map() };
   for (let guard = 0; guard < 2000; guard++) {
     blocks = expandBlocks([...units.values()], maxBlock, settings.minBlockMin).filter(blockFilter);
+    // Triage while the aggregate check fails (§11.5 steps 1–2) …
+    if (!aggregateFeasible(blocks, prepared) && applyNextTriage(units, triage, outOfPlan)) continue;
+    // … then place; leftovers that do not fit block by block get the move repair (step 5a).
     result = place(blocks, prepared);
     if (result.unplaced.length > 0) repairByMoves(result, blocks, prepared);
     if (result.unplaced.length === 0) break;

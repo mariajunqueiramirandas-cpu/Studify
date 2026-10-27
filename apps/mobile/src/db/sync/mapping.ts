@@ -13,7 +13,7 @@ export function selectColumnsFor(table: SQLiteTable): string[] {
 /** Server column name for a JS key of a local table. */
 export function dbColumnName(table: SQLiteTable, key: string): string {
   const col = getTableColumns(table)[key];
-  if (!col) throw new Error(`Unknown column "${key}" on table "${table.getSQL ? '' : ''}"`);
+  if (!col) throw new Error(`Unknown column "${key}"`);
   return col.name;
 }
 

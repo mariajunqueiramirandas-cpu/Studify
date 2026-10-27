@@ -4,7 +4,7 @@ import { stableStringify } from '../stable-json.ts';
 import { FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragments/index.ts';
 import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { FlagVerdict, ModerationVerdict } from '../schemas/trust.ts';
-import { languageLines, userTurn } from './shared.ts';
+import { feedbackLanguageLines, userTurn } from './shared.ts';
 
 // ---------------------------------------------------------------------------
 // TRU-02.4 — flag.triage (Worker, high effort)
@@ -56,7 +56,7 @@ export const flagTriage = defineTask<FlagTriageInput, ReturnType<typeof FlagVerd
       `Motivo: ${input.reason}.`,
       input.comment ? section('Comentário do denunciante (dado):', wrapUntrusted(TAG.comentario, input.comment)) : 'Sem comentário do denunciante.',
       `Resumo do tópico: ${input.topicSummary}`,
-      languageLines(input.contentLanguage, false),
+      feedbackLanguageLines(input.contentLanguage, false),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };

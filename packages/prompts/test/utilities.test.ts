@@ -120,7 +120,7 @@ describe('study note checks (spec 02 §8)', () => {
 
 describe('quotas and targets', () => {
   it('bank quotas total ~15 and swap two MCQs for numeric on quantitative topics', () => {
-    const regular = topicQuotas({});
+    const regular = topicQuotas({ quantitative: false });
     const quant = topicQuotas({ quantitative: true });
     const sum = (q: Record<string, number | undefined>) => Object.values(q).reduce<number>((a, b) => a + (b ?? 0), 0);
     expect(sum(regular)).toBe(15);

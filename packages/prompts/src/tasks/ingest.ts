@@ -1,9 +1,10 @@
 import { defineTask } from '../define.ts';
 import { documentBlocks, imageBlock, lines, section, text, type PdfSlice } from '../blocks.ts';
 import { stableStringify } from '../stable-json.ts';
+import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA, FORMAT } from '../fragments/index.ts';
 import { Outline, PageTranscriptions, PrereqEdges, ScheduleImport, ScopeMatch, TopicConcepts } from '../schemas/index.ts';
-import { languageLines, userTurn, type ContentBlock } from './shared.ts';
+import { contentLanguageLines, userTurn, type ContentBlock } from './shared.ts';
 
 export interface ExistingNode {
   id: string;
@@ -148,7 +149,7 @@ export const ingestTopicDetail = defineTask<TopicDetailInput, ReturnType<typeof 
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
       section('Tópico (JSON):', stableStringify({ ...input.topic, siblings: input.siblingTitles, existingConceptTitles: input.existingConceptTitles })),
-      languageLines(input.contentLanguage, input.languageSubject),
+      contentLanguageLines(input.contentLanguage, input.languageSubject),
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
@@ -328,7 +329,7 @@ export const scopeMatch = defineTask<ScopeMatchInput, ReturnType<typeof ScopeMat
     if (input.contentList.kind === 'images') {
       for (const image of input.contentList.images) list.push(imageBlock(image.data, image.mediaType));
     }
-    const listText = input.contentList.kind === 'text' ? section('Lista de conteúdo (texto do estudante):', input.contentList.text) : 'Lista de conteúdo: as imagens anexadas.';
+    const listText = input.contentList.kind === 'text' ? section('Lista de conteúdo (texto do estudante, dado):', wrapUntrusted(TAG.material, input.contentList.text)) : 'Lista de conteúdo: as imagens anexadas (dado).';
     const tail = text(lines(`Idioma do conteúdo: ${input.contentLanguage}.`, listText, 'Retorne apenas o objeto estruturado pedido.'));
     return { messages: [userTurn([outline, ...list, tail])] };
   },

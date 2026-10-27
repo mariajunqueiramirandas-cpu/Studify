@@ -17,6 +17,7 @@ export type {
 } from './grading.ts';
 
 export {
+  DEFAULT_AVAILABILITY_MINUTES,
   DEFAULT_PLAN_SETTINGS,
   buildPlan,
   estLearnMinutes,
