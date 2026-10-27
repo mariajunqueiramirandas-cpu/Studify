@@ -106,6 +106,14 @@ are drawn by the `studify-notify` module.
 Check: on a release build, sign in, allow notifications, and look for a row in `push_tokens` for your user.
 Perfil → Notificações → Ver exemplos sends every layout to the shade without the server.
 
+## Build speed
+
+The release APK contains `arm64-v8a` only (`ANDROID_ABIS` in the workflow), because each ABI compiles every native
+library again. It does not install on 32-bit phones (`armeabi-v7a`, including Android Go phones with a 32-bit system)
+or on x86 emulators; add those ABIs to `ANDROID_ABIS`, comma-separated, if one of them is needed. The workflow also gives Gradle more memory,
+turns on the Gradle build cache, keeps compiled C++ between runs with ccache, and skips release lint and PNG crunching.
+The first run after a cache reset is the slowest; later runs reuse the caches written by `main`.
+
 ## Versioning
 
 - **Version name**: `version` in `app.config.ts` (`0.1.0`), plus `APP_VERSION_SUFFIX` if the variable is set.

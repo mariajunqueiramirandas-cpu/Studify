@@ -21,17 +21,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Secrets cannot be used in a step-level `if`, so the token is checked here and read from `steps.eas`.
-      # Fork PRs and repos without the secret skip the build with a notice instead of failing.
-      - name: Check for the EXPO_TOKEN secret
+      # Fork PRs and repos without the secret skip the build with a notice instead of failing. app.config.ts takes
+      # the Expo project from EXPO_PUBLIC_EAS_PROJECT_ID, and `eas build` cannot pick one in non-interactive mode.
+      - name: Check for the EXPO_TOKEN secret and the Expo project
         id: eas
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
         run: |
-          if [ -n "$EXPO_TOKEN" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
+          if [ -z "$EXPO_TOKEN" ]; then
             echo "::notice::EXPO_TOKEN is not set; skipping the EAS preview build."
             echo "available=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$EXPO_PUBLIC_EAS_PROJECT_ID" ]; then
+            echo "::notice::The EXPO_PUBLIC_EAS_PROJECT_ID variable is not set, so there is no Expo project to build; skipping the EAS preview build. See apps/mobile/RELEASING.md step 6."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: pnpm/action-setup@v4
         if: steps.eas.outputs.available == 'true'
@@ -54,4 +59,5 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
         run: eas build --profile preview --platform android --non-interactive
