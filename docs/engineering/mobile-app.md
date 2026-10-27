@@ -26,7 +26,7 @@ studify/
 │  │  │  ├─ stores/            # Zustand stores (UI/session state only)
 │  │  │  ├─ theme/             # tokens, light/dark themes, typography
 │  │  │  ├─ i18n/              # i18next setup + pt-BR.json
-│  │  │  └─ lib/               # logging, Sentry, feature flags, formatting (dates, grades)
+│  │  │  └─ lib/               # logging, feature flags, formatting (dates, grades)
 │  │  ├─ assets/               # fonts, images, bundled KaTeX/markdown-it web assets
 │  │  ├─ app.config.ts         # Expo config (dynamic, per environment)
 │  │  └─ eas.json
@@ -67,7 +67,7 @@ Route segments are English (code names); every label shown to the user is PT-BR 
 
 ```text
 app/
-├─ _layout.tsx                      # providers: Sentry, QueryClient, Theme, i18n, DB, AuthGate
+├─ _layout.tsx                      # providers: QueryClient, Theme, i18n, DB, AuthGate
 ├─ (auth)/
 │  ├─ sign-in.tsx                   # "Entrar" — email (magic link / OTP code) or Google
 │  ├─ verify.tsx                    # 6-digit code entry; also handles magic-link deep link
@@ -387,14 +387,14 @@ Reference device: a mid-range Android phone typical of the class (e.g. Samsung G
 | Memory (steady state) | < 300 MB | Android Studio profiler |
 | SQLite queries on the review path | < 16 ms | Drizzle query timing in dev |
 
-Techniques: Hermes; lazy routes (PDF viewer, KaTeX WebView, camera, podcast player loaded on demand); FlashList for long lists; `expo-image` with disk cache for thumbnails; no network on the startup critical path (Hoje renders from SQLite/MMKV, then refreshes); defer Sentry/feature-flag fetch until after first frame.
+Techniques: Hermes; lazy routes (PDF viewer, KaTeX WebView, camera, podcast player loaded on demand); FlashList for long lists; `expo-image` with disk cache for thumbnails; no network on the startup critical path (Hoje renders from SQLite/MMKV, then refreshes); defer the feature-flag fetch until after first frame.
 
 ## 15. Error handling and monitoring
 
 - **Error boundaries** per route group with a friendly PT-BR fallback ("Algo deu errado aqui. Tente de novo.") and a retry button; the review/quiz runners persist progress so a crash never loses answers.
 - **Network:** TanStack Query retries (3, exponential) for idempotent reads; an offline banner ("Você está offline — suas revisões serão sincronizadas depois") when NetInfo reports no connection.
 - **AI errors** map to user messages by error code from the API (budget exceeded → "Você atingiu o limite de IA de hoje. Volta amanhã!"; generation failed → "Não conseguimos gerar isso agora. Tente de novo em instantes.").
-- **Sentry** (`@sentry/react-native` Expo plugin): release = app version, dist = EAS build number; EAS Update id attached as tag; source maps uploaded in EAS build/update hooks. **PII scrubbing:** strip emails, display names, note/card/question text, tutor messages, and file names from events and breadcrumbs (`beforeSend`); no session replay. Sample rate 100% errors, 10% traces.
+- **No crash reporting SDK** (2026-10-27): `@sentry/react-native` was removed to cut Android build time. Errors go to the logger (`src/lib/logger.ts`, data scrubbed by `src/lib/pii.ts`). If crash reporting comes back, it must keep the same PII scrubbing: no emails, display names, note/card/question text, tutor messages or file names, and no session replay.
 - No third-party analytics SDKs (no advertising or behavioral profiling of minors — see security-privacy.md). Product metrics are computed server-side from first-party tables.
 
 ## 16. Android permissions
@@ -441,7 +441,7 @@ Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_
 ### 17.3 OTA updates (EAS Update)
 
 - JS/asset changes ship via `eas update --channel <channel>`; native changes require a new APK.
-- `production` updates roll out at 20% → 100% after 24 h without new Sentry issues; `eas update:rollback` if crash rate rises.
+- `production` updates roll out at 20% → 100% after 24 h without new crash reports; `eas update:rollback` if crash rate rises.
 - Check for updates on launch (download in background, apply on next cold start). Critical fixes can force reload after a confirmation dialog.
 - When a newer **native** build exists (tracked in a server `app_versions` table), the app shows "Nova versão disponível" with the install link; builds older than the server's `min_supported_version` are blocked with an update screen (needed when the sync `schema_version` changes).
 

@@ -39,3 +39,14 @@ enable_signup = true
 # Email sign-in uses a one-time code, not a password. Six digits, valid for one hour.
 otp_length = 6
 otp_expiry = 3600
+
+# The app asks for the 6-digit code, so both e-mails must show {{ .Token }}; Supabase's default templates only
+# carry a link. A new address gets "confirmation", a known one gets "magic_link". The hosted project does not
+# read this file: push it with `supabase config push` or paste the templates under Auth > Email Templates.
+[auth.email.template.confirmation]
+subject = "Seu código do Studify"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Seu código do Studify"
+content_path = "./supabase/templates/magic_link.html"

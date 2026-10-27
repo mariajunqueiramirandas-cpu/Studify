@@ -59,11 +59,14 @@
       "resend": "Reenviar código",
       "resend_in": "Reenviar em {s} s",
       "invalid": "Código inválido ou expirado. Confere e tenta de novo.",
+      "rate_limited": "Você pediu um código há pouco. Use o do último e-mail ou espera um minuto pra pedir outro.",
       "verify": "Entrar"
     },
     "offline": "Você precisa de internet pra entrar pela primeira vez.",
     "privacy_link": "Aviso de privacidade",
-    "google_unavailable": "Entrar com Google não está disponível nesta versão. Use seu e-mail."
+    "google_unavailable": "Entrar com Google não está disponível nesta versão. Use seu e-mail.",
+    "google_misconfigured": "Entrar com Google ainda não está liberado nesta versão. Use seu e-mail por enquanto.",
+    "google_play_services": "Entrar com Google precisa do Google Play Services atualizado. Use seu e-mail ou atualize e tente de novo."
   },
   "onb": {
     "step": "Passo {i} de {n}",

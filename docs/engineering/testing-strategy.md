@@ -245,7 +245,7 @@ flowchart LR
   T --> U
   U --> DB[Supabase CLI: db reset + db lint + pgTAP RLS suite]
   DB --> I[integration: API functions + worker + sync<br/>mock Claude, recorded responses]
-  I --> B[EAS preview build — Android APK<br/>only if apps/mobile or packages changed]
+  I --> B[Android APK build on the runner<br/>android-release.yml dry run, on demand]
   B --> E[Maestro smoke on emulator]
   E --> C[comment: install link + QR + results]
 ```
@@ -253,14 +253,14 @@ flowchart LR
 | Workflow | Trigger | Jobs |
 |---|---|---|
 | `ci.yml` | every PR + push to `main` | lint (ESLint + Prettier), typecheck (`tsc -b`), gitleaks, unit, Supabase (`supabase start`, `db reset`, `db lint`, pgTAP), integration |
-| `mobile-preview.yml` | PR touching `apps/mobile/**` or `packages/**` | `eas build --profile preview --platform android --non-interactive`, Maestro smoke on emulator, PR comment with the install link |
+| `android-release.yml` | push to `main`; manual, with `dry_run` for any branch | Release APK built and signed on the runner, published as a GitHub Release (dry run: uploaded as an artifact) |
 | `evals.yml` | manual (`workflow_dispatch`) with inputs (`size`, `tasks`, `approved_budget_usd`) | Runs evals with the eval API key, refuses to start if the estimate exceeds `approved_budget_usd`, uploads scorecard as an artifact |
 | `release.yml` | tag `v*` | production build, EAS Update to `production` channel (staged), release notes with E2E results |
 | `deps.yml` | weekly | `pnpm audit`, Dependabot PRs |
 
-Required checks to merge into `main`: `ci.yml` all green; `mobile-preview.yml` green when it ran; an eval scorecard attached for prompt/model changes.
+Required checks to merge into `main`: `ci.yml` all green; an eval scorecard attached for prompt/model changes.
 
-Caching: pnpm store, Supabase Docker images, Gradle (EAS handles native builds remotely).
+Caching: pnpm store, Supabase Docker images, Gradle (dependencies and build cache) and ccache for native code in the Android release build.
 
 ## 12. Quality gates per roadmap phase
 

@@ -16,7 +16,7 @@ export interface DatabaseProviderProps {
   fallback?: ReactNode;
   /** Called once the database is ready (e.g. to start the sync controller). */
   onReady?: (db: AppDb) => void;
-  /** Called when opening or migrating fails (report to Sentry, show the UI error state). */
+  /** Called when opening or migrating fails (log it, show the UI error state). */
   onError?: (error: Error) => void;
 }
 

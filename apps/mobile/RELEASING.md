@@ -57,20 +57,17 @@ Settings > Secrets and variables > Actions.
 | `ANDROID_KEYSTORE_PASSWORD` | Secret | yes | Keystore password |
 | `ANDROID_KEY_ALIAS` | Secret | yes | Key alias (`studify`) |
 | `ANDROID_KEY_PASSWORD` | Secret | yes | Key password (same as the keystore password for PKCS12) |
-| `SENTRY_AUTH_TOKEN` | Secret | no | Uploads source maps and native symbols. Without it the upload is skipped (`SENTRY_DISABLE_AUTO_UPLOAD=true`). |
 | `GOOGLE_SERVICES_JSON_BASE64` | Secret | for remote push | Base64 of the Firebase `google-services.json` (step 6). Without it the build gets no push token. |
 | `EXPO_PUBLIC_SUPABASE_URL` | Variable | yes | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Variable | yes | Supabase publishable key (`sb_publishable_...`), or the legacy anon key until it is turned off. Public by design; RLS protects the data. |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Variable | recommended | Google sign-in web client id (empty disables Google sign-in) |
-| `EXPO_PUBLIC_SENTRY_DSN` | Variable | recommended | Sentry DSN (public ingest URL) |
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | Variable | for remote push | The Expo project the push tokens belong to (step 6); also enables the expo-updates URL. |
 | `EXPO_PUBLIC_BASE_URL` | Variable | no | Defaults to `https://studify.vendua.com.br` |
 | `EXPO_PUBLIC_API_URL` | Variable | no | Defaults to `https://studify.vendua.com.br/api`. The app does not read it yet. |
 | `APP_VERSION_SUFFIX` | Variable | no | Appended to the version name, for example `-beta.1` |
-| `SENTRY_ORG`, `SENTRY_PROJECT` | Variable | only with `SENTRY_AUTH_TOKEN` | Sentry upload target |
 
 Every `EXPO_PUBLIC_*` value is compiled into the APK, so only public values belong in variables. Never put
-service-role keys, Anthropic keys or Sentry auth tokens in an `EXPO_PUBLIC_*` variable.
+service-role keys or Anthropic keys in an `EXPO_PUBLIC_*` variable.
 
 ### 5. Put the release fingerprint into assetlinks.json
 
@@ -105,6 +102,33 @@ are drawn by the `studify-notify` module.
 
 Check: on a release build, sign in, allow notifications, and look for a row in `push_tokens` for your user.
 Perfil → Notificações → Ver exemplos sends every layout to the shade without the server.
+
+### 7. Google sign-in
+
+The account picker opening proves only `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is set. After the pick, Google checks
+that an **Android** OAuth client in the same Google Cloud project matches the installed app's package and
+signing key. Without it the app gets `DEVELOPER_ERROR` (code 10) and says Google sign-in is not available yet.
+
+1. In the Google Cloud console (the Firebase project from step 6 if you use one), open APIs & Services →
+   Credentials. Configure the OAuth consent screen if it asks, and publish it (or add your testers) so
+   accounts outside your own can sign in.
+2. Create an OAuth client of type **Web application**. Its client id is `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
+3. Create an OAuth client of type **Android** with package `com.studify.app` and the release key's **SHA-1**.
+   The job summary of each release prints it; the same value comes from
+   `keytool -list -v -keystore studify-release.keystore -alias studify` (the `SHA1:` line). Add a second
+   Android client with the debug key's SHA-1 if you also sign in from local debug builds.
+4. In Supabase, Authentication → Sign In / Providers → Google: enable it and enter the web client id and its
+   secret. Supabase rejects ID tokens issued to any client id it does not list there.
+
+Changes in Google Cloud can take a few minutes to apply; the APK does not need a rebuild.
+
+### 8. E-mail sign-in
+
+The app asks for the 6-digit code from the e-mail, so the hosted project needs the templates in
+`supabase/templates` (Supabase's default ones carry only a link). Push them with `supabase config push`, or
+paste each file under Authentication → Email Templates (Confirm signup and Magic Link) with the subject from
+`supabase/config.toml`. Supabase's built-in sender is meant for testing and sends only a few e-mails per hour;
+set up custom SMTP under Authentication → Emails before real users sign in.
 
 ## Build speed
 
@@ -146,8 +170,9 @@ Do not edit them by hand.
 
 ## EAS (optional)
 
-`.github/workflows/mobile-preview.yml` still builds preview APKs with EAS on pull requests when `EXPO_TOKEN` is set.
-That path is optional and separate from the release workflow, with two things to keep in mind:
+No workflow builds with EAS: the release workflow builds on the GitHub runner, and a dry run (above) tests a branch.
+EAS builds (`npx eas-cli@latest build --profile preview --platform android`) are optional and run by hand, with two
+things to keep in mind:
 
 - EAS signs with its own credentials. An EAS build can update a GitHub release build only if both use the same key.
   Upload this keystore to EAS (`npx eas-cli@latest credentials`, Android, production profile), or accept that EAS
