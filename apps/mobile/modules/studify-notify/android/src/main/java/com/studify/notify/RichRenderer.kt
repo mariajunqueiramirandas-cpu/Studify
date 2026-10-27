@@ -84,18 +84,19 @@ object RichRenderer {
     if (!NotificationManagerCompat.from(c).areNotificationsEnabled()) return false
     ensureChannel(c, p.channel)
     // Never lose the message: a Live Update the system refuses (some OEM builds reject promoted notifications)
-    // falls back to the drawn layout, and a drawing or style failure to the plain notification.
+    // falls back to the drawn layout, and a drawing or style failure to the plain notification. Throwable, not
+    // Exception: OEM builds that report SDK 36 but lack or alter the Live Update API throw linkage errors.
     val attempts = buildList<() -> Notification> {
       add { build(c, p, live = true) }
       if (isLiveUpdate(p)) add { build(c, p, live = false) }
       add { plain(c, p).build() }
     }
-    var failure: Exception? = null
+    var failure: Throwable? = null
     for (attempt in attempts) {
       failure = try {
         nm(c).notify(p.key, ID, attempt())
         null
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         Log.w(TAG, "rich notification ${p.template} (${p.key}) not posted", e)
         e
       }
