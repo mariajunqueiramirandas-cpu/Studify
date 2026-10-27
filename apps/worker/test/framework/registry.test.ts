@@ -139,5 +139,51 @@ describe('ai_jobs mirror', () => {
     expect(seen).toBe(aiJob);
     expect(writes.some((w) => w.text.includes('insert into public.ai_jobs'))).toBe(false);
   });
+
+  it('does not touch the ai_jobs row of a job that only observes it (notify.live)', async () => {
+    const backend = new InMemoryQueue();
+    const { pool, writes } = recordingPool();
+    const registry = new JobRegistry(deps(backend, pool));
+    let seen: string | null | undefined;
+    await registry.register([
+      {
+        name: 'test.observer',
+        observesAiJob: true,
+        handler: async (_ctx, _data, meta) => {
+          seen = meta.aiJobId;
+        },
+      },
+    ]);
+    await registry.enqueue('test.observer', { ai_job_id: randomUUID() });
+    await backend.drain();
+    expect(seen).toBeNull();
+    // Marking the job running would queue another notify.live and revive finished jobs.
+    expect(writes.some((w) => w.text.includes('update public.ai_jobs'))).toBe(false);
+  });
+});
+
+describe('applyProgress', () => {
+  it('never moves a finished job back to a non-terminal status, and then notifies no one', async () => {
+    const { applyProgress, setProgressListener } = await import('../../src/framework/progress.ts');
+    const queries: string[] = [];
+    const sql = {
+      async query(text: string) {
+        queries.push(text);
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const heard: string[] = [];
+    setProgressListener((id) => heard.push(id));
+    try {
+      await applyProgress(sql as never, 'job-1', { status: 'running' });
+      expect(queries[0]).toContain(`status not in ('succeeded', 'failed', 'cancelled')`);
+      expect(heard).toEqual([]);
+      await applyProgress(sql as never, 'job-1', { status: 'succeeded' });
+      expect(queries[1]).not.toContain('status not in');
+      expect(heard).toEqual(['job-1']);
+    } finally {
+      setProgressListener(null);
+    }
+  });
 });
 

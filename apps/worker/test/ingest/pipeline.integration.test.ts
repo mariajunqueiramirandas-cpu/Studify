@@ -21,6 +21,7 @@ import { jobs as contentJobs } from '../../src/jobs/content.ts';
 import { jobs as batchJobs } from '../../src/jobs/batch.ts';
 import { jobs as filesJobs } from '../../src/jobs/files.ts';
 import { FakeObjectStore, InMemoryQueue, fakeSupabase } from './support/fakes.ts';
+import { loadTopicBundle, writeNote } from '../../src/ingest/topics.ts';
 import { encryptedPdfBytes, textPdf } from './support/pdf.ts';
 import type pg from 'pg';
 
@@ -460,6 +461,41 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const job = await pool.query<{ status: string }>(`select status from public.ai_jobs where document_id = $1 and type = 'ingest.document'`, [docId]);
     expect(job.rows[0]?.status).toBe('succeeded');
     expect(expo.sent.some((m) => m.data.type === 'material_ready')).toBe(true);
+  }, 180_000);
+
+  it('writing a note again changes nothing, and a note the app is generating is left to note-generate', async () => {
+    const store = new FakeObjectStore();
+    const { userId, subjectId, docId, storagePath, bytes } = await seed();
+    store.put('documents', storagePath, bytes, 'application/pdf');
+    const { backend, registry, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
+    await backend.drain(4000);
+    expect(backend.failedJobs).toEqual([]);
+
+    const topic = (await pool.query<{ id: string }>(`select id from public.knowledge_nodes where subject_id = $1 and kind = 'topic' order by title limit 1`, [subjectId])).rows[0]!.id;
+    const bundle = (await loadTopicBundle(pool, topic))!;
+    const ctx = { pool, bundle, createdBy: userId, labels: new Map(), promptVersion: 'test@v1', genBatchId: randomUUID(), language: 'pt-BR', force: false };
+    const depths = (await pool.query<{ depth: string }>(`select depth from public.notes where node_id = $1 and status = 'ready'`, [topic])).rows.map((r) => r.depth);
+    const done = depths[0] as 'tldr' | 'study' | 'deep';
+
+    // A retried batch collection writes the same output again: the ready note stays the only current one.
+    expect(await writeNote(ctx as never, done, 'Outra versão.', [])).toEqual({ written: false });
+    const current = await pool.query<{ n: string }>(
+      `select count(*)::text as n from public.notes where node_id = $1 and depth = $2 and status in ('pending','generating','ready')`,
+      [topic, done],
+    );
+    expect(current.rows[0]?.n).toBe('1');
+
+    // A depth the app is generating right now (note-generate's row) is not touched.
+    const free = (['tldr', 'study', 'deep'] as const).find((d) => !depths.includes(d))!;
+    await pool.query(
+      `insert into public.notes (subject_id, node_id, scope_kind, depth, language, status, created_by) values ($1, $2, 'topic', $3, 'pt-BR', 'generating', $4)`,
+      [subjectId, topic, free, userId],
+    );
+    expect(await writeNote(ctx as never, free, 'Texto do lote.', [])).toEqual({ written: false });
+    const generating = await pool.query<{ status: string }>(`select status from public.notes where node_id = $1 and depth = $2`, [topic, free]);
+    expect(generating.rows.map((r) => r.status)).toEqual(['generating']);
   }, 180_000);
 
   it('re-runs a refused batch item on the standard API and still writes its output', async () => {

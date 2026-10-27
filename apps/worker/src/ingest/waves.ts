@@ -186,7 +186,13 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
       try {
         const result = await callClaude(env.ctx.ai, call);
         if (result.status === 'ok') {
-          handled = await writeOutcome(env, item, result.data, result.text, result.citations);
+          try {
+            handled = await writeOutcome(env, item, result.data, result.text, result.citations);
+          } catch (err) {
+            // The output is paid for; calling again would not fix a write problem.
+            env.ctx.log.warn({ customId: item.customId, err: err instanceof Error ? err.message : 'unknown' }, 'standard output not written');
+            break;
+          }
         } else {
           env.ctx.log.warn({ customId: item.customId, status: result.status, attempt }, 'standard call did not produce output');
         }
@@ -370,7 +376,13 @@ export async function pollWave(env: PipelineEnv, plan: WavePlan): Promise<PollOu
     if (!item) continue;
     let handled = false;
     if (outcome.status === 'ok') {
-      handled = await writeOutcome(env, item, outcome.data, outcome.text, outcome.citations);
+      // One item that cannot be written must not fail the whole collection: a retry would re-collect the batch
+      // (writing the earlier items and recording their usage again) and hit the same item forever.
+      try {
+        handled = await writeOutcome(env, item, outcome.data, outcome.text, outcome.citations);
+      } catch (err) {
+        env.ctx.log.warn({ customId: item.customId, err: err instanceof Error ? err.message : 'unknown' }, 'batch output not written');
+      }
     } else {
       // Refused, truncated, invalid, errored (retryable), canceled, expired or missing: one standard-API retry.
       try {

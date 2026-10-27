@@ -78,5 +78,6 @@ export async function handleNotifyLive(ctx: JobContext, raw: Record<string, unkn
 
 export const jobs: JobDefinition[] = [
   { name: 'notify.dispatch', retryLimit: 3, handler: async (ctx, data) => void (await handleNotifyDispatch(ctx, data)) },
-  { name: 'notify.live', retryLimit: 1, expireInSeconds: 120, handler: async (ctx, data) => void (await handleNotifyLive(ctx, data)) },
+  // observesAiJob: marking the job running here would queue another notify.live (and revive finished jobs).
+  { name: 'notify.live', retryLimit: 1, expireInSeconds: 120, observesAiJob: true, handler: async (ctx, data) => void (await handleNotifyLive(ctx, data)) },
 ];
