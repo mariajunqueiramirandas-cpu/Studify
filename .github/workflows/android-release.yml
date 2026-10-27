@@ -20,9 +20,9 @@ env:
   ANDROID_VERSION_CODE_OFFSET: '100'
   # SDK packages that Expo SDK 58 / RN 0.88 generate (expo-autolinking defaults and RN's libs.versions.toml).
   # Update these when the Expo or React Native version changes.
-  ANDROID_COMPILE_SDK: '37'
-  ANDROID_BUILD_TOOLS: '37.0.0'
-  ANDROID_NDK: '27.1.12297006'
+  ANDROID_COMPILE_SDK: '36'
+  ANDROID_BUILD_TOOLS: '36.0.0'
+  ANDROID_NDK: '28.2.13676358'
 
 jobs:
   release:
