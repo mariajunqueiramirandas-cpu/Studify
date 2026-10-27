@@ -238,6 +238,7 @@ A user who was blocked can try again after their 12th birthday. Nothing about th
 
 - 8 characters from the same alphabet as Turma codes (SOC-01.2): `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no `0 O 1 I L`), shown in groups of 4 (`K7QX-9HMR`).
 - Owner (pilot) invites: single-use, expire in 14 days. Turma invites: expiry, max uses and regeneration per SOC-01.4 in [10 — Turma & social](10-turma-social.md). Both live in the `invites` table.
+- Bootstrap code `STUDYF26` (`BOOTSTRAP_INVITE_CODE` in `apps/api/src/functions/signup-complete.ts`): the first account has no one to invite it, so while no `app_admin` exists this code creates the account as the owner (`app_role = app_admin`). Once an owner exists it is rejected as `invite_invalid`.
 - Codes are compared case-insensitively. Invalid-code attempts follow SOC-01.14: at most 5 per minute and 20 per hour per user/device and per IP; after 20 failures in an hour, joining is blocked for 1 hour.
 
 ### 8.3 Budget display

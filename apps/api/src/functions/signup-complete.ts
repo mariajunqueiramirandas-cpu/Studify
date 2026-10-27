@@ -11,6 +11,22 @@ import { defineFunction } from '../shared/http.ts';
 const BLOCKED_NAME_FRAGMENTS = ['studify', 'admin', 'suporte', 'moderador'];
 const MIN_AGE = 12;
 
+/**
+ * Bootstrap invite (SP-02): sign-up needs an invite and only an app_admin can issue pilot invites, so
+ * the very first account redeems this code and becomes the owner. It works only while no app_admin
+ * exists; afterwards it answers invite_invalid like any unknown code.
+ */
+export const BOOTSTRAP_INVITE_CODE = 'STUDYF26';
+
+interface InviteRow {
+  id: string;
+  class_group_id: string | null;
+  uses_left: number | null;
+  expires_at: string;
+  revoked_at: string | null;
+  email: string | null;
+}
+
 /** Whole years at `now` in the student's default zone, from birth month and year (SP-01 age gate). */
 export function ageAt(now: Date, birthYear: number, birthMonth: number): number {
   const [year, month] = wallClockOf(now, DEFAULT_TIME_ZONE).date.split('-').map(Number) as [number, number, number];
@@ -44,25 +60,28 @@ export const handler = defineFunction<z.infer<typeof SignupCompleteReqSchema>>({
       throw new ApiFailure('display_name_rejected');
     }
 
-    const invite = await db
-      .from('invites')
-      .select('id, class_group_id, uses_left, expires_at, revoked_at, email')
-      .eq('code', req.invite_code)
-      .maybeSingle();
-    if (invite.error) throw invite.error;
-    const row = invite.data as {
-      id: string;
-      class_group_id: string | null;
-      uses_left: number | null;
-      expires_at: string;
-      revoked_at: string | null;
-      email: string | null;
-    } | null;
-    if (!row || row.revoked_at) throw new ApiFailure('invite_invalid');
-    if (new Date(row.expires_at).getTime() <= ctx.now.getTime()) throw new ApiFailure('invite_expired');
-    if (row.uses_left !== null && row.uses_left <= 0) throw new ApiFailure('invite_used_up');
-    if (row.email && ctx.user.email && row.email.toLowerCase() !== ctx.user.email.toLowerCase()) {
-      throw new ApiFailure('invite_invalid');
+    let bootstrap = false;
+    if (req.invite_code === BOOTSTRAP_INVITE_CODE) {
+      const admin = await db.from('profiles').select('id').eq('app_role', 'app_admin').limit(1).maybeSingle();
+      if (admin.error) throw admin.error;
+      bootstrap = !admin.data;
+    }
+
+    let row: InviteRow | null = null;
+    if (!bootstrap) {
+      const invite = await db
+        .from('invites')
+        .select('id, class_group_id, uses_left, expires_at, revoked_at, email')
+        .eq('code', req.invite_code)
+        .maybeSingle();
+      if (invite.error) throw invite.error;
+      row = invite.data as InviteRow | null;
+      if (!row || row.revoked_at) throw new ApiFailure('invite_invalid');
+      if (new Date(row.expires_at).getTime() <= ctx.now.getTime()) throw new ApiFailure('invite_expired');
+      if (row.uses_left !== null && row.uses_left <= 0) throw new ApiFailure('invite_used_up');
+      if (row.email && ctx.user.email && row.email.toLowerCase() !== ctx.user.email.toLowerCase()) {
+        throw new ApiFailure('invite_invalid');
+      }
     }
 
     const created = await db.from('profiles').insert({
@@ -74,7 +93,8 @@ export const handler = defineFunction<z.infer<typeof SignupCompleteReqSchema>>({
       school_year: req.school_year,
       privacy_notice_version: req.privacy_notice_version,
       privacy_accepted_at: ctx.now.toISOString(),
-      invite_id: row.id,
+      invite_id: row?.id ?? null,
+      ...(bootstrap ? { app_role: 'app_admin' } : {}),
     });
     if (created.error) {
       if (created.error.code === '23505') throw new ApiFailure('already_completed');
@@ -83,14 +103,15 @@ export const handler = defineFunction<z.infer<typeof SignupCompleteReqSchema>>({
 
     let classGroup: SignupCompleteRes['class_group'];
     try {
-      if (row.class_group_id) {
+      // The bootstrap owner has no invite row (row is null): nothing to join or use up.
+      if (row?.class_group_id) {
         // join_class_group reads auth.uid(), so it runs with the student's own token.
         const joined = await ctx.deps.asUser(ctx.user.jwt).rpc('join_class_group', { p_code: req.invite_code });
         if (joined.error) throw joined.error;
         const payload = joined.data as { class_group_id: string; status: 'active' | 'pending' };
         const group = await db.from('class_groups').select('name').eq('id', payload.class_group_id).maybeSingle();
         classGroup = { id: payload.class_group_id, name: (group.data?.name as string) ?? '', status: payload.status };
-      } else if (row.uses_left !== null) {
+      } else if (row && row.uses_left !== null) {
         const used = await db
           .from('invites')
           .update({ uses_left: row.uses_left - 1 })
