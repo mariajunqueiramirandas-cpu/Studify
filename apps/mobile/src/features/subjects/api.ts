@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Crypto from 'expo-crypto';
-import { File } from 'expo-file-system';
 import { uuidv7 } from 'uuidv7';
-import { callFunction } from '../../api/functions';
+import { ApiError, callFunction } from '../../api/functions';
 import { uploadFile } from '../../api/storage';
 import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
@@ -186,46 +184,43 @@ export type UploadOutcome =
 
 const MAX_BYTES = 100 * 1024 * 1024;
 
-/** ING-01 upload flow (api.md §6): checksum → documents row → Storage → ingest-start. */
-export async function uploadMaterial(userId: string, input: UploadInput): Promise<UploadOutcome> {
+/**
+ * ING-01 upload flow (api.md §6): the PDF goes to Storage, then ingest-start. The server creates the documents
+ * row (checksum, size, duplicate check) — the app never writes it.
+ */
+export async function uploadMaterial(input: UploadInput): Promise<UploadOutcome> {
   if (input.size > MAX_BYTES) return { ok: false, code: 'too_large' };
-  const file = new File(input.uri);
-  const bytes = await file.bytes();
-  const head = String.fromCharCode(...bytes.slice(0, 5));
-  if (head !== '%PDF-') return { ok: false, code: 'unsupported_type' };
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
-  const checksum = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-
-  const existing = await row<{ id: string }>(
-    supabase.from('documents').select('id').eq('subject_id', input.subjectId).eq('checksum_sha256', checksum).is('deleted_at', null).maybeSingle(),
-  );
-  if (existing) return { ok: false, code: 'duplicate_document', existingDocumentId: existing.id };
-
   const documentId = uuidv7();
   const storagePath = `${input.subjectId}/${documentId}.pdf`;
-  const title = input.name.replace(/\.pdf$/i, '').slice(0, 200) || 'Material';
-  const { error } = await supabase.from('documents').insert({
-    id: documentId,
-    subject_id: input.subjectId,
-    uploaded_by: userId,
-    title,
-    kind: input.kind,
-    storage_path: storagePath,
-    mime_type: 'application/pdf',
-    size_bytes: input.size,
-    checksum_sha256: checksum,
-    teacher_name: input.teacherName ?? null,
-    status: 'uploaded',
-  });
-  if (error) return { ok: false, code: error.code === '23505' ? 'duplicate_document' : 'internal_error' };
-
   await uploadFile({ bucket: 'documents', path: storagePath, uri: input.uri, contentType: 'application/pdf', onProgress: input.onProgress });
-  const res = await callFunction<{ document_id: string }, { job_id: string; mode: 'full' | 'outline_only' }>(
-    'ingest-start',
-    { document_id: documentId },
-    { idempotencyKey: documentId },
-  );
-  return { ok: true, documentId, jobId: res.job_id, mode: res.mode };
+  try {
+    const res = await callFunction<IngestStartBody, { job_id: string; mode: 'full' | 'outline_only' }>(
+      'ingest-start',
+      {
+        document_id: documentId,
+        subject_id: input.subjectId,
+        title: input.name.replace(/\.pdf$/i, '').trim().slice(0, 200) || 'Material',
+        kind: input.kind,
+        teacher_name: input.teacherName ?? null,
+      },
+      { idempotencyKey: documentId },
+    );
+    return { ok: true, documentId, jobId: res.job_id, mode: res.mode };
+  } catch (e) {
+    if (e instanceof ApiError && e.status > 0 && e.status < 500 && e.code !== 'unauthorized') {
+      const existing = e.details?.existing_document_id;
+      return { ok: false, code: e.code, existingDocumentId: typeof existing === 'string' ? existing : undefined };
+    }
+    throw e;
+  }
+}
+
+interface IngestStartBody {
+  document_id: string;
+  subject_id: string;
+  title: string;
+  kind: DocumentKind;
+  teacher_name: string | null;
 }
 
 export async function retryIngestion(documentId: string) {

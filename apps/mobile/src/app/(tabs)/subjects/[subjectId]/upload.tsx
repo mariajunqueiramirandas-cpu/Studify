@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { ActionBar, Banner, Button, Card, Chip, ChipGroup, ProgressBar, Row, Screen, Text, TextField, useOnline, useOverlay } from '../../../../components';
+import { ApiError } from '../../../../api/functions';
 import { useSession } from '../../../../features/auth/session';
 import { formatBytes } from '../../../../features/common/format';
 import { askNotificationsAfterUpload } from '../../../../features/profile/permissions';
@@ -18,6 +19,8 @@ const ERROR_KEYS: Record<string, string> = {
   pdf_password_protected: 'ingest.password',
   password_protected: 'ingest.password',
   corrupt: 'ingest.corrupt',
+  pdf_corrupt: 'ingest.corrupt',
+  file_too_large: 'ingest.too_large',
   too_many_pages: 'ingest.too_many_pages',
   budget_exhausted: 'budget.upload_paused',
 };
@@ -52,7 +55,7 @@ export default function Upload() {
     setError(null);
     try {
       const isFirst = (docs.data ?? []).length === 0;
-      const out = await uploadMaterial(userId, {
+      const out = await uploadMaterial({
         subjectId,
         uri: file.uri,
         name: file.name,
@@ -73,8 +76,9 @@ export default function Upload() {
       router.replace({ pathname: '/subjects/[subjectId]/processing', params: { subjectId, firstUpload: isFirst ? '1' : '' } });
     } catch (e) {
       setPct(null);
-      const code = (e as { code?: string }).code ?? '';
-      setError({ message: t(ERROR_KEYS[code] ?? 'ingest.failed') });
+      const key = ERROR_KEYS[(e as { code?: string }).code ?? ''];
+      // The server's envelope message says what went wrong; the generic copy is the last resort.
+      setError({ message: key ? t(key) : e instanceof ApiError ? e.message : t('error.generic') });
     }
   };
 

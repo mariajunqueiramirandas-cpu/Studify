@@ -31,6 +31,8 @@ function nativeStrings(): Record<string, string> {
     overlay_unlock: t('focus.overlay_unlock'),
     overlay_hold: t('focus.overlay_hold', { n: '{n}' }),
     overlay_end: t('focus.overlay_end'),
+    cycle: t('focus.cycle', { n: '{n}', total: '{total}' }),
+    ends_at: t('focus.ends_at', { time: '{time}' }),
   };
 }
 

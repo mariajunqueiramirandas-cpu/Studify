@@ -18,6 +18,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -45,6 +46,8 @@ data class FocusStrings(
   val overlayUnlock: String,
   val overlayHold: String,
   val overlayEnd: String,
+  val cycle: String,
+  val endsAt: String,
 ) {
   companion object {
     fun from(o: JSONObject) = FocusStrings(
@@ -65,6 +68,8 @@ data class FocusStrings(
       overlayUnlock = o.optString("overlay_unlock", "Desbloquear por 5 min"),
       overlayHold = o.optString("overlay_hold", "Segure… {n} s"),
       overlayEnd = o.optString("overlay_end", "Encerrar foco"),
+      cycle = o.optString("cycle", "Ciclo {n} de {total}"),
+      endsAt = o.optString("ends_at", "termina às {time}"),
     )
   }
 }
@@ -91,6 +96,7 @@ class FocusService : Service() {
     private const val ALERT_ID = 7302
     private const val POLL_MS = 1000L
     private const val UNLOCK_MS = 5 * 60 * 1000L
+    private const val TAG = "StudifyFocus"
 
     @Volatile
     var running = false
@@ -116,6 +122,9 @@ class FocusService : Service() {
   private var overlayFor: String? = null
   private var overlay: BlockOverlay? = null
   private var screenReceiver: BroadcastReceiver? = null
+  /** First notification style the system accepted: 0 Live Update (Android 16), 1 custom layout, 2 plain. */
+  private var style = if (Build.VERSION.SDK_INT >= 36) 0 else 1
+  private var lastRender: String? = null
 
   private val tick = Runnable { onTick() }
 
@@ -254,8 +263,10 @@ class FocusService : Service() {
     if (!running || phases.isEmpty()) return
     val now = System.currentTimeMillis()
     val untilEnd = if (paused) Long.MAX_VALUE else (phaseEndsAt - now).coerceAtLeast(0)
+    // The ring shows whole minutes left: refresh it when that number changes (the countdown ticks by itself).
+    val untilMinute = if (paused) Long.MAX_VALUE else (untilEnd % 60_000).let { if (it == 0L) 60_000L else it } + 50
     val polling = blockingActive() && isInteractive()
-    val delay = if (polling) minOf(POLL_MS, untilEnd) else untilEnd
+    val delay = minOf(if (polling) minOf(POLL_MS, untilEnd) else untilEnd, untilMinute)
     if (delay != Long.MAX_VALUE) main.postDelayed(tick, delay.coerceAtLeast(50))
     scheduleAlarm()
   }
@@ -404,7 +415,24 @@ class FocusService : Service() {
     else -> strings.focus
   }
 
-  private fun buildNotification(): android.app.Notification {
+  private fun snapshot(now: Long = System.currentTimeMillis()) = FocusSnapshot(
+    kinds = phases.map { it.kind },
+    phaseMs = phases.map { it.ms },
+    index = index.coerceIn(0, maxOf(0, phases.size - 1)),
+    paused = paused,
+    phaseEndsAt = phaseEndsAt,
+    leftMs = if (paused) remainingMs else (phaseEndsAt - now).coerceAtLeast(0),
+  )
+
+  private fun actions(): List<FocusNotification.Action> = listOf(
+    if (paused) FocusNotification.Action(strings.resume, actionIntent(ACTION_RESUME, 10))
+    else FocusNotification.Action(strings.pause, actionIntent(ACTION_PAUSE, 11)),
+    FocusNotification.Action(strings.skip, actionIntent(ACTION_SKIP, 12)),
+    FocusNotification.Action(strings.stop, actionIntent(ACTION_STOP, 13)),
+  )
+
+  /** The plain notification: the last resort when the system refuses the custom ones. */
+  private fun buildPlainNotification(): android.app.Notification {
     val b = NotificationCompat.Builder(this, CHANNEL_ONGOING)
       .setSmallIcon(R.drawable.studify_focus_ic)
       .setContentTitle(phaseTitle())
@@ -418,25 +446,60 @@ class FocusService : Service() {
       val s = remainingMs / 1000
       b.setContentText("${strings.paused} · ${s / 60}:${(s % 60).toString().padStart(2, '0')}")
       b.setShowWhen(false).setUsesChronometer(false)
-      b.addAction(0, strings.resume, actionIntent(ACTION_RESUME, 10))
     } else {
       b.setWhen(phaseEndsAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-      b.addAction(0, strings.pause, actionIntent(ACTION_PAUSE, 11))
     }
-    b.addAction(0, strings.skip, actionIntent(ACTION_SKIP, 12))
-    b.addAction(0, strings.stop, actionIntent(ACTION_STOP, 13))
+    actions().forEach { b.addAction(0, it.label, it.intent) }
     return b.build()
   }
 
+  private fun buildNotification(level: Int, view: FocusNotification, snap: FocusSnapshot): android.app.Notification = when (level) {
+    0 -> view.liveUpdate(CHANNEL_ONGOING, snap, openIntent(), actions()) ?: throw IllegalStateException("no Live Updates before Android 16")
+    1 -> view.compat(CHANNEL_ONGOING, R.drawable.studify_focus_ic, snap, openIntent(), actions())
+    else -> buildPlainNotification()
+  }
+
+  /**
+   * Posts the focus notification in the richest style the system accepts, remembering it: some OEM builds
+   * refuse promoted Live Updates, and a drawing failure must never leave the timer without its notification.
+   */
+  private fun post(start: Boolean) {
+    val view = FocusNotification(this, strings)
+    val snap = snapshot()
+    val key = "$style|${snap.renderKey(view.night)}"
+    if (!start && key == lastRender) return
+    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    while (true) {
+      try {
+        val n = buildNotification(style, view, snap)
+        if (start) {
+          val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+          ServiceCompat.startForeground(this, NOTIFICATION_ID, n, type)
+        } else {
+          nm.notify(NOTIFICATION_ID, n)
+        }
+        lastRender = "$style|${snap.renderKey(view.night)}"
+        return
+      } catch (e: Exception) {
+        // Not a style problem: the system does not let this service run in the foreground now.
+        if (start && Build.VERSION.SDK_INT >= 31 && e is android.app.ForegroundServiceStartNotAllowedException) throw e
+        Log.w(TAG, "focus notification style $style not posted", e)
+        if (style >= 2) {
+          if (start) throw e
+          return
+        }
+        style += 1
+      }
+    }
+  }
+
   private fun startInForeground() {
-    val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-    ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), type)
+    post(start = true)
   }
 
   private fun updateNotification() {
     if (!running) return
-    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    nm.notify(NOTIFICATION_ID, buildNotification())
+    post(start = false)
   }
 
   private fun alert(text: String) {

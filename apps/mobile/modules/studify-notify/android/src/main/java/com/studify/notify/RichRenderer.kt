@@ -11,6 +11,7 @@ import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
@@ -39,6 +40,12 @@ object RichRenderer {
   const val EXTRA_KEY = "key"
   const val EXTRA_ACTION_ID = "action_id"
   const val EXTRA_KIND = "kind"
+  private const val TAG = "StudifyNotify"
+
+  /** Why the last show() posted nothing; null after a success or when notifications are off. */
+  @Volatile
+  var lastError: String? = null
+    private set
 
   private val CHANNELS = mapOf(
     "reviews" to ("Revisões" to NotificationManager.IMPORTANCE_DEFAULT),
@@ -69,20 +76,33 @@ object RichRenderer {
   /** Posts the payload. False when it is not a rich notification or notifications are off. */
   @SuppressLint("MissingPermission")
   fun show(c: Context, raw: JSONObject): Boolean {
-    val p = RichPayload.parse(raw) ?: return false
-    if (!NotificationManagerCompat.from(c).areNotificationsEnabled()) return false
-    ensureChannel(c, p.channel)
-    val notification = try {
-      build(c, p)
-    } catch (_: Exception) {
-      // A drawing or style failure falls back to the plain notification: never lose the message.
-      plain(c, p).build()
-    }
-    try {
-      nm(c).notify(p.key, ID, notification)
-    } catch (_: SecurityException) {
+    lastError = null
+    val p = RichPayload.parse(raw) ?: run {
+      lastError = "invalid payload"
       return false
     }
+    if (!NotificationManagerCompat.from(c).areNotificationsEnabled()) return false
+    ensureChannel(c, p.channel)
+    // Never lose the message: a Live Update the system refuses (some OEM builds reject promoted notifications)
+    // falls back to the drawn layout, and a drawing or style failure to the plain notification.
+    val attempts = buildList<() -> Notification> {
+      add { build(c, p, live = true) }
+      if (isLiveUpdate(p)) add { build(c, p, live = false) }
+      add { plain(c, p).build() }
+    }
+    var failure: Exception? = null
+    for (attempt in attempts) {
+      failure = try {
+        nm(c).notify(p.key, ID, attempt())
+        null
+      } catch (e: Exception) {
+        Log.w(TAG, "rich notification ${p.template} (${p.key}) not posted", e)
+        e
+      }
+      if (failure == null) break
+    }
+    lastError = failure?.let { "${it.javaClass.simpleName}: ${it.message ?: ""}".trim() }
+    if (failure != null) return false
     if (p.actions.any { it.kind == "snooze" || it.kind == "reveal" } || raw.optBoolean("revealed")) NotifyStore.saveShown(c, p.key, raw)
     p.group?.let { updateSummary(c, it, p.channel) }
     NotifyStore.listener?.invoke("shown", p.key)
@@ -100,9 +120,12 @@ object RichRenderer {
 
   // ---------------------------------------------------------------- building
 
-  private fun build(c: Context, p: RichPayload): Notification {
+  private fun isLiveUpdate(p: RichPayload): Boolean =
+    p.template == "progress" && p.progress?.state == "running" && Build.VERSION.SDK_INT >= 36
+
+  private fun build(c: Context, p: RichPayload, live: Boolean): Notification {
     val progress = p.progress
-    if (p.template == "progress" && progress != null && progress.state == "running" && Build.VERSION.SDK_INT >= 36) {
+    if (live && isLiveUpdate(p) && progress != null && Build.VERSION.SDK_INT >= 36) {
       return buildLiveUpdate(c, p, progress)
     }
     val b = base(c, p)

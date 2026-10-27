@@ -14,6 +14,14 @@ export function splitStoragePath(path: string): { bucket: string; object: string
   return { bucket, object: path.slice(slash + 1) };
 }
 
+/**
+ * documents.storage_path is relative to the `documents` bucket (`{subject_id}/{document_id}.pdf`), which is how
+ * the worker reads and writes it. Rows that already carry the bucket prefix are accepted as they are.
+ */
+export function documentObjectPath(storagePath: string): string {
+  return storagePath.startsWith('documents/') ? storagePath : `documents/${storagePath}`;
+}
+
 /** True when the object exists. Storage errors other than "not found" are rethrown. */
 export async function objectExists(db: SupabaseClient, path: string): Promise<boolean> {
   const { bucket, object } = splitStoragePath(path);

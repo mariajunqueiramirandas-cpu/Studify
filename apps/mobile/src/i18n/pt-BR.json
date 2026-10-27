@@ -1142,7 +1142,8 @@
     "preview_title": "Exemplos de notificações",
     "preview_hint": "Toque em um exemplo para receber no seu aparelho.",
     "preview_sent": "Enviado para a barra de notificações.",
-    "preview_unavailable": "Neste aparelho os exemplos aparecem só aqui."
+    "preview_unavailable": "Neste aparelho os exemplos aparecem só aqui.",
+    "preview_failed": "O Android não aceitou esse exemplo. {reason}"
   },
   "memory": {
     "title": "Memória",
@@ -2302,6 +2303,7 @@
       "long_break": "Pausa longa"
     },
     "cycle": "Ciclo {n} de {total}",
+    "ends_at": "termina às {time}",
     "pause": "Pausar",
     "resume": "Retomar",
     "skip": "Pular",

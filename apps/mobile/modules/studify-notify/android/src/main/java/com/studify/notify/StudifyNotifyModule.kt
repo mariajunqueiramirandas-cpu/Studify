@@ -39,6 +39,11 @@ class StudifyNotifyModule : Module() {
       json(payloadJson)?.let { RichRenderer.show(context, it) } ?: false
     }
 
+    /** Why the last show() posted nothing, or null. */
+    Function("lastError") {
+      RichRenderer.lastError
+    }
+
     Function("cancel") { key: String ->
       RichRenderer.cancel(context, key)
     }
