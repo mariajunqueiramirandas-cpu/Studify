@@ -43,8 +43,30 @@ export const queryKeys = {
   aiUsage: () => ['aiUsage'] as const,
 };
 
-const CACHE_KEY = 'rq.cache.v1';
+// v1 wrote Maps/Sets as `{}`, which crashed screens that read them after a cold start.
+const CACHE_KEY = 'rq.cache.v2';
+const LEGACY_CACHE_KEYS = ['rq.cache.v1'];
 const MAX_PERSISTED_BYTES = 1_000_000;
+
+/** Some queries return Maps/Sets (mastery, outline index); plain JSON would flatten them to `{}`. */
+export function serializeCache(state: DehydratedState): string {
+  return JSON.stringify(state, (_key, value: unknown) => {
+    if (value instanceof Map) return { __type: 'Map', entries: [...value] };
+    if (value instanceof Set) return { __type: 'Set', values: [...value] };
+    return value;
+  });
+}
+
+export function deserializeCache(raw: string): DehydratedState {
+  return JSON.parse(raw, (_key, value: unknown) => {
+    if (value && typeof value === 'object' && '__type' in value) {
+      const tagged = value as { __type: unknown; entries?: unknown; values?: unknown };
+      if (tagged.__type === 'Map' && Array.isArray(tagged.entries)) return new Map(tagged.entries as [unknown, unknown][]);
+      if (tagged.__type === 'Set' && Array.isArray(tagged.values)) return new Set(tagged.values);
+    }
+    return value;
+  }) as DehydratedState;
+}
 
 function shouldPersist(query: Query): boolean {
   // Only server data that is safe to show offline; never errors or in-flight state.
@@ -57,8 +79,9 @@ function shouldPersist(query: Query): boolean {
  */
 export function startQueryPersistence(): () => void {
   try {
+    for (const key of LEGACY_CACHE_KEYS) getKv().remove(key);
     const raw = getKv().getString(CACHE_KEY);
-    if (raw) hydrate(queryClient, JSON.parse(raw) as DehydratedState);
+    if (raw) hydrate(queryClient, deserializeCache(raw));
   } catch {
     getKv().remove(CACHE_KEY);
   }
@@ -68,7 +91,7 @@ export function startQueryPersistence(): () => void {
     timer = null;
     try {
       const state = dehydrate(queryClient, { shouldDehydrateQuery: shouldPersist });
-      const serialized = JSON.stringify(state);
+      const serialized = serializeCache(state);
       if (serialized.length <= MAX_PERSISTED_BYTES) getKv().set(CACHE_KEY, serialized);
     } catch {
       // Persistence is best-effort.
