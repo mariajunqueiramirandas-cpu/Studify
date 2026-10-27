@@ -53,7 +53,7 @@ Every study effort is organized as a **Goal** (`Objetivo`). A goal has a mode:
 
 Each feature has a stable ID used across specs, tickets, code comments and commits. **Phase** refers to the [roadmap](roadmap.md). **Spec** links to the detailed specification.
 
-### 5.1 Platform (PLT) — spec: [architecture](../engineering/architecture.md), [mobile-app](../engineering/mobile-app.md)
+### 5.1 Platform (PLT) — spec: [00-platform](../specs/00-platform.md), [mobile-app](../engineering/mobile-app.md)
 
 | ID | Feature | Phase |
 |---|---|---|

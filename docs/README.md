@@ -14,6 +14,7 @@ Studify turns class PDFs into a complete study system (notes, flashcards, quizze
 
 | Spec | Features |
 |---|---|
+| [00 — Platform: shell, accounts, subjects, limits, notifications, offline](specs/00-platform.md) | PLT-01…07 |
 | [01 — Ingestion & knowledge map](specs/01-ingestion-knowledge-map.md) | ING-01…08, TRU-01 |
 | [02 — Learn: notes, glossary, concept map](specs/02-learn-notes.md) | LRN-01…05 |
 | [03 — Tutor](specs/03-tutor.md) | TUT-01…06 |
