@@ -48,7 +48,6 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
-      EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
       EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
       EXPO_PUBLIC_BASE_URL: ${{ vars.EXPO_PUBLIC_BASE_URL || 'https://studify.vendua.com.br' }}
       EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://studify.vendua.com.br/api' }}
@@ -88,9 +87,6 @@ jobs:
           if [ -z "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID" ]; then
             echo "::warning title=Google sign-in not configured::EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is empty."
           fi
-          if [ -z "$EXPO_PUBLIC_SENTRY_DSN" ]; then
-            echo "::warning title=Error reporting off::EXPO_PUBLIC_SENTRY_DSN is empty, so the app will not report errors."
-          fi
 
       - uses: actions/checkout@v4
         with:
@@ -108,15 +104,6 @@ jobs:
           java-version: '17'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Sentry source map upload (optional)
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: |
-          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
-            echo "SENTRY_DISABLE_AUTO_UPLOAD=true" >> "$GITHUB_ENV"
-            echo "::notice title=Sentry upload skipped::SENTRY_AUTH_TOKEN is not set, so source maps and native symbols are not uploaded."
-          fi
 
       - name: Firebase config for remote push (optional)
         env:
@@ -228,9 +215,6 @@ jobs:
       - name: Build the release APK
         working-directory: apps/mobile/android
         env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           # React Native's CMake helpers pick ccache up from PATH; the launcher variables cover the other libraries.
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache

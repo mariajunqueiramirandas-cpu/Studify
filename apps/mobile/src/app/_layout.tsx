@@ -25,7 +25,6 @@ import { FocusRuntime } from '../features/focus/FocusRuntime';
 import { markReadByKey } from '../features/notifications/inbox';
 import { NotificationsRuntime } from '../features/notifications/NotificationsRuntime';
 import { startActivityTracking } from '../features/wellbeing/activity';
-import { initSentry } from '../lib/sentry';
 import { setupNotificationChannels } from '../platform/notifications';
 import { attachNotificationActions, registerReviewCategories } from '../platform/notification-actions';
 import { attachNotificationLinks } from '../platform/notification-links';
@@ -36,7 +35,6 @@ import { useUiStore } from '../stores/ui';
 import { t } from '../i18n';
 import { ThemeProvider, useTheme } from '../theme';
 
-initSentry();
 void SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = { initialRouteName: '(tabs)' };

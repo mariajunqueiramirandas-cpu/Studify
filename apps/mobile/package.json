@@ -12,7 +12,6 @@
     "@react-native-google-signin/google-signin": "^16.1.5",
     "@react-native-ml-kit/face-detection": "^2.0.1",
     "@react-native-ml-kit/text-recognition": "^2.0.0",
-    "@sentry/react-native": "~8.28.0",
     "@shopify/flash-list": "2.3.2",
     "@studify/shared": "workspace:*",
     "@supabase/supabase-js": "^2.118.0",

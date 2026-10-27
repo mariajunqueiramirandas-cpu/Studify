@@ -91,7 +91,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-splash-screen', { backgroundColor: '#FFFFFF', image: './assets/splash-icon.png', imageWidth: 160, dark: { backgroundColor: '#0F1115' } }],
     'expo-web-browser',
     '@react-native-google-signin/google-signin',
-    '@sentry/react-native',
     'expo-sharing',
     // ING-01.3: PDFs shared from WhatsApp/Drive land on "Salvar em qual matéria?". Android only for now.
     ['expo-share-intent', { androidIntentFilters: ['application/pdf'], disableIOS: true }],

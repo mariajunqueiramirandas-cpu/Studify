@@ -57,20 +57,17 @@ Settings > Secrets and variables > Actions.
 | `ANDROID_KEYSTORE_PASSWORD` | Secret | yes | Keystore password |
 | `ANDROID_KEY_ALIAS` | Secret | yes | Key alias (`studify`) |
 | `ANDROID_KEY_PASSWORD` | Secret | yes | Key password (same as the keystore password for PKCS12) |
-| `SENTRY_AUTH_TOKEN` | Secret | no | Uploads source maps and native symbols. Without it the upload is skipped (`SENTRY_DISABLE_AUTO_UPLOAD=true`). |
 | `GOOGLE_SERVICES_JSON_BASE64` | Secret | for remote push | Base64 of the Firebase `google-services.json` (step 6). Without it the build gets no push token. |
 | `EXPO_PUBLIC_SUPABASE_URL` | Variable | yes | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Variable | yes | Supabase publishable key (`sb_publishable_...`), or the legacy anon key until it is turned off. Public by design; RLS protects the data. |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Variable | recommended | Google sign-in web client id (empty disables Google sign-in) |
-| `EXPO_PUBLIC_SENTRY_DSN` | Variable | recommended | Sentry DSN (public ingest URL) |
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | Variable | for remote push | The Expo project the push tokens belong to (step 6); also enables the expo-updates URL. |
 | `EXPO_PUBLIC_BASE_URL` | Variable | no | Defaults to `https://studify.vendua.com.br` |
 | `EXPO_PUBLIC_API_URL` | Variable | no | Defaults to `https://studify.vendua.com.br/api`. The app does not read it yet. |
 | `APP_VERSION_SUFFIX` | Variable | no | Appended to the version name, for example `-beta.1` |
-| `SENTRY_ORG`, `SENTRY_PROJECT` | Variable | only with `SENTRY_AUTH_TOKEN` | Sentry upload target |
 
 Every `EXPO_PUBLIC_*` value is compiled into the APK, so only public values belong in variables. Never put
-service-role keys, Anthropic keys or Sentry auth tokens in an `EXPO_PUBLIC_*` variable.
+service-role keys or Anthropic keys in an `EXPO_PUBLIC_*` variable.
 
 ### 5. Put the release fingerprint into assetlinks.json
 
