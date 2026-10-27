@@ -23,7 +23,11 @@ begin
     ('exports',     'exports',     false, null,      array['application/zip'])
   on conflict (id) do nothing;
 
-  alter table storage.objects enable row level security;
+  -- Hosted Supabase already runs RLS on storage.objects and owns the table, so ALTER TABLE fails here
+  -- with "must be owner of table objects" (42501). Enable RLS only when it is off (plain Postgres in tests).
+  if not (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass) then
+    alter table storage.objects enable row level security;
+  end if;
 
   -- documents/{subject_id}/{document_id}.pdf
   create policy storage_documents_read on storage.objects for select to authenticated
