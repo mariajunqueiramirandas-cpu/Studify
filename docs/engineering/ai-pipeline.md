@@ -165,7 +165,7 @@ export async function callClaude<T>(call: TaskCall<T>) {
 |---|---|---|---|---|---|---|---|---|---|---|
 | `tutor.turn` — Responder | TUT-01, TUT-03, TUT-04 | Student message | Edge·SSE (`tutor-chat`) | Static system + tools; replayed history (`raw_content`); new context-pack slices (spec 03 §8.2); student context (TUT-05, Ph 2) | `C` (+ tool `marcar_fora_do_material`) | `medium` | M | SYS, CTX | ≤ 60 msgs/user/day ([security-privacy §7](security-privacy.md#7-rate-limiting-and-ai-budgets-plt-04)) | user |
 | `tutor.turn` — Socrático | TUT-02.3 | Same | Edge·SSE | Same + mid-conversation system message "Modo atual: Socrático" | `C`, one guiding question | `medium` | M | SYS, CTX | — | user |
-| `tutor.turn` — Me testa | TUT-02.4 | Same | Edge·SSE | Same + selected node keys (learning-engine §6.3) | `C` + tool `registrar_avaliacao` | `medium` | M | SYS, CTX | — | user |
+| `tutor.turn` — Me testa | TUT-02.4 | Same | Edge·SSE | Same + selected node keys (learning-engine §6.6) | `C` + tool `registrar_avaliacao` | `medium` | M | SYS, CTX | — | user |
 | `tutor.turn` — voice | TUT-06 (Ph 3) | Voice thread | Edge·SSE | Same | `C` ≤ 600-token reply target | `low` (constant for the thread — §6.6) | M | SYS, CTX | — | user |
 | `tutor.route` | TUT-01 (spec 03 §8.1) | FTS confidence below τ | Edge | Text: outline titles + summaries in scope | `S:RouteNodes` — `node_ids[≤3]` | `low` | XS | SYS, OL | ≤ 1 per turn | user |
 | `tutor.general` | TUT-04.2 | Student taps "Responder com conhecimento geral" | Edge·SSE | Question only, no documents; separate request outside the thread prefix | `P`, labeled "Conhecimento geral" | `low` | M | SYS | rare | user |
