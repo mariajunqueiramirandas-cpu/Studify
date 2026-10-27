@@ -19,12 +19,12 @@ describe('ENUMS registry', () => {
     }
   });
 
-  it('every list is non-empty, unique and snake_case (or an uppercase area code)', () => {
+  it('every list is non-empty, unique and snake_case (or an uppercase area code / answer letter)', () => {
     for (const [key, values] of Object.entries(ENUMS)) {
       expect(values.length, key).toBeGreaterThan(0);
       expect(new Set(values).size, `${key} duplicates`).toBe(values.length);
       for (const v of values) {
-        expect(v, `${key}:${v}`).toMatch(/^([a-z][a-z0-9_]*|[A-Z]{2})$/);
+        expect(v, `${key}:${v}`).toMatch(/^([a-z][a-z0-9_]*|[A-Z]{1,2})$/);
       }
     }
   });

@@ -703,6 +703,77 @@ export const ROOM_REACTIONS = ['👏', '🔥', '💪', '☕', '😴', '🎉'] as
 export type RoomReaction = (typeof ROOM_REACTIONS)[number];
 export const RoomReactionSchema = z.enum(ROOM_REACTIONS);
 
+// ---------------------------------------------------------------- ENEM mode and Argumentação (§5.10, Phase 4)
+
+// System-owned subjects that hold global content (the ENEM bank, Atualidades questions).
+export const SYSTEM_SUBJECT_KIND = ['enem_bank', 'atualidades'] as const;
+export type SystemSubjectKind = (typeof SYSTEM_SUBJECT_KIND)[number];
+
+// ENM-08.1: dates confirmed by the INEP edital (with a verification stamp) or provisional.
+export const ENEM_DATES_STATUS = ['official', 'provisional'] as const;
+export type EnemDatesStatus = (typeof ENEM_DATES_STATUS)[number];
+
+export const ENEM_APPLICATION = ['regular', 'ppl', 'other'] as const;
+export type EnemApplication = (typeof ENEM_APPLICATION)[number];
+export const EnemApplicationSchema = z.enum(ENEM_APPLICATION);
+
+export const ENEM_LANGUAGE = ['en', 'es'] as const;
+export type EnemLanguage = (typeof ENEM_LANGUAGE)[number];
+
+export const ENEM_ANSWER_KEY = ['A', 'B', 'C', 'D', 'E'] as const;
+export type EnemAnswerKey = (typeof ENEM_ANSWER_KEY)[number];
+export const EnemAnswerKeySchema = z.enum(ENEM_ANSWER_KEY);
+
+// ENM-02.9: an imported item is published only after review.
+export const ENEM_REVIEW_STATUS = ['ok', 'needs_review'] as const;
+export type EnemReviewStatus = (typeof ENEM_REVIEW_STATUS)[number];
+
+export const ENEM_EXPLANATION_STATUS = ['pending', 'ok', 'flagged'] as const;
+export type EnemExplanationStatus = (typeof ENEM_EXPLANATION_STATUS)[number];
+
+// Spec 09 §8.4.1: `std` is the N(0,1) scale; `enem` is the published 500/100 scale (converted before use).
+export const TRI_PARAM_SCALE = ['std', 'enem'] as const;
+export type TriParamScale = (typeof TRI_PARAM_SCALE)[number];
+
+export const TOPIC_TREND = ['up', 'flat', 'down'] as const;
+export type TopicTrend = (typeof TOPIC_TREND)[number];
+export const TopicTrendSchema = z.enum(TOPIC_TREND);
+
+export const ESSAY_THEME_SOURCE = ['past_enem', 'predicted', 'atualidades', 'custom'] as const;
+export type EssayThemeSource = (typeof ESSAY_THEME_SOURCE)[number];
+export const EssayThemeSourceSchema = z.enum(ESSAY_THEME_SOURCE);
+
+export const DIGEST_STATUS = ['draft', 'published', 'withdrawn'] as const;
+export type DigestStatus = (typeof DIGEST_STATUS)[number];
+
+// ENM-05: Repertório kinds and the verification outcome of repertorio.verify.
+export const REPERTORIO_KIND = ['quote', 'data', 'law', 'work', 'event'] as const;
+export type RepertorioKind = (typeof REPERTORIO_KIND)[number];
+export const RepertorioKindSchema = z.enum(REPERTORIO_KIND);
+
+export const REPERTORIO_VERIFIED = ['yes', 'no', 'contradicted'] as const;
+export type RepertorioVerified = (typeof REPERTORIO_VERIFIED)[number];
+export const RepertorioVerifiedSchema = z.enum(REPERTORIO_VERIFIED);
+
+export const SISU_OFFER_SOURCE = ['open_data', 'edital', 'manual_admin'] as const;
+export type SisuOfferSource = (typeof SISU_OFFER_SOURCE)[number];
+
+// ENM-09 Argumentação.
+export const ARGUMENT_GOAL_MODE = ['exam_week', 'enem'] as const;
+export type ArgumentGoalMode = (typeof ARGUMENT_GOAL_MODE)[number];
+export const ArgumentGoalModeSchema = z.enum(ARGUMENT_GOAL_MODE);
+
+export const ARGUMENT_THEME_SOURCE = ['suggested', 'enem', 'custom'] as const;
+export type ArgumentThemeSource = (typeof ARGUMENT_THEME_SOURCE)[number];
+export const ArgumentThemeSourceSchema = z.enum(ARGUMENT_THEME_SOURCE);
+
+export const ARGUMENT_MODE = ['debate', 'build'] as const;
+export type ArgumentMode = (typeof ARGUMENT_MODE)[number];
+export const ArgumentModeSchema = z.enum(ARGUMENT_MODE);
+
+export const ARGUMENT_STATUS = ['active', 'finished', 'abandoned'] as const;
+export type ArgumentStatus = (typeof ARGUMENT_STATUS)[number];
+
 // ---------------------------------------------------------------- feature IDs (PRD §5 catalog)
 
 // Every PRD feature ID. `ai_usage.feature` and `xp_events.source_feature` store these (data-model §1.1).
@@ -853,4 +924,28 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'teaching_sessions.status': TEACHING_STATUS,
   'study_rooms.status': ROOM_STATUS,
   'study_room_members.status_mode': ROOM_STATUS_MODE,
+  // Phase 4
+  'subjects.system_kind': SYSTEM_SUBJECT_KIND,
+  'enem_editions.dates_status': ENEM_DATES_STATUS,
+  'enem_skills.area': ENEM_AREA,
+  'enem_topics.area': ENEM_AREA,
+  'enem_items.application': ENEM_APPLICATION,
+  'enem_items.area': ENEM_AREA,
+  'enem_items.answer_key': ENEM_ANSWER_KEY,
+  'enem_items.language': ENEM_LANGUAGE,
+  'enem_items.explanation_status': ENEM_EXPLANATION_STATUS,
+  'enem_items.review_status': ENEM_REVIEW_STATUS,
+  'enem_item_params.scale': TRI_PARAM_SCALE,
+  'enem_topic_stats.area': ENEM_AREA,
+  'enem_topic_trends.trend': TOPIC_TREND,
+  'enem_redacao_themes.application': ENEM_APPLICATION,
+  'essay_themes.source': ESSAY_THEME_SOURCE,
+  'atualidades_digests.status': DIGEST_STATUS,
+  'repertorio_items.kind': REPERTORIO_KIND,
+  'repertorio_items.verified': REPERTORIO_VERIFIED,
+  'sisu_offers.source': SISU_OFFER_SOURCE,
+  'argument_sessions.goal_mode': ARGUMENT_GOAL_MODE,
+  'argument_sessions.theme_source': ARGUMENT_THEME_SOURCE,
+  'argument_sessions.mode': ARGUMENT_MODE,
+  'argument_sessions.status': ARGUMENT_STATUS,
 };
