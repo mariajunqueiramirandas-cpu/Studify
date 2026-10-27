@@ -15,9 +15,8 @@ page never shows.
 ## Before going live
 1. **Rewrites:** every `/c|i|q|b/*` path must serve `link.html` with status 200. `public/_redirects`
    covers Netlify and Cloudflare Pages; `vercel.json` covers Vercel.
-2. **assetlinks.json:** replace both placeholders with the SHA-256 signing-certificate fingerprints
-   (`npx eas-cli@latest credentials` → Android → the build profile's keystore). It must be served as
-   `application/json` over HTTPS with no redirect.
+2. **assetlinks.json:** already lists the release key's SHA-256 for `com.studify.app` (generated 2026-10-27). If the
+   keystore is ever replaced, update the fingerprint. It must be served as `application/json` over HTTPS with no redirect.
 3. **APK link:** set `apkUrl` in `public/config.js` to the EAS internal-distribution install link.
 4. **Not here yet:** `/privacidade` (SP-13 privacy notice, needs legal review) and `/ajuda`; the app
    links to both.
