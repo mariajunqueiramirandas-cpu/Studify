@@ -9,6 +9,7 @@ import { buildLocalQueue, previewIntervals, type ReviewCard } from '../features/
 import { useStorageUrl } from '../features/subjects/api';
 import { setCardFlag } from '../features/learn/api';
 import { useSession } from '../features/auth/session';
+import { useCardMnemonic } from '../features/mnemonics/api';
 import { FlagSheet } from '../features/trust/FlagSheet';
 import { options, t } from '../i18n';
 import { useSessionStore } from '../stores/session';
@@ -28,6 +29,8 @@ export default function Review() {
   const [menu, setMenu] = useState(false);
   const [flag, setFlag] = useState(false);
   const [leech, setLeech] = useState<ReviewCard | null>(null);
+  // The card whose mnemonic hint was opened before the reveal (keyed by card, so it resets on the next one).
+  const [hintFor, setHintFor] = useState<string | null>(null);
   const shownAt = useRef(Date.now());
 
   useEffect(() => {
@@ -40,6 +43,9 @@ export default function Review() {
 
   const current = queue?.[store.index] ?? null;
   const mediaUrl = useStorageUrl(current?.media?.path);
+  // MEM-06.4: the student's mnemonic, shown on the back and, before the reveal, behind "Ver dica".
+  const mnemonic = useCardMnemonic(current?.id).data ?? null;
+  const hint = current !== null && hintFor === current.id;
   const intervals = useMemo(() => (current ? previewIntervals(db, current.id) : undefined), [db, current]);
   const menuLabels = options('review.menu');
 
@@ -51,7 +57,7 @@ export default function Review() {
     if (!current) return;
     const card = current;
     try {
-      await store.answer(db, rating, { durationMs: Date.now() - shownAt.current, source: source ?? 'session' });
+      await store.answer(db, rating, { durationMs: Date.now() - shownAt.current, source: source ?? 'session', hintUsed: hint });
       overlay.undo(`${options('review.rating.again').length ? '' : ''}${[t('review.rating.again'), t('review.rating.hard'), t('review.rating.good'), t('review.rating.easy')][rating - 1]}`, () => void store.undo(db));
       // MEM-02.12 leech prompt on the lapse that marks it.
       if (rating === 1 && card.isLeech) setLeech(card);
@@ -124,6 +130,11 @@ export default function Review() {
               </Row>
             }
           />
+          {mnemonic && (store.revealed || hint) ? (
+            <Banner kind="info" icon="bulb-outline" title={mnemonic.title} message={mnemonic.content.text} />
+          ) : mnemonic ? (
+            <Button compact variant="text" icon="bulb-outline" label={t('mnemonic.show_hint')} onPress={() => setHintFor(current.id)} />
+          ) : null}
         </View>
       ) : null}
       <Text variant="bodySmall" tone="secondary" align="center">
@@ -156,6 +167,7 @@ export default function Review() {
       </BottomSheet>
       {current ? <FlagSheet visible={flag} onClose={() => setFlag(false)} itemType="card" itemId={current.id} shared={false} /> : null}
       <BottomSheet visible={!!leech} onClose={() => setLeech(null)} title={t('review.leech')}>
+        <Button variant="tonal" icon="bulb-outline" label={t('mnemonic.create')} onPress={() => (setLeech(null), router.push({ pathname: '/mnemonic/new', params: { cardId: leech!.id } }))} />
         <Button variant="tonal" label={options('review.leech_actions')[0] ?? 'Reescrever'} onPress={() => (setLeech(null), router.push({ pathname: '/subjects/[subjectId]/card/[cardId]', params: { subjectId: leech!.subjectId, cardId: leech!.id } }))} />
         <Button variant="text" label={options('review.leech_actions')[2] ?? 'Agora não'} onPress={() => setLeech(null)} />
       </BottomSheet>

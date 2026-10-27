@@ -133,6 +133,9 @@ export const PULL_TABLES: readonly PullTableDef[] = [
   { name: 'daily_activity', table: s.dailyActivity, pk: ['userId', 'localDate'] },
   { name: 'streaks', table: s.streaks, pk: ['userId'] },
   { name: 'achievements', table: s.achievements, pk: ['userId', 'code'] },
+  // Phase 5 (MEM-06): own rows only (RLS), so no extra scope.
+  { name: 'memory_palaces', table: s.memoryPalaces, pk: ['id'] },
+  { name: 'mnemonics', table: s.mnemonics, pk: ['id'] },
 ];
 
 /**

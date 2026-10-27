@@ -37,6 +37,7 @@ export default function Documents() {
         </Card>
       ))}
       <BottomSheet visible={!!menu} onClose={() => setMenu(null)} title={menu?.title}>
+        <ListItem icon="warning-outline" title={t('findings.title')} subtitle={t('findings.menu_hint')} onPress={() => (setMenu(null), router.push({ pathname: '/subjects/[subjectId]/findings', params: { subjectId, documentId: menu!.id, title: menu!.title } }))} />
         <ListItem icon="create-outline" title={t('subjects.rename_document')} onPress={() => (setRenaming(menu!.title), null)} />
         <ListItem
           icon="cloud-download-outline"

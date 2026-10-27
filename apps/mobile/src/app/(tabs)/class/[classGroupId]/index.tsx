@@ -88,6 +88,9 @@ export default function ClassHome() {
 
       <Card>
         <ListItem icon="cafe-outline" title={t('rooms.title')} subtitle={t('rooms.entry_hint')} onPress={() => router.push(`/class/${classGroupId}/rooms`)} />
+        <ListItem icon="git-branch-outline" title={t('divide.title')} subtitle={t('divide.entry_hint')} onPress={() => router.push({ pathname: '/class/[classGroupId]/divide', params: { classGroupId } })} />
+        <ListItem icon="help-buoy-outline" title={t('peer.title')} subtitle={t('peer.entry_hint')} onPress={() => router.push({ pathname: '/class/[classGroupId]/questions', params: { classGroupId } })} />
+        <ListItem icon="trophy-outline" title={t('league.title')} subtitle={t('league.entry_hint')} onPress={() => router.push({ pathname: '/class/[classGroupId]/league', params: { classGroupId } })} />
         <ListItem icon="people-outline" title={t('class.members')} subtitle={String(active.length)} onPress={() => router.push(`/class/${classGroupId}/members`)} />
         {cg.data?.isMod ? <ListItem icon="flag-outline" title={t('class.review_queue')} onPress={() => router.push(`/class/${classGroupId}/review-queue`)} /> : null}
       </Card>

@@ -15,6 +15,8 @@ export interface QuizScope {
   subject_id?: string;
   node_ids?: string[];
   weak_only?: boolean;
+  /** Chefão (MOT-02.4): the unit whose topics the boss mixes. */
+  unit_node_id?: string;
 }
 
 /** An official ENEM item behind a question (features/enem EnemItemMeta). */

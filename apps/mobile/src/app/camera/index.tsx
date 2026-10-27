@@ -26,7 +26,7 @@ const INTENTS: { intent: CaptureIntent; icon: 'bulb-outline' | 'calculator-outli
  * photo is resized, checked for blur / dark / glare and has faces pixelated on the phone before upload.
  */
 export default function CameraCapture() {
-  const params = useLocalSearchParams<{ intent?: CaptureIntent; subjectId?: string; nodeId?: string; questionId?: string; themeId?: string }>();
+  const params = useLocalSearchParams<{ intent?: CaptureIntent; subjectId?: string; nodeId?: string; questionId?: string; themeId?: string; purpose?: 'contribution'; contributionId?: string }>();
   const { userId } = useSession();
   const online = useOnline();
   const overlay = useOverlay();
@@ -76,7 +76,7 @@ export default function CameraCapture() {
     setUpload(0);
     try {
       const captureId = await createCapture(userId, { intent, photos, subjectId: params.subjectId ?? null, nodeId: params.nodeId ?? null }, setUpload);
-      router.replace({ pathname: '/camera/[captureId]', params: { captureId, ...(params.questionId ? { questionId: params.questionId } : {}), ...(params.themeId ? { themeId: params.themeId } : {}) } });
+      router.replace({ pathname: '/camera/[captureId]', params: { captureId, ...(params.questionId ? { questionId: params.questionId } : {}), ...(params.themeId ? { themeId: params.themeId } : {}), ...(params.purpose ? { purpose: params.purpose, contributionId: params.contributionId } : {}) } });
     } catch {
       overlay.snack(t('cam.upload_failed'));
       setUpload(null);

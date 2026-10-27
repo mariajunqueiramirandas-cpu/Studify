@@ -37,6 +37,8 @@ import { openTutor } from '../../../../../features/tutor/open';
 import { options, t } from '../../../../../i18n';
 import { space } from '../../../../../theme';
 import { ReadAloudButton } from '../../../../../features/voice/VoiceButtons';
+import { FindingsList, useTopicFindingCount } from '../../../../../features/material/FindingsList';
+import { useClassSummary } from '../../../../../features/class/turma5';
 
 type Tab = 'notes' | 'cards' | 'questions' | 'glossary';
 
@@ -65,6 +67,8 @@ export default function TopicScreen() {
     }
   };
 
+  const findingCount = useTopicFindingCount(nodeId);
+  const classSummary = useClassSummary(nodeId, subject.data?.owner_class_group_id);
   const m = mastery.data?.get(nodeId)?.mastery;
   const unit = node?.parent_id ? outline?.byId.get(node.parent_id) : undefined;
   const firstSource = node?.sources[0];
@@ -79,6 +83,7 @@ export default function TopicScreen() {
             {[subject.data?.name, unit?.title].filter(Boolean).join(' · ')}
             {firstSource ? ` · ${pageLabel(firstSource.page_start, firstSource.page_end)}` : ''}
           </Text>
+          {findingCount > 0 ? <Text accessibilityLabel={t('findings.badge_a11y', { n: findingCount })}>⚠️</Text> : null}
           {m != null ? <PctRing value={m} size={40} label={`Domínio ${Math.round(m * 100)}%`} /> : null}
         </Row>
       }
@@ -134,7 +139,27 @@ export default function TopicScreen() {
             <ListItem icon="school-outline" title={t('lucas.title')} subtitle={t('lucas.entry_hint')} onPress={() => router.push({ pathname: '/lucas/[nodeId]', params: { nodeId, subjectId } })} />
             <ListItem icon="headset-outline" title={t('podcast.title')} subtitle={t('podcast.entry_hint')} onPress={() => router.push({ pathname: '/podcast/new', params: { subjectId, nodeIds: nodeId } })} />
             <ListItem icon="camera-outline" title={t('cam.title')} subtitle={t('cam.entry_hint')} onPress={() => router.push({ pathname: '/camera', params: { subjectId, nodeId } })} />
+            <ListItem icon="git-network-outline" title={t('visual.open')} subtitle={t('visual.entry_hint')} onPress={() => router.push({ pathname: '/visual/[nodeId]', params: { nodeId, subjectId, title: node.title } })} />
+            <ListItem icon="bulb-outline" title={t('mnemonic.create')} subtitle={t('mnemonic.entry_hint')} onPress={() => router.push({ pathname: '/mnemonic/new', params: { nodeId, title: node.title } })} />
           </Card>
+        </Section>
+      ) : null}
+      {node && tab === 'notes' && classSummary.data ? (
+        <Section title={t('divide.class_summary')}>
+          <Card tone="soft">
+            <RichContent text={classSummary.data.body} />
+            {classSummary.data.credits.length ? (
+              <Text variant="caption" tone="secondary">
+                {t('divide.credits', { names: classSummary.data.credits.join(', ') })}
+              </Text>
+            ) : null}
+            <AiBadge />
+          </Card>
+        </Section>
+      ) : null}
+      {node && tab === 'notes' && findingCount > 0 ? (
+        <Section title={`⚠️ ${t('findings.title')}`}>
+          <FindingsList nodeId={nodeId} subjectId={subjectId} onRedo={() => void requestNote(nodeId, 'study', true).then(() => overlay.snack(t('findings.redo_started'))).catch(() => overlay.snack(t('error.generation')))} />
         </Section>
       ) : null}
       {node && tab === 'notes' ? <TopicFacts objectives={node.learning_objectives} formulas={node.formulas} sources={node.sources} subjectId={subjectId} /> : null}

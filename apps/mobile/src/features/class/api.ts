@@ -25,6 +25,7 @@ export interface Membership {
   nickname: string | null;
   contribute_insights: boolean;
   accepts_duels: boolean;
+  league_opt_in: boolean;
 }
 
 export interface MemberPublic {
@@ -118,7 +119,7 @@ export function useInvite(classGroupId: string | undefined) {
   });
 }
 
-export async function updateMyMembership(classGroupId: string, userId: string, patch: Partial<Pick<Membership, 'nickname' | 'contribute_insights' | 'accepts_duels'>>) {
+export async function updateMyMembership(classGroupId: string, userId: string, patch: Partial<Pick<Membership, 'nickname' | 'contribute_insights' | 'accepts_duels' | 'league_opt_in'>>) {
   const { error } = await supabase.from('class_group_members').update(patch).eq('class_group_id', classGroupId).eq('user_id', userId);
   if (error) throw error;
 }

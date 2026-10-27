@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Banner, Button, Card, ErrorState, RichContent, Screen, SkeletonList, Text } from '../../components';
+import { Banner, Button, Card, ErrorState, RichContent, Screen, SkeletonList, Text, TextField, useOverlay } from '../../components';
 import { analyzeCapture, discardCapture, useCapture } from '../../features/camera/api';
 import { AddToSubjectPanel, ExplainPanel, SolvePanel, TranscriptionReview } from '../../features/camera/CapturePanels';
+import { appendToContribution } from '../../features/class/turma5';
 import { t } from '../../i18n';
 import { space } from '../../theme';
 
@@ -15,7 +16,7 @@ const MODEL_ISSUES = ['blur', 'glare', 'partial', 'dark', 'handwriting', 'multip
  * before grading. A photo without study content is deleted by the server and offers a retake.
  */
 export default function CaptureResult() {
-  const { captureId, questionId, themeId } = useLocalSearchParams<{ captureId: string; questionId?: string; themeId?: string }>();
+  const { captureId, questionId, themeId, purpose, contributionId } = useLocalSearchParams<{ captureId: string; questionId?: string; themeId?: string; purpose?: 'contribution'; contributionId?: string }>();
   const capture = useCapture(captureId);
   const [analysis, setAnalysis] = useState<{ issues: string[] } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -97,7 +98,10 @@ export default function CaptureResult() {
         {c.intent === 'explain' ? <ExplainPanel capture={c} /> : null}
         {c.intent === 'solve' ? <SolvePanel capture={c} /> : null}
         {c.intent === 'add_to_subject' ? <AddToSubjectPanel capture={c} /> : null}
-        {grading ? (
+        {purpose === 'contribution' && contributionId ? (
+          // SOC-06.2: a handwritten summary page becomes text in the divisão draft; nothing is graded.
+          <ContributionFromPhoto text={c.transcription ?? ''} contributionId={contributionId} />
+        ) : grading ? (
           <TranscriptionReview
             capture={c}
             questionId={questionId}
@@ -108,5 +112,26 @@ export default function CaptureResult() {
         ) : null}
       </View>
     </Screen>
+  );
+}
+
+function ContributionFromPhoto({ text, contributionId }: { text: string; contributionId: string }) {
+  const overlay = useOverlay();
+  const [value, setValue] = useState(text);
+  return (
+    <View style={{ gap: space.md }}>
+      <Text variant="heading">{t('cam.transcription.title')}</Text>
+      <Text tone="secondary">{t('divide.photo_hint')}</Text>
+      <TextField label={t('divide.write')} value={value} onChangeText={setValue} multiline />
+      <Button
+        label={t('divide.use_text')}
+        disabled={!value.trim()}
+        onPress={() =>
+          void appendToContribution(contributionId, value.trim())
+            .then(() => router.back())
+            .catch(() => overlay.snack(t('error.generic')))
+        }
+      />
+    </View>
   );
 }

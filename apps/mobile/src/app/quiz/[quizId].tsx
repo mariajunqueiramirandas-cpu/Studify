@@ -1,4 +1,4 @@
-import { gradeAnswer, suggestMistakeCause } from '@studify/shared';
+import { bossHealth, bossPassed, gradeAnswer, suggestMistakeCause } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -20,10 +20,12 @@ import {
   Text,
   useOverlay,
 } from '../../components';
+import { supabase } from '../../api/supabase';
 import { useDb } from '../../db/DatabaseProvider';
 import { useSession } from '../../features/auth/session';
 import { formatClock } from '../../features/common/format';
 import { EnemItemHeader, TextoBaseView } from '../../features/enem/components';
+import { awardXp } from '../../features/motivation/xp';
 import { ExplainSheet } from '../../features/learn/ExplainSheet';
 import { useQuizBundle } from '../../features/practice/api';
 import { usePickedCauses } from '../../features/practice/causes';
@@ -51,6 +53,7 @@ export default function QuizRunner() {
   const questions = bundle.data?.questions ?? [];
   const exam = quiz?.mode === 'exam_conditions' || quiz?.mode === 'relaxed';
   const enemSim = quiz?.kind === 'enem_simulado';
+  const isBoss = quiz?.kind === 'boss';
   const confidenceOn = (profile?.settings as { confidence_enabled?: boolean } | undefined)?.confidence_enabled !== false;
 
   const [response, setResponse] = useState<QuestionResponse | null>(null);
@@ -164,15 +167,29 @@ export default function QuizRunner() {
       if (g.correct) correct++;
     }
     const id = await runner.submit(db);
+    // MOT-02.4: ≥ 70% defeats the boss: 50 XP the first time for this unit, 10 on later wins (spec 13 §8.1).
+    let bossWon = false;
+    if (isBoss && userId && questions.length) {
+      bossWon = bossPassed(correct / questions.length);
+      const unitId = (quiz?.scope as { unit_node_id?: string } | undefined)?.unit_node_id;
+      if (bossWon && unitId) {
+        const before = await supabase.from('boss_attempts').select('id').eq('user_id', userId).eq('unit_node_id', unitId).eq('passed', true).limit(1);
+        awardXp(db, userId, { kind: 'boss_defeated', retry: (before.data ?? []).length > 0 }, { type: 'boss', id: id ?? attemptId ?? quizId, feature: 'MOT-02' });
+      }
+    }
     // ENEM simulado: per-area TRI estimate instead of a single score (ENM-04.5).
     if (enemSim && (id ?? attemptId)) router.replace({ pathname: '/enem/simulado/[attemptId]', params: { attemptId: (id ?? attemptId)! } });
-    else router.replace({ pathname: '/practice/result/[attemptId]', params: { attemptId: id ?? attemptId ?? '', k: String(correct), n: String(questions.length), quizId } });
+    else router.replace({ pathname: '/practice/result/[attemptId]', params: { attemptId: id ?? attemptId ?? '', k: String(correct), n: String(questions.length), quizId, ...(isBoss ? { boss: bossWon ? 'won' : 'lost' } : {}) } });
   };
 
   if (bundle.isError) return <Screen title="" immersive><ErrorState onRetry={bundle.refetch} /></Screen>;
   if (!quiz || !q) return <Screen title="" immersive><SkeletonList rows={4} height={64} /></Screen>;
 
   const answered = isAnswered(q.type, response);
+  // Correct answers so far, graded on the device (bosses use auto-graded types only).
+  const bossCorrect = isBoss
+    ? questions.filter((x) => runner.answers[x.id]?.response && (gradeAnswer(x.type as never, x.payload as never, runner.answers[x.id]!.response as never) as GradeResult).correct).length
+    : 0;
   const enemMeta = bundle.data?.enem.get(q.id);
   const needsConfidence = confidenceOn && !exam && answered && !result;
   const subjectShared = false;
@@ -193,7 +210,11 @@ export default function QuizRunner() {
       context={
         <Row>
           <View style={{ flex: 1 }}>
-            <ProgressBar value={(runner.index + (result ? 1 : 0)) / questions.length} />
+            {isBoss ? (
+              <ProgressBar value={bossHealth(bossCorrect, questions.length)} label={t('map.boss_health')} />
+            ) : (
+              <ProgressBar value={(runner.index + (result ? 1 : 0)) / questions.length} />
+            )}
           </View>
           {remaining !== null ? (
             <Text variant="label" tone={remaining < 60 ? 'warning' : 'secondary'} accessibilityLiveRegion="none">

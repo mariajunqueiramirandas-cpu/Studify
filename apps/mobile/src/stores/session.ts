@@ -21,7 +21,8 @@ export interface SessionState {
   start: (cardIds: string[]) => void;
   reveal: () => void;
   /** Records the rating for the current card, then advances. Returns the new log id. */
-  answer: (db: AppDb, rating: Grade, opts?: { durationMs?: number; source?: ReviewSource }) => Promise<string>;
+  /** `hintUsed`: the mnemonic hint was opened before the reveal (MEM-06.4, logged only). */
+  answer: (db: AppDb, rating: Grade, opts?: { durationMs?: number; source?: ReviewSource; hintUsed?: boolean }) => Promise<string>;
   /** Undoes the last answer of this session (restores the card and steps back). */
   undo: (db: AppDb) => Promise<boolean>;
   /** Ends the session and syncs now. */
@@ -52,6 +53,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       rating,
       durationMs: opts.durationMs,
       source: opts.source ?? 'session',
+      hintUsed: opts.hintUsed ?? false,
     });
     set((s) => ({
       index: s.index + 1,

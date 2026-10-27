@@ -90,6 +90,7 @@ export default function CardEditor() {
       {card?.source_pages.length ? <PageChips sources={card.source_pages} subjectId={subjectId} /> : null}
       {!isNew && card ? (
         <Card>
+          <ListItem icon="bulb-outline" title={t('mnemonic.create')} subtitle={t('mnemonic.entry_hint')} onPress={() => router.push({ pathname: '/mnemonic/new', params: { cardId: card.id } })} />
           <ListItem icon="pause-circle-outline" title="Suspender" onPress={async () => (await setCardFlag(userId!, card.id, { suspended: true }), overlay.snack(t('review.suspended')), router.back())} />
           <ListItem icon="eye-off-outline" title="Excluir pra mim" onPress={async () => (await setCardFlag(userId!, card.id, { hidden: true }), overlay.snack(t('review.hidden')), router.back())} />
           <ListItem icon="flag-outline" title="Achou um erro nesse cartão? ⚑ Reportar erro" onPress={() => setFlag(true)} />

@@ -648,6 +648,32 @@ export const wellbeingCheckins = sqliteTable('wellbeing_checkins', {
   answers: json<Record<string, unknown>>('answers').notNull(),
 });
 
+// ---------- Phase 5 mirrored tables (MEM-06: owner rows, pulled for offline reviews) ----------
+
+export const memoryPalaces = sqliteTable('memory_palaces', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  loci: json<string[]>('loci').notNull(),
+  ...syncCols,
+});
+
+export const mnemonics = sqliteTable(
+  'mnemonics',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    cardId: text('card_id'),
+    nodeId: text('node_id'),
+    type: text('type').notNull(),
+    title: text('title').notNull(),
+    content: json<{ text: string; items?: string[]; how_to_use?: string; loci?: Array<{ locus: string; item: string; image: string }> }>('content').notNull(),
+    palaceId: text('palace_id'),
+    ...syncCols,
+  },
+  (t) => [index('mnemonics_card').on(t.cardId), index('mnemonics_node').on(t.nodeId)],
+);
+
 /** Every mirrored table, in pull order (parents before children). */
 export const mirroredTables = {
   profiles,
@@ -677,6 +703,8 @@ export const mirroredTables = {
   daily_activity: dailyActivity,
   streaks,
   achievements,
+  memory_palaces: memoryPalaces,
+  mnemonics,
 } as const;
 
 export type MirroredTableName = keyof typeof mirroredTables;
