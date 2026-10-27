@@ -157,3 +157,57 @@ test('budget store: budget_exhausted from the RPC becomes a refusal with scope a
   assertEquals(calls[0]?.args.p_estimate_micro_usd, 1234);
   assertEquals(calls[0]?.args.p_budget_class, 'user');
 });
+
+test('ingest-start: with subject_id the server creates the documents row from the stored file', async () => {
+  const h = await setupH();
+  const docId = v7(320);
+  const pdf = await makePdf(3);
+  h.db.objects.set(`documents/${IDS.subject}/${docId}.pdf`, pdf);
+  const res = await ingestStart(
+    request('ingest-start', { idem: docId, body: { document_id: docId, subject_id: IDS.subject, title: 'Resumão', kind: 'notes', teacher_name: null } }),
+    h.deps,
+  );
+  assertEquals(res.status, 202);
+  const row = h.db.rows('documents').find((d) => d.id === docId)!;
+  assertEquals(row.storage_path, `${IDS.subject}/${docId}.pdf`, 'relative to the documents bucket, as the worker reads it');
+  assertEquals(row.uploaded_by, ALICE.id);
+  assertEquals(row.title, 'Resumão');
+  assertEquals(row.size_bytes, pdf.byteLength);
+  assertEquals((row.checksum_sha256 as string).length, 64);
+  assertEquals(row.status, 'processing');
+  assertEquals(h.enqueued.find((e) => e.queue === 'ingest.document')?.data.document_id, docId);
+});
+
+test('ingest-start: an uploaded copy of a file already in the subject → duplicate, and the copy is removed', async () => {
+  const h = await setupH();
+  const pdf = await makePdf(3);
+  const first = v7(321);
+  h.db.objects.set(`documents/${IDS.subject}/${first}.pdf`, pdf);
+  assertEquals((await ingestStart(request('ingest-start', { idem: first, body: { document_id: first, subject_id: IDS.subject } }), h.deps)).status, 202);
+  const second = v7(322);
+  h.db.objects.set(`documents/${IDS.subject}/${second}.pdf`, pdf);
+  const res = await ingestStart(request('ingest-start', { idem: second, body: { document_id: second, subject_id: IDS.subject } }), h.deps);
+  assertEquals(res.status, 409);
+  assertEquals((await json(res)).error.details.existing_document_id, first);
+  assert(!h.db.objects.has(`documents/${IDS.subject}/${second}.pdf`), 'the rejected copy is gone');
+  assert(!h.db.rows('documents').some((d) => d.id === second));
+});
+
+test('ingest-start: a file that is not a PDF is rejected and removed', async () => {
+  const h = await setupH();
+  const docId = v7(323);
+  h.db.objects.set(`documents/${IDS.subject}/${docId}.pdf`, new TextEncoder().encode('hello, not a pdf'));
+  const res = await ingestStart(request('ingest-start', { idem: docId, body: { document_id: docId, subject_id: IDS.subject } }), h.deps);
+  assertEquals(res.status, 422);
+  assertEquals((await json(res)).error.code, 'pdf_corrupt');
+  assert(!h.db.objects.has(`documents/${IDS.subject}/${docId}.pdf`));
+});
+
+test('ingest-start: creating a document in another student’s subject is not found', async () => {
+  const h = await setupH();
+  const docId = v7(324);
+  h.db.objects.set(`documents/${IDS.bobSubject}/${docId}.pdf`, await makePdf(1));
+  const res = await ingestStart(request('ingest-start', { idem: docId, body: { document_id: docId, subject_id: IDS.bobSubject } }), h.deps);
+  assertEquals(res.status, 404);
+  assert(!h.db.rows('documents').some((d) => d.id === docId));
+});

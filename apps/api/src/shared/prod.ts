@@ -3,6 +3,7 @@
 // keeps serving while the worker is still creating the schema.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import pg from 'pg';
 import { PgBoss } from 'pg-boss';
 import type { AnthropicLike } from '@studify/ai';
 import { uuidV7 } from '@studify/shared';
@@ -11,6 +12,7 @@ import { log } from '../log.ts';
 import { makeBudgetStore, makeUsageSink } from './budget.ts';
 import type { Deps } from './deps.ts';
 import { makePgBossEnqueue } from './enqueue.ts';
+import { withPrivateSchema } from './private-schema.ts';
 
 export interface ProdRuntime {
   deps: Deps;
@@ -39,9 +41,15 @@ function minClientVersionOf(db: SupabaseClient): () => Promise<number | null> {
 }
 
 export function buildProdRuntime(config: ApiConfig): ProdRuntime {
-  const db = createClient(config.supabaseUrl, config.serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  // The private schema is not exposed through PostgREST: db.schema('private') runs over this pool.
+  const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 4, idleTimeoutMillis: 30_000, application_name: 'studify-api' });
+  pool.on('error', (err: Error) => log('warn', 'postgres pool error', { message: err.message }));
+  const db = withPrivateSchema(
+    createClient(config.supabaseUrl, config.serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }),
+    pool,
+  );
   const client = new Anthropic({
     apiKey: config.anthropicApiKey,
     baseURL: config.anthropicBaseUrl,
@@ -102,10 +110,12 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
       }
     },
     async stop() {
-      if (!starting) return;
-      await boss.stop({ graceful: true, timeout: 10_000 }).catch((err: unknown) => {
-        log('warn', 'pg-boss stop failed', { message: errorMessage(err) });
-      });
+      if (starting) {
+        await boss.stop({ graceful: true, timeout: 10_000 }).catch((err: unknown) => {
+          log('warn', 'pg-boss stop failed', { message: errorMessage(err) });
+        });
+      }
+      await pool.end().catch(() => undefined);
     },
   };
 }

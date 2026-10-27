@@ -19,12 +19,14 @@
     "@supabase/supabase-js": "^2.118.0",
     "hono": "^4.13.14",
     "pdf-lib": "^1.17.1",
+    "pg": "^8.23.1",
     "pg-boss": "^12.38.0",
     "ts-fsrs": "^5.4.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
+    "@types/pg": "^8.23.1",
     "typescript": "~6.0.3"
   }
 }

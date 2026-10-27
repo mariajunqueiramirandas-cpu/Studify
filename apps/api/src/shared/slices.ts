@@ -5,7 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PdfSlice } from '@studify/prompts';
 import { pagesToRanges } from '@studify/ai';
-import { downloadBytes, sliceBytes, uploadBytes } from './storage.ts';
+import { documentObjectPath, downloadBytes, sliceBytes, uploadBytes } from './storage.ts';
 
 export type SlicePurpose = 'outline' | 'topic' | 'transcription' | 'tutor';
 
@@ -84,7 +84,7 @@ export async function prepareSlices(db: SupabaseClient, args: PrepareArgs): Prom
       storagePath = existing.storage_path as string;
       bytes = await downloadBytes(db, storagePath);
     } else {
-      source ??= await downloadBytes(db, args.storagePath);
+      source ??= await downloadBytes(db, documentObjectPath(args.storagePath));
       bytes = await sliceBytes(source, pages);
       rowId = args.newId();
       storagePath = `slices/${args.documentId}/${args.purpose}-${range.page_start}-${range.page_end}-${rowId.slice(0, 8)}.pdf`;

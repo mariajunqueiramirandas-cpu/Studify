@@ -60,9 +60,18 @@ export const GuardianLinkResSchema = z.object({
 
 export const IngestModeSchema = z.enum(['full', 'outline_only']);
 
+/**
+ * The app uploads the PDF to `documents/{subject_id}/{document_id}.pdf`, then calls ingest-start. With `subject_id`
+ * the server creates the documents row (checksum, size and duplicate check are computed from the stored file);
+ * without it, the row must already exist (retries).
+ */
 export const IngestStartReqSchema = z.object({
   document_id: UuidSchema,
   mode: IngestModeSchema.optional(),
+  subject_id: UuidSchema.optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(DOCUMENT_KIND).optional(),
+  teacher_name: z.string().trim().max(120).nullable().optional(),
 });
 export type IngestStartReq = z.infer<typeof IngestStartReqSchema>;
 

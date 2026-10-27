@@ -1,6 +1,6 @@
 // AI budget gate and usage log (security-privacy §7, ai-pipeline §9). The BudgetStore wraps the
-// service-only private.ai_budget_reserve / ai_budget_settle functions. The private schema must be
-// exposed to the service role in the API settings (see the README of this folder).
+// service-only private.ai_budget_reserve / ai_budget_settle functions. The private schema is not exposed
+// through PostgREST; in production db.schema('private') runs over direct SQL (private-schema.ts).
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AiUsageRow, BudgetReserveInput, BudgetReserveResult, BudgetScope, BudgetStore, UsageSink } from '@studify/ai';
 import { DEFAULT_TIME_ZONE, localDateOf } from '@studify/shared';
