@@ -2,6 +2,7 @@
 // batch.poll payload. The plan carries everything needed to route a result (block order for citations, labels
 // for page mapping, the budget context and the custom_id → topic/kind mapping), so the poll job needs no
 // other state. Results that fail are re-run on the standard API, rebuilt from the same plan (ai-pipeline §7.3).
+import { STANDARD_WAVE_CONCURRENCY } from '../framework/concurrency-defaults.ts';
 import { callClaude, collectBatch, pollBatch, submitBatch, BudgetExceededError, type BatchItem, type BatchSubmission, type BudgetContext, type CallResult, type MappedCitation, type TaskCall } from '@studify/ai';
 import { getTask } from '@studify/prompts';
 import { getDocument, type PipelineEnv } from './env.ts';
@@ -167,7 +168,7 @@ export async function submitWave(env: PipelineEnv, input: SubmitInput): Promise<
 }
 
 /** Parallel standard calls per wave when the Batch API is off (AI_USE_BATCH). */
-export const STANDARD_WAVE_CONCURRENCY = 6;
+export { STANDARD_WAVE_CONCURRENCY };
 
 /**
  * Runs a wave now on the standard API (AI_USE_BATCH off): every item is called, written by the same writers as a
@@ -185,7 +186,7 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
   if (input.aiJobId) {
     await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
   }
-  await mapLimit(input.items, STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
+  await mapLimit(input.items, env.ctx.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
     let handled = false;
     for (let attempt = 1; attempt <= 2 && !handled && !summary.budgetExceeded; attempt++) {
       try {
