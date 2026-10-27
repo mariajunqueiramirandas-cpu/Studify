@@ -1,7 +1,7 @@
 {
   "name": "@studify/mobile",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "./index.ts",
   "dependencies": {
     "@expo-google-fonts/atkinson-hyperlegible": "^0.4.1",
     "@expo-google-fonts/inter": "^0.4.2",

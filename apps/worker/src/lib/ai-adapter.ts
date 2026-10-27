@@ -43,6 +43,21 @@ export function sourcesOf(documents: DocumentMap | undefined): DocumentSlice[] {
     }));
 }
 
+/**
+ * Media first, text last inside each user turn (ai-pipeline §2.2): document and image blocks must
+ * precede text. Some builders put a cached outline text before the media; the order is fixed here so
+ * the request passes assertRequestShape. Relative order inside each group is kept.
+ */
+export function mediaFirst(messages: BuiltPrompt['messages']): BuiltPrompt['messages'] {
+  return messages.map((message) => {
+    if (typeof message.content === 'string' || message.role !== 'user') return message;
+    const media = message.content.filter((b) => b.type === 'document' || b.type === 'image');
+    if (media.length === 0) return message;
+    const rest = message.content.filter((b) => b.type !== 'document' && b.type !== 'image');
+    return { ...message, content: [...media, ...rest] };
+  });
+}
+
 function systemOf(built: BuiltPrompt): SystemBlock[] {
   return built.system.map((block) => (block.cache_control ? { text: block.text, cacheTtl: block.cache_control.ttl } : { text: block.text }));
 }
@@ -71,7 +86,7 @@ export async function runPrompt<I, O>(deps: ClaudeDeps, run: PromptRun<I, O>): P
     },
     ctx: budget,
     system: systemOf(built),
-    messages: built.messages as unknown as TaskCall<O>['messages'],
+    messages: mediaFirst(built.messages) as unknown as TaskCall<O>['messages'],
     sources: sourcesOf(built.documents),
   };
   const result = await callClaude(deps, call);

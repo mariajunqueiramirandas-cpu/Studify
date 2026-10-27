@@ -31,13 +31,13 @@ export function useMotivation() {
         supabase.from('xp_events').select('amount').eq('user_id', userId!),
       ]);
       if (streak.error && day.error) return null; // Phase 2 tables not deployed yet
-      const s = (streak.data ?? {}) as { current?: number; best?: number; shields?: number; reset_notice_pending?: boolean };
+      const s = (streak.data ?? {}) as { current_length?: number; longest_length?: number; shields_available?: number; reset_notice_pending?: boolean };
       const totalXp = ((xp.data ?? []) as { amount: number }[]).reduce((a, b) => a + (b.amount ?? 0), 0);
       const dailyGoal = Number((profile?.settings as { daily_goal_minutes?: number } | undefined)?.daily_goal_minutes ?? 20);
       return {
-        streak: s.current ?? 0,
-        bestStreak: s.best ?? 0,
-        shields: s.shields ?? 0,
+        streak: s.current_length ?? 0,
+        bestStreak: s.longest_length ?? 0,
+        shields: s.shields_available ?? 0,
         todayMinutes: Number((day.data as { active_minutes?: number } | null)?.active_minutes ?? 0),
         dailyGoal,
         xp: totalXp,

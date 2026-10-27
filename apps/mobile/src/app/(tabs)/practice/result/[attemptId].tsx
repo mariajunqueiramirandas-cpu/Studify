@@ -1,4 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { Share } from 'react-native';
+import { shareQuiz } from '../../../../features/class/api';
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { ActionBar, AiBadge, Banner, BottomSheet, Button, Card, Celebrate, FeedbackPanel, ListItem, RichContent, RichText, Row, Screen, Section, Stat, Text, useOverlay } from '../../../../components';
@@ -11,7 +13,7 @@ import { space } from '../../../../theme';
 
 /** S-PRA-07 Resultado + S-PRA-08 Correção (PRA-03, PRA-01.6). */
 export default function Result() {
-  const { attemptId, k, n } = useLocalSearchParams<{ attemptId: string; k?: string; n?: string; quizId?: string }>();
+  const { attemptId, k, n, quizId } = useLocalSearchParams<{ attemptId: string; k?: string; n?: string; quizId?: string }>();
   const res = useAttemptResult(attemptId);
   const mistakes = useMistakes('open');
   const take = usePickedCauses((s) => s.take);
@@ -85,6 +87,21 @@ export default function Result() {
           <ListItem icon="book-outline" title={t('mistakes.title')} onPress={() => router.push('/practice/mistakes')} />
           <ListItem icon="flash-outline" title={t('result.review_cards')} onPress={() => router.push('/review')} />
           <ListItem icon="speedometer-outline" title={t('result.calibration')} onPress={() => router.push('/practice/calibration')} />
+          {quizId ? (
+            <ListItem
+              icon="share-social-outline"
+              title={t('share.quiz')}
+              onPress={async () => {
+                // SOC-09 / S-TUR-17: score card + link; outsiders never see the material.
+                try {
+                  const s = await shareQuiz(quizId);
+                  await Share.share({ message: `${t('share.quiz_card', { k: correct, n: total, subject: '' }).replace(' em  —', ' —')} ${s.url}` });
+                } catch {
+                  overlay.snack(t('error.generic'));
+                }
+              }}
+            />
+          ) : null}
         </Card>
       </Section>
       <BottomSheet visible={!!grading} onClose={() => setGrading(null)} title={t('grading.title')}>

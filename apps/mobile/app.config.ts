@@ -74,26 +74,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'react-native-android-widget',
       {
-        // MEM-04: "Revisão rápida" 4×2 and "Hoje" 2×2 (mobile-app.md §6.1).
+        // MEM-04: "Revisão rápida" 4×2 (mobile-app.md §6.1). The 2×2 "Hoje" widget is not built yet.
         widgets: [
           {
-            name: 'QuickReview',
+            name: 'ReviewWidget',
             label: 'Revisão rápida',
             description: 'Revise um cartão direto da tela inicial',
             minWidth: '250dp',
             minHeight: '110dp',
             targetCellWidth: 4,
-            targetCellHeight: 2,
-            previewImage: './assets/icon.png',
-            updatePeriodMillis: 1800000,
-          },
-          {
-            name: 'Today',
-            label: 'Hoje',
-            description: 'Revisões pendentes e a próxima prova',
-            minWidth: '110dp',
-            minHeight: '110dp',
-            targetCellWidth: 2,
             targetCellHeight: 2,
             previewImage: './assets/icon.png',
             updatePeriodMillis: 1800000,

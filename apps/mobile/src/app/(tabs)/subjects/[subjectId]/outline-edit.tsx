@@ -9,6 +9,13 @@ import { editOutline, setNodeExcluded, undoOutlineEvent, useCanEditSubject, useI
 import { t } from '../../../../i18n';
 import { space } from '../../../../theme';
 
+/** Pages where a topic can be cut: every page after the first one it covers. */
+function splitPages(n: OutlineNode): number[] {
+  const pages = new Set<number>();
+  for (const s of n.sources) for (let p = s.page_start + 1; p <= (s.page_end ?? s.page_start); p++) pages.add(p);
+  return [...pages].sort((a, b) => a - b).slice(0, 60);
+}
+
 type Mode = { kind: 'menu' } | { kind: 'rename' } | { kind: 'merge' } | { kind: 'move' } | { kind: 'split' } | { kind: 'newUnit' };
 
 /** S-MAT-06 Revisar mapa (ING-04): rename, merge, split, move, delete, "Não cai na prova". */
@@ -104,7 +111,7 @@ export default function OutlineEdit() {
           <>
             <ListItem icon="create-outline" title={t('outline.rename_title')} onPress={() => (setText(selected?.title ?? ''), setMode({ kind: 'rename' }))} />
             {selected?.kind !== 'unit' ? <ListItem icon="git-merge-outline" title={t('outline.merge_title')} onPress={() => setMode({ kind: 'merge' })} /> : null}
-            {selected?.kind === 'topic' && (selected.children.length ?? 0) > 1 ? <ListItem icon="cut-outline" title="Dividir aqui" onPress={() => setMode({ kind: 'split' })} /> : null}
+            {selected?.kind === 'topic' && splitPages(selected).length > 0 ? <ListItem icon="cut-outline" title="Dividir aqui" onPress={() => setMode({ kind: 'split' })} /> : null}
             {selected?.kind === 'topic' ? <ListItem icon="return-down-forward-outline" title={t('outline.move_title')} onPress={() => setMode({ kind: 'move' })} /> : null}
             <ListItem
               icon="trash-outline"
@@ -148,7 +155,7 @@ export default function OutlineEdit() {
         visible={mode?.kind === 'merge'}
         onClose={close}
         title={t('outline.merge_title')}
-        footer={<Button label={t('global.confirm')} loading={busy} disabled={!target} onPress={() => run([{ op: 'merge', node_ids: [selected!.id], into_node_id: target! }], 'outline.merged')} />}
+        footer={<Button label={t('global.confirm')} loading={busy} disabled={!target} onPress={() => run([{ op: 'merge', node_ids: [target!, selected!.id] }], 'outline.merged')} />}
       >
         {selected ? <RadioList value={target} onChange={setTarget} options={siblings(selected).map((n) => ({ value: n.id, label: n.title }))} /> : null}
       </BottomSheet>
@@ -171,17 +178,15 @@ export default function OutlineEdit() {
             label={t('global.confirm')}
             loading={busy}
             disabled={!target}
-            onPress={() => {
-              const at = selected!.children.find((c) => c.id === target);
-              run([{ op: 'split', node_id: selected!.id, at_child_id: target!, titles: [selected!.title, at?.title ?? selected!.title] }], 'outline.split_done');
-            }}
+            onPress={() => run([{ op: 'split', node_id: selected!.id, page: Number(target), ...(text.trim() ? { title: text.trim() } : {}) }], 'outline.split_done')}
           />
         }
       >
         <Text tone="secondary" variant="bodySmall">
-          O novo tópico começa no conceito escolhido.
+          O novo tópico começa na página escolhida.
         </Text>
-        {selected ? <RadioList value={target} onChange={setTarget} options={selected.children.slice(1).map((c) => ({ value: c.id, label: c.title }))} /> : null}
+        <TextField label={t('subjects.name')} value={text} onChangeText={setText} placeholder={selected ? `${selected.title} (parte 2)` : ''} />
+        {selected ? <RadioList value={target} onChange={setTarget} options={splitPages(selected).map((p) => ({ value: String(p), label: `pág. ${p}` }))} /> : null}
       </BottomSheet>
       <View style={{ height: space.xl }} />
     </Screen>

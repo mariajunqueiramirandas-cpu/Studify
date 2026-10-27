@@ -100,8 +100,10 @@ export type OutlineOp =
   | { op: 'rename'; node_id: string; title: string }
   | { op: 'move'; node_id: string; parent_id: string | null; position?: number }
   | { op: 'reorder'; node_id: string; position: number }
-  | { op: 'merge'; node_ids: string[]; into_node_id: string; title?: string }
-  | { op: 'split'; node_id: string; at_child_id?: string; titles: [string, string] }
+  /** [keep, drop]: the keeper absorbs sources, concepts and items (ING-04.3). */
+  | { op: 'merge'; node_ids: [string, string] }
+  /** Cut the topic before `page`; later sources/items move to the new topic (ING-04.4). */
+  | { op: 'split'; node_id: string; page: number; title?: string }
   | { op: 'delete'; node_id: string }
   | { op: 'restore'; node_id: string }
   | { op: 'create'; kind: 'unit' | 'topic'; title: string; parent_id?: string | null };

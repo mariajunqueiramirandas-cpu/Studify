@@ -53,7 +53,7 @@ interface ScreenProps {
   context?: ReactNode;
   /** Sticky primary action area (ActionBar). */
   footer?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   scroll?: boolean;
   /** Immersive screens hide chrome (ux §3). */
   immersive?: boolean;

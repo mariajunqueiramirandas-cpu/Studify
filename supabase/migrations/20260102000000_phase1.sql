@@ -740,7 +740,7 @@ end $$;
 -- ---- content_flags (TRU-02) ----------------------------------------
 alter table public.content_flags enable row level security;
 revoke all on public.content_flags from anon, authenticated;
-grant select, insert on public.content_flags to authenticated;
+grant select on public.content_flags to authenticated;
 grant insert (id, item_type, item_id, item_version, class_group_id, reporter_id, reason, comment)
   on public.content_flags to authenticated;   -- status and resolution are written by resolve_flag only
 create policy content_flags_select on public.content_flags for select to authenticated
@@ -764,7 +764,7 @@ create policy notes_select on public.notes for select to authenticated
 -- ---- note_highlights ----------------------------------------------
 alter table public.note_highlights enable row level security;
 revoke all on public.note_highlights from anon, authenticated;
-grant select, insert, update on public.note_highlights to authenticated;
+grant select on public.note_highlights to authenticated;
 grant insert (id, user_id, note_id, "start", "end", quote, color, orphaned) on public.note_highlights to authenticated;
 grant update ("start", "end", quote, color, orphaned, deleted_at) on public.note_highlights to authenticated;
 create policy note_highlights_select_own on public.note_highlights for select to authenticated
@@ -778,7 +778,7 @@ create policy note_highlights_update_own on public.note_highlights for update to
 -- ---- topic_reads (append-only) -------------------------------------
 alter table public.topic_reads enable row level security;
 revoke all on public.topic_reads from anon, authenticated;
-grant select, insert on public.topic_reads to authenticated;
+grant select on public.topic_reads to authenticated;
 grant insert (id, user_id, node_id, depth, read_at, seconds) on public.topic_reads to authenticated;
 create policy topic_reads_select_own on public.topic_reads for select to authenticated
   using (user_id = auth.uid());
@@ -795,7 +795,7 @@ create policy glossary_terms_select on public.glossary_terms for select to authe
 -- ---- glossary_term_overrides (per user) ----------------------------
 alter table public.glossary_term_overrides enable row level security;
 revoke all on public.glossary_term_overrides from anon, authenticated;
-grant select, insert, update on public.glossary_term_overrides to authenticated;
+grant select on public.glossary_term_overrides to authenticated;
 grant insert (user_id, term_id, definition, deleted_at) on public.glossary_term_overrides to authenticated;
 grant update (definition, deleted_at) on public.glossary_term_overrides to authenticated;
 create policy glossary_term_overrides_select_own on public.glossary_term_overrides for select to authenticated
@@ -818,7 +818,7 @@ create policy explanations_update_own_personal on public.explanations for update
 -- ---- explanation_feedback (append-only) ----------------------------
 alter table public.explanation_feedback enable row level security;
 revoke all on public.explanation_feedback from anon, authenticated;
-grant select, insert on public.explanation_feedback to authenticated;
+grant select on public.explanation_feedback to authenticated;
 grant insert (id, user_id, explanation_id, helpful) on public.explanation_feedback to authenticated;
 create policy explanation_feedback_select_own on public.explanation_feedback for select to authenticated
   using (user_id = auth.uid());
@@ -828,7 +828,7 @@ create policy explanation_feedback_insert_own on public.explanation_feedback for
 -- ---- card_overrides (per user; shared-card fixes go through TRU-02) ----
 alter table public.card_overrides enable row level security;
 revoke all on public.card_overrides from anon, authenticated;
-grant select, insert, update on public.card_overrides to authenticated;
+grant select on public.card_overrides to authenticated;
 grant insert (user_id, card_id, front, back, media, deleted_at) on public.card_overrides to authenticated;
 grant update (front, back, media, deleted_at) on public.card_overrides to authenticated;
 create policy card_overrides_select_own on public.card_overrides for select to authenticated
@@ -855,7 +855,7 @@ create policy item_revisions_select on public.item_revisions for select to authe
 -- ---- item_hides (per user, R7) -------------------------------------
 alter table public.item_hides enable row level security;
 revoke all on public.item_hides from anon, authenticated;
-grant select, insert, update on public.item_hides to authenticated;
+grant select on public.item_hides to authenticated;
 grant insert (user_id, item_type, item_id, reason) on public.item_hides to authenticated;
 grant update (reason, deleted_at) on public.item_hides to authenticated;
 create policy item_hides_select_own on public.item_hides for select to authenticated
@@ -882,7 +882,7 @@ create policy mastery_evidence_select_own on public.mastery_evidence for select 
 -- ---- essays (own; grading columns are written by the service) ------
 alter table public.essays enable row level security;
 revoke all on public.essays from anon, authenticated;
-grant select, insert, update on public.essays to authenticated;
+grant select on public.essays to authenticated;
 grant insert (id, user_id, kind, theme_id, question_id, text, input_mode, image_paths, version, parent_essay_id)
   on public.essays to authenticated;
 grant update (text, input_mode, image_paths, deleted_at) on public.essays to authenticated;
@@ -898,7 +898,7 @@ create policy essays_update_own_draft on public.essays for update to authenticat
 -- ---- quizzes (own; duel/battle/predicted/boss quizzes come from Edge Functions) ----
 alter table public.quizzes enable row level security;
 revoke all on public.quizzes from anon, authenticated;
-grant select, insert, update on public.quizzes to authenticated;
+grant select on public.quizzes to authenticated;
 grant insert (id, owner_id, subject_id, goal_id, exam_id, class_group_id, kind, mode, title, question_ids,
               time_limit_s, scope, config, seed) on public.quizzes to authenticated;
 grant update (title, time_limit_s, deleted_at) on public.quizzes to authenticated;
@@ -916,7 +916,7 @@ create policy quizzes_update_own on public.quizzes for update to authenticated
 -- ---- quiz_attempts (own; scoring is written by quiz-submit) --------
 alter table public.quiz_attempts enable row level security;
 revoke all on public.quiz_attempts from anon, authenticated;
-grant select, insert, update on public.quiz_attempts to authenticated;
+grant select on public.quiz_attempts to authenticated;
 grant insert (id, user_id, quiz_id, status, started_at, paused_seconds, device_id) on public.quiz_attempts to authenticated;
 grant update (status, finished_at, paused_seconds, deleted_at) on public.quiz_attempts to authenticated;
 create policy quiz_attempts_select_own on public.quiz_attempts for select to authenticated
@@ -934,7 +934,7 @@ create policy quiz_attempts_update_own on public.quiz_attempts for update to aut
 -- ---- attempt_answers (own, while the attempt is open) --------------
 alter table public.attempt_answers enable row level security;
 revoke all on public.attempt_answers from anon, authenticated;
-grant select, insert, update on public.attempt_answers to authenticated;
+grant select on public.attempt_answers to authenticated;
 grant insert (id, attempt_id, user_id, question_id, question_version, response, confidence, time_spent_ms,
               hints_used, solution_viewed, marked_for_review, self_override, input_mode, answered_at)
   on public.attempt_answers to authenticated;   -- correct, score and grading columns: service only
@@ -956,7 +956,7 @@ create policy attempt_answers_update_own on public.attempt_answers for update to
 -- ---- mistakes (own) -----------------------------------------------
 alter table public.mistakes enable row level security;
 revoke all on public.mistakes from anon, authenticated;
-grant select, insert, update on public.mistakes to authenticated;
+grant select on public.mistakes to authenticated;
 grant insert (id, user_id, question_id, attempt_answer_id, subject_id, node_id, cause, suggested_cause,
               cause_source, user_note) on public.mistakes to authenticated;
 grant update (cause, cause_source, user_note, next_retry_at, retry_step, success_days, resolved_at, deleted_at)
@@ -973,7 +973,7 @@ create policy mistakes_update_own on public.mistakes for update to authenticated
 -- ---- exam_scope_items / exam_scope_nodes (own, via the parent exam) --
 alter table public.exam_scope_items enable row level security;
 revoke all on public.exam_scope_items from anon, authenticated;
-grant select, insert, update on public.exam_scope_items to authenticated;
+grant select on public.exam_scope_items to authenticated;
 grant insert (id, exam_id, raw_text, position, status, placeholder_node_id, source_document_id)
   on public.exam_scope_items to authenticated;
 grant update (raw_text, position, status, placeholder_node_id, source_document_id, deleted_at)
@@ -988,7 +988,7 @@ create policy exam_scope_items_update on public.exam_scope_items for update to a
 
 alter table public.exam_scope_nodes enable row level security;
 revoke all on public.exam_scope_nodes from anon, authenticated;
-grant select, insert, update on public.exam_scope_nodes to authenticated;
+grant select on public.exam_scope_nodes to authenticated;
 grant insert (exam_id, node_id, scope_item_id, source, confidence, confirmed) on public.exam_scope_nodes to authenticated;
 grant update (scope_item_id, source, confidence, confirmed, deleted_at) on public.exam_scope_nodes to authenticated;
 create policy exam_scope_nodes_select on public.exam_scope_nodes for select to authenticated
@@ -1001,7 +1001,7 @@ create policy exam_scope_nodes_update on public.exam_scope_nodes for update to a
 -- ---- grading_rules (own) -------------------------------------------
 alter table public.grading_rules enable row level security;
 revoke all on public.grading_rules from anon, authenticated;
-grant select, insert, update on public.grading_rules to authenticated;
+grant select on public.grading_rules to authenticated;
 grant insert (id, owner_profile_id, subject_id, school_year, formula, preset_key, template_class_group_id)
   on public.grading_rules to authenticated;
 grant update (subject_id, school_year, formula, preset_key, template_class_group_id, deleted_at)
@@ -1018,7 +1018,7 @@ create policy grading_rules_update_own on public.grading_rules for update to aut
 -- ---- grade_components (own) ----------------------------------------
 alter table public.grade_components enable row level security;
 revoke all on public.grade_components from anon, authenticated;
-grant select, insert, update on public.grade_components to authenticated;
+grant select on public.grade_components to authenticated;
 grant insert (id, user_id, subject_id, school_year, term_index, name, kind, weight, max_points, grade, exam_id, position)
   on public.grade_components to authenticated;
 grant update (school_year, term_index, name, kind, weight, max_points, grade, exam_id, position, deleted_at)
@@ -1034,7 +1034,7 @@ create policy grade_components_update_own on public.grade_components for update 
 -- ---- study_sessions (own; client-generated ids) --------------------
 alter table public.study_sessions enable row level security;
 revoke all on public.study_sessions from anon, authenticated;
-grant select, insert, update on public.study_sessions to authenticated;
+grant select on public.study_sessions to authenticated;
 grant insert (id, user_id, kind, plan_item_id, goal_id, started_at, ended_at, active_minutes, activities,
               planned_focus_minutes, cycles_planned, cycles_done, interruptions, blocked_attempts, dnd_used)
   on public.study_sessions to authenticated;
@@ -1051,7 +1051,7 @@ create policy study_sessions_update_own on public.study_sessions for update to a
 -- ---- availability_exceptions (own; desperate rows are written by RPC only) ----
 alter table public.availability_exceptions enable row level security;
 revoke all on public.availability_exceptions from anon, authenticated;
-grant select, insert, update on public.availability_exceptions to authenticated;
+grant select on public.availability_exceptions to authenticated;
 grant insert (user_id, local_date, minutes, source, deleted_at) on public.availability_exceptions to authenticated;
 grant update (minutes, deleted_at) on public.availability_exceptions to authenticated;
 create policy availability_exceptions_select_own on public.availability_exceptions for select to authenticated
@@ -1093,7 +1093,7 @@ create policy topic_predictions_select on public.topic_predictions for select to
 -- ---- exam_outcome_topics (own) --------------------------------------
 alter table public.exam_outcome_topics enable row level security;
 revoke all on public.exam_outcome_topics from anon, authenticated;
-grant select, insert, update on public.exam_outcome_topics to authenticated;
+grant select on public.exam_outcome_topics to authenticated;
 grant insert (exam_id, user_id, node_id) on public.exam_outcome_topics to authenticated;
 grant update (deleted_at) on public.exam_outcome_topics to authenticated;
 create policy exam_outcome_topics_select_own on public.exam_outcome_topics for select to authenticated
@@ -1106,7 +1106,7 @@ create policy exam_outcome_topics_update_own on public.exam_outcome_topics for u
 -- ---- tutor_threads (own; metadata sync) -----------------------------
 alter table public.tutor_threads enable row level security;
 revoke all on public.tutor_threads from anon, authenticated;
-grant select, insert, update on public.tutor_threads to authenticated;
+grant select on public.tutor_threads to authenticated;
 grant insert (id, user_id, scope_type, subject_id, goal_id, node_id, passage, mode, title, context_pages, state,
               continued_from_thread_id) on public.tutor_threads to authenticated;
 grant update (title, mode, state, context_pages, archived_at, deleted_at) on public.tutor_threads to authenticated;
@@ -1126,7 +1126,7 @@ create policy tutor_threads_update_own on public.tutor_threads for update to aut
 -- ---- tutor_messages (Edge Functions write both turns; the user rates them) ----
 alter table public.tutor_messages enable row level security;
 revoke all on public.tutor_messages from anon, authenticated;
-grant select, update on public.tutor_messages to authenticated;
+grant select on public.tutor_messages to authenticated;
 grant update (feedback, feedback_reason) on public.tutor_messages to authenticated;
 create policy tutor_messages_select_own on public.tutor_messages for select to authenticated
   using (user_id = auth.uid());

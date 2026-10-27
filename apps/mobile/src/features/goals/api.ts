@@ -150,7 +150,7 @@ export async function createGoal(userId: string, input: { name: string; start_da
   return id;
 }
 
-export async function updateGoal(goalId: string, patch: Partial<Pick<Goal, 'name' | 'start_date' | 'end_date' | 'status' | 'term_index'>>) {
+export async function updateGoal(goalId: string, patch: Partial<Pick<Goal, 'name' | 'start_date' | 'end_date' | 'status' | 'term_index' | 'settings'>>) {
   const { error } = await supabase.from('goals').update(patch).eq('id', goalId);
   if (error) throw error;
 }

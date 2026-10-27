@@ -1,0 +1,78 @@
+// Topic content jobs: the S2 concept wave, the S3 prerequisites call, the S4 content wave, and a per-topic
+// regeneration (ING-04, LRN-01.12). Each submits a Batch wave; results are collected by batch.poll.
+import { z } from 'zod';
+import type { JobDefinition } from '../framework/types.ts';
+import { parsePayload } from '../framework/errors.ts';
+import { supabaseStore } from '../ingest/store.ts';
+import { runPrereqJob, runRegenerate, runTopicContent } from '../ingest/pipeline.ts';
+
+const uuid = z.uuid();
+const optionalUuid = uuid.nullable().default(null);
+const aiJobId = uuid.nullable().optional().transform((v) => v ?? null);
+
+const TopicContentPayload = z.object({
+  stage: z.enum(['S2', 'S4']),
+  subject_id: uuid,
+  document_id: optionalUuid,
+  user_id: optionalUuid,
+  node_ids: z.array(uuid).min(1).max(300),
+  kinds: z.array(z.enum(['concepts', 'notes', 'glossary', 'cards', 'questions', 'feed'])).default([]),
+  force: z.boolean().default(false),
+  ai_job_id: aiJobId,
+});
+
+const PrereqPayload = z.object({
+  subject_id: uuid,
+  document_id: optionalUuid,
+  user_id: optionalUuid,
+  ai_job_id: aiJobId,
+});
+
+const RegeneratePayload = z.object({
+  node_id: uuid,
+  kinds: z.array(z.enum(['notes', 'glossary', 'cards', 'questions', 'feed'])).default([]),
+  user_id: optionalUuid,
+});
+
+export const jobs: JobDefinition<any>[] = [
+  {
+    name: 'ingest.topic_content',
+    retryLimit: 2,
+    expireInSeconds: 3600,
+    handler: async (ctx, data) => {
+      const p = parsePayload(TopicContentPayload, data, 'ingest.topic_content');
+      await runTopicContent(ctx, supabaseStore(ctx.supabase), {
+        stage: p.stage,
+        subjectId: p.subject_id,
+        documentId: p.document_id,
+        userId: p.user_id,
+        nodeIds: p.node_ids,
+        kinds: p.kinds,
+        force: p.force,
+        aiJobId: p.ai_job_id,
+      });
+    },
+  },
+  {
+    name: 'ingest.prerequisites',
+    retryLimit: 2,
+    expireInSeconds: 1800,
+    handler: async (ctx, data) => {
+      const p = parsePayload(PrereqPayload, data, 'ingest.prerequisites');
+      await runPrereqJob(ctx, {
+        subjectId: p.subject_id,
+        documentId: p.document_id,
+        userId: p.user_id,
+        aiJobId: p.ai_job_id,
+      });
+    },
+  },
+  {
+    name: 'content.regenerate_topic',
+    retryLimit: 2,
+    handler: async (ctx, data) => {
+      const p = parsePayload(RegeneratePayload, data, 'content.regenerate_topic');
+      await runRegenerate(ctx, { nodeId: p.node_id, kinds: p.kinds, userId: p.user_id });
+    },
+  },
+];

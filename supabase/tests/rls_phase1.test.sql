@@ -173,7 +173,7 @@ select is(
         'study_sessions','availability_exceptions','desperate_modes','readiness_snapshots','teacher_profiles',
         'topic_predictions','exam_outcome_topics','tutor_threads','tutor_messages','join_attempts'])
       and c.relrowsecurity),
-  34, 'all 34 Phase 1 tables have row level security enabled');
+  33, 'all 33 Phase 1 tables have row level security enabled');
 
 -- =====================================================================
 -- 1. notes and highlights (LRN-01): members read the Turma's notes, nobody but the service writes them
@@ -349,3 +349,297 @@ select test_helpers.check_err('alice cannot write an essay for bob', 'authentica
   $$insert into public.essays (user_id, kind) values ('22222222-2222-4222-8222-222222222222', 'school_answer')$$);
 select test_helpers.check_rows('bob reads no essays of alice', 'authenticated', pg_temp.u('bob'),
   $$select id from public.essays$$, 0);
+
+-- =====================================================================
+-- 10. quizzes, attempts, answers, mistakes (PRA-01…04)
+-- =====================================================================
+select test_helpers.check_rows('alice reads her quiz', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.quizzes$$, 1);
+select test_helpers.check_rows('bob reads only his quiz', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.quizzes$$, 1);
+select test_helpers.check_err('alice cannot create a quiz owned by bob', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.quizzes (owner_id, kind) values ('22222222-2222-4222-8222-222222222222', 'practice')$$);
+select test_helpers.check_err('clients cannot create predicted tests (Edge only)', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.quizzes (owner_id, kind) values ('11111111-1111-4111-8111-111111111111', 'predicted_test')$$);
+select test_helpers.check_rows('alice starts an attempt on her practice quiz', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.quiz_attempts (id, user_id, quiz_id, status, started_at, device_id) values ('e6000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'a8000000-0000-4000-8000-000000000001', 'in_progress', now(), 'dev-a2')$$, 1);
+select test_helpers.check_err('alice cannot start an attempt on bob quiz', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.quiz_attempts (user_id, quiz_id, status, started_at, device_id) values ('11111111-1111-4111-8111-111111111111', 'a8000000-0000-4000-8000-000000000002', 'in_progress', now(), 'dev-a')$$);
+select test_helpers.check_err('alice cannot submit an attempt directly (quiz-submit scores it)', 'authenticated', pg_temp.u('alice'),
+  $$update public.quiz_attempts set status = 'submitted' where id = 'a9000000-0000-4000-8000-000000000001'$$);
+select test_helpers.check_rows('alice abandons her open attempt', 'authenticated', pg_temp.u('alice'),
+  $$update public.quiz_attempts set status = 'abandoned' where id = 'e6000000-0000-4000-8000-000000000001'$$, 1);
+select test_helpers.check_rows('bob reads no attempts of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.quiz_attempts where user_id = '11111111-1111-4111-8111-111111111111'$$, 0);
+select test_helpers.check_rows('alice answers in her open attempt', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.attempt_answers (id, attempt_id, user_id, question_id, question_version, response, confidence, time_spent_ms, answered_at) values ('e7000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'b1000000-0000-4000-8000-000000000001', 1, '{"choice":"c"}', 2, 1200, now())$$, 1);
+select test_helpers.check_err('alice cannot answer in bob attempt', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.attempt_answers (attempt_id, user_id, question_id, question_version, answered_at) values ('a9000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'b1000000-0000-4000-8000-000000000001', 1, now())$$);
+select test_helpers.check_err('alice cannot mark her own answer correct', 'authenticated', pg_temp.u('alice'),
+  $$update public.attempt_answers set correct = true where id = 'aa000000-0000-4000-8000-000000000001'$$);
+select test_helpers.check_rows('bob reads no answers of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.attempt_answers where user_id = '11111111-1111-4111-8111-111111111111'$$, 0);
+select test_helpers.check_rows('alice reads her mistake', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.mistakes$$, 1);
+select test_helpers.check_rows('alice adds a note to her mistake', 'authenticated', pg_temp.u('alice'),
+  $$update public.mistakes set user_note = 'Confundi as organelas' where id = 'ab000000-0000-4000-8000-000000000001'$$, 1);
+select test_helpers.check_rows('bob reads no mistakes of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.mistakes$$, 0);
+select test_helpers.check_scalar('calibration_stats is a security invoker view', 'authenticated', pg_temp.u('alice'),
+  $$(select count(*) from pg_class c where c.relname = 'calibration_stats' and c.reloptions @> array['security_invoker=true'])$$, '1');
+select test_helpers.check_scalar('alice sees her calibration row (confidence 3, wrong)', 'authenticated', pg_temp.u('alice'),
+  $$(select n || ':' || n_correct from public.calibration_stats where confidence = 3)$$, '1:0');
+select test_helpers.check_scalar('bob sees no calibration rows of alice', 'authenticated', pg_temp.u('bob'),
+  $$(select count(*) from public.calibration_stats where user_id = '11111111-1111-4111-8111-111111111111')$$, '0');
+
+-- =====================================================================
+-- 11. goals: scope, grading, study sessions, availability (GOL-03, GOL-04, GOL-05, GOL-06)
+-- =====================================================================
+select test_helpers.check_rows('alice adds a scope item to her exam', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.exam_scope_items (id, exam_id, raw_text) values ('e8000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'Celulas')$$, 1);
+select test_helpers.check_err('bob cannot add a scope item to alice exam', 'authenticated', pg_temp.u('bob'),
+  $$insert into public.exam_scope_items (exam_id, raw_text) values ('a2000000-0000-4000-8000-000000000001', 'x')$$);
+select test_helpers.check_rows('bob reads no scope items of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.exam_scope_items$$, 0);
+select test_helpers.check_rows('alice scopes her exam to a topic of her subject', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.exam_scope_nodes (exam_id, node_id, source, confirmed) values ('a2000000-0000-4000-8000-000000000001', 'a7000000-0000-4000-8000-000000000002', 'user', true)$$, 1);
+select test_helpers.check_rows('alice reads her grading rule', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.grading_rules$$, 1);
+select test_helpers.check_err('bob cannot write a grading rule for alice', 'authenticated', pg_temp.u('bob'),
+  $$insert into public.grading_rules (owner_profile_id, school_year, formula) values ('11111111-1111-4111-8111-111111111111', 3, '{}')$$);
+select test_helpers.check_rows('alice reads her grade components', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.grade_components$$, 3);
+select test_helpers.check_rows('bob reads no grades of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.grade_components$$, 0);
+select test_helpers.check_rows('alice starts a study session (client id)', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.study_sessions (id, user_id, kind, started_at, active_minutes) values ('e9000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'review', now(), 12)$$, 1);
+select test_helpers.check_err('a study session kind is limited to R17', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.study_sessions (user_id, kind, started_at) values ('11111111-1111-4111-8111-111111111111', 'gaming', now())$$);
+select test_helpers.check_rows('alice reduces the minutes of a day (own)', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.availability_exceptions (user_id, local_date, minutes, source) values ('11111111-1111-4111-8111-111111111111', '2026-06-01', 0, 'user')$$, 1);
+select test_helpers.check_err('clients cannot write desperate availability rows', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.availability_exceptions (user_id, local_date, minutes, source) values ('11111111-1111-4111-8111-111111111111', '2026-06-02', 60, 'desperate')$$);
+select test_helpers.check_rows('alice reads her readiness', 'authenticated', pg_temp.u('alice'),
+  $$select exam_id from public.readiness_snapshots$$, 1);
+select test_helpers.check_rows('bob reads no readiness of alice', 'authenticated', pg_temp.u('bob'),
+  $$select exam_id from public.readiness_snapshots$$, 0);
+select test_helpers.check_err('clients cannot write readiness', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.readiness_snapshots (user_id, exam_id, local_date, readiness) values ('11111111-1111-4111-8111-111111111111', 'a2000000-0000-4000-8000-000000000001', '2026-06-01', 0.1)$$);
+select test_helpers.check_rows('members read the Turma teacher profile', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.teacher_profiles$$, 1);
+select test_helpers.check_rows('dave reads no teacher profile', 'authenticated', pg_temp.u('dave'),
+  $$select id from public.teacher_profiles$$, 0);
+select test_helpers.check_rows('alice reads the prediction of her exam', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.topic_predictions$$, 1);
+select test_helpers.check_rows('bob reads no predictions', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.topic_predictions$$, 0);
+select test_helpers.check_rows('alice records an outcome topic of her exam', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.exam_outcome_topics (exam_id, user_id, node_id) values ('a2000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'a7000000-0000-4000-8000-000000000002')$$, 1);
+select test_helpers.check_rows('bob reads no outcome topics', 'authenticated', pg_temp.u('bob'),
+  $$select exam_id from public.exam_outcome_topics$$, 0);
+
+-- =====================================================================
+-- 12. tutor (TUT-01…06): threads are own; the service writes the messages
+-- =====================================================================
+select test_helpers.check_rows('alice reads her thread', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.tutor_threads$$, 1);
+select test_helpers.check_rows('bob reads no tutor threads of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.tutor_threads$$, 0);
+select test_helpers.check_rows('alice starts a thread on her subject', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.tutor_threads (id, user_id, scope_type, subject_id, title) values ('ea000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'subject', 'a0000000-0000-4000-8000-000000000001', 'Nova')$$, 1);
+select test_helpers.check_err('a thread scope must name its column (topic needs a node)', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.tutor_threads (user_id, scope_type, title) values ('11111111-1111-4111-8111-111111111111', 'topic', 'Sem topico')$$);
+select test_helpers.check_err('alice cannot open a thread for bob', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.tutor_threads (user_id, scope_type, subject_id) values ('22222222-2222-4222-8222-222222222222', 'subject', 'a0000000-0000-4000-8000-000000000001')$$);
+select test_helpers.check_rows('alice archives a thread (never a delete)', 'authenticated', pg_temp.u('alice'),
+  $$update public.tutor_threads set archived_at = now() where id = 'ea000000-0000-4000-8000-000000000002'$$, 1);
+select test_helpers.check_rows('alice reads her tutor message', 'authenticated', pg_temp.u('alice'),
+  $$select id from public.tutor_messages$$, 1);
+select test_helpers.check_rows('alice rates a tutor answer', 'authenticated', pg_temp.u('alice'),
+  $$update public.tutor_messages set feedback = 1 where id = 'af000000-0000-4000-8000-000000000001'$$, 1);
+select test_helpers.check_err('alice cannot rewrite a tutor answer', 'authenticated', pg_temp.u('alice'),
+  $$update public.tutor_messages set content = 'x' where id = 'af000000-0000-4000-8000-000000000001'$$);
+select test_helpers.check_err('clients cannot insert tutor messages (Edge only)', 'authenticated', pg_temp.u('alice'),
+  $$insert into public.tutor_messages (thread_id, user_id, role, mode) values ('ae000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'user', 'answer')$$);
+select test_helpers.check_rows('bob reads no tutor messages of alice', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.tutor_messages$$, 0);
+
+-- =====================================================================
+-- 13. realtime (data-model §8.1): notes and essays are published
+-- =====================================================================
+select is(
+  (select count(*)::int from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename in ('notes','essays')),
+  2, 'notes and essays are in the supabase_realtime publication');
+
+-- =====================================================================
+-- 14. edit_outline: merge, split, restore and their undo (ING-04.3, .4, .5)
+-- =====================================================================
+select test_helpers.check_err('bob (member) cannot restructure the Turma map', 'authenticated', pg_temp.u('bob'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"merge","node_ids":["40000000-0000-4000-8000-000000000002","40000000-0000-4000-8000-000000000004"]}]'::jsonb)$$);
+select test_helpers.check_err('merge only joins topics (a unit is refused)', 'authenticated', pg_temp.u('carol'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"merge","node_ids":["40000000-0000-4000-8000-000000000001","40000000-0000-4000-8000-000000000004"]}]'::jsonb)$$);
+select test_helpers.check_ok('carol merges two topics (keeps the first id)', 'authenticated', pg_temp.u('carol'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"merge","node_ids":["40000000-0000-4000-8000-000000000002","40000000-0000-4000-8000-000000000004"]}]'::jsonb)$$);
+select is((select count(*)::int from public.knowledge_nodes where id = '40000000-0000-4000-8000-000000000004' and deleted_at is not null),
+  1, 'the merged topic is a tombstone');
+select is((select count(*)::int from public.node_sources where node_id = '40000000-0000-4000-8000-000000000002' and deleted_at is null),
+  2, 'the kept topic now has the union of both topics sources');
+select is((select status from public.notes where id = '41000000-0000-4000-8000-000000000001'),
+  'superseded', 'the notes of the merged topics are archived for regeneration');
+select test_helpers.check_ok('carol undoes the merge within 30 days', 'authenticated', pg_temp.u('carol'),
+  $$select public.undo_outline_event((select id from public.node_events where action = 'merge' order by created_at desc limit 1))$$);
+select is((select count(*)::int from public.knowledge_nodes where id = '40000000-0000-4000-8000-000000000004' and deleted_at is null),
+  1, 'undo restores the merged topic');
+select is((select count(*)::int from public.node_sources where node_id = '40000000-0000-4000-8000-000000000002' and deleted_at is null),
+  1, 'undo gives its sources back');
+select is((select status from public.notes where id = '41000000-0000-4000-8000-000000000001'),
+  'ready', 'undo restores the note status');
+
+select test_helpers.check_ok('carol splits the topic before page 3', 'authenticated', pg_temp.u('carol'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"split","node_id":"40000000-0000-4000-8000-000000000002","page":3}]'::jsonb)$$);
+select is((select count(*)::int from public.node_sources where page_start = 3 and page_end = 4 and deleted_at is null),
+  1, 'the second part gets the straddling source from page 3');
+select is((select node_id = '40000000-0000-4000-8000-000000000002' from public.cards where id = 'c0000000-0000-4000-8000-000000000004'),
+  false, 'the item whose first page is 4 moves to the new topic');
+select is((select parent_id from public.knowledge_nodes where id = '40000000-0000-4000-8000-000000000003'),
+  '40000000-0000-4000-8000-000000000002'::uuid, 'a concept without sources stays with its topic');
+select test_helpers.check_ok('carol undoes the split', 'authenticated', pg_temp.u('carol'),
+  $$select public.undo_outline_event((select id from public.node_events where action = 'split' order by created_at desc limit 1))$$);
+select is((select node_id from public.cards where id = 'c0000000-0000-4000-8000-000000000004'),
+  '40000000-0000-4000-8000-000000000002'::uuid, 'undo moves the item back');
+select is((select page_end from public.node_sources where node_id = '40000000-0000-4000-8000-000000000002' and deleted_at is null),
+  4, 'undo restores the shortened source');
+
+select test_helpers.check_ok('carol deletes the second topic (soft, with its subtree)', 'authenticated', pg_temp.u('carol'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"delete","node_id":"40000000-0000-4000-8000-000000000004"}]'::jsonb)$$);
+select test_helpers.check_ok('carol restores it from the deleted items', 'authenticated', pg_temp.u('carol'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"restore","node_id":"40000000-0000-4000-8000-000000000004"}]'::jsonb)$$);
+select is((select count(*)::int from public.knowledge_nodes where id = '40000000-0000-4000-8000-000000000004' and deleted_at is null),
+  1, 'restore brings the topic back');
+select test_helpers.check_err('a live node cannot be restored', 'authenticated', pg_temp.u('carol'),
+  $$select public.edit_outline('50000000-0000-4000-8000-000000000001', '[{"op":"restore","node_id":"40000000-0000-4000-8000-000000000004"}]'::jsonb)$$);
+
+-- =====================================================================
+-- 15. handle_report: remove_content (SP-09)
+-- =====================================================================
+select test_helpers.check_err('remove_content needs content in the report', 'authenticated', pg_temp.u('carol'),
+  $$select public.handle_report('f2000000-0000-4000-8000-000000000002', 'remove_content')$$);
+select test_helpers.check_err('remove_content cannot reach personal content outside the Turma', 'authenticated', pg_temp.u('carol'),
+  $$select public.handle_report('f2000000-0000-4000-8000-000000000003', 'remove_content')$$);
+select test_helpers.check_err('bob cannot handle reports', 'authenticated', pg_temp.u('bob'),
+  $$select public.handle_report('f2000000-0000-4000-8000-000000000001', 'remove_content')$$);
+select test_helpers.check_ok('carol removes the reported card', 'authenticated', pg_temp.u('carol'),
+  $$select public.handle_report('f2000000-0000-4000-8000-000000000001', 'remove_content')$$);
+select test_helpers.check_rows('bob cannot see the removed card', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.cards where id = 'c0000000-0000-4000-8000-000000000001'$$, 0);
+select test_helpers.check_rows('carol (moderator) still sees the removed card', 'authenticated', pg_temp.u('carol'),
+  $$select id from public.cards where id = 'c0000000-0000-4000-8000-000000000001'$$, 1);
+select is((select status from public.user_reports where id = 'f2000000-0000-4000-8000-000000000001'),
+  'actioned', 'the report is marked actioned');
+select is((select count(*)::int from private.moderation_actions where action = 'remove' and report_id = 'f2000000-0000-4000-8000-000000000001'),
+  1, 'the removal is logged in the moderation trail');
+
+-- =====================================================================
+-- 16. join_class_group rate limit (SOC-01.14): 5 failed codes per hour
+-- =====================================================================
+select test_helpers.check_scalar('frank joins Turma A with the code and waits for approval', 'authenticated', pg_temp.u('frank'),
+  $$public.join_class_group('ABCD2345')->>'status'$$, 'pending');
+select test_helpers.check_ok('the service records 5 failed codes for frank', 'service_role', null,
+  $$select public.record_join_failure('66666666-6666-4666-8666-666666666666') from generate_series(1, 5)$$);
+select test_helpers.check_err('clients cannot record join failures', 'authenticated', pg_temp.u('frank'),
+  $$select public.record_join_failure('66666666-6666-4666-8666-666666666666')$$);
+select test_helpers.check_err('after 5 failed codes in an hour joining is rate limited', 'authenticated', pg_temp.u('frank'),
+  $$select public.join_class_group('ABCD2345')$$);
+
+-- =====================================================================
+-- 18. Modo Desespero (GOL-12): start, groups, end
+-- =====================================================================
+select test_helpers.check_err('a test 30 days away is not in the 7-day window', 'authenticated', pg_temp.u('alice'),
+  $$select public.start_desperate_mode('a1000000-0000-4000-8000-000000000001', '{a2000000-0000-4000-8000-000000000003}', 120)$$);
+select test_helpers.check_err('minutes per day must be 60-240', 'authenticated', pg_temp.u('alice'),
+  $$select public.start_desperate_mode('a1000000-0000-4000-8000-000000000001', '{a2000000-0000-4000-8000-000000000001}', 30)$$);
+select test_helpers.check_ok('alice starts the mode for her two near tests', 'authenticated', pg_temp.u('alice'),
+  $$select public.start_desperate_mode('a1000000-0000-4000-8000-000000000001', '{a2000000-0000-4000-8000-000000000001,a2000000-0000-4000-8000-000000000002}', 120)$$);
+select is((select count(*)::int from public.availability_exceptions where user_id = '11111111-1111-4111-8111-111111111111' and source = 'desperate' and deleted_at is null),
+  6, 'the chosen time covers each day up to the last test (today to +5)');
+select test_helpers.check_err('only one active mode per goal', 'authenticated', pg_temp.u('alice'),
+  $$select public.start_desperate_mode('a1000000-0000-4000-8000-000000000001', '{a2000000-0000-4000-8000-000000000001}', 120)$$);
+select test_helpers.check_err('bob cannot start a mode on the goal of alice', 'authenticated', pg_temp.u('bob'),
+  $$select public.start_desperate_mode('a1000000-0000-4000-8000-000000000001', '{a2000000-0000-4000-8000-000000000001}', 120)$$);
+select test_helpers.check_ok('alice moves a topic of her subject to Foco total', 'authenticated', pg_temp.u('alice'),
+  $$select public.set_desperate_groups((select id from public.desperate_modes where status = 'active'), '[{"node_id":"a7000000-0000-4000-8000-000000000002","group":"focus"}]'::jsonb)$$);
+select test_helpers.check_scalar('the topic group is stored', 'authenticated', pg_temp.u('alice'),
+  $$(select topic_groups->>'a7000000-0000-4000-8000-000000000002' from public.desperate_modes where status = 'active')$$, 'focus');
+select test_helpers.check_err('a group must be focus, basic or out', 'authenticated', pg_temp.u('alice'),
+  $$select public.set_desperate_groups((select id from public.desperate_modes where status = 'active'), '[{"node_id":"a7000000-0000-4000-8000-000000000002","group":"maybe"}]'::jsonb)$$);
+select test_helpers.check_err('a topic outside the exams subjects is refused', 'authenticated', pg_temp.u('alice'),
+  $$select public.set_desperate_groups((select id from public.desperate_modes where status = 'active'), '[{"node_id":"40000000-0000-4000-8000-000000000002","group":"focus"}]'::jsonb)$$);
+select test_helpers.check_ok('alice ends the mode', 'authenticated', pg_temp.u('alice'),
+  $$select public.end_desperate_mode((select id from public.desperate_modes where status = 'active'))$$);
+select is((select count(*)::int from public.availability_exceptions where user_id = '11111111-1111-4111-8111-111111111111' and source = 'desperate' and deleted_at is null),
+  0, 'ending the mode removes its future availability rows');
+select test_helpers.check_err('a mode cannot be ended twice', 'authenticated', pg_temp.u('alice'),
+  $$select public.end_desperate_mode((select id from public.desperate_modes limit 1))$$);
+
+-- =====================================================================
+-- 17. confirm_exam_scope (GOL-03) and log_exam_grade (GOL-06)
+-- =====================================================================
+select test_helpers.check_ok('alice confirms the unit of her exam', 'authenticated', pg_temp.u('alice'),
+  $$select public.confirm_exam_scope('a2000000-0000-4000-8000-000000000001', '{a7000000-0000-4000-8000-000000000001}', false)$$);
+select is((select count(*)::int from public.exam_scope_nodes where exam_id = 'a2000000-0000-4000-8000-000000000001' and deleted_at is null and confirmed),
+  1, 'the confirmed scope of the exam is the chosen unit');
+select test_helpers.check_ok('nodes of another subject are left out of the scope', 'authenticated', pg_temp.u('alice'),
+  $$select public.confirm_exam_scope('a2000000-0000-4000-8000-000000000001', '{40000000-0000-4000-8000-000000000002}', false)$$);
+select is((select count(*)::int from public.exam_scope_nodes where exam_id = 'a2000000-0000-4000-8000-000000000001' and deleted_at is null),
+  0, 'the replaced scope has no live row left from the other subject');
+select test_helpers.check_ok('alice confirms the whole subject for her second exam (default_all)', 'authenticated', pg_temp.u('alice'),
+  $$select public.confirm_exam_scope('a2000000-0000-4000-8000-000000000002', '{}', true)$$);
+select is((select source from public.exam_scope_nodes where exam_id = 'a2000000-0000-4000-8000-000000000002' and deleted_at is null),
+  'default_all', 'default_all stores the subject topics');
+select is((select scope_status from public.exams where id = 'a2000000-0000-4000-8000-000000000002'),
+  'confirmed', 'the exam scope is confirmed');
+select test_helpers.check_err('bob cannot confirm alice exam', 'authenticated', pg_temp.u('bob'),
+  $$select public.confirm_exam_scope('a2000000-0000-4000-8000-000000000001', '{}', true)$$);
+
+select test_helpers.check_scalar('logging the grade of P1 says the same grade needed on P2 (weighted mean)', 'authenticated', pg_temp.u('alice'),
+  $$(public.log_exam_grade('a2000000-0000-4000-8000-000000000001', 5, 10)->'required'->0->>'needed')::numeric = 6$$, 'true');
+select test_helpers.check_scalar('the pending component is reported for its exam', 'authenticated', pg_temp.u('alice'),
+  $$(public.log_exam_grade('a2000000-0000-4000-8000-000000000001', 5, 10)->'required'->0->>'exam_id')$$, 'a2000000-0000-4000-8000-000000000002');
+select is((select status from public.exams where id = 'a2000000-0000-4000-8000-000000000001'),
+  'done', 'a logged exam is marked done with its grade');
+select test_helpers.check_err('a grade above the maximum is refused', 'authenticated', pg_temp.u('alice'),
+  $$select public.log_exam_grade('a2000000-0000-4000-8000-000000000001', 12, 10)$$);
+select test_helpers.check_err('bob cannot log a grade of alice', 'authenticated', pg_temp.u('bob'),
+  $$select public.log_exam_grade('a2000000-0000-4000-8000-000000000001', 5, 10)$$);
+
+-- =====================================================================
+-- 19. resolve_flag (TRU-02): moderators act inside their Turma, accepting applies the fix
+-- =====================================================================
+select test_helpers.check_err('bob cannot resolve a flag', 'authenticated', pg_temp.u('bob'),
+  $$select public.resolve_flag('b5000000-0000-4000-8000-000000000001', 'accept')$$);
+select test_helpers.check_err('dave cannot resolve a flag', 'authenticated', pg_temp.u('dave'),
+  $$select public.resolve_flag('b5000000-0000-4000-8000-000000000001', 'reject')$$);
+select test_helpers.check_ok('carol accepts a flag and applies the fix', 'authenticated', pg_temp.u('carol'),
+  $$select public.resolve_flag('b5000000-0000-4000-8000-000000000001', 'accept', '{"stem":"Quanto e 1+1? (corrigido)"}'::jsonb)$$);
+select is((select version from public.questions where id = 'b1000000-0000-4000-8000-000000000001'), 2,
+  'the fix bumps the question version');
+select is((select count(*)::int from public.item_revisions where item_id = 'b1000000-0000-4000-8000-000000000001' and version = 2),
+  1, 'the fix writes an item revision');
+select test_helpers.check_rows('bob (member) reads the revision of the question', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.item_revisions$$, 1);
+select test_helpers.check_err('a resolved flag cannot be resolved again', 'authenticated', pg_temp.u('carol'),
+  $$select public.resolve_flag('b5000000-0000-4000-8000-000000000001', 'reject')$$);
+select test_helpers.check_ok('carol removes the question (second flag)', 'authenticated', pg_temp.u('carol'),
+  $$select public.resolve_flag('b5000000-0000-4000-8000-000000000002', 'remove')$$);
+select test_helpers.check_rows('bob cannot see the removed question', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000001'$$, 0);
+select test_helpers.check_rows('carol (moderator) sees the removed question', 'authenticated', pg_temp.u('carol'),
+  $$select id from public.questions where id = 'b1000000-0000-4000-8000-000000000001'$$, 1);
+select is((select count(*)::int from private.moderation_actions where action = 'remove' and flag_id = 'b5000000-0000-4000-8000-000000000002'),
+  1, 'the removal of a flagged item is logged');
+select test_helpers.check_err('a note cannot be removed by a flag (no hidden state)', 'authenticated', pg_temp.u('carol'),
+  $$select public.resolve_flag('b5000000-0000-4000-8000-000000000003', 'remove')$$);
+
+select * from finish();
+rollback;

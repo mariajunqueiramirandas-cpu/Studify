@@ -13,13 +13,17 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { queryClient } from '../api/queryClient';
+import { queryClient, startQueryPersistence } from '../api/queryClient';
 import { Button, ErrorState, OverlayProvider, Text } from '../components';
 import { DatabaseProvider } from '../db/DatabaseProvider';
 import { startSync, useSyncStatus } from '../db/sync';
 import { SessionProvider, useSession } from '../features/auth/session';
 import { initSentry } from '../lib/sentry';
 import { setupNotificationChannels } from '../platform/notifications';
+import { attachNotificationActions, registerReviewCategories } from '../platform/notification-actions';
+import { refreshFeatureFlags } from '../lib/flags';
+import { useDb } from '../db/DatabaseProvider';
+import { Platform } from 'react-native';
 import { useUiStore } from '../stores/ui';
 import { t } from '../i18n';
 import { ThemeProvider, useTheme } from '../theme';
@@ -65,11 +69,22 @@ function AuthGate() {
     }
   }, [ready, session, profile, segments, router]);
 
+  const db = useDb();
   useEffect(() => {
     if (!session || !profile) return;
     void setupNotificationChannels();
-    return startSync();
-  }, [session, profile]);
+    void refreshFeatureFlags(db).catch(() => undefined);
+    const stopSync = startSync();
+    let detach: (() => void) | undefined;
+    if (Platform.OS === 'android') {
+      void registerReviewCategories();
+      detach = attachNotificationActions();
+    }
+    return () => {
+      stopSync();
+      detach?.();
+    };
+  }, [session, profile, db]);
 
   if (sync.updateRequired) return <UpdateRequired />;
   return null;
@@ -117,6 +132,7 @@ function Navigator() {
 }
 
 export default function RootLayout() {
+  useEffect(() => startQueryPersistence(), []);
   const [fontsLoaded] = useFonts({
     Nunito_600SemiBold,
     Nunito_700Bold,
