@@ -359,6 +359,14 @@ Placeholders use `{name}`. Markdown bold (`**…**`) is allowed in strings rende
 | `vespera.not_studied` | Não deu tempo de estudar esse — foca no básico. |
 | `vespera.sleep` | Dormir bem ajuda sua memória a fixar o que você estudou. Que tal parar às {time}? |
 | `exam.good_luck` | Boa prova! 🍀 |
+| `desperate.offer.title` | Prova em {n} dias? Bora pro Modo Desespero 😅 |
+| `desperate.offer.body` | Calma, dá pra fazer muita coisa. Eu foco no que mais vale ponto e monto um plano de ataque pra você. |
+| `desperate.diag.body` | Umas perguntas rápidas pra eu saber o que você já sabe. Sem nota, sem pressão. |
+| `desperate.coverage` | Com {hours} por dia, dá pra cobrir ~{pct}% do que deve cair. |
+| `desperate.groups` | Foco total · Só o básico · Fica de fora |
+| `desperate.enough` | Você já fez bastante hoje. Descansar também conta. |
+
+> **Modo Desespero tone.** The name is the student's own joke ("bateu o desespero"); everything inside the mode is calm and concrete. Never "você deixou pra última hora", never countdown alarms. Full string list in [spec 07 §5.3](../specs/07-goals-semana-de-provas.md#53-key-pt-br-strings).
 
 ### 4.10 Turma, duels and battles
 

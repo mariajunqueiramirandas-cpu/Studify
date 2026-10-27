@@ -176,6 +176,9 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 | S-OBJ-13 | Quanto preciso tirar? | Components, grades, required grade per test | GOL-06 | 1 | Dashboard, grade prompt |
 | S-OBJ-14 | Regras da escola | Grading-rule presets + "Personalizar" | GOL-06.1, GOL-06.7 | 1 | S-OBJ-13, wizard step 6 |
 | S-OBJ-15 | Modo Véspera | Guided night-before session (calm style) | GOL-07 | 1 | Notification, Hoje card |
+| S-OBJ-17 | Modo Desespero: oferta | Bottom sheet offering the mode when a test is ≤ 6 days away | GOL-12.1 | 1 | Wizard end, Hoje card, S-OBJ-04 |
+| S-OBJ-18 | Diagnóstico rápido | 5-min one-question-per-topic check (immersive) | GOL-12.3 | 1 | S-OBJ-17 |
+| S-OBJ-19 | Plano de ataque | Foco total / Só o básico / Fica de fora + coverage estimate; time presets | GOL-12.4–12.5 | 1 | S-OBJ-18, Hoje header |
 | S-OBJ-16 | Importar calendário de provas | Photo → extracted tests (draft) → confirm | ING-07 | 2 | Wizard step 3, S-OBJ-04 |
 
 ### 4.7 Turma (`S-TUR`)

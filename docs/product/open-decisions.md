@@ -46,6 +46,7 @@ Answer them in any order. When you decide, the answer gets recorded here and the
 | D-26 | Long **tutor threads**: server-side compaction, or start a new linked thread at a cap? | Cap and continue | [03-tutor](../specs/03-tutor.md) |
 | D-27 | **Quiet hours**: may students move them? | Yes, but under-18s keep at least 8 hours | [00-platform](../specs/00-platform.md), [13-motivation-wellbeing](../specs/13-motivation-wellbeing.md) |
 | D-46 | **Exam-day load**: halve study capacity on test days, or leave the day free after the test? | Halve capacity | [07](../specs/07-goals-semana-de-provas.md) |
+| D-48 | **Modo Desespero** generates Foco total topics on the standard API (faster, no batch discount) when material is still processing. OK to spend more for speed here? | Yes | [07](../specs/07-goals-semana-de-provas.md) GOL-12.8 |
 | D-47 | Does anyone in the class use a phone **without Google Play services** (some Huawei models)? The document scanner depends on it. | Assume everyone has Play services; a basic camera fallback exists | [11-camera-magica](../specs/11-camera-magica.md) |
 
 ## Turma (Phase 2)

@@ -161,6 +161,7 @@ Spec: [07-goals-semana-de-provas](../specs/07-goals-semana-de-provas.md)
 | GOL-09 | Calendar sync (Google Calendar) | 5 |
 | GOL-10 | Energy-aware scheduling (learns when you perform best) | 5 |
 | GOL-11 | Predicted grade with confidence range | 2 |
+| GOL-12 | Modo Desespero: when a test is less than a week away and little is done, a 5-min diagnostic and a "plano de ataque" focused on the topics worth the most points | 1 |
 
 ### 5.9 Turma / Together (SOC)
 

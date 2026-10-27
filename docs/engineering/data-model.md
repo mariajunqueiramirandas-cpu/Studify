@@ -914,7 +914,10 @@ Unique `(owner_profile_id, school_year, coalesce(subject_id, '00000000-0000-0000
 | `dnd_used` | bool | false | |
 
 #### `availability_exceptions` [sync] — GOL-04.3, GOL-09.2
-PK `(user_id, local_date)`; `minutes int` (0 = blocked), `source` (`user` · `calendar`).
+PK `(user_id, local_date)`; `minutes int` (0 = blocked), `source` (`user` · `calendar` · `desperate`).
+
+#### `desperate_modes` [sync] — GOL-12
+`id`, `user_id`, `goal_id`, `status` (`active` · `ended` · `cancelled`), `exam_ids uuid[]`, `minutes_per_day int` (60–240), `topic_groups jsonb` (`{node_id: 'focus' | 'basic' | 'out'}`), `user_moves jsonb` (topics moved by hand), `diagnostic_attempt_id uuid N` (a `quiz_attempts` row of a `practice` quiz with `mode = 'diagnostic'`), `started_at`, `ended_at N`. Partial unique index: one `active` row per `(user_id, goal_id)`. `plan_runs.trigger` gains `desperate_on` · `desperate_off`; `mastery_evidence.source` gains `diagnostic`.
 
 #### `readiness_snapshots` [svc] — GOL-08, GOL-11
 PK `(user_id, exam_id, local_date)`; `readiness real`, `readiness_proj real`, `pred_low`, `pred_mid`, `pred_high numeric N`, `evidence jsonb`.

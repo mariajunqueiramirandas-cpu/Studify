@@ -2,7 +2,7 @@
 
 | Status | Phase(s) | Features |
 |---|---|---|
-| Draft v1 | 0 (GOL-01 skeleton) · 1 (GOL-01…GOL-08) · 2 (GOL-11) · 5 (GOL-09, GOL-10) | GOL-01 … GOL-11 |
+| Draft v1 | 0 (GOL-01 skeleton) · 1 (GOL-01…GOL-08, GOL-12) · 2 (GOL-11) · 5 (GOL-09, GOL-10) | GOL-01 … GOL-12 |
 
 Related: [PRD](../product/PRD.md) · [Architecture](../engineering/architecture.md) · [04 — Flashcards & memory](04-flashcards-memory.md) (FSRS, exam-aware scheduling) · [05 — Practice & exams](05-practice-exams.md) (quizzes, simulados) · [08 — Prova Provável](08-prova-provavel.md) (topic weights) · [09 — ENEM mode](09-enem-mode.md) (ENEM goals) · [Learning engine](../engineering/learning-engine.md) (consolidates the algorithms in §8)
 
@@ -157,6 +157,27 @@ Phase 5 adds device **calendar sync** (GOL-09) and **energy-aware scheduling** (
 - **GOL-11.3** When the predicted upper bound is below the required grade (GOL-06), the dashboard shows a supportive alert with concrete actions ("Mais 20 min/dia em Física até quinta aumenta bastante sua chance").
 - **GOL-11.4** The prediction is labeled as an estimate; it is not shown to anyone else, including the Turma.
 
+### GOL-12 — Modo Desespero (Phase 1)
+
+For the student who opens Studify less than a week before a test with little done. It turns the remaining days into a focused "plano de ataque": a 5-minute diagnostic, an honest triage of what fits, and short sessions on the topics worth the most points. The tone stays calm; the name is playful, the content never shames.
+
+- **GOL-12.1 Offer.** Studify offers Modo Desespero (never forces it) when a scheduled test is **6 days away or less** (`D_e − today ≤ 6`) and preparation is low: scope coverage < 50%, readiness < 40%, or no study session yet for that test (§8.10.1). The offer appears at the end of the goal wizard, when a test is added or moved into the window, and as the first Hoje card. It is always available manually from **Detalhe da prova** for any test 6 days away or less. "Agora não" hides the offer for that test for 24 h.
+- **GOL-12.2 Coverage.** One Modo Desespero covers **every** scheduled test inside the 7-day window. Tests further out keep the normal planner with whatever capacity is left, and the student is told ("As provas depois de {data} ficam com o tempo que sobrar").
+- **GOL-12.3 Diagnóstico rápido.** An optional 5-minute check: one objective question per in-scope topic, highest topic weight first, max 12 (max 6 when the test is today or tomorrow). It estimates mastery so the triage doesn't assume zero. Results are mastery evidence (source `diagnostic`). Wrong answers are shown as "a revisar" and do **not** create Caderno de Erros entries. "Pular — começo do zero" skips it.
+- **GOL-12.4 Time.** Studify asks "Quanto tempo você tem por dia até a prova?" with presets **1h / 2h / 3h / 4h**. The answer overrides available minutes for each day until the last covered test. Planned study is capped at **4 h per day**; quiet hours and the véspera sleep stop time (GOL-07.6) are never violated, and nothing is planned after 23:00 even if quiet hours were moved.
+- **GOL-12.5 Plano de ataque.** After the diagnostic, Studify shows the triage up front (§8.10.2) in three groups: **Foco total**, **Só o básico** and **Fica de fora**, with an honest coverage estimate per test: "Com {h} por dia, dá pra cobrir ~{pct}% do que deve cair." The student can move a topic between groups with one tap; the plan and the estimate recompute instantly.
+- **GOL-12.6 Planner changes while active** (§8.10.3):
+  - Foco total topics get `learn_light` then `practice`. Practice may happen the **same day**, in a later session at least 2 h after learning.
+  - Só o básico topics get `learn_light` only (Resumo rápido + top 3 cards).
+  - Fica de fora topics get no units. Their Resumo rápido stays one tap away and appears in the véspera cheat sheet (GOL-07.3).
+  - One 20-min mini-simulado on `D − 2` when the test is 3 or more days away. Véspera (GOL-07) is unchanged.
+- **GOL-12.7 Sessions.** Hoje shows a "Modo Desespero · faltam {n} dias" header. Each session loops through Foco total topics: Resumo rápido (LRN-01 `tldr`) → up to 5 key cards → 5 questions → explanations for wrong answers (PRA-02). Blocks are 25 minutes with a 5-minute break prompt.
+- **GOL-12.8 Content first.** If material for an in-scope topic is still being generated, Foco total topics jump the job queue and use the **standard API instead of Batch**, so content arrives in minutes. This costs more per item (no batch discount) and counts against the normal budget (PLT-04). If the budget can't cover everything, Foco total topics are generated first and the rest waits.
+- **GOL-12.9 Signals used.** Prova Provável topic weights (PRA-09) and uploaded past tests are used when available. In-scope cards keep the exam overlay (MEM-02.5).
+- **GOL-12.10 Wellbeing.** No streak or XP pressure prompts while active, no all-nighter plans, and the burnout guard (WEL-03) applies. After 3 h of active study in a day, the session suggests stopping: "Você já fez bastante hoje. Descansar também conta."
+- **GOL-12.11 Exit.** Ends automatically after the last covered test, or when the student taps "Sair do Modo Desespero" (normal planning resumes with a replan). After the test, the grade prompt (GOL-06) appears as usual, plus one optional offer, at most once per goal: "Quer que eu te avise 2 semanas antes da próxima prova?" (creates a reminder for the next scheduled test).
+- **GOL-12.12 Test today or tomorrow.** The "plano relâmpago" case (§9) is the 0–1 day version of Modo Desespero: diagnostic max 6 questions, no mini-simulado, straight to Foco total, then véspera tonight.
+
 ## 5. UX and screens
 
 ### 5.1 Screens
@@ -175,6 +196,9 @@ Phase 5 adds device **calendar sync** (GOL-09) and **energy-aware scheduling** (
 | **Detalhe da prova** | Scope, mastery, actions | GOL-08.2 |
 | **Notas e médias** | Grading rules + components + required grades (GOL-06) | Per subject; presets |
 | **Modo Véspera** | Guided session (GOL-07) | Calm visual style, no streak/XP prompts |
+| **Modo Desespero: oferta** | Bottom sheet offering the mode (GOL-12.1) | "Ativar" / "Agora não" |
+| **Diagnóstico rápido** | 5-min check (GOL-12.3) | Progress bar, "Pular" always visible |
+| **Plano de ataque** | Triage groups + coverage estimate (GOL-12.5) | Tap a topic to move it between groups; time presets on top |
 
 ### 5.2 Key flows
 
@@ -232,6 +256,25 @@ flowchart TD
 | `vespera.not_studied` | Não deu tempo de estudar esse — foca no básico. |
 | `vespera.sleep` | Dormir bem ajuda sua memória a fixar o que você estudou. Que tal parar às {time}? |
 | `exam.good_luck` | Boa prova! 🍀 |
+| `desperate.offer.title` | Prova em {n} dias? Bora pro Modo Desespero 😅 |
+| `desperate.offer.body` | Calma, dá pra fazer muita coisa. Eu foco no que mais vale ponto e monto um plano de ataque pra você. |
+| `desperate.offer.yes` | Ativar Modo Desespero |
+| `desperate.offer.no` | Agora não |
+| `desperate.diag.title` | Diagnóstico rápido (5 min) |
+| `desperate.diag.body` | Umas perguntas rápidas pra eu saber o que você já sabe. Sem nota, sem pressão. |
+| `desperate.diag.skip` | Pular — começo do zero |
+| `desperate.time.title` | Quanto tempo você tem por dia até a prova? |
+| `desperate.plan.title` | Seu plano de ataque |
+| `desperate.group.focus` | Foco total |
+| `desperate.group.basic` | Só o básico |
+| `desperate.group.out` | Fica de fora |
+| `desperate.coverage` | Com {hours} por dia, dá pra cobrir ~{pct}% do que deve cair. |
+| `desperate.out.hint` | Esses ficam de fora do plano, mas o resumo continua aqui se sobrar tempo. |
+| `desperate.header` | Modo Desespero · faltam {n} dias |
+| `desperate.break` | Pausa de 5 min. Bebe uma água 💧 |
+| `desperate.enough` | Você já fez bastante hoje. Descansar também conta. |
+| `desperate.exit` | Sair do Modo Desespero |
+| `desperate.after` | Quer que eu te avise 2 semanas antes da próxima prova? |
 | `predict.range` | Previsão de nota: entre {low} e {high} |
 | `predict.not_enough` | Responda mais algumas questões pra eu conseguir prever sua nota. |
 | `predict.label` | É uma estimativa, não uma garantia. |
@@ -271,7 +314,8 @@ flowchart TD
 | `plan_items` | `exam_id` (nullable), `unit_type` (`learn` / `learn_light` / `practice` / `mock` / `vespera` / `warmup` / `review` / `upload_material` / `essay`), `node_ids` (uuid[]), `deadline` (date), `priority` (numeric), `order_in_day` (int), `demanding` (bool), `pinned` (bool), `plan_run_id`, `reason_key` + `reason_params` (JSON) | | GOL-04 |
 | `plan_runs` (new) | `id`, `user_id`, `version`, `trigger` (enum, §8.2.6), `input_hash`, `feasible` (bool), `triage` (JSON), `created_at`, `computed_by` (`server` / `device`) | | GOL-04.9 |
 | `study_preferences` (new, 1 row per user) | `minutes_by_weekday` (int[7], Mon…Sun), `window_start` / `window_end` (time), `min_block_min` (default 15), `max_block_min` (default 45), `max_subjects_per_day` (default 3), `quiet_start` / `quiet_end` (default 22:00 / 07:00), `vespera_time` (default 19:00), `day_rollover_hour` (default 4), `enem_min_share` (default 0.2), `review_seconds_estimate` (learned) | | §8.2 inputs |
-| `availability_exceptions` (new) | `user_id`, `local_date`, `minutes` (0 = blocked), `source` (`user` / `calendar`) | | GOL-04.3, GOL-09.2 |
+| `availability_exceptions` (new) | `user_id`, `local_date`, `minutes` (0 = blocked), `source` (`user` / `calendar` / `desperate`) | | GOL-04.3, GOL-09.2, GOL-12.4 |
+| `desperate_modes` (new) | `id`, `user_id`, `goal_id`, `status` (`active` / `ended` / `cancelled`), `exam_ids` (uuid[]), `minutes_per_day`, `topic_groups` (JSON `{node_id: focus \| basic \| out}`), `user_moves` (JSON), `diagnostic_attempt_id` (nullable), `started_at`, `ended_at` | | GOL-12 |
 | `readiness_snapshots` (new) | `user_id`, `exam_id`, `local_date`, `readiness` (0–1), `readiness_proj` (0–1), `pred_low`, `pred_high`, `pred_mid` (numeric, nullable), `evidence` (JSON) | | GOL-08, GOL-11 calibration |
 | `performance_windows` (new, derived) | `user_id`, `window` (int, 2-h bucket), `n_events`, `mean_residual`, `ci_low`, `ci_high`, `updated_at` | | GOL-10 |
 
@@ -347,7 +391,7 @@ For each scheduled test `e` and each topic `n ∈ N_e`:
 | `learn(n)` | `n` not yet studied | `est_learn_minutes(n) × κ` | today | `D_e − 2` |
 | `practice(n)` | `m_n < 0.8` | 10 | day after `learn(n)` is scheduled (spacing ≥ 1 day) | `D_e − 1` |
 | `practice₂(n)` | after a practice, if `m_n < 0.6` | 10 | ≥ 1 day after `practice(n)` | `D_e − 1` |
-| `mock(e)` | once per test | `min(45, 3 × |N_e| + 15)` | `D_e − 4` | `D_e − 1` (prefer `D_e − 2`) |
+| `mock(e)` | once per test | `min(45, 3 × \|N_e\| + 15)` | `D_e − 4` | `D_e − 1` (prefer `D_e − 2`) |
 | `vespera(e)` | always | 25 (GOL-07) | fixed: `D_e − 1` | `D_e − 1` |
 | `upload_material(n)` | `n.is_placeholder` | 5 | today | `D_e − 3` |
 
@@ -536,11 +580,59 @@ The learning engine may later replace `p_n` with the `mastery` table value; the 
 - All active `exam_week` goals form one pool of tests.
 - With an active `enem` goal (Phase 4): if any `exam_week` test is within the next 14 days, ENEM gets `enem_min_share × A(d)` (default 20%; the student can set 0 = "pausar ENEM durante as provas"), and the exam week gets the rest. Otherwise the ENEM planner ([09 §8](09-enem-mode.md)) gets all unit capacity. Reviews are shared and reserved first regardless of goal.
 
+### 8.10 Modo Desespero (GOL-12)
+
+#### 8.10.1 Eligibility
+
+```
+eligible(e) = e.status = scheduled
+              and D_e − today ≤ 6
+              and (coverage_e < 0.5 or readiness_e < 0.4 or sessions_e = 0)
+coverage_e  = studied in-scope topics / in-scope topics
+```
+
+#### 8.10.2 Plano de ataque (triage up front)
+
+Topics of all covered tests compete in one list:
+
+```
+light_min(n) = 0.5 × est_learn_minutes(n) × κ           // learn_light
+gain(n)      = W'_e × ω_{e,n} × (1 − m_n)               // share of the test's points still missing
+yield(n)     = gain(n) / (light_min(n) + 10)             // + one 10-min practice block
+capacity     = Σ_{d = today}^{D_last − 1} C(d) − vespera minutes − mini-simulado minutes
+
+sort topics by yield desc (ties: knowledge-map order)
+Foco total  : take topics while Σ (light_min + 10) ≤ 0.7 × capacity
+Só o básico : then take topics while Σ light_min ≤ remaining capacity
+Fica de fora: the rest
+coverage_pct(e) = 100 × ( Σ_{Foco} ω_{e,n} + 0.5 × Σ_{Básico} ω_{e,n} )   // shown rounded to 5%
+```
+
+`m_n` comes from the diagnostic when taken (§8.10.4), else the learning-engine default for unknown mastery. A topic the student moves by hand keeps its group on recomputes; the greedy fill runs only over the remaining topics.
+
+#### 8.10.3 Planner overrides while active
+
+| Rule | Normal planner (§8.2) | Modo Desespero |
+|---|---|---|
+| `A(d)` | `study_preferences` | `minutes_per_day` (≤ 240), stored as `availability_exceptions` with source `desperate` |
+| `learn` units | `learn` | Foco total and Só o básico → `learn_light`; Fica de fora → none |
+| Spacing `learn → practice` | ≥ 1 day | Same day allowed, ≥ 2 h later or next session |
+| `practice₂` | If `m_n < 0.6` | Foco total only, if capacity remains |
+| `mock` | `min(45, 3 × \|N_e\| + 15)` | One 20-min mini-simulado on `D − 2` if `D_e − today ≥ 3`; else none |
+| Block size | `max_block_min` (45) | 25 min + 5-min break |
+| Latest planned time | Quiet hours | Earlier of quiet-hours start, 23:00 and the véspera sleep stop time |
+
+Triage steps of §8.2.5 still apply if the plan is infeasible after these overrides.
+
+#### 8.10.4 Diagnostic
+
+One objective question (`mcq_single` / `true_false` / `fill_blank`) per in-scope topic, ordered by `W'_e × ω_{e,n}` desc, max 12 (6 for a test today or tomorrow), predicted difficulty near medium. Each answer is mastery evidence with source `diagnostic` ([learning-engine.md §5.2](../engineering/learning-engine.md#52-evidence-weights)). Topics without a diagnostic answer keep the default.
+
 ## 9. Edge cases and errors
 
 | Case | Behavior |
 |---|---|
-| Goal created with a test **tomorrow** or **today** | No `learn` deadlines are feasible → "plano relâmpago": skip spacing rules, triage to the top-π topics (`learn_light`), mock skipped, véspera today/tonight. Message: "Pouco tempo, mas dá pra fazer muita coisa. Bora no essencial." |
+| Goal created with a test **tomorrow** or **today** | Handled by Modo Desespero (GOL-12.12). No `learn` deadlines are feasible → "plano relâmpago": skip spacing rules, triage to the top-π topics (`learn_light`), mock skipped, véspera today/tonight. Message: "Pouco tempo, mas dá pra fazer muita coisa. Bora no essencial." |
 | Student **joins mid-week** (some tests already past) | Past-date tests are created as `done` (or ignored if added after the fact); the plan starts today. |
 | **Two tests on the same day** | Shared capacity before that day; one combined véspera (GOL-07.4); `C(D_e)` halved once, not twice. |
 | Test **moved earlier** | `exam_changed` replan; triage may kick in; card "A prova de {Matéria} foi pra {data}. Ajustei o plano." |
@@ -588,6 +680,11 @@ The learning engine may later replace `p_n` with the `mastery` table value; the 
 - [ ] The véspera notification fires at the configured time (default 19:00) and never inside quiet hours; the session contains the six parts of GOL-07.2.
 - [ ] The cheat sheet only cites pages present in the input notes (validation test with a forged citation must fail).
 - [ ] Hoje works offline with the last synced plan and syncs completed items later without duplicates.
+- [ ] (GOL-12) A test 4 days away with no sessions triggers the Modo Desespero offer; a test 8 days away does not.
+- [ ] (GOL-12) For a fixture with 10 topics and 2 h/day, the Plano de ataque groups and coverage estimate match §8.10.2 exactly; moving a topic by hand keeps it in its group after recompute.
+- [ ] (GOL-12) No plan item is placed after 23:00 or inside quiet hours; planned study never exceeds 4 h on a day.
+- [ ] (GOL-12) While material is still generating, Foco total topics get notes, cards and questions before any other topic (standard API, logged to `ai_usage` with feature `GOL-12`).
+- [ ] (GOL-12) The mode ends automatically after the last covered test and normal planning resumes.
 - [ ] Dashboard shows countdown, readiness (number + color), required grade and coverage per test.
 - [ ] (Phase 2) Predicted grade is hidden below the evidence gate and shows an 80% interval above it; nightly snapshots are written.
 - [ ] (Phase 5) With calendar sync on, busy events reduce available minutes; no event title/description is sent to the server (network inspection).

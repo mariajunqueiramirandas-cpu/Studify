@@ -43,7 +43,7 @@ flowchart LR
 | Remember | MEM-01, MEM-02 |
 | Practice | PRA-01, PRA-02, PRA-03, PRA-04 |
 | Tutor | TUT-01, TUT-02, TUT-03, TUT-04 |
-| Goals | GOL-01, GOL-02, GOL-03, GOL-04, GOL-05, GOL-06, GOL-07, GOL-08 |
+| Goals | GOL-01, GOL-02, GOL-03, GOL-04, GOL-05, GOL-06, GOL-07, GOL-08, GOL-12 |
 | Platform | PLT-05, PLT-07 (offline reviews) |
 | Trust | TRU-01 (all items), TRU-02 (flag only) |
 | Wellbeing | WEL-04 (baseline accessibility) |
@@ -56,6 +56,7 @@ flowchart LR
 - [ ] The tutor answers with citations and refuses to invent content not in the material.
 - [ ] "Quanto preciso tirar?" gives the right required grade for the school's rules (unit-tested against hand-computed cases).
 - [ ] Missed plan days are redistributed automatically.
+- [ ] A student starting 4 days before a test gets the Modo Desespero offer, a diagnostic and a plano de ataque with an honest coverage estimate.
 
 ## Phase 2 — Turma + smart
 

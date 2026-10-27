@@ -306,6 +306,7 @@ evidence_count = card reviews + question-type evidence events (raw count)
 | Ensine o Lucas (INT-02), per key concept at session end | 0.75 | `s` = 1 correct / 0.5 partial / 0 wrong; a `major` taught error on the concept forces `s = 0` |
 | Câmera Mágica **assisted** solution (CAM-02.10) | 0 for positive evidence | A wrong "Tentar responder" is negative evidence with weight 1.0; a correct attempt before hint level 3 is normal evidence |
 | Self-override of an AI grade ("Eu acho que acertei") | 0.5 | |
+| Modo Desespero diagnostic (`diagnostic`, GOL-12.3) | 1.0 | One question per topic; no Caderno de Erros entry |
 
 | Confidence (PRA-05) | `confidence_multiplier` |
 |---|---|
@@ -685,6 +686,10 @@ New-card quota on d0: `planned = floor(0.25 × 60 × 60 / 20) = 45` → `min(50,
 ### 11.12 Determinism
 
 `buildPlan` is a pure function of its inputs; it uses no randomness. Re-running with the same inputs yields byte-identical `plan_items` (tested). The device preview and the worker run the same code; the worker's run is authoritative.
+
+### 11.13 Modo Desespero (GOL-12)
+
+Eligibility, the plano de ataque triage (`yield = gain / (light_min + 10)`, 70% of capacity to Foco total, the rest to Só o básico), the coverage estimate and the planner overrides are specified in [spec 07 §8.10](../specs/07-goals-semana-de-provas.md#810-modo-desespero-gol-12). They run inside `buildPlan` as a mode flag (`mode: 'normal' | 'desperate'`), so determinism (§11.12) and the triage steps of §11.5 still hold. Fixture: 10 topics, 2 h/day, test in 4 days. It asserts the three groups, the coverage percentage, no item after 23:00 and ≤ 240 planned min/day.
 
 ## 12. Session builder (Hoje, GOL-05)
 

@@ -663,6 +663,35 @@ flowchart TD
 
 ---
 
+## UF-23 — Modo Desespero (test in less than a week)
+
+```mermaid
+flowchart TD
+  A[Student adds a test 4 days away<br/>no sessions yet] --> B{Eligible?<br/>GOL-12.1}
+  B -- no --> N[Normal plan]
+  B -- yes --> C[S-OBJ-17 offer]
+  C -- Agora não --> N
+  C -- Ativar --> D[S-OBJ-18 Diagnóstico rápido<br/>≤ 12 questions]
+  D -- Pular --> E
+  D --> E[Time: 1h / 2h / 3h / 4h]
+  E --> F[S-OBJ-19 Plano de ataque<br/>Foco total · Só o básico · Fica de fora<br/>~coverage %]
+  F --> G[Hoje: 25-min loops<br/>Resumo rápido → cards → questions]
+  G --> H[D−1 Modo Véspera]
+  H --> I[Test] --> J[Log grade · offer reminder<br/>2 weeks before next test]
+```
+
+| Step | What happens | IDs |
+|---|---|---|
+| 1 | A test 6 days away or less with low coverage/readiness or no sessions triggers the offer | GOL-12.1 |
+| 2 | Optional diagnostic sets mastery per topic | GOL-12.3 |
+| 3 | Student picks daily time (max 4 h) | GOL-12.4 |
+| 4 | Plano de ataque with coverage estimate; topics can be moved between groups | GOL-12.5 |
+| 5 | If content is still generating, Foco total topics are generated first on the standard API | GOL-12.8 |
+| 6 | Daily sessions with breaks; stop suggestion after 3 h | GOL-12.7, GOL-12.10 |
+| 7 | Véspera on D−1; mode ends after the test | GOL-07, GOL-12.11 |
+
+**Edge paths:** test today or tomorrow → diagnostic max 6, no mini-simulado (GOL-12.12); budget exhausted → Foco total generated first, the rest waits (PLT-04); several tests in the window → one plano de ataque across all of them (GOL-12.2).
+
 ## Cross-cutting failure paths
 
 | Situation | Where it shows | Behavior | Copy (PT-BR) |

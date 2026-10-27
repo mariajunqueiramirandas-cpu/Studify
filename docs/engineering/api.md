@@ -491,6 +491,9 @@ All are `security definer`, `set search_path = ''`, check `auth.uid()` explicitl
 | `edit_outline(subject_id, ops jsonb)` | ING-04 | `ops: [{op: rename\|move\|reorder\|merge\|split\|delete\|restore\|create, ...}]` → `{event_ids: uuid[], regenerate_node_ids: uuid[]}` | Needs `can_edit_subject`; writes `node_events`; enqueues `content.regenerate_topic` for merged/split topics |
 | `undo_outline_event(event_id)` | ING-04.5 | → `void` | Within 30 days |
 | `confirm_exam_scope(exam_id, node_ids uuid[], default_all boolean)` | GOL-03 | → `void` | Sets `scope_status = confirmed`; triggers `plan.recompute` |
+| `start_desperate_mode(goal_id, exam_ids, minutes_per_day)` | GOL-12 | → `{desperate_mode_id, diagnostic_quiz_id?}` | Checks eligibility (spec 07 §8.10.1); writes `availability_exceptions` (source `desperate`); triggers replan `desperate_on` |
+| `set_desperate_groups(desperate_mode_id, moves: [{node_id, group}])` | GOL-12.5 | → `{topic_groups, coverage: [{exam_id, pct}]}` | Recomputes the plano de ataque; triggers replan |
+| `end_desperate_mode(desperate_mode_id)` | GOL-12.11 | → `{ok}` | Removes `desperate` availability exceptions; replan `desperate_off`. Also run by the nightly job after the last covered test |
 | `log_exam_grade(exam_id, grade, grade_max)` | GOL-06 | → `{required: [{exam_id, needed, status: 'secured'\|'needed'\|'impossible'}]}` | Uses the shared solver (spec 07 §8.5); triggers replan + `readiness` refresh |
 | `apply_schedule_import(schedule_import_id, goal_id?)` | ING-07 | → `{goal_id, exam_ids}` | Creates `exams.status = draft` |
 | `set_sisu_target(goal_id, offer_id?, manual?, modality_label?, margin?, priority?)` | ENM-06 | → `{sisu_target_id, targets}` | Recomputes per-area targets; triggers replan |

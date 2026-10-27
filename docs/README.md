@@ -22,7 +22,7 @@ Studify turns class PDFs into a complete study system (notes, flashcards, quizze
 | [04 — Flashcards & memory](specs/04-flashcards-memory.md) | MEM-01…06 |
 | [05 — Practice & exams](specs/05-practice-exams.md) | PRA-01…08 |
 | [06 — Feed de Estudos](specs/06-feed-de-estudos.md) | FED-01 |
-| [07 — Goals & Semana de Provas](specs/07-goals-semana-de-provas.md) | GOL-01…11 |
+| [07 — Goals & Semana de Provas](specs/07-goals-semana-de-provas.md) | GOL-01…12 |
 | [08 — Prova Provável](specs/08-prova-provavel.md) | PRA-09, ENM-08 |
 | [09 — ENEM mode](specs/09-enem-mode.md) | ENM-01…10 |
 | [10 — Turma & social](specs/10-turma-social.md) | SOC-01…09, TRU-02 |
