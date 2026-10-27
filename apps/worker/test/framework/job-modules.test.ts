@@ -11,7 +11,8 @@ const JOBS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 
 /** The job modules of api §7 that must be picked up (one file each). */
 const EXPECTED_MODULES = [
-  'account', 'batch', 'content', 'files', 'grading', 'ingest', 'learning', 'motivation', 'notify', 'planning', 'prova', 'social', 'trust',
+  'account', 'batch', 'content', 'files', 'grading', 'ingest', 'learning', 'motivation', 'notify', 'planning', 'podcast', 'prova', 'rooms', 'social',
+  'trust',
 ];
 
 /** Field ranges of a standard 5-field cron (minute hour day-of-month month day-of-week; 0 and 7 are Sunday). */

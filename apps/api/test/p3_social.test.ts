@@ -62,8 +62,11 @@ test('room-control: members open and join; the host alone drives the timer, stam
   const carolJoin = await roomControl(room({ action: 'join', room_id: r.room_id }, CAROL.jwt, 3), deps);
   assertEquals(carolJoin.status, 404);
 
+  // Alice blocked Bob: both still study in the room, but neither app shows the other (SOC-X.3).
+  h.db.seed('user_blocks', { blocker_id: ALICE.id, blocked_id: BOB.id });
   const joined = await json(await roomControl(room({ action: 'join', room_id: r.room_id }, BOB.jwt, 4), deps));
   assertEquals(joined.members, 2);
+  assertEquals(joined.hidden_user_ids, [ALICE.id]);
   const bobStart = await roomControl(room({ action: 'start', room_id: r.room_id }, BOB.jwt, 5), deps);
   assertEquals(bobStart.status, 403);
 
@@ -87,7 +90,7 @@ test('room-control: one reaction per 5 s, nickname first; a full room refuses th
   const first = await roomControl(room({ action: 'react', room_id: r.room_id, reaction: '🔥' }, ALICE.jwt, 2), deps);
   assertEquals(first.status, 200);
   const reaction = broadcasts.find((b) => b.event === 'reaction')!;
-  assertEquals(reaction.payload, { nickname: 'Ali', reaction: '🔥' });
+  assertEquals(reaction.payload, { user_id: ALICE.id, nickname: 'Ali', reaction: '🔥' });
   const second = await roomControl(room({ action: 'react', room_id: r.room_id, reaction: '👏' }, ALICE.jwt, 3), deps);
   assertEquals(second.status, 429);
 

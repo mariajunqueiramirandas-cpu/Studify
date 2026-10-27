@@ -4,6 +4,7 @@
 import { PgBoss } from 'pg-boss';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ClaudeDeps } from '@studify/ai';
+import { ttsFromEnv, type TtsProvider } from '@studify/speech';
 import type { WorkerConfig } from './env.ts';
 import { createBudgetStore } from './budget.ts';
 import { createPool, type Sql } from './db.ts';
@@ -33,6 +34,8 @@ export interface RuntimeOverrides {
   log?: Logger;
   /** Expo client override (tests). Defaults to the real client when EXPO_ACCESS_TOKEN is set. */
   expo?: Parameters<typeof createPushService>[0]['expo'];
+  /** TTS override (tests). Defaults to TTS_PROVIDER / GOOGLE_TTS_API_KEY (packages/speech). */
+  tts?: TtsProvider | null;
 }
 
 /** Starts pg-boss unless a backend is injected. Callers register job modules afterwards. */
@@ -88,6 +91,7 @@ export async function createRuntime(config: WorkerConfig, overrides: RuntimeOver
     push,
     log,
     now,
+    tts: overrides.tts !== undefined ? overrides.tts : ttsFromEnv(process.env),
   } satisfies RuntimeDeps);
   enqueueRef = (name, data, opts) => registry.enqueue(name, data, opts);
   await registry.register(builtinJobs(() => push));

@@ -195,7 +195,8 @@ create table public.study_room_members (
   primary key (room_id, user_id)
 );
 
--- Room members must be active members of the room's Turma, and blocked pairs never share a room (SOC-X.3).
+-- Room members must be active members of the room's Turma. Blocked pairs may share a room but never see each
+-- other (SOC-X.3): room-control returns the caller's hidden members and the app filters presence and reactions.
 create or replace function private.study_room_members_guard() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin

@@ -4,6 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type pg from 'pg';
 import type { ClaudeDeps } from '@studify/ai';
+import type { TtsProvider } from '@studify/speech';
 import type { Logger } from 'pino';
 
 export interface JobContext {
@@ -22,6 +23,8 @@ export interface JobContext {
   now: () => Date;
   /** Push notifications via the Expo Push API (respects quiet hours + 3/day cap). */
   push: (userId: string, message: { channel: 'reviews' | 'plan' | 'class' | 'processing'; title: string; body: string; data?: Record<string, unknown>; requested?: boolean }) => Promise<void>;
+  /** Cloud TTS for podcast audio (INT-01.4). Null: episodes are played with on-device TTS (INT-01.11). */
+  tts?: TtsProvider | null;
 }
 
 export interface JobDefinition<T = Record<string, unknown>> {

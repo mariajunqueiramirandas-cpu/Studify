@@ -17,7 +17,7 @@ import {
 } from '@studify/shared';
 import { defineP2 } from '../shared-p2/http.ts';
 import type { P2Deps } from '../shared-p2/deps.ts';
-import { activeMember, displayNameOf, nicknameOrName, requireActiveMember } from '../shared-p2/turma.ts';
+import { activeMember, blockedEitherWay, displayNameOf, nicknameOrName, requireActiveMember } from '../shared-p2/turma.ts';
 
 interface RoomRow {
   id: string;
@@ -72,15 +72,20 @@ async function goalOf(p2: P2Deps, room: RoomRow, members: MemberRow[], now: Date
   return { progress: g.progress, target: g.target, kind: room.group_goal.kind };
 }
 
-async function respond(p2: P2Deps, room: RoomRow, now: Date): Promise<RoomControlRes> {
+async function respond(p2: P2Deps, room: RoomRow, me: string, now: Date): Promise<RoomControlRes> {
   const members = await membersOf(p2, room.id);
+  const inside = members.filter((m) => !m.left_at);
+  // SOC-X.3: blocking is silent and mutual in effect; the caller's app hides these members.
+  const hidden: string[] = [];
+  for (const m of inside) if (m.user_id !== me && (await blockedEitherWay(p2.db, me, m.user_id))) hidden.push(m.user_id);
   return {
     room_id: room.id,
     status: room.status,
     timer_state: room.timer_state as unknown as Record<string, unknown>,
     timer_config: room.timer_config,
     goal: await goalOf(p2, room, members, now),
-    members: members.filter((m) => !m.left_at).length,
+    members: inside.length,
+    hidden_user_ids: hidden,
   };
 }
 
@@ -121,7 +126,7 @@ export const handler = defineP2<RoomControlReq>({
       const joined = await db.from('study_room_members').insert({ room_id: roomId, user_id: me, joined_at: at });
       if (joined.error) throw joined.error;
       await p2.broadcast([{ topic: `turma:${input.class_group_id}`, event: 'room_opened', payload: { room_id: roomId, name: room.name }, private: true }]);
-      return ctx.json(await respond(p2, room, now));
+      return ctx.json(await respond(p2, room, me, now));
     }
 
     const room = await loadRoom(p2, input.room_id);
@@ -169,7 +174,7 @@ export const handler = defineP2<RoomControlReq>({
         const res = await db.from('study_room_members').update({ last_reaction_at: at }).eq('room_id', room.id).eq('user_id', me);
         if (res.error) throw res.error;
         const nickname = nicknameOrName(member, await displayNameOf(db, me));
-        await broadcast(p2, room.id, 'reaction', { nickname, reaction: input.reaction });
+        await broadcast(p2, room.id, 'reaction', { user_id: me, nickname, reaction: input.reaction });
         break;
       }
       case 'close': {
@@ -190,7 +195,7 @@ export const handler = defineP2<RoomControlReq>({
         await broadcast(p2, room.id, 'timer', { ...next, config: room.timer_config });
       }
     }
-    const body = await respond(p2, room, now);
+    const body = await respond(p2, room, me, now);
     if (input.action === 'join' || input.action === 'leave') {
       await broadcast(p2, room.id, 'members', { count: body.members });
       if (body.goal) await broadcast(p2, room.id, 'goal', { progress: body.goal.progress, target: body.goal.target });

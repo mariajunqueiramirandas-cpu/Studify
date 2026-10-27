@@ -241,7 +241,26 @@ export async function handleStoragePurge(ctx: JobContext, raw: Record<string, un
   }
   const idempotency = await ctx.db.query("delete from private.idempotency_keys where created_at < now() - interval '24 hours'");
   purged.idempotency_keys = idempotency.rowCount ?? 0;
+  purged.camera_captures = await purgeCaptures(ctx, now);
   return { purged, exportsExpired: expired.length, errors };
+}
+
+/**
+ * Spec 11 §8.4 (D-38): photos of captures the student did not save are deleted 30 days after the capture
+ * (expires_at), together with the row. Saved captures keep their photos: they back an essay, a question or a
+ * document. Failed captures already lost their photos; their tombstoned rows go here too.
+ */
+export async function purgeCaptures(ctx: JobContext, now: Date): Promise<number> {
+  const expired = unwrapRows<{ id: string; image_paths: string[] }>(
+    await ctx.supabase.from('camera_captures').select('id,image_paths').eq('saved', false).lt('expires_at', now.toISOString()).limit(500),
+    'camera_captures',
+  );
+  for (const capture of expired) {
+    const objects = capture.image_paths.filter((p) => p.startsWith('photos/')).map((p) => p.slice('photos/'.length));
+    if (objects.length > 0) await ctx.supabase.storage.from('photos').remove(objects);
+    unwrap(await ctx.supabase.from('camera_captures').delete().eq('id', capture.id), 'camera_captures');
+  }
+  return expired.length;
 }
 
 export const jobs: JobDefinition[] = [

@@ -249,5 +249,7 @@ export const RoomControlResSchema = z.object({
   timer_config: RoomTimerConfigSchema,
   goal: z.object({ progress: z.int().min(0), target: z.int().min(1), kind: z.enum(['cards', 'questions']) }).nullable(),
   members: z.int().min(0),
+  /** SOC-X.3: members blocked either way with the caller; the app hides their presence and reactions. */
+  hidden_user_ids: z.array(UuidSchema),
 });
 export type RoomControlRes = z.infer<typeof RoomControlResSchema>;

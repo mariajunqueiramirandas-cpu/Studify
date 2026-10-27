@@ -12,7 +12,7 @@ const uuid = z.uuid();
 
 const PlanItemSchema = z.object({
   customId: z.string().min(1).max(64),
-  kind: z.enum(['concepts', 'tldr', 'study', 'deep', 'glossary', 'cards', 'questions', 'feed', 'transcription']),
+  kind: z.enum(['concepts', 'tldr', 'study', 'deep', 'glossary', 'cards', 'questions', 'feed', 'find_error', 'problems', 'transcription']),
   topicId: z.string().nullable(),
   taskId: z.string().min(1),
   promptVersion: z.string().min(1),

@@ -339,3 +339,135 @@ export function mapGlossaryTerm(
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Ache o Erro (PRA-06) and problem sets (PRA-08)
+// ---------------------------------------------------------------------------
+
+export interface FindErrorDraft {
+  statement_kind: 'statement' | 'paragraph' | 'solution';
+  segments: Array<{ id: string; text: string }>;
+  error_segment_id: string | null;
+  error_type: string | null;
+  explanation: string;
+  corrected_text: string | null;
+  concept_keys: string[];
+  difficulty: number;
+  source_pages: PageRefInput[];
+}
+
+const FIND_ERROR_STEM: Record<FindErrorDraft['statement_kind'], string> = {
+  statement: 'Ache o erro na afirmação.',
+  paragraph: 'Ache o trecho errado do parágrafo.',
+  solution: 'Ache o passo errado da resolução.',
+};
+
+/** Ache o Erro item → `find_error` question (PRA-06.2). "Não tem erro" items keep a null error segment. */
+export function mapFindError(draft: FindErrorDraft, ctx: { labels: LabelMap; conceptIdByKey: ReadonlyMap<string, string> }): MapResult<QuestionRow> {
+  const conceptIds = resolveConceptKeys(draft.concept_keys, ctx.conceptIdByKey);
+  if (conceptIds.length === 0) return { ok: false, reason: 'concept_not_in_topic' };
+  const sources = toSourcePages(draft.source_pages, ctx.labels);
+  if (!sources) return { ok: false, reason: 'source_pages_out_of_range' };
+  const ids = draft.segments.map((s) => s.id);
+  if (new Set(ids).size !== ids.length) return { ok: false, reason: 'duplicate_segment' };
+  if (draft.error_segment_id !== null && !ids.includes(draft.error_segment_id)) return { ok: false, reason: 'error_segment_unknown' };
+  const noError = draft.error_segment_id === null;
+  const text = draft.segments.map((s) => s.text).join(' ');
+  return {
+    ok: true,
+    value: {
+      type: 'find_error',
+      stem: FIND_ERROR_STEM[draft.statement_kind],
+      stimulus: null,
+      payload: {
+        segments: draft.segments,
+        error_segment_id: draft.error_segment_id,
+        error_type: noError ? 'sem_erro' : (draft.error_type ?? 'conceitual'),
+        explanation: draft.explanation,
+        corrected_text: noError ? draft.explanation : (draft.corrected_text ?? draft.explanation),
+        statement_kind: draft.statement_kind,
+      },
+      explanation: draft.explanation,
+      bloom_level: 'evaluate',
+      difficulty: draft.difficulty,
+      concept_ids: conceptIds,
+      source_pages: sources,
+      has_math: text.includes('$'),
+    },
+  };
+}
+
+export interface ProblemDraft {
+  statement: string;
+  given: Array<{ name: string; value: string }>;
+  final_answer: string;
+  answer_format: 'numeric' | 'expression' | 'choice';
+  unit: string | null;
+  tolerance: number | null;
+  check_expression: string | null;
+  solution_steps: string[];
+  hints: string[];
+  difficulty: number;
+  concept_keys: string[];
+  source_pages: PageRefInput[];
+}
+
+export interface WorkedExampleDraft {
+  statement: string;
+  steps: string[];
+  answer: string;
+}
+
+/**
+ * Problem → `problem` question (PRA-08.2). Every item must pass the deterministic consistency check
+ * (spec 05 §8.9: check_expression with `given` reproduces final_answer); one that fails is dropped.
+ */
+export function mapProblem(
+  draft: ProblemDraft,
+  ctx: { labels: LabelMap; conceptIdByKey: ReadonlyMap<string, string>; consistent: (p: { given: Record<string, number | string>; final_answer: string; answer_format: ProblemDraft['answer_format']; tolerance: number | null; check_expression: string | null }) => boolean },
+): MapResult<QuestionRow> {
+  const conceptIds = resolveConceptKeys(draft.concept_keys, ctx.conceptIdByKey);
+  if (conceptIds.length === 0) return { ok: false, reason: 'concept_not_in_topic' };
+  const sources = toSourcePages(draft.source_pages, ctx.labels);
+  if (!sources) return { ok: false, reason: 'source_pages_out_of_range' };
+  if (draft.hints.length !== 3) return { ok: false, reason: 'hints_not_three' };
+  const given: Record<string, number | string> = {};
+  for (const g of draft.given) {
+    const n = Number(g.value.replace(',', '.'));
+    given[g.name] = Number.isFinite(n) && g.value.trim() !== '' ? n : g.value;
+  }
+  const finalAnswer = draft.answer_format === 'numeric' ? draft.final_answer.replace(',', '.') : draft.final_answer;
+  if (!ctx.consistent({ given, final_answer: finalAnswer, answer_format: draft.answer_format, tolerance: draft.tolerance, check_expression: draft.check_expression })) {
+    return { ok: false, reason: 'problem_inconsistent' };
+  }
+  const text = [draft.statement, ...draft.solution_steps].join(' ');
+  return {
+    ok: true,
+    value: {
+      type: 'problem',
+      stem: draft.statement,
+      stimulus: null,
+      payload: {
+        given,
+        final_answer: draft.answer_format === 'numeric' ? Number(finalAnswer) : finalAnswer,
+        answer_format: draft.answer_format,
+        unit: draft.unit,
+        tolerance: draft.tolerance,
+        check_expression: draft.check_expression,
+        solution_steps: draft.solution_steps,
+        hints: draft.hints,
+      },
+      explanation: draft.solution_steps.join('\n'),
+      bloom_level: 'apply',
+      difficulty: draft.difficulty,
+      concept_ids: conceptIds,
+      source_pages: sources,
+      has_math: text.includes('$'),
+    },
+  };
+}
+
+/** PRA-08.1 faded worked examples: example 2 hides its last step, example 3 its last two. */
+export function fadeWorkedExamples(examples: readonly WorkedExampleDraft[]): Array<WorkedExampleDraft & { hidden_steps: number }> {
+  return examples.slice(0, 3).map((e, i) => ({ ...e, hidden_steps: Math.min(i, Math.max(0, e.steps.length - 1)) }));
+}

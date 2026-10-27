@@ -176,6 +176,22 @@ function respond(req: MockRequest): MockResponse | undefined {
       ],
     });
   }
+  if (body.includes('itens de') && body.includes('Ache o Erro')) {
+    const page = { doc: 'D1', page_start: isMembrana ? 3 : 1, page_end: isMembrana ? 3 : 1 };
+    const segments = (a: string) => [
+      { id: 'S1', text: `${a} faz parte da célula.` },
+      { id: 'S2', text: isMembrana ? 'A membrana é formada por uma única camada de proteínas.' : 'A mitocôndria produz glicose.' },
+      { id: 'S3', text: 'Isso é cobrado em prova.' },
+    ];
+    const planted = { error_segment_id: 'S2', error_type: 'conceitual', corrected_text: isMembrana ? 'A membrana é uma bicamada lipídica.' : 'A mitocôndria produz ATP.' };
+    return text({
+      items: [
+        { statement_kind: 'paragraph', segments: segments('A organela'), ...planted, explanation: 'O segundo trecho troca o conceito.', concept_keys: ['c1'], difficulty: 2, source_pages: [page] },
+        { statement_kind: 'statement', segments: segments('Ela'), ...planted, explanation: 'Mesmo erro, outra forma.', concept_keys: ['c1'], difficulty: 3, source_pages: [page] },
+        { statement_kind: 'statement', segments: segments('Isso'), error_segment_id: null, error_type: null, corrected_text: null, explanation: 'Está tudo certo.', concept_keys: ['c9'], difficulty: 1, source_pages: [page] },
+      ],
+    });
+  }
   return undefined;
 }
 
@@ -326,10 +342,18 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
 
     const questions = await pool.query<{ n: string; has_remediation: boolean; options: string }>(
       `select count(*)::text as n, bool_and(payload ? 'remediation_card') as has_remediation, max(jsonb_array_length(payload->'options'))::text as options
-         from public.questions where subject_id = $1 and origin = 'generated'`,
+         from public.questions where subject_id = $1 and origin = 'generated' and type = 'mcq_single'`,
       [subjectId],
     );
     expect(Number(questions.rows[0]?.n)).toBe(2);
+    // Ache o Erro (PRA-06): two planted items per topic are kept; the third cites a concept outside the topic.
+    const findError = await pool.query<{ stem: string; error_segment_id: string | null; error_type: string }>(
+      `select stem, payload->>'error_segment_id' as error_segment_id, payload->>'error_type' as error_type
+         from public.questions where subject_id = $1 and type = 'find_error' order by stem`,
+      [subjectId],
+    );
+    expect(findError.rows.length).toBe(4);
+    expect(findError.rows.every((r) => r.error_segment_id === 'S2' && r.error_type === 'conceitual')).toBe(true);
     expect(questions.rows[0]?.has_remediation).toBe(true);
     expect(questions.rows[0]?.options).toBe('5');
 
@@ -351,7 +375,9 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       [subjectId],
     );
     const tasks = usage.rows.map((r) => r.task);
-    expect(tasks).toEqual(expect.arrayContaining(['ingest.outline', 'ingest.topicDetail', 'ingest.prerequisites', 'notes.tldr', 'cards.generate', 'questions.generate']));
+    expect(tasks).toEqual(expect.arrayContaining(['ingest.outline', 'ingest.topicDetail', 'ingest.prerequisites', 'notes.tldr', 'cards.generate', 'questions.generate', 'acheOErro.generate']));
+    // No concept carries a formula: no problem set (PRA-08.1 is for quantitative topics).
+    expect(tasks).not.toContain('problems.generate');
     expect(usage.rows.find((r) => r.task === 'ingest.topicDetail')?.batch).toBe(true);
     expect(usage.rows.find((r) => r.task === 'ingest.outline')?.batch).toBe(false);
 

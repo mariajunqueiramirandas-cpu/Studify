@@ -2,7 +2,7 @@
 // and no colons, so the logical key `{node_id}:{kind}:{prompt_version}` is encoded as
 // `{node_id without dashes}-{kind code}`. The prompt version is not needed to route a result: the
 // task id follows from the kind, and the plan stored in the batch.poll payload carries it for audit.
-export type TopicKind = 'concepts' | 'tldr' | 'study' | 'deep' | 'glossary' | 'cards' | 'questions' | 'feed';
+export type TopicKind = 'concepts' | 'tldr' | 'study' | 'deep' | 'glossary' | 'cards' | 'questions' | 'feed' | 'find_error' | 'problems';
 
 const KIND_CODE: Readonly<Record<TopicKind, string>> = {
   concepts: 'c',
@@ -13,6 +13,8 @@ const KIND_CODE: Readonly<Record<TopicKind, string>> = {
   cards: 'k',
   questions: 'q',
   feed: 'f',
+  find_error: 'e',
+  problems: 'p',
 };
 
 const CODE_KIND: Readonly<Record<string, TopicKind>> = Object.fromEntries(
@@ -61,6 +63,8 @@ export const TASK_FOR_KIND: Readonly<Record<TopicKind, string>> = {
   cards: 'cards.generate',
   questions: 'questions.generate',
   feed: 'feed.generate',
+  find_error: 'acheOErro.generate',
+  problems: 'problems.generate',
 };
 
 /** Expands the public kind names used by job payloads (api.md §7) into internal kinds. */

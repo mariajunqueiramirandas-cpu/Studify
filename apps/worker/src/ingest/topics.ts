@@ -3,7 +3,7 @@
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
 import { cardTargetCount, getTask, topicQuotas } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
-import { uuidV7 } from '@studify/shared';
+import { checkProblemConsistency, uuidV7 } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
 import type pg from 'pg';
 import { tableExists, withTransaction, type Sql } from '../framework/db.ts';
@@ -12,7 +12,24 @@ import { TASK_FOR_KIND, type TopicKind } from './custom-id.ts';
 import { splitSpan } from './slice-plan.ts';
 import { TOPIC_SLICE_PAGES } from './limits.ts';
 import { prepareCall, toPdfSlices, type SliceRef } from './tasks.ts';
-import { mapCard, mapGlossaryTerm, mapQuestion, cardFrontKey, toSourcePages, type CardDraftInput, type GlossaryDraftInput, type LabelMap, type QuestionDraft } from './mappers.ts';
+import {
+  mapCard,
+  mapFindError,
+  mapGlossaryTerm,
+  mapProblem,
+  mapQuestion,
+  cardFrontKey,
+  fadeWorkedExamples,
+  toSourcePages,
+  type CardDraftInput,
+  type FindErrorDraft,
+  type GlossaryDraftInput,
+  type LabelMap,
+  type ProblemDraft,
+  type QuestionDraft,
+  type QuestionRow,
+  type WorkedExampleDraft,
+} from './mappers.ts';
 import { renderCitedBody, type CitationInput } from './citations.ts';
 import { loadSubject, type SubjectRecord } from './repo.ts';
 import { normalizeTerm } from './text.ts';
@@ -254,6 +271,19 @@ export async function buildKindCall(
         languageSubject,
       });
       break;
+    case 'find_error':
+      built = getTask(taskId).build({ topic: topicInput(bundle), slices, existingStatements: existing, contentLanguage, languageSubject });
+      break;
+    case 'problems':
+      built = getTask(taskId).build({
+        topic: topicInput(bundle),
+        slices,
+        count: problemCountFor(bundle),
+        existingStatements: existing,
+        contentLanguage,
+        languageSubject,
+      });
+      break;
   }
   const prepared = prepareCall(taskId, built, budget, refs);
   return { kind, taskId, call: prepared.call, refs: [...refs], promptVersion: built.promptVersion };
@@ -269,7 +299,24 @@ async function existingItems(sql: Sql, bundle: TopicBundle, kind: TopicKind): Pr
   }
   if (kind === 'questions') {
     const { rows } = await sql.query<{ stem: string }>(
-      `select stem from public.questions where node_id = $1 and deleted_at is null limit 200`,
+      `select stem from public.questions where node_id = $1 and deleted_at is null and type not in ('find_error','problem') limit 200`,
+      [bundle.topicId],
+    );
+    return rows.map((r) => r.stem);
+  }
+  if (kind === 'find_error') {
+    const { rows } = await sql.query<{ text: string }>(
+      `select coalesce(string_agg(seg->>'text', ' '), '') as text
+         from public.questions q, jsonb_array_elements(q.payload->'segments') seg
+        where q.node_id = $1 and q.type = 'find_error' and q.deleted_at is null
+        group by q.id limit 60`,
+      [bundle.topicId],
+    );
+    return rows.map((r) => r.text.slice(0, 300));
+  }
+  if (kind === 'problems') {
+    const { rows } = await sql.query<{ stem: string }>(
+      `select stem from public.questions where node_id = $1 and type = 'problem' and deleted_at is null limit 60`,
       [bundle.topicId],
     );
     return rows.map((r) => r.stem);
@@ -320,7 +367,21 @@ export function featureOf(kind: TopicKind): string {
       return 'PRA-01';
     case 'feed':
       return 'FED-01';
+    case 'find_error':
+      return 'PRA-06';
+    case 'problems':
+      return 'PRA-08';
   }
+}
+
+/** PRA-08.1: a quantitative topic is one whose concepts carry formulas. */
+export function isQuantitativeTopic(bundle: Pick<TopicBundle, 'concepts'>): boolean {
+  return bundle.concepts.some((c) => c.formulas.length > 0);
+}
+
+/** PRA-08.1: 5–10 problems, one more per concept beyond four. */
+export function problemCountFor(bundle: Pick<TopicBundle, 'concepts'>): number {
+  return Math.min(10, Math.max(5, bundle.concepts.length + 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -571,7 +632,8 @@ export async function writeQuestions(
     if (ctx.force) {
       await client.query(
         `update public.questions set status = 'archived', updated_at = now()
-          where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active'`,
+          where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active'
+            and type not in ('find_error','problem')`,
         [ctx.bundle.topicId],
       );
     }
@@ -608,6 +670,101 @@ export async function writeQuestions(
           ctx.genBatchId,
         ],
       );
+      written++;
+    }
+  });
+  return { written, dropped, reasons };
+}
+
+async function insertGeneratedQuestion(client: Sql, ctx: WriteContext, row: QuestionRow): Promise<void> {
+  await client.query(
+    `insert into public.questions
+       (subject_id, node_id, concept_ids, type, stem, stimulus, payload, explanation, bloom_level, difficulty,
+        has_math, source_pages, origin, prompt_version, gen_batch_id, status, review_status)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12::jsonb, 'generated', $13, $14, 'active', 'approved')`,
+    [
+      ctx.bundle.subjectId,
+      ctx.bundle.topicId,
+      row.concept_ids,
+      row.type,
+      row.stem,
+      row.stimulus ? JSON.stringify(row.stimulus) : null,
+      JSON.stringify(row.payload),
+      row.explanation,
+      row.bloom_level,
+      row.difficulty,
+      row.has_math,
+      JSON.stringify(row.source_pages),
+      ctx.promptVersion,
+      ctx.genBatchId,
+    ],
+  );
+}
+
+async function archiveGenerated(client: Sql, ctx: WriteContext, type: 'find_error' | 'problem'): Promise<void> {
+  await client.query(
+    `update public.questions set status = 'archived', updated_at = now()
+      where node_id = $1 and origin = 'generated' and type = $2 and deleted_at is null and status = 'active'`,
+    [ctx.bundle.topicId, type],
+  );
+}
+
+/** Ache o Erro items (PRA-06.1–06.2). */
+export async function writeFindErrors(ctx: WriteContext, data: { items: FindErrorDraft[] }): Promise<{ written: number; dropped: number; reasons: Record<string, number> }> {
+  let written = 0;
+  let dropped = 0;
+  const reasons: Record<string, number> = {};
+  await withTransaction(ctx.pool, async (client) => {
+    if (ctx.force) await archiveGenerated(client, ctx, 'find_error');
+    for (const draft of data.items) {
+      const mapped = mapFindError(draft, { labels: ctx.labels, conceptIdByKey: ctx.bundle.conceptIdByKey });
+      if (!mapped.ok) {
+        dropped++;
+        reasons[mapped.reason] = (reasons[mapped.reason] ?? 0) + 1;
+        continue;
+      }
+      await insertGeneratedQuestion(client, ctx, mapped.value);
+      written++;
+    }
+  });
+  return { written, dropped, reasons };
+}
+
+/**
+ * Problem set (PRA-08.1–08.2, 08.6): problems that fail the consistency check are dropped. Items of one set
+ * share `set_id`; the first (easiest) carries the faded worked examples shown before the set.
+ */
+export async function writeProblems(
+  ctx: WriteContext,
+  data: { worked_examples: WorkedExampleDraft[]; problems: ProblemDraft[] },
+): Promise<{ written: number; dropped: number; reasons: Record<string, number> }> {
+  let written = 0;
+  let dropped = 0;
+  const reasons: Record<string, number> = {};
+  const rows: QuestionRow[] = [];
+  for (const draft of data.problems) {
+    const mapped = mapProblem(draft, {
+      labels: ctx.labels,
+      conceptIdByKey: ctx.bundle.conceptIdByKey,
+      consistent: (p) => checkProblemConsistency(p).ok,
+    });
+    if (!mapped.ok) {
+      dropped++;
+      reasons[mapped.reason] = (reasons[mapped.reason] ?? 0) + 1;
+      continue;
+    }
+    rows.push(mapped.value);
+  }
+  rows.sort((a, b) => a.difficulty - b.difficulty);
+  const setId = uuidV7();
+  const examples = fadeWorkedExamples(data.worked_examples);
+  await withTransaction(ctx.pool, async (client) => {
+    if (ctx.force) await archiveGenerated(client, ctx, 'problem');
+    rows.forEach((row, index) => {
+      row.payload = { ...row.payload, set_id: setId, set_position: index, ...(index === 0 && examples.length > 0 ? { worked_examples: examples } : {}) };
+    });
+    for (const row of rows) {
+      await insertGeneratedQuestion(client, ctx, row);
       written++;
     }
   });

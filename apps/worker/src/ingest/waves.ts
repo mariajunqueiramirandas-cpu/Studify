@@ -7,7 +7,21 @@ import { getTask } from '@studify/prompts';
 import { getDocument, type PipelineEnv } from './env.ts';
 import { buildPagesCustomId, buildTopicCustomId, type TopicKind } from './custom-id.ts';
 import { aiTask, prepareCall, toPdfSlices, type SliceRef } from './tasks.ts';
-import { buildKindCall, featureOf, loadTopicBundle, writeCards, writeConcepts, writeFeed, writeGlossary, writeNote, writeQuestions, type TopicBundle, type WriteContext } from './topics.ts';
+import {
+  buildKindCall,
+  featureOf,
+  loadTopicBundle,
+  writeCards,
+  writeConcepts,
+  writeFeed,
+  writeFindErrors,
+  writeGlossary,
+  writeNote,
+  writeProblems,
+  writeQuestions,
+  type TopicBundle,
+  type WriteContext,
+} from './topics.ts';
 import { TRANSCRIPTION_PAGES } from './limits.ts';
 import { pagesToSpans } from './slice-plan.ts';
 import { applyProgress } from '../framework/progress.ts';
@@ -391,6 +405,16 @@ export async function writeOutcome(
     case 'feed':
       await writeFeed(ctx, data as Parameters<typeof writeFeed>[1]);
       return true;
+    case 'find_error': {
+      const result = await writeFindErrors(ctx, data as Parameters<typeof writeFindErrors>[1]);
+      env.ctx.log.info({ written: result.written, dropped: result.dropped, reasons: result.reasons }, 'find_error items written');
+      return true;
+    }
+    case 'problems': {
+      const result = await writeProblems(ctx, data as Parameters<typeof writeProblems>[1]);
+      env.ctx.log.info({ written: result.written, dropped: result.dropped, reasons: result.reasons }, 'problems written');
+      return true;
+    }
   }
 }
 
