@@ -535,7 +535,10 @@ begin
     return;
   end if;
 
-  execute 'alter table realtime.messages enable row level security';
+  -- Same as storage.objects: hosted Supabase owns realtime.messages and usually has RLS on already.
+  if not (select relrowsecurity from pg_class where oid = 'realtime.messages'::regclass) then
+    execute 'alter table realtime.messages enable row level security';
+  end if;
 
   execute $p$
     create policy realtime_private_read on realtime.messages for select to authenticated
