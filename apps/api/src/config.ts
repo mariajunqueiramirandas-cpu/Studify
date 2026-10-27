@@ -2,6 +2,7 @@
 // process with the full list of problems, so a bad Dokploy environment fails on the first boot.
 import path from 'node:path';
 import { z } from 'zod';
+import { DEFAULT_APK_URL } from './site.ts';
 
 const Env = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
@@ -20,8 +21,10 @@ const Env = z.object({
     .string()
     .regex(/^[a-z_][a-z0-9_]*$/, 'must be a lowercase SQL identifier')
     .default('pgboss'),
-  /** Directory with the static link site. Default: apps/site/public in the repo (the image sets /app/site). */
+  /** Directory with the built link site. Default: apps/site/dist in the repo (the image sets /app/site). */
   SITE_DIR: z.string().min(1).optional(),
+  /** Where /download redirects. Default: the newest GitHub Release's studify.apk (site.ts DEFAULT_APK_URL). */
+  APK_URL: z.url().optional(),
 });
 
 export interface ApiConfig {
@@ -36,6 +39,7 @@ export interface ApiConfig {
   baseUrl: string | undefined;
   pgBossSchema: string;
   siteDir: string;
+  apkUrl: string;
   /** TTS_PROVIDER, GOOGLE_TTS_API_KEY, TTS_VOICE_*, TTS_USD_PER_MILLION_CHARS (packages/speech ttsFromEnv). */
   ttsEnv: Record<string, string | undefined>;
 }
@@ -47,8 +51,8 @@ export class ConfigError extends Error {
   }
 }
 
-/** Default site directory: apps/site/public, relative to this file (apps/api/src). */
-export const DEFAULT_SITE_DIR = path.resolve(import.meta.dir, '../../site/public');
+/** Default site directory: apps/site/dist (`pnpm --filter @studify/site build`), relative to this file (apps/api/src). */
+export const DEFAULT_SITE_DIR = path.resolve(import.meta.dir, '../../site/dist');
 
 /** Empty strings mean "unset", except BASE_URL where empty has a meaning (custom-scheme links). */
 function withoutEmpty(env: Record<string, string | undefined>): Record<string, string | undefined> {
@@ -81,6 +85,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     baseUrl: env.BASE_URL === undefined ? undefined : env.BASE_URL.trim(),
     pgBossSchema: v.PG_BOSS_SCHEMA,
     siteDir: v.SITE_DIR ?? DEFAULT_SITE_DIR,
+    apkUrl: v.APK_URL ?? DEFAULT_APK_URL,
     ttsEnv: Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('TTS_') || key === 'GOOGLE_TTS_API_KEY')),
   };
 }
