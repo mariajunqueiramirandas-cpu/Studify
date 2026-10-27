@@ -108,7 +108,6 @@ class FocusNotification(private val context: Context, private val strings: Focus
       .setStyle(style)
       .setOngoing(true)
       .setOnlyAlertOnce(true)
-      .setSilent(true)
       .setCategory(Notification.CATEGORY_PROGRESS)
       .setVisibility(Notification.VISIBILITY_PUBLIC)
       .setContentIntent(open)
