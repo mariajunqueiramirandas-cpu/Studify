@@ -403,7 +403,8 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 ### 7.1 Layout
 
 - **Phone-first**, 360–412 dp wide as the design baseline; test at 320 dp. No horizontal scrolling except carousels with visible overflow.
-- Grid: 16 dp side margins, 8 dp spacing scale (4, 8, 12, 16, 24, 32, 48).
+- Grid: 20 dp page gutter (`space.gutter`: content, footer bar, sheets and snackbars all align on it), 4 dp-based spacing scale (2, 4, 8, 12, 16, 24, 32, 48). A subtitle hugs its heading (2 dp); a group sits 12 dp under its heading; blocks on a page are 16 dp apart, with 24 dp above a titled section.
+- Lists inside a card run edge to edge with inset hairline dividers; tabs size to their labels and scroll rather than wrap.
 - **Touch targets ≥ 48×48 dp**, ≥ 8 dp apart. Answer options ≥ 56 dp tall.
 - **Thumb zone:** primary actions in the bottom 40%; destructive actions never in the thumb zone's default position.
 - Tablets: not a target in v1. Layouts must not break on large screens (max content width 600 dp, centered).

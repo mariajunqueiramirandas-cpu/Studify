@@ -86,7 +86,7 @@ export function FeedbackPanel({
         <View style={[styles.badge, { backgroundColor: color }]}>
           <Ionicons name={result.pending ? 'time-outline' : result.correct ? 'checkmark' : partial ? 'remove' : 'close'} size={24} color={c.onPrimary} />
         </View>
-        <RichText variant="title" style={{ flex: 1, color }}>
+        <RichText variant="heading" style={{ flex: 1, color }}>
           {header}
         </RichText>
       </View>

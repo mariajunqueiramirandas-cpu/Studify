@@ -89,8 +89,10 @@ export function ProgressRing({ value, size = 64, stroke = 7, color, children, la
 
 export function PctRing({ value, size = 56, label }: { value: number | null | undefined; size?: number; label?: string }) {
   return (
-    <ProgressRing value={value ?? 0} size={size} label={label}>
-      <Text variant="label">{value == null ? '—' : `${Math.round(value * 100)}%`}</Text>
+    <ProgressRing value={value ?? 0} size={size} stroke={Math.max(4, Math.round(size * 0.12))} label={label}>
+      <Text variant="label" weight="bold" style={size < 48 ? { fontSize: Math.round(size * 0.29), lineHeight: Math.round(size * 0.36) } : undefined}>
+        {value == null ? '—' : `${Math.round(value * 100)}%`}
+      </Text>
     </ProgressRing>
   );
 }

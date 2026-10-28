@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View, type TextInputProps } from 'react-native';
 import { shortDate, timeHM, weekdayDate } from '../features/common/format';
 import { tap } from '../lib/haptics';
 import { radius, space, touch, useTheme } from '../theme';
@@ -19,7 +19,7 @@ export function TextField({ label, hint, error, counter, style, multiline, value
   const [focused, setFocused] = useState(false);
   const len = value?.length ?? 0;
   return (
-    <View style={{ gap: space.xs }}>
+    <View style={{ gap: space.sm }}>
       {label ? <Text variant="label">{label}</Text> : null}
       <TextInput
         accessibilityLabel={label ?? rest.placeholder}
@@ -106,7 +106,14 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
   return (
     <View style={{ gap: space.xs }}>
       {label ? <Text variant="label">{label}</Text> : null}
-      <View style={[styles.segment, { borderBottomColor: c.border }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.segment, { borderBottomColor: c.border }]}
+        contentContainerStyle={styles.segmentRow}
+        accessibilityRole="radiogroup"
+        accessibilityLabel={label}
+      >
         {options.map((o) => {
           const selected = o.value === value;
           return (
@@ -120,14 +127,14 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
               }}
               style={({ pressed }) => [styles.segmentItem, pressed && !selected && { opacity: 0.6 }]}
             >
-              <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: selected ? c.textPrimary : c.textSecondary }} align="center" numberOfLines={2}>
+              <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: selected ? c.textPrimary : c.textSecondary }} align="center" numberOfLines={1}>
                 {o.label}
               </Text>
               <View style={[styles.segmentBar, { backgroundColor: selected ? c.primary : 'transparent' }]} />
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -226,8 +233,10 @@ const styles = StyleSheet.create({
   input: { minHeight: touch.min, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, paddingVertical: space.xs },
-  segment: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth * 2, gap: space.xs },
-  segmentItem: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.xs, gap: space.sm },
+  // Tabs size to their labels and share any spare width; when they don't fit, the row scrolls instead of wrapping.
+  segment: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth * 2 },
+  segmentRow: { flexGrow: 1, gap: space.sm },
+  segmentItem: { flexGrow: 1, minHeight: 46, alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.xxs, gap: space.sm },
   segmentBar: { alignSelf: 'stretch', height: 3, borderTopLeftRadius: 2, borderTopRightRadius: 2, marginBottom: -1 },
   radio: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1.5, minHeight: touch.option },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: touch.option },

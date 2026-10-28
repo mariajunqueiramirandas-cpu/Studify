@@ -123,15 +123,23 @@ export function Screen({
   );
 }
 
-export function Section({ title, action, children, style }: { title?: string; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+/** A titled group. The subtitle hugs its heading; the content sits one step below both. */
+export function Section({ title, subtitle, action, children, style }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.section, title ? styles.titled : null, style]}>
       {title ? (
-        <View style={styles.sectionHeader}>
-          <Text variant="heading" accessibilityRole="header" style={{ flex: 1 }}>
-            {title}
-          </Text>
-          {action}
+        <View style={{ gap: space.xxs }}>
+          <View style={styles.sectionHeader}>
+            <Text variant="heading" accessibilityRole="header" style={{ flex: 1 }}>
+              {title}
+            </Text>
+            {action}
+          </View>
+          {subtitle ? (
+            <Text variant="bodySmall" tone="secondary">
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       {children}
@@ -164,7 +172,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center' },
   context: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   content: { width: '100%', maxWidth: maxContentWidth, alignSelf: 'center', gap: space.lg },
-  padded: { paddingHorizontal: space.lg + 4, paddingTop: space.sm },
+  padded: { paddingHorizontal: space.gutter, paddingTop: space.sm },
   section: { gap: space.md },
   titled: { marginTop: space.sm },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 32 },

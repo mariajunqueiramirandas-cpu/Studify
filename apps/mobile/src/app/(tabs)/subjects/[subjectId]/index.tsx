@@ -141,7 +141,7 @@ export default function SubjectHome() {
 /** The open notebook's cover: the subject's colour as a wash, its name set large, how much of it you've studied. */
 function SubjectCover({ name, icon, tint, studied, total, dark }: { name: string; icon: string | null; tint: string; studied: number; total: number; dark: boolean }) {
   return (
-    <View style={{ marginHorizontal: -(space.lg + 4), marginTop: -space.sm, paddingHorizontal: space.lg + 4, paddingVertical: space.lg, gap: space.md, backgroundColor: `${tint}${dark ? '2A' : '1C'}`, borderBottomWidth: 3, borderBottomColor: tint }}>
+    <View style={{ marginHorizontal: -(space.gutter), marginTop: -space.sm, paddingHorizontal: space.gutter, paddingVertical: space.lg, gap: space.md, backgroundColor: `${tint}${dark ? '2A' : '1C'}`, borderBottomWidth: 3, borderBottomColor: tint }}>
       <Ionicons name={(icon ?? 'book-outline') as IconName} size={30} color={tint} />
       <Text variant="display" accessibilityRole="header">
         {name}

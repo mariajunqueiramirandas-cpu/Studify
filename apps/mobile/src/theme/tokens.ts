@@ -101,7 +101,8 @@ export function getPalette(scheme: ColorScheme, contrast = false): Palette {
 }
 
 // 8 dp scale with the 4 dp half step (ux §7.1).
-export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
+// `gutter` is the page margin: content, the footer bar and sheets all line up on it.
+export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, gutter: 20, xl: 24, xxl: 32, xxxl: 48 } as const;
 /** Mixes a #RRGGBB colour towards black (amount > 0) or white (amount < 0); the ledge under tactile controls. */
 export function shade(hex: string, amount: number): string {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);

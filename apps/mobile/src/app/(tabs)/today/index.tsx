@@ -250,9 +250,9 @@ export default function Today() {
       {activeGoal ? (
         <Section
           title={t('today.plan_title')}
+          subtitle={plan.items.length ? t('today.summary', { minutes: plan.minutes, subjects: plan.subjects }) : undefined}
           action={<Button compact variant="text" label={t('dashboard.title')} onPress={() => router.push(`/goal/${activeGoal.id}`)} />}
         >
-          {plan.items.length ? <Text tone="secondary">{t('today.summary', { minutes: plan.minutes, subjects: plan.subjects })}</Text> : null}
           {plan.items.length === 0 ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
           {inGoodWindow && pending.some((i) => isDemandingUnit(i.unitType)) ? (
             <Text variant="bodySmall" tone="accent">
@@ -350,8 +350,8 @@ function PlanRow({ item, first, color, onDone, onSkip }: { item: TodayItem; firs
 const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, marginTop: -space.md },
   goal: { flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'flex-start' },
-  bleed: { marginHorizontal: -(space.lg + 4) },
-  exams: { paddingHorizontal: space.lg + 4, gap: space.sm },
+  bleed: { marginHorizontal: -(space.gutter) },
+  exams: { paddingHorizontal: space.gutter, gap: space.sm },
   exam: { borderWidth: 1, borderRadius: radius.md, paddingVertical: space.sm, paddingLeft: space.sm, paddingRight: space.lg },
   stack: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   sheet: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden' },

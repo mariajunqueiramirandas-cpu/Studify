@@ -324,13 +324,15 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
             const c = note.citations[i];
             if (c) router.push({ pathname: '/subjects/[subjectId]/document/[documentId]', params: { subjectId, documentId: c.document_id, page: String(c.page_start), ...(c.cited_text ? { cite: c.cited_text.slice(0, 300) } : {}) } });
           }} />
-          <PageChips sources={note.citations} subjectId={subjectId} max={4} />
-          <Row wrap>
-            <AiBadge />
-            <View style={{ flex: 1 }} />
-            <ReadAloudButton id={`note:${note.id}`} text={note.body} />
-            <Button compact variant="text" label={t('global.report_error')} onPress={() => setFlag(true)} />
-          </Row>
+          <View style={{ gap: space.xs }}>
+            <PageChips sources={note.citations} subjectId={subjectId} max={4} />
+            <Row wrap>
+              <AiBadge />
+              <View style={{ flex: 1 }} />
+              <ReadAloudButton id={`note:${note.id}`} text={note.body} />
+              <Button compact variant="text" label={t('global.report_error')} onPress={() => setFlag(true)} />
+            </Row>
+          </View>
           <Button variant="secondary" icon="bulb-outline" label={t('notes.explain')} disabled={!online} onPress={() => setExplain(true)} />
           <Card tone="soft" style={{ marginTop: space.md }}>
             <Row gap={space.md}>
