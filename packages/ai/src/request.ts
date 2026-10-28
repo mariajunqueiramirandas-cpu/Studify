@@ -18,6 +18,7 @@ import type {
   BetaCreateParams,
   BetaMessageParam,
   BetaTextBlockParam,
+  BetaToolUnion,
   ChoiceKind,
   Choices,
   MaxTokensClass,
@@ -95,6 +96,17 @@ function stripSchema(node: unknown, choices: Choices): unknown {
   return out;
 }
 
+/**
+ * Custom tools get the same keyword pass as the output format: the API rejects number bounds in tool schemas too
+ * ("For 'number' type, properties maximum, minimum are not supported"). Server tools carry no schema and pass through.
+ */
+export function sanitizeTools(tools: readonly BetaToolUnion[]): BetaToolUnion[] {
+  return tools.map((tool) => {
+    if (!("input_schema" in tool)) return tool;
+    return { ...tool, input_schema: stripSchema(tool.input_schema, {}) as typeof tool.input_schema };
+  });
+}
+
 /** A usable bound: Zod's safe-integer bounds on every int say nothing, so they are left out. */
 const num = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER ? value : null;
@@ -165,7 +177,7 @@ export function buildParams<T>(call: TaskCall<T>, opts: BuildParamsOptions): Bet
     messages: [...opts.messages],
   };
   if (call.tools && call.tools.length > 0) {
-    params.tools = call.tools;
+    params.tools = sanitizeTools(call.tools);
     params.tool_choice = { type: "auto" };
   }
   return opts.batch ? params : { ...params, ...syncRequestDefaults(model) };
