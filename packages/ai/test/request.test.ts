@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { assertRequestShape, buildParams, toJsonSchema } from "../src/request.ts";
+import { assertRequestShape, buildParams, sanitizeTools, toJsonSchema } from "../src/request.ts";
 import { AiBadRequestError } from "../src/errors.ts";
 import { DEFAULT_MODEL, SERVER_FALLBACK_BETA } from "../src/models.ts";
 import type { BetaCreateParams, BetaMessageParam } from "../src/types.ts";
@@ -56,6 +56,25 @@ describe("buildParams", () => {
     expect(schema.$schema).toBeUndefined();
     expect(JSON.stringify(schema)).not.toMatch(/"minItems"|"minLength"/);
     expect(cardsTask.output.mode).toBe("structured");
+  });
+});
+
+describe("sanitizeTools", () => {
+  it("drops number bounds from custom tool schemas and restates them, and leaves server tools alone", () => {
+    const tool = {
+      name: "registrar_avaliacao",
+      description: "Registra a avaliação.",
+      strict: true,
+      input_schema: toJsonSchema(z.object({ score: z.number().min(0).max(1), node_key: z.string() })),
+    };
+    const webSearch = { type: "web_search_20260209", name: "web_search", max_uses: 2 };
+    const [custom, server] = sanitizeTools([tool, webSearch] as never);
+    const text = JSON.stringify(custom);
+    expect(text).not.toMatch(/"minimum"|"maximum"/);
+    expect((custom as { input_schema: { properties: Record<string, { description?: string }> } }).input_schema.properties.score?.description).toBe(
+      "valor >= 0 e <= 1",
+    );
+    expect(server).toBe(webSearch);
   });
 });
 
