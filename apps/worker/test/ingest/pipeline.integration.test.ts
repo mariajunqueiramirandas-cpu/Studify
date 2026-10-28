@@ -286,7 +286,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
   }
 
   /** useBatch mirrors AI_USE_BATCH: content waves on the Message Batches API instead of standard calls. */
-  function runtime(store: FakeObjectStore, opts: { useBatch?: boolean } = {}) {
+  function runtime(store: FakeObjectStore, opts: { useBatch?: boolean; waveConcurrency?: number } = {}) {
     const log = createLogger('silent');
     const backend = new InMemoryQueue();
     const expo = captureExpo();
@@ -309,7 +309,17 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
         return registry.enqueue(name, data, opts);
       },
     });
-    registry = new JobRegistry({ backend, pool, supabase: fakeSupabase(store), claude, push, log, now, useBatch: opts.useBatch ?? false });
+    registry = new JobRegistry({
+      backend,
+      pool,
+      supabase: fakeSupabase(store),
+      claude,
+      push,
+      log,
+      now,
+      useBatch: opts.useBatch ?? false,
+      ...(opts.waveConcurrency ? { waveConcurrency: opts.waveConcurrency } : {}),
+    });
     return { backend, registry, expo, push };
   }
 
@@ -479,6 +489,53 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const job = await pool.query<{ status: string }>(`select status from public.ai_jobs where document_id = $1 and type = 'ingest.document'`, [docId]);
     expect(job.rows[0]?.status).toBe('succeeded');
     expect(expo.sent.some((m) => m.data.type === 'material_ready')).toBe(true);
+  }, 180_000);
+
+  it('runs each topic straight through and marks it ready before the next topic starts (Batch API off)', async () => {
+    const store = new FakeObjectStore();
+    const { userId, subjectId, docId, storagePath, bytes } = await seed();
+    store.put('documents', storagePath, bytes, 'application/pdf');
+    // One call at a time makes the order deterministic.
+    const { backend, registry, push } = runtime(store, { waveConcurrency: 1 });
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    const requestsBefore = mock.requests.length;
+
+    await registry.enqueue('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
+    await backend.drain(4000);
+    expect(backend.failedJobs).toEqual([]);
+
+    // The first topic's content calls come before the second topic's concepts call, not after every concept.
+    const bodies = mock.requests.slice(requestsBefore).filter((r) => r.path === '/v1/messages').map((r) => JSON.stringify(r.body));
+    const conceptCalls = bodies.flatMap((b, i) => (b.includes('identifique os conceitos de um tópico') ? [i] : []));
+    const firstCards = bodies.findIndex((b) => b.includes('crie cartões de repetição espaçada'));
+    expect(conceptCalls.length).toBe(2);
+    expect(firstCards).toBeGreaterThan(conceptCalls[0]!);
+    expect(firstCards).toBeLessThan(conceptCalls[1]!);
+
+    // The first topic was ready before the second topic's concepts were written.
+    const firstReady = await pool.query<{ at: Date }>(
+      `select updated_at as at from public.knowledge_nodes where subject_id = $1 and kind = 'topic' and title = $2`,
+      [subjectId, TOPIC_ORGANELAS],
+    );
+    const secondConcepts = await pool.query<{ at: Date }>(
+      `select c.created_at as at from public.knowledge_nodes c join public.knowledge_nodes t on t.id = c.parent_id
+        where t.subject_id = $1 and t.title = $2 and c.kind = 'concept'`,
+      [subjectId, TOPIC_MEMBRANA],
+    );
+    expect(firstReady.rows[0]!.at.getTime()).toBeLessThan(secondConcepts.rows[0]!.at.getTime());
+
+    const topicStatus = await pool.query<{ content_status: string }>(
+      `select content_status from public.knowledge_nodes where subject_id = $1 and kind = 'topic'`,
+      [subjectId],
+    );
+    expect(topicStatus.rows.map((r) => r.content_status)).toEqual(['ready', 'ready']);
+    const doc = await pool.query<{ status: string }>(`select status from public.documents where id = $1`, [docId]);
+    expect(doc.rows[0]?.status).toBe('ready');
+    const job = await pool.query<{ status: string; stage: string; items_total: number; items_done: number }>(
+      `select status, stage, items_total, items_done from public.ai_jobs where document_id = $1 and type = 'ingest.document'`,
+      [docId],
+    );
+    expect(job.rows[0]).toMatchObject({ status: 'succeeded', stage: 'S4', items_total: 2, items_done: 2 });
   }, 180_000);
 
   it('writing a note again changes nothing, and a note the app is generating is left to note-generate', async () => {

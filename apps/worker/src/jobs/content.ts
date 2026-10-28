@@ -39,7 +39,8 @@ export const jobs: JobDefinition<any>[] = [
   {
     name: 'ingest.topic_content',
     retryLimit: 2,
-    expireInSeconds: 3600,
+    // With the Batch API off one job runs a material's concepts and content calls (pipeline.ts runTopicsNow).
+    expireInSeconds: 3 * 3600,
     handler: async (ctx, data, meta) => {
       const p = parsePayload(TopicContentPayload, data, 'ingest.topic_content');
       await runTopicContent(ctx, supabaseStore(ctx.supabase), {
