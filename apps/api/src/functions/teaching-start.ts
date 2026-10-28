@@ -10,6 +10,7 @@ import { callTask, unwrapResult } from '../shared/ai.ts';
 import { budgetCtxFor } from '../shared/ctx.ts';
 import { claudeDepsFor } from '../shared/deps.ts';
 import { loadTopic, topicInput, topicSlices } from '../shared/topic.ts';
+import { storedSliceOf } from '../shared/retrieval.ts';
 import { scoringPlan, startState, type ModelPlan, type StoredPlan } from '../shared-p3/teaching.ts';
 
 export const handler = defineFunction<z.infer<typeof TeachingStartReqSchema>>({
@@ -73,7 +74,7 @@ export const handler = defineFunction<z.infer<typeof TeachingStartReqSchema>>({
       model,
       scoring: scoringPlan(model, documents, opener, new Set(bundle.concepts.map((c) => c.id))),
       documents,
-      slices: prepared.map((p) => ({ row_id: p.rowId, document_id: p.documentId, title: p.title, pages: p.pages, storage_path: p.storagePath })),
+      slices: prepared.map(storedSliceOf),
     };
     const sessionId = deps.newId();
     const messages = [{ role: 'lucas' as const, text: opener, at: ctx.now.toISOString() }];

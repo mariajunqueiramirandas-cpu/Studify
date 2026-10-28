@@ -68,7 +68,20 @@ export interface StoredSlice {
   document_id: string;
   title: string;
   pages: number[];
+  /** The topic's own pages when the slice also carries context pages. */
+  focus_pages?: number[];
   storage_path: string;
+}
+
+export function storedSliceOf(p: PreparedSlice): StoredSlice {
+  return {
+    row_id: p.rowId,
+    document_id: p.documentId,
+    title: p.title,
+    pages: p.pages,
+    ...(p.focusPages ? { focus_pages: p.focusPages } : {}),
+    storage_path: p.storagePath,
+  };
 }
 
 /** Prepares the new slices for a turn and returns them with their stored form. */
@@ -81,7 +94,7 @@ export async function prepareTurnSlices(deps: Deps, docs: Map<string, { title: s
       ...(await prepareSlices(deps.db, { documentId, title: doc.title, storagePath: doc.storagePath, pages, purpose: 'tutor', newId: deps.newId })),
     );
   }
-  const stored = prepared.map((p) => ({ row_id: p.rowId, document_id: p.documentId, title: p.title, pages: p.pages, storage_path: p.storagePath }));
+  const stored = prepared.map(storedSliceOf);
   return { prepared, stored };
 }
 
@@ -94,7 +107,13 @@ export async function slicesFromStored(deps: Deps, stored: StoredSlice[], cache:
       data = toBase64(await downloadBytes(deps.db, sliceObjectPath(s.storage_path)));
       cache.set(s.row_id, data);
     }
-    out.push({ documentId: s.document_id, title: s.title, pages: s.pages, source: { type: 'base64', media_type: 'application/pdf', data } });
+    out.push({
+      documentId: s.document_id,
+      title: s.title,
+      pages: s.pages,
+      ...(s.focus_pages ? { focusPages: s.focus_pages } : {}),
+      source: { type: 'base64', media_type: 'application/pdf', data },
+    });
   }
   return out;
 }

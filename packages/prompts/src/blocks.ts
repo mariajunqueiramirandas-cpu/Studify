@@ -7,6 +7,11 @@ export interface PdfSlice {
   title: string;
   /** ORIGINAL page numbers of the pages in this block, in ascending order. */
   pages: readonly number[];
+  /**
+   * The pages that belong to the topic, when the block also carries neighboring pages as context
+   * (withContextPages). Absent: every page belongs to the task.
+   */
+  focusPages?: readonly number[];
   source: DocumentSource;
 }
 
@@ -39,9 +44,16 @@ export function documentBlocks(slices: readonly PdfSlice[], ttl?: CacheTtl): Doc
     const label = `D${index + 1}`;
     labels[label] = slice.documentId;
     allowedPages[label] = [...slice.pages];
+    const focus = slice.focusPages ? slice.pages.filter((p) => slice.focusPages!.includes(p)) : [];
+    const context = slice.focusPages ? slice.pages.filter((p) => !slice.focusPages!.includes(p)) : [];
+    const pages = formatPageList(slice.pages);
     const block: DocumentBlock = {
       type: 'document',
-      title: `Documento ${label} — ${slice.title} — páginas originais ${formatPageList(slice.pages)}`,
+      title:
+        focus.length > 0 && context.length > 0
+          ? `Documento ${label} — ${slice.title} — páginas originais ${pages} (do tópico: ${formatPageList(focus)})`
+          : `Documento ${label} — ${slice.title} — páginas originais ${pages}`,
+      ...(focus.length > 0 && context.length > 0 ? { context: contextPagesNote(focus, context) } : {}),
       source: slice.source,
     };
     return block;
@@ -52,6 +64,20 @@ export function documentBlocks(slices: readonly PdfSlice[], ttl?: CacheTtl): Doc
     if (cc) blocks[last] = { ...blocks[last]!, cache_control: cc };
   }
   return { blocks, labels, allowedPages };
+}
+
+/**
+ * What the model may take from the context pages of a topic slice: only the continuation of something the topic's
+ * own pages start or finish (a passage cut by the page break, an exercise and its answer), never new subject matter.
+ */
+export function contextPagesNote(focus: readonly number[], context: readonly number[]): string {
+  return lines(
+    `O conteúdo deste tópico está nas páginas ${formatPageList(focus)}.`,
+    `${context.length === 1 ? 'A página' : 'As páginas'} ${formatPageList(context)} ${context.length === 1 ? 'vem' : 'vêm'} de partes vizinhas do material e ${context.length === 1 ? 'está' : 'estão'} aqui só como contexto, porque um assunto pode começar antes ou terminar depois da quebra de página.`,
+    'Use as páginas de contexto apenas para completar um trecho, explicação, tabela ou exercício que começa ou termina nas páginas do tópico.',
+    'Não crie conceitos, notas, cartões ou questões sobre assuntos que aparecem só nas páginas de contexto: eles pertencem a outros tópicos.',
+    'Ao citar, prefira as páginas do tópico; cite uma página de contexto só para a parte que continua nela.',
+  );
 }
 
 export function imageBlock(data: string, mediaType: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg'): ContentBlock {

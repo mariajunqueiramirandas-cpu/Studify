@@ -26,6 +26,8 @@ export type DocumentSource =
 export interface DocumentBlock {
   type: 'document';
   title: string;
+  /** Notes about the document the model reads but never cites (Messages API `context`). */
+  context?: string;
   source: DocumentSource;
   citations?: { enabled: boolean };
   cache_control?: CacheControl;

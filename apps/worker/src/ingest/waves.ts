@@ -39,6 +39,8 @@ export const BATCH_MAX_WAIT_MS = 60 * 60_000;
 export interface PlanBlock {
   documentId: string;
   pages: number[];
+  /** The topic's own pages when the block also carries context pages. */
+  focusPages?: number[];
 }
 
 export interface PlanItem {
@@ -96,6 +98,7 @@ export async function refsFromBlocks(env: PipelineEnv, blocks: readonly PlanBloc
       documentId: doc.id,
       title: doc.title,
       pages: cached.pages,
+      ...(block.focusPages ? { focusPages: block.focusPages } : {}),
       tokenCount: null,
       source: { kind: 'base64', data: Buffer.from(cached.bytes).toString('base64') },
     });
@@ -266,7 +269,7 @@ export async function topicItem(
     topicId: bundle.topicId,
     taskId: built.taskId,
     promptVersion: built.promptVersion,
-    blocks: refs.map((r) => ({ documentId: r.documentId, pages: r.pages })),
+    blocks: refs.map((r) => ({ documentId: r.documentId, pages: r.pages, ...(r.focusPages ? { focusPages: r.focusPages } : {}) })),
     budget,
     language: opts.language,
     genBatchId: opts.genBatchId,

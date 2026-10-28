@@ -15,6 +15,8 @@ export interface PreparedSlice {
   documentId: string;
   title: string;
   pages: number[];
+  /** The topic's own pages when `pages` also holds context pages (topicSlices). */
+  focusPages?: number[];
   base64: string;
   storagePath: string;
 }
@@ -33,6 +35,7 @@ export function toPdfSlice(slice: PreparedSlice): PdfSlice {
     documentId: slice.documentId,
     title: slice.title,
     pages: slice.pages,
+    ...(slice.focusPages ? { focusPages: slice.focusPages } : {}),
     source: { type: 'base64', media_type: 'application/pdf', data: slice.base64 },
   };
 }

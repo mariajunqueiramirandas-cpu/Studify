@@ -1,7 +1,7 @@
 // Topic content (S2 concepts, S4 notes, glossary, cards, questions, feed): loads a topic's bundle from the
 // map, builds the prompts input for each kind, and writes the outputs. Calls are built the same way for the
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
-import { cardTargetCount, decodeQuestion, getTask, topicQuotas, type QuestionDraft as ModelQuestionDraft } from '@studify/prompts';
+import { cardTargetCount, decodeQuestion, getTask, topicQuotas, withContextPages, type QuestionDraft as ModelQuestionDraft } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
 import { checkProblemConsistency, parseQuestionPayload, uuidV7, type QuestionType } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
@@ -9,7 +9,7 @@ import type pg from 'pg';
 import { tableExists, withTransaction, type Sql } from '../framework/db.ts';
 import { budgetFor, getDocument, type PipelineEnv } from './env.ts';
 import { TASK_FOR_KIND, type TopicKind } from './custom-id.ts';
-import { splitSpan } from './slice-plan.ts';
+import { pagesToSpans, splitSpan, type PageSpan } from './slice-plan.ts';
 import { TOPIC_SLICE_PAGES } from './limits.ts';
 import { prepareCall, toPdfSlices, type SliceRef } from './tasks.ts';
 import {
@@ -131,26 +131,57 @@ export function sourcesOf(bundle: TopicBundle, documentId?: string): SourceSpan[
 /**
  * Slice references for a topic's pages: one `topic` slice per ≤ 60 consecutive pages, per document, in the
  * order the prompts builder labels them (document id, first page). Each slice is base64 for the request.
+ * With `context` (the default) every run of pages gets one neighboring page on each side, so a subject cut by a
+ * page break reaches the model whole; `focusPages` tells the prompt which pages are the topic's own. Callers
+ * that slice a whole document (the material check) turn it off.
  */
-export async function topicSliceRefs(env: PipelineEnv, sources: readonly SourceSpan[]): Promise<SliceRef[]> {
-  const ordered = [...sources].sort((a, b) => a.documentId.localeCompare(b.documentId) || a.pageStart - b.pageStart);
+export async function topicSliceRefs(env: PipelineEnv, sources: readonly SourceSpan[], opts: { context?: boolean } = {}): Promise<SliceRef[]> {
+  const context = opts.context ?? true;
+  // One page set per document: overlapping spans (and their context pages) are sent once.
+  const byDoc = new Map<string, Set<number>>();
+  for (const source of sources) {
+    const pages = byDoc.get(source.documentId) ?? new Set<number>();
+    for (let p = source.pageStart; p <= source.pageEnd; p += 1) pages.add(p);
+    byDoc.set(source.documentId, pages);
+  }
   const refs: SliceRef[] = [];
-  for (const source of ordered) {
-    const doc = await getDocument(env, source.documentId);
-    if (!doc) throw new Error(`document ${source.documentId} not found for topic slices`);
-    for (const span of splitSpan(source.pageStart, source.pageEnd, TOPIC_SLICE_PAGES)) {
-      const cached = await env.sources.slice(doc, span, 'topic');
-      refs.push({
-        id: cached.id,
-        documentId: doc.id,
-        title: doc.title,
-        pages: cached.pages,
-        tokenCount: null,
-        source: { kind: 'base64', data: Buffer.from(cached.bytes).toString('base64') },
-      });
+  for (const documentId of [...byDoc.keys()].sort((a, b) => a.localeCompare(b))) {
+    const doc = await getDocument(env, documentId);
+    if (!doc) throw new Error(`document ${documentId} not found for topic slices`);
+    const own = [...byDoc.get(documentId)!];
+    const { pages, focus } = context ? withContextPages(own, doc.pageCount) : { pages: own, focus: own };
+    for (const run of pagesToSpans(pages)) {
+      for (const span of topicChunks(run, focus)) {
+        const cached = await env.sources.slice(doc, span, 'topic');
+        const focusPages = cached.pages.filter((p) => focus.includes(p));
+        refs.push({
+          id: cached.id,
+          documentId: doc.id,
+          title: doc.title,
+          pages: cached.pages,
+          ...(focusPages.length < cached.pages.length ? { focusPages } : {}),
+          tokenCount: null,
+          source: { kind: 'base64', data: Buffer.from(cached.bytes).toString('base64') },
+        });
+      }
     }
   }
   return refs;
+}
+
+/** Splits a run into ≤ 60-page slices; an edge slice holding only a context page joins its neighbor instead. */
+function topicChunks(run: PageSpan, focus: readonly number[]): PageSpan[] {
+  const chunks = splitSpan(run.start, run.end, TOPIC_SLICE_PAGES);
+  const hasFocus = (c: PageSpan) => focus.some((p) => p >= c.start && p <= c.end);
+  if (chunks.length > 1 && !hasFocus(chunks[chunks.length - 1]!)) {
+    const tail = chunks.pop()!;
+    chunks[chunks.length - 1]!.end = tail.end;
+  }
+  if (chunks.length > 1 && !hasFocus(chunks[0]!)) {
+    const head = chunks.shift()!;
+    chunks[0]!.start = head.start;
+  }
+  return chunks;
 }
 
 export function labelMapOf(refs: readonly SliceRef[]): LabelMap {

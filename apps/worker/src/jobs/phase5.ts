@@ -152,7 +152,7 @@ export async function handleMaterialCheck(ctx: JobContext, data: { document_id: 
   const lastPage = Math.min(doc.page_count, MAX_CHECK_PAGES);
   const rows: FindingRow[] = [];
   for (let start = 1; start <= lastPage; start += CHECK_SLICE_PAGES) {
-    const refs = await topicSliceRefs(env, [{ documentId: doc.id, pageStart: start, pageEnd: Math.min(lastPage, start + CHECK_SLICE_PAGES - 1) }]);
+    const refs = await topicSliceRefs(env, [{ documentId: doc.id, pageStart: start, pageEnd: Math.min(lastPage, start + CHECK_SLICE_PAGES - 1) }], { context: false });
     const { result, documents } = await runPrompt(ctx.ai, {
       task: getTask('material.check'),
       schema: MaterialFindings,

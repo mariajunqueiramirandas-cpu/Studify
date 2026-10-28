@@ -12,7 +12,7 @@ import {
   type SourcePage,
 } from '@studify/shared';
 import type { StoredSlice } from '../shared/retrieval.ts';
-import { downloadBytes } from '../shared/storage.ts';
+import { downloadBytes, sliceObjectPath } from '../shared/storage.ts';
 import { toBase64 } from '../shared/slices.ts';
 
 /** Model-facing plan (doc labels, concept keys), as returned by lucas.plan. */
@@ -163,7 +163,7 @@ export async function restoreTurns(db: SupabaseClient, turns: readonly RawTurn[]
         if (!stored) continue;
         let data = cache.get(source.slice);
         if (!data) {
-          data = toBase64(await downloadBytes(db, stored.storage_path));
+          data = toBase64(await downloadBytes(db, sliceObjectPath(stored.storage_path)));
           cache.set(source.slice, data);
         }
         content.push({ ...block, source: { type: 'base64', media_type: 'application/pdf', data } });
