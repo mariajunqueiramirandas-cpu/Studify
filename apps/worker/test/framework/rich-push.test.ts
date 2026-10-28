@@ -117,6 +117,10 @@ describe('rich pushes (api.md §9.1)', () => {
     expect(await service(day.sql, zonedToInstant(2026, 10, 27, 15, 0, TZ), expo).svc.push(USER, live)).toBe('sent');
     expect(expo.sent[0]).toMatchObject({ priority: 'high' });
     expect(expo.sent[0]!.title).toBeUndefined();
+    // Any presentational field would make Android draw a blank notification by itself in background.
+    expect(expo.sent[0]!.body).toBeUndefined();
+    expect(expo.sent[0]!.channelId).toBeUndefined();
+    expect(expo.sent[0]).toMatchObject({ contentAvailable: true });
     expect(day.calls.some((c) => c.text.includes('notification_inbox') || c.text.includes('insert into public.notification_log'))).toBe(false);
     const night = fakeSql(profile(['t']));
     expect(await service(night.sql, zonedToInstant(2026, 10, 27, 23, 30, TZ), fakeExpo()).svc.push(USER, live)).toBe('dropped');
