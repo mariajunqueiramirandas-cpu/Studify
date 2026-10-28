@@ -437,21 +437,24 @@ export async function saveMistake(deps: Deps, trail: TrailRow, row: StepRow, tim
 
   const answerId = deps.newId();
   const response = { choice: row.response };
-  const answer = await db.from('attempt_answers').insert({
-    id: answerId,
-    attempt_id: attemptId,
-    user_id: trail.user_id,
-    question_id: questionId,
-    question_version: 1,
-    response,
-    correct: false,
-    score: 0,
-    grading_status: 'graded',
-    time_spent_ms: timeSpentMs,
-    answered_at: row.answered_at ?? now.toISOString(),
-  });
+  // The answer and the link back to the step both only need the question: write them together.
+  const [answer, linked] = await Promise.all([
+    db.from('attempt_answers').insert({
+      id: answerId,
+      attempt_id: attemptId,
+      user_id: trail.user_id,
+      question_id: questionId,
+      question_version: 1,
+      response,
+      correct: false,
+      score: 0,
+      grading_status: 'graded',
+      time_spent_ms: timeSpentMs,
+      answered_at: row.answered_at ?? now.toISOString(),
+    }),
+    db.from('trail_steps').update({ question_id: questionId }).eq('id', row.id),
+  ]);
   if (answer.error) throw answer.error;
-  const linked = await db.from('trail_steps').update({ question_id: questionId }).eq('id', row.id);
   if (linked.error) throw linked.error;
 
   const outcome = await recordMistake(db, deps.newId, {
