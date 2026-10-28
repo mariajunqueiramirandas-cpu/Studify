@@ -1,9 +1,10 @@
 // The HTTP surface: /api/health, the function routes under /api/<name> and the static link site.
 // Built from the runtime deps by server.ts; tests drive it with app.request() and the same fakes.
 import { Hono } from 'hono';
+import { createHash } from 'node:crypto';
 import { apiError } from '@studify/shared';
 import pkg from '../package.json' with { type: 'json' };
-import { jsonResponse } from './shared/http.ts';
+import { jsonResponse, OPERATION_STATUS_HEADER } from './shared/http.ts';
 import { log } from './log.ts';
 import { mountSite } from './site.ts';
 import { ROUTES } from './routes.ts';
@@ -16,12 +17,29 @@ export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string): Hono 
 
   app.use('*', async (c, next) => {
     const started = performance.now();
+    const path = new URL(c.req.url).pathname;
+    // Request identity without secrets: a short hash of the Idempotency-Key ties a resend to its original call,
+    // and the user agent tells the app's HTTP stack from a proxy (ADR 0009 §Context 4). Only function calls carry them.
+    const key = c.req.header('idempotency-key');
+    const who: Record<string, unknown> =
+      !path.startsWith('/api/') || path === '/api/health'
+        ? {}
+        : { ...(key ? { key: createHash('sha256').update(key).digest('hex').slice(0, 12) } : {}), ua: (c.req.header('user-agent') ?? '').slice(0, 80) };
+    let answered = false;
+    c.req.raw.signal?.addEventListener('abort', () => {
+      if (answered) return;
+      log('info', 'client disconnected', { method: c.req.method, path, ...who, ms: Math.round(performance.now() - started) });
+    });
     await next();
+    answered = true;
     // Logged when the response headers are ready: for SSE, that is the start of the stream.
+    const operation = c.res.headers.get(OPERATION_STATUS_HEADER);
     log('info', 'request', {
       method: c.req.method,
-      path: new URL(c.req.url).pathname,
+      path,
       status: c.res.status,
+      ...(operation ? { operation } : {}),
+      ...who,
       ms: Math.round(performance.now() - started),
     });
   });

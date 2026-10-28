@@ -1,14 +1,48 @@
 // API entry point: `bun apps/api/src/server.ts` (Dokploy runs the same command in the image).
-// Validates the environment, builds the runtime deps once, starts Bun.serve with the Hono app and stops
-// gracefully on SIGTERM/SIGINT: the HTTP server drains in-flight requests, then pg-boss stops.
+// Validates the environment, builds the runtime deps once, starts Bun.serve with the Hono app, works the
+// interactive queue of deferred calls (ADR 0009) and stops gracefully on SIGTERM/SIGINT: the HTTP server drains
+// in-flight requests, then pg-boss stops (deferred calls in progress get time to finish).
 import { ConfigError, loadConfig } from './config.ts';
 import { createApp, VERSION } from './app.ts';
 import { log } from './log.ts';
+import { runDeferred } from './shared/http.ts';
+import type { DeferredRunner, ProdRuntime } from './shared/prod.ts';
 import { buildP2Runtime } from './shared-p2/prod.ts';
+import type { P2Deps } from './shared-p2/deps.ts';
 import { existsSync } from 'node:fs';
 
 /** Dokploy gives a stopping container 60 s (stop_grace_period in docker-compose.yml). Stay under it. */
 const SHUTDOWN_DEADLINE_MS = 50_000;
+/** How long to wait before trying again to serve the interactive queue when pg-boss is not reachable. */
+const INTERACTIVE_RETRY_MS = 30_000;
+
+/**
+ * Works the interactive queue (ADR 0009): each deferred call runs its handler here and stores the response under
+ * its Idempotency-Key. Retries until pg-boss is reachable, so the API serves requests even while it is not.
+ */
+function serveDeferredCalls(runtime: ProdRuntime, deps: P2Deps, isStopping: () => boolean): void {
+  const run: DeferredRunner = async (job, attempt) => {
+    const started = performance.now();
+    try {
+      const stored = await runDeferred(job, deps, attempt);
+      log('info', 'deferred call', { fn: job.fn, requestId: job.request_id, status: stored.status, ms: Math.round(performance.now() - started) });
+    } catch (err) {
+      log('warn', 'deferred call failed; retrying', { fn: job.fn, requestId: job.request_id, ms: Math.round(performance.now() - started), message: err instanceof Error ? err.message : String(err) });
+      throw err;
+    }
+  };
+  const attempt = (): void => {
+    if (isStopping()) return;
+    runtime.serveInteractive(run).then(
+      () => log('info', 'serving deferred calls'),
+      (err: unknown) => {
+        log('warn', 'interactive queue not ready; retrying', { message: err instanceof Error ? err.message : String(err) });
+        setTimeout(attempt, INTERACTIVE_RETRY_MS).unref();
+      },
+    );
+  };
+  attempt();
+}
 
 async function main(): Promise<void> {
   let config;
@@ -33,6 +67,7 @@ async function main(): Promise<void> {
   log('info', 'api listening', { version: VERSION, port: server.port, siteDir: config.siteDir });
 
   let stopping = false;
+  serveDeferredCalls(runtime, runtime.deps, () => stopping);
   const shutdown = async (signal: string): Promise<void> => {
     if (stopping) return;
     stopping = true;

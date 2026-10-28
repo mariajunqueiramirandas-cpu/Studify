@@ -1,7 +1,8 @@
 // Idempotency-Key handling (api.md §2.4). Rows live in private.idempotency_keys for 24 h, keyed by
 // (user, function, key). A placeholder row (status 102) is written before the work starts, so two
 // concurrent first calls cannot both run the side effects. A stale placeholder (crashed call) is
-// released after 10 minutes so the student can retry.
+// released after 10 minutes so the student can retry. A deferred call (ADR 0009) keeps its placeholder until
+// its job finishes, so every retry with the same key in the meantime gets `202 running`.
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -24,7 +25,10 @@ export type IdempotencyOutcome =
   | { kind: 'new'; handle: IdempotencyHandle }
   | { kind: 'replay'; stored: StoredResponse }
   | { kind: 'mismatch' }
-  | { kind: 'in_flight' };
+  /** The same key is still running. */
+  | { kind: 'in_flight' }
+  /** Another key with the same body is still running (deferred calls only): the caller should follow `key`. */
+  | { kind: 'joined'; key: string };
 
 export interface BeginArgs {
   userId: string;
@@ -32,6 +36,11 @@ export interface BeginArgs {
   key: string;
   requestHash: string;
   now: Date;
+  /**
+   * Deferred calls (ADR 0009): a second identical request from the same student while the first still runs joins it
+   * instead of paying for the same work again (a remount, a double tap, a resend under a new key).
+   */
+  joinSameRequest?: boolean;
 }
 
 interface KeyRow {
@@ -42,10 +51,12 @@ interface KeyRow {
 }
 
 export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Promise<IdempotencyOutcome> {
-  const table = db.schema('private').from('idempotency_keys');
+  // A fresh builder per statement: the private-schema query object is mutable, so reusing one would carry the
+  // filters of the previous statement into the next.
+  const table = () => db.schema('private').from('idempotency_keys');
   const match = { user_id: args.userId, function_name: args.fn, key: args.key };
 
-  const { data, error } = await table
+  const { data, error } = await table()
     .select('request_hash, status_code, response, created_at')
     .eq('user_id', match.user_id)
     .eq('function_name', match.function_name)
@@ -64,11 +75,27 @@ export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Prom
       if (row.response) return { kind: 'replay', stored: row.response };
       return { kind: 'in_flight' };
     }
-    const removed = await table.delete().eq('user_id', match.user_id).eq('function_name', match.function_name).eq('key', match.key);
+    const removed = await table().delete().eq('user_id', match.user_id).eq('function_name', match.function_name).eq('key', match.key);
     if (removed.error) throw removed.error;
   }
 
-  const inserted = await table.insert({
+  if (args.joinSameRequest) {
+    const running = await table()
+      .select('key, created_at')
+      .eq('user_id', match.user_id)
+      .eq('function_name', match.function_name)
+      .eq('request_hash', args.requestHash)
+      .eq('status_code', IN_FLIGHT)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (running.error) throw running.error;
+    const sibling = ((running.data ?? []) as Array<{ key: string; created_at: string }>)[0];
+    if (sibling && args.now.getTime() - new Date(sibling.created_at).getTime() <= IN_FLIGHT_STALE_MS) {
+      return { kind: 'joined', key: sibling.key };
+    }
+  }
+
+  const inserted = await table().insert({
     user_id: args.userId,
     function_name: args.fn,
     key: args.key,
@@ -83,20 +110,21 @@ export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Prom
     throw inserted.error;
   }
 
-  const handle: IdempotencyHandle = {
+  return { kind: 'new', handle: idempotencyHandle(db, args.userId, args.fn, args.key) };
+}
+
+/** The handle of an existing key: the request that wrote the placeholder, or the job that finishes a deferred call. */
+export function idempotencyHandle(db: SupabaseClient, userId: string, fn: string, key: string): IdempotencyHandle {
+  const table = () => db.schema('private').from('idempotency_keys');
+  return {
     async complete(stored: StoredResponse) {
-      const res = await table
-        .update({ status_code: stored.status, response: stored })
-        .eq('user_id', match.user_id)
-        .eq('function_name', match.function_name)
-        .eq('key', match.key);
+      const res = await table().update({ status_code: stored.status, response: stored }).eq('user_id', userId).eq('function_name', fn).eq('key', key);
       if (res.error) throw res.error;
     },
     async abort() {
-      await table.delete().eq('user_id', match.user_id).eq('function_name', match.function_name).eq('key', match.key);
+      await table().delete().eq('user_id', userId).eq('function_name', fn).eq('key', key);
     },
   };
-  return { kind: 'new', handle };
 }
 
 /** SHA-256 hex of the raw request body. Equal bodies under one key replay; different bodies conflict. */

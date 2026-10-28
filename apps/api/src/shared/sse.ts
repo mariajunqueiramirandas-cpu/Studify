@@ -14,6 +14,8 @@ export class SseWriter {
   #encoder = new TextEncoder();
   #transcript = '';
   #closed = false;
+  /** The client went away. Frames still go to the transcript so the finished stream can be replayed (ADR 0009). */
+  #detached = false;
 
   constructor(controller: ReadableStreamDefaultController<Uint8Array>) {
     this.#controller = controller;
@@ -36,16 +38,32 @@ export class SseWriter {
     this.#write(`: ${text}\n\n`);
   }
 
+  /** Stops writing to the socket; the producer keeps running and the transcript keeps growing. */
+  detach(): void {
+    this.#detached = true;
+  }
+
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.#controller.close();
+    if (this.#detached) return;
+    try {
+      this.#controller.close();
+    } catch {
+      // Cancelled underneath us: nothing left to close.
+    }
   }
 
   #write(frame: string): void {
     if (this.#closed) return;
     this.#transcript += frame;
-    this.#controller.enqueue(this.#encoder.encode(frame));
+    if (this.#detached) return;
+    try {
+      this.#controller.enqueue(this.#encoder.encode(frame));
+    } catch {
+      // The client disconnected between frames. Keep the transcript; a reconnect with the same key replays it.
+      this.#detached = true;
+    }
   }
 }
 
@@ -70,31 +88,37 @@ export interface OpenSseOptions {
  */
 export function openSse(options: OpenSseOptions, producer: (writer: SseWriter) => Promise<void>): Response {
   let timer: ReturnType<typeof setInterval> | undefined;
+  let writer: SseWriter | undefined;
   const stopHeartbeat = () => {
     if (timer !== undefined) clearInterval(timer);
     timer = undefined;
   };
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const writer = new SseWriter(controller);
+      writer = new SseWriter(controller);
+      const out = writer;
       if (options.heartbeatMs > 0) {
-        timer = setInterval(() => writer.comment('ping'), options.heartbeatMs);
+        timer = setInterval(() => out.comment('ping'), options.heartbeatMs);
       }
       const settle = async (ok: boolean) => {
         stopHeartbeat();
-        writer.close();
-        await options.onSettled?.({ ok, transcript: writer.transcript });
+        out.close();
+        await options.onSettled?.({ ok, transcript: out.transcript });
       };
-      producer(writer)
+      producer(out)
         .then(() => settle(true))
         .catch(async (err: unknown) => {
           const mapped = mapError(err);
           if (mapped.internal) console.error('sse producer failed', mapped.internal);
-          writer.send('error', mapped.body.error);
+          out.send('error', mapped.body.error);
           await settle(false);
-        });
+        })
+        .catch((err: unknown) => console.error('sse settle failed', err));
     },
     cancel() {
+      // The client disconnected. The producer finishes into the transcript, which is stored under the
+      // Idempotency-Key, so the app's reconnect gets the whole answer instead of a second generation.
+      writer?.detach();
       stopHeartbeat();
       options.onCancel?.();
     },

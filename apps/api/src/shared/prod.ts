@@ -10,14 +10,28 @@ import { uuidV7 } from '@studify/shared';
 import type { ApiConfig } from '../config.ts';
 import { log } from '../log.ts';
 import { makeBudgetStore, makeUsageSink } from './budget.ts';
-import type { Deps } from './deps.ts';
+import type { DeferredJob, Deps } from './deps.ts';
 import { makePgBossEnqueue } from './enqueue.ts';
 import { withPrivateSchema } from './private-schema.ts';
+
+/**
+ * ADR 0009: handlers that call Claude outside a stream run as jobs on this queue, served by the API process itself
+ * (it has the handlers and their dependencies). pg-boss makes the work durable: a job whose process dies is
+ * retried after `expireInSeconds`. One retry covers a transient failure; the app stops polling after 4 minutes.
+ */
+export const INTERACTIVE_QUEUE = 'api.interactive';
+const INTERACTIVE_QUEUE_OPTIONS = { retryLimit: 1, retryDelay: 2, retryBackoff: false, expireInSeconds: 240, policy: 'standard', notify: true } as const;
+/** Deferred calls one API process runs at once. They wait on Claude, not on the CPU. */
+const INTERACTIVE_CONCURRENCY = 16;
+
+export type DeferredRunner = (job: DeferredJob, attempt: { finalAttempt: boolean }) => Promise<void>;
 
 export interface ProdRuntime {
   deps: Deps;
   /** Warms up pg-boss. Failure is logged, not fatal: the next enqueue retries. */
   start(): Promise<void>;
+  /** Starts working the interactive queue (ADR 0009). Rejects when pg-boss is not reachable yet; the caller retries. */
+  serveInteractive(run: DeferredRunner): Promise<void>;
   /** Stops pg-boss gracefully (in-flight sends finish). Safe when pg-boss never started. */
   stop(): Promise<void>;
 }
@@ -59,11 +73,13 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
   const boss = new PgBoss({
     connectionString: config.databaseUrl,
     schema: config.pgBossSchema,
-    max: 2,
-    // The worker owns the schema, supervision and scheduling. The API only sends.
+    max: 4,
+    // The worker owns the schema, supervision and scheduling. The API sends, and works only its interactive queue.
     supervise: false,
     schedule: false,
     migrate: false,
+    // Wakes the interactive workers as soon as a call is deferred. Falls back to polling when LISTEN is unavailable.
+    useListenNotify: true,
   });
   boss.on('error', (err: Error) => log('error', 'pg-boss error', { message: err.message }));
 
@@ -77,6 +93,23 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
       },
     );
     return starting;
+  };
+
+  let queueReady: Promise<void> | null = null;
+  const interactiveQueue = (): Promise<void> => {
+    queueReady ??= (async () => {
+      await ready();
+      if ((await boss.getQueue(INTERACTIVE_QUEUE)) === null) {
+        await boss.createQueue(INTERACTIVE_QUEUE, INTERACTIVE_QUEUE_OPTIONS).catch(async (err: unknown) => {
+          // Another API process created it first.
+          if ((await boss.getQueue(INTERACTIVE_QUEUE)) === null) throw err;
+        });
+      }
+    })().catch((err: unknown) => {
+      queueReady = null;
+      throw err;
+    });
+    return queueReady;
   };
 
   const deps: Deps = {
@@ -93,8 +126,13 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
       const { error } = await once.auth.verifyOtp({ email, token: code, type: 'email' });
       return !error;
     },
-    ai: { client, budget: makeBudgetStore(db), usage: makeUsageSink(db), timeoutMs: 120_000, maxRetries: 2 },
+    // One SDK retry: worst case 2 × 120 s stays under Bun's 255 s idle timeout for streams (ADR 0009).
+    ai: { client, budget: makeBudgetStore(db), usage: makeUsageSink(db), timeoutMs: 120_000, maxRetries: 1 },
     enqueue: makePgBossEnqueue(boss, ready),
+    defer: async (job: DeferredJob) => {
+      await interactiveQueue();
+      await boss.send(INTERACTIVE_QUEUE, { ...job });
+    },
     now: () => new Date(),
     newId: () => uuidV7(),
     heartbeatMs: 15_000,
@@ -114,9 +152,22 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
         log('warn', 'pg-boss not ready yet; enqueue will retry', { message: errorMessage(err) });
       }
     },
+    async serveInteractive(run: DeferredRunner) {
+      await interactiveQueue();
+      await boss.work(
+        INTERACTIVE_QUEUE,
+        { localConcurrency: INTERACTIVE_CONCURRENCY, pollingIntervalSeconds: 0.5, includeMetadata: true },
+        async (jobs) => {
+          for (const job of jobs) {
+            await run(job.data as DeferredJob, { finalAttempt: job.retryCount >= job.retryLimit });
+          }
+        },
+      );
+    },
     async stop() {
       if (starting) {
-        await boss.stop({ graceful: true, timeout: 10_000 }).catch((err: unknown) => {
+        // Deferred calls in progress get time to finish; one cut off is retried by the queue after it expires.
+        await boss.stop({ graceful: true, timeout: 30_000 }).catch((err: unknown) => {
           log('warn', 'pg-boss stop failed', { message: errorMessage(err) });
         });
       }
