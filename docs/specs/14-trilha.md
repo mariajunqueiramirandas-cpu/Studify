@@ -4,13 +4,13 @@
 |---|---|---|
 | Draft v1 | 5 | TRL-01 |
 
-Related: [PRD](../product/PRD.md#515-trilha-trl) · [01 — Ingestion & knowledge map](01-ingestion-knowledge-map.md) (the outline, prerequisites) · [05 — Practice & exams](05-practice-exams.md) (question rules) · [06 — Feed de Estudos](06-feed-de-estudos.md) (micro-lessons) · [13 — Motivation](13-motivation-wellbeing.md) (skill tree, Chefão) · [learning-engine.md](../engineering/learning-engine.md#23-trilha-trl-01)
+Related: [PRD](../product/PRD.md#515-trilha-trl) · [01 — Ingestion & knowledge map](01-ingestion-knowledge-map.md) (the outline, prerequisites) · [02 — Learn](02-learn-notes.md) (Explica de outro jeito) · [03 — Tutor](03-tutor.md) · [04 — Flashcards](04-flashcards-memory.md) · [05 — Practice & exams](05-practice-exams.md) (question rules, Caderno de Erros) · [12 — Interactive learning](12-interactive-learning.md) (Ensine o Lucas) · [13 — Motivation](13-motivation-wellbeing.md) (skill tree, Chefão) · [learning-engine.md](../engineering/learning-engine.md#23-trilha-trl-01)
 
 ---
 
 ## 1. Summary
 
-A Duolingo-style path through one subject. The app decides the order in which the whole course should be learned, then teaches it one concept at a time: a short explanation, questions right after it, feedback that teaches, a different explanation when the student misses, and a chapter test at the end of each topic that must be passed to move on. Key terms are underlined and explained on tap. The path is persistent: the student can leave at any step and resume exactly there. Content is written on demand, one concept ahead, not all at once.
+A Duolingo-style path through one subject. The app decides the order in which the whole course should be learned, then teaches it one concept at a time: a short explanation, questions right after it, feedback that teaches, a different explanation when the student misses, and a chapter test at the end of each topic that must be passed — then the student teaches the topic to Lucas to close the chapter. The path ties the rest of the app together: the tutor and "Explica de outro jeito" on every step, misses in the Caderno de Erros, what was learned first in the flashcard reviews, and the unit's Chefão when a unit is done. Key terms are underlined and explained on tap. The path is persistent: the student can leave at any step and resume exactly there. Content is written on demand, one concept ahead, not all at once.
 
 ## 2. Goals and non-goals
 
@@ -50,11 +50,17 @@ A Duolingo-style path through one subject. The app decides the order in which th
 - **TRL-01.9** Key terms: each lesson and question carries up to 6 key terms with one-sentence definitions; the first occurrence is underlined (dotted, ux §7.3) and opens a sheet with the definition.
 - **TRL-01.10** Resume: the step on screen is stored as served; leaving and opening again shows the same step. Answering a step twice never grades it twice.
 - **TRL-01.11** Path view: "Ver a trilha" lists the chapters (done, now, later) with their "por que agora", and the concepts of the current chapter with their state.
+- **TRL-01.12** Ensine o Lucas closes every chapter (required): after the chapter test is passed, the student teaches the topic to Lucas (INT-02, Rápido). The chapter finishes when a finished lesson on that topic scored **≥ 70** (the "good" band, spec 12 §5.2); a lower score asks for another lesson (Lucas brings different misconceptions, INT-02.9). Coming back to the Trilha checks it and moves on.
+- **TRL-01.13** Caderno de Erros: every missed Trilha question is saved as a personal bank question, answered in the trail's implicit attempt (`quizzes.kind = trail`), and becomes a mistakes row with its remediation card (PRA-02, PRA-04), so it comes back as a Caderno retry. Feedback says "Guardei essa no seu Caderno de Erros…". Saving is best effort and never fails the answer.
+- **TRL-01.14** Chefão: when every chapter of a unit (at least 2 in the path) is done and its Chefão (MOT-02.4) is not defeated yet, the chapter-done screen, the end screen and the path view offer "Enfrentar o Chefão: {unidade}" (optional).
+- **TRL-01.15** Flashcards: concepts cleared in the Trilha (and every concept of a finished chapter) go first among the day's new cards in the review queue (after exam-scoped cards, within the new-card limit), so what was just understood enters spaced review. The chapter-done screen offers "Revisar os cartões".
+- **TRL-01.16** Help on every step: lessons show "Explica de outro jeito" (LRN-03, target `trail_step`) and "Perguntar ao tutor" (topic scope); after a wrong answer the feedback shows "Não entendi" (tutor, with the question prefilled) and "Explica de outro jeito". A question can only be re-explained once answered.
 
 ## 5. UX and screens
 
 - **S-TRL-01 Trilha** (immersive, from the subject home): header with the whole-path progress bar and "Capítulo i de n · {tópico}"; action "Ver a trilha" (map icon). Body: one step. Footer: one primary button ("Entendi, bora praticar" · "Verificar" · "Continuar").
-- Milestones between steps: chapter done (Capi celebrating, "Próximo: {capítulo}"), failed test ("Você acertou k de n. Bora revisar o que faltou e tentar de novo.").
+- Milestones between steps: test passed ("…Falta só um passo: ensinar pro Lucas."), chapter done (Capi celebrating, "Próximo: {capítulo}", "Enfrentar o Chefão" when a unit is done, "Revisar os cartões"), failed test ("Você acertou k de n. Bora revisar o que faltou e tentar de novo.").
+- Lucas step: "Último passo do capítulo" · "Ensine {tópico} pro Lucas" · the pass score and the best score so far · "Ensinar o Lucas" opens S-INT-03 on the topic.
 - Waiting: Capi curious, "Preparando o próximo passo…", skeleton lines; after 12 s "Tá demorando mais que o normal. Já já sai."
 
 **Key PT-BR strings**
@@ -75,7 +81,11 @@ A Duolingo-style path through one subject. The app decides the order in which th
 |---|---|
 | **`trails`** (new) [svc] | One per `(user_id, subject_id)`: `plan jsonb` (`TrailChapter[]`: `{topicId, why, conceptIds}` in path order), `goal`, `outline_hash`, `chapter_index`, `status` (`active` · `completed`), `prompt_version` (null = outline fallback), `preparing_until` (generation lease), `completed_at`. |
 | **`trail_steps`** (new) [svc] | Every generated step: `topic_id`, `concept_id` (the topic itself when it has no concepts), `purpose` (`lesson` · `practice` · `remedial_lesson` · `remedial_question` · `checkpoint`), `round` (test round; 0 while learning), `for_step_id` (the wrong answer a remedial step repairs), `created_seq`, `served_seq`, `status` (`ready` · `done` · `discarded`), `content jsonb` (lesson `{title, body, terms}` or question `{stem, options[{id,text,rationale}], correct, explanation, tip, terms}`), `source_pages`, `response`, `correct`, `answered_at`, `prompt_version`. |
+| `trails.quiz_attempt_id` | The implicit attempt (`quizzes.kind = trail`, status `submitted`) that holds the answers sent to the Caderno. |
+| `trail_steps.question_id` | The bank question a missed step was saved as. |
 | `mastery_evidence.source` | add `trail` (`ref_type = trail_step`). |
+| `quizzes.kind` | add `trail`. |
+| `explanations.target_type` | add `trail_step` (LRN-03 on a Trilha step). |
 
 Students select their own rows; only the API writes. Both tables are in the account export and are removed by account reset/deletion (FK cascade).
 
@@ -103,7 +113,8 @@ Unknown and repeated topics/concepts are dropped, missing ones appended in outli
 1. A served step that is still open → show it again.
 2. Learning phase, first concept not cleared (2 correct) or shaky (5 answers): its lesson → after a wrong answer, that answer's remedial lesson and question → the next practice question → out of questions: re-teach from the last miss.
 3. All concepts cleared/shaky → chapter test round 1 (`checkpointBlueprint`: 1 per concept, +1 per weakness level, then round-robin to 2 per concept, 4–10).
-4. Round finished: ≥ 70% → chapter passed; else re-teach up to 3 missed concepts (one pair each), then round r + 1.
+4. Round finished: ≥ 70% → test passed; else re-teach up to 3 missed concepts (one pair each), then round r + 1.
+5. Test passed → the chapter waits for Ensine o Lucas on the topic (best finished score ≥ `TRAIL.teachPassScore` = 70), then the path moves to the next chapter.
 
 ### 8.3 Buffer (`trailNeeds`)
 At most two needs, blocking first: the content the next move needs, then one lookahead (§4 TRL-01.8). `trail-prepare` generates one need per call under a 150 s lease, so two devices never generate the same step.
@@ -133,9 +144,14 @@ Chapters finished per active student per week; share of concepts cleared without
 - [ ] The answer and rationales never reach the app before the student answers.
 - [ ] Answering the same step twice writes one mastery evidence row.
 - [ ] Students cannot read or write another student's trail (pgTAP).
+- [ ] After the test is passed the chapter stays open until a Lucas lesson on the topic scores ≥ 70; a lesson at 55 is not enough.
+- [ ] A missed Trilha question appears in the Caderno de Erros with its remediation card.
+- [ ] Finishing every chapter of a unit offers its Chefão until it is defeated.
+- [ ] The cards of a concept cleared in the Trilha are the first new cards of the next review, even when older new cards exist.
 
 ## 12. Open questions
 
 - Should the Trilha feed the planner (Hoje learn blocks follow the path order)? Default: independent in v1.
 - A "já sei isso" placement test that skips a chapter when passed? Default: not in v1 (strict path).
+- Should a passed Chefão be required before the next unit? Default: optional (Lucas is the required step).
 - Offline: download the next chapter's steps to the device? Default: online only in v1.

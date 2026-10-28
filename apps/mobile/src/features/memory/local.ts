@@ -1,9 +1,10 @@
-import { and, asc, eq, inArray, isNull, lte, notInArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lte, notInArray, or } from 'drizzle-orm';
 import { createEmptyCard, Rating, State, type Card } from 'ts-fsrs';
 import type { OcclusionCardMedia } from '@studify/shared';
 import type { AppDb } from '../../db/client';
 import { currentUserId, schedulerFor } from '../../db/hooks/review';
 import { cardOverrides, cards, cardStates, exams, examScopeNodes, profiles, subjects, subjectUserSettings } from '../../db/schema';
+import { learnedConcepts } from '../trail/learned';
 
 export interface ReviewCard {
   id: string;
@@ -27,7 +28,7 @@ const DAY = 86_400_000;
 /**
  * Builds the review queue from SQLite only (MEM-02, offline): due cards first (earliest due),
  * then new cards up to the user's new-per-day setting. Cards in scope of a test in the next
- * 7 days carry the exam tag and are pulled forward.
+ * 7 days carry the exam tag and are pulled forward; then the cards of concepts cleared in the Trilha.
  */
 export function buildLocalQueue(db: AppDb, opts: { subjectId?: string; limit?: number; now?: Date } = {}): ReviewCard[] {
   const now = opts.now ?? new Date();
@@ -91,6 +92,8 @@ export function buildLocalQueue(db: AppDb, opts: { subjectId?: string; limit?: n
     .where(and(eq(cardStates.userId, userId), eq(cardStates.state, State.New), eq(cardStates.suspended, false), eq(cardStates.hidden, false)))
     .all()
     .map((r) => r.id);
+  const learned = learnedConcepts();
+  const fromTrail = (conceptId: string | null, nodeId: string) => (conceptId ? learned.has(conceptId) : learned.has(nodeId));
   const newCandidates = db
     .select()
     .from(cards)
@@ -98,11 +101,37 @@ export function buildLocalQueue(db: AppDb, opts: { subjectId?: string; limit?: n
     .orderBy(asc(cards.createdAt))
     .limit(newPerDay * 3)
     .all();
+  // The oldest-first window above may not reach them, so the Trilha's concepts get their own (newest 500).
+  const recent = [...learned].slice(-500);
+  const trailCandidates = recent.length
+    ? db
+        .select()
+        .from(cards)
+        .where(
+          and(
+            isNull(cards.deletedAt),
+            isNull(cards.hiddenReason),
+            eq(cards.status, 'active'),
+            ...subjectFilter,
+            knownIds.length ? notInArray(cards.id, knownIds) : undefined,
+            or(inArray(cards.conceptId, recent), inArray(cards.nodeId, recent)),
+          ),
+        )
+        .orderBy(asc(cards.createdAt))
+        .limit(newPerDay * 3)
+        .all()
+    : [];
   const newFromStates = newStateIds.length ? db.select().from(cards).where(and(inArray(cards.id, newStateIds), ...subjectFilter)).all() : [];
-  const newCards = [...newFromStates, ...newCandidates]
+  const seenNew = new Set<string>();
+  const newCards = [...newFromStates, ...newCandidates, ...trailCandidates]
+    .filter((c) => !seenNew.has(c.id) && (seenNew.add(c.id), true))
     .filter((c) => !archivedIds.has(c.subjectId) && (!c.personalForUserId || c.personalForUserId === userId))
-    // Exam-scoped new cards first (MEM-02.5).
-    .sort((a, b) => Number(!!examTagFor(b.nodeId, b.subjectId)) - Number(!!examTagFor(a.nodeId, a.subjectId)))
+    // Exam-scoped new cards first (MEM-02.5), then the cards of concepts just learned in the Trilha (TRL-01.15).
+    .sort(
+      (a, b) =>
+        Number(!!examTagFor(b.nodeId, b.subjectId)) - Number(!!examTagFor(a.nodeId, a.subjectId)) ||
+        Number(fromTrail(b.conceptId, b.nodeId)) - Number(fromTrail(a.conceptId, a.nodeId)),
+    )
     .slice(0, newPerDay);
 
   const overrides = new Map(db.select().from(cardOverrides).where(eq(cardOverrides.userId, userId)).all().map((o) => [o.cardId, o]));

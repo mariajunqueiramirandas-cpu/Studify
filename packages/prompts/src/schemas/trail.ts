@@ -41,8 +41,7 @@ const TrailQuestionBase = z.strictObject({
   stem: z.string().min(1).max(320),
   options: z
     .array(z.strictObject({ id: TrailOptionId, text: z.string().min(1).max(180), rationale: z.string().min(1).max(220) }))
-    .min(3)
-    .max(4),
+    .length(4),
   correct: TrailOptionId,
   explanation: z.string().min(1).max(500),
   tip: z.string().min(1).max(160).nullable(),

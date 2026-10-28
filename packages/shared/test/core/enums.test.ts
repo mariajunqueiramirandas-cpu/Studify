@@ -31,7 +31,7 @@ describe('ENUMS registry', () => {
 
   it('maps the documented value lists (spot checks against data-model.md)', () => {
     expect(ENUMS['documents.status']).toEqual(['uploaded', 'processing', 'ready', 'failed', 'waiting_budget']);
-    expect(ENUMS['quizzes.kind']).toHaveLength(9);
+    expect(ENUMS['quizzes.kind']).toHaveLength(10);
     expect(ENUMS['mistakes.cause']).toEqual(['didnt_know', 'confused', 'careless', 'misread']);
     expect(ENUMS['subjects.enem_area']).toEqual(['LC', 'CH', 'CN', 'MT']);
     expect(ENUMS['notes.depth']).toContain('class_summary');

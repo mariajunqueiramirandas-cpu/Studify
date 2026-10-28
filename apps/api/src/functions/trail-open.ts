@@ -1,10 +1,11 @@
-// trail-open (TRL-01.1–01.3; api §4.11). Opens the student's Trilha of a subject, creating it on first use: the
-// path order comes from trail.plan (outline order when the call fails). An existing trail is resumed where it
-// stopped; when the outline changed since the plan was made, the chapters not started yet are planned again.
+// trail-open (TRL-01.1–01.3, 01.12; api §4.11). Opens the student's Trilha of a subject, creating it on first use:
+// the path order comes from trail.plan (outline order when the call fails). An existing trail is resumed where it
+// stopped; when the outline changed since the plan was made, the chapters not started yet are planned again. Coming
+// back from Ensine o Lucas closes the chapter when the lesson scored enough.
 import { ApiFailure, TrailOpenReqSchema, type TrailOpenReq } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { requireSubject } from '../shared/access.ts';
-import { buildState, loadOutline, loadSteps, outlineHashOf, planChapters, replan, type TrailRow } from '../shared/trail.ts';
+import { advanceIfPassed, buildState, loadOutline, loadSteps, outlineHashOf, planChapters, replan, type TrailRow } from '../shared/trail.ts';
 
 export const handler = defineFunction<TrailOpenReq>({
   name: 'trail-open',
@@ -74,7 +75,8 @@ export const handler = defineFunction<TrailOpenReq>({
       steps = await loadSteps(db, trail.id);
     }
 
-    return ctx.json(await buildState(deps, trail, steps, outline));
+    const advanced = await advanceIfPassed(deps, trail, steps, outline, ctx.now);
+    return ctx.json(await buildState(deps, advanced.trail, steps, outline, { chapterDone: advanced.chapterDone }));
   },
 });
 

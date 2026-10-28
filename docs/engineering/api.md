@@ -530,15 +530,15 @@ Alias of `questions-generate-more` with `enem_style = true` (kept as one functio
 ### 4.11 Trilha
 
 #### `trail-open` — TRL-01.1–01.3 · class A (first open or outline change) · `POST`
-`Req { subject_id }` → `TrailState`. Creates the student's trail for the subject on first use (`trail.plan`, outline order on failure); re-plans the chapters not started when the outline changed. 404 when the subject has no topic with material. The step it returns is marked served (resume).
+`Req { subject_id }` → `TrailState`. Creates the student's trail for the subject on first use (`trail.plan`, outline order on failure); re-plans the chapters not started when the outline changed; closes the chapter when its test is passed and a finished Ensine o Lucas lesson on the topic scored ≥ 70 (`state.chapter_done`). 404 when the subject has no topic with material. The step it returns is marked served (resume).
 
 #### `trail-prepare` — TRL-01.8 · class A · `POST`
 `Req { trail_id }` → `TrailState`. Generates at most one need (`trail.lesson`, `trail.remediate` or `trail.checkpoint`): the one blocking the next step, else one lookahead. A 150 s lease on `trails.preparing_until` serializes generation; a concurrent call returns the state unchanged. Lookahead failures are swallowed.
 
 #### `trail-answer` — TRL-01.5–01.7, 01.10 · no AI · `POST`
-`Req { trail_id, step_id, response: 'A'…'D' | null, time_spent_ms? }` → `{ feedback | null, checkpoint_result | null, chapter_done | null, state }`. `null` marks a lesson read. Writes `mastery_evidence` (`source trail`, `ref_type trail_step`) and enqueues `mastery.recompute`; advances `chapter_index` when the chapter test passed. A step already answered returns its stored feedback.
+`Req { trail_id, step_id, response: 'A'…'D' | null, time_spent_ms? }` → `{ feedback | null, checkpoint_result | null, mistake_id | null, state }`. `null` marks a lesson read. Writes `mastery_evidence` (`source trail`, `ref_type trail_step`) and enqueues `mastery.recompute`; a miss is saved to the Caderno (personal question + implicit `trail` attempt + `mistakes`, best effort); advances `chapter_index` when the test passed and Lucas was taught. A step already answered returns its stored feedback.
 
-`TrailState { trail_id, subject_id, status, goal, progress, chapter_index, chapters[{topic_id, title, why, status, concepts[{id, title, state}]}], phase, checkpoint, step, preparing, prefetch }`; `step` never carries the answer or the rationales.
+`TrailState { trail_id, subject_id, status, goal, progress, chapter_index, chapters[{topic_id, unit_id, title, why, status, concepts[{id, title, state}]}], phase (learning · checkpoint · teach · completed), checkpoint, step, teach {topic_id, title, pass_score, best_score, attempts}, boss {unit_id, title}, chapter_done, preparing, prefetch }`; `step` never carries the answer or the rationales. `explain` accepts `target_type: trail_step` (a lesson, or a question once answered).
 
 ### 4.10 Admin (app admin only)
 

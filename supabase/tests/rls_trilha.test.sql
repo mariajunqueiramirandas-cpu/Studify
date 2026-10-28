@@ -46,6 +46,10 @@ select test_helpers.check_sqlstate('step purposes are closed',
   $$insert into public.trail_steps (trail_id, user_id, chapter_index, topic_id, concept_id, purpose, created_seq, content, prompt_version) values ('b1000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 0, 'a7000000-0000-4000-8000-000000000002', 'a7000000-0000-4000-8000-000000000002', 'video', 3, '{}', 'x')$$, '23514');
 select test_helpers.check_sqlstate('trail answers are mastery evidence',
   $$insert into public.mastery_evidence (user_id, node_id, subject_id, source, outcome, weight, ref_type, ref_id, occurred_at) values ('11111111-1111-4111-8111-111111111111', 'a7000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001', 'trail', 1, 1, 'trail_step', 'b2000000-0000-4000-8000-000000000001', now())$$, null);
+select test_helpers.check_sqlstate('the Caderno holds Trilha answers in a trail quiz',
+  $$insert into public.quizzes (owner_id, subject_id, kind) values ('11111111-1111-4111-8111-111111111111', 'a0000000-0000-4000-8000-000000000001', 'trail')$$, null);
+select test_helpers.check_sqlstate('Trilha steps can be re-explained (LRN-03)',
+  $$insert into public.explanations (subject_id, target_type, target_id, style, language, body, prompt_version) values ('a0000000-0000-4000-8000-000000000001', 'trail_step', 'b2000000-0000-4000-8000-000000000001', 'simpler', 'pt-BR', 'x', 'explain.restyle@v1')$$, null);
 
 select * from finish();
 rollback;

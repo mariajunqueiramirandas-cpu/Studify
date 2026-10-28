@@ -8,6 +8,7 @@ import { IDS, seedWorld, v7 } from './world.ts';
 import { handler as trailOpen } from '../src/functions/trail-open.ts';
 import { handler as trailPrepare } from '../src/functions/trail-prepare.ts';
 import { handler as trailAnswer } from '../src/functions/trail-answer.ts';
+import { handler as explain } from '../src/functions/explain.ts';
 
 const reply = (value: unknown): FakeReply => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
 const page = [{ doc: 'D1', page_start: 12, page_end: 12 }];
@@ -38,7 +39,7 @@ function byTask(params: Record<string, unknown>, planReply: unknown): FakeReply 
 
 const PLAN = { goal: 'Explicar como as plantas produzem energia.', chapters: [{ topic_key: 'T1', why: 'É o começo de tudo.', concept_keys: ['C1'] }] };
 
-test('trail: plan, lesson, wrong answer re-taught, chapter test, completion', async () => {
+test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chapter test, Lucas, completion', async () => {
   const h = makeHarness((params) => byTask(params, PLAN));
   await seedWorld(h);
   let n = 10;
@@ -91,6 +92,20 @@ test('trail: plan, lesson, wrong answer re-taught, chapter test, completion', as
   assertEquals(evidence[0]!.outcome, 0);
   assertEquals(evidence[0]!.node_id, IDS.concept);
   assert(h.enqueued.some((e) => e.queue === 'mastery.recompute'));
+  // The miss is in the Caderno: a personal bank question answered in the trail's attempt, with a mistake row.
+  assert(wrong.mistake_id !== null);
+  const mistake = h.db.rows('mistakes')[0]!;
+  assertEquals(mistake.id, wrong.mistake_id);
+  const saved = h.db.rows('questions').find((q) => q.id === mistake.question_id)!;
+  assertEquals(saved.personal_for_user_id, h.db.rows('trails')[0]!.user_id);
+  assertEquals((saved.payload as { correct: string }).correct, 'B');
+  assertEquals(h.db.rows('quizzes').filter((q) => q.kind === 'trail').length, 1);
+  assertEquals(h.db.rows('trail_steps').find((r) => r.id === q1)!.question_id, saved.id);
+
+  // "Explica de outro jeito" works on an answered question, never on one still open.
+  const unanswered = h.db.rows('trail_steps').find((r) => r.purpose === 'practice' && r.status === 'ready')!;
+  const early = await explain(request('explain', { body: { target_type: 'trail_step', target_id: unanswered.id, style: 'simpler' }, idem: v7(n++) }), h.deps);
+  assertEquals(early.status, 400);
 
   // Answering the same step again changes nothing.
   const again = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: q1, response: 'B' })).body);
@@ -116,7 +131,7 @@ test('trail: plan, lesson, wrong answer re-taught, chapter test, completion', as
   assertEquals(test1.step?.purpose, 'checkpoint');
   assert(test1.step?.kind === 'question' && test1.step.position?.index === 1 && test1.step.position.total === 4);
 
-  // 7. All right: the chapter (and here the whole path) is done.
+  // 7. All right: the test is passed, and Ensine o Lucas closes the chapter.
   let last = test1;
   let res: ReturnType<typeof TrailAnswerResSchema.parse> | null = null;
   for (let i = 0; i < 4; i++) {
@@ -124,10 +139,23 @@ test('trail: plan, lesson, wrong answer re-taught, chapter test, completion', as
     last = res.state;
   }
   assertEquals(res!.checkpoint_result, { round: 1, correct: 4, total: 4, passed: true });
-  assertEquals(res!.chapter_done?.title, 'Fotossíntese');
-  assertEquals(res!.chapter_done?.next_title, null);
-  assertEquals(res!.state.status, 'completed');
-  assertEquals(res!.state.progress, 1);
+  assertEquals(res!.state.phase, 'teach');
+  assertEquals(res!.state.teach, { topic_id: IDS.topic, title: 'Fotossíntese', pass_score: 70, best_score: null, attempts: 0 });
+  assertEquals(res!.state.chapter_done, null);
+  assertEquals(res!.state.status, 'active');
+
+  // A weak lesson is not enough; a good one closes the chapter (and here the whole path) on the way back.
+  const user = h.db.rows('trails')[0]!.user_id;
+  h.db.seed('teaching_sessions', { id: v7(800), user_id: user, subject_id: IDS.subject, node_id: IDS.topic, status: 'finished', score: 55, deleted_at: null });
+  const weak = TrailStateSchema.parse((await call(trailOpen, 'trail-open', { subject_id: IDS.subject })).body);
+  assertEquals(weak.phase, 'teach');
+  assertEquals(weak.teach?.best_score, 55);
+  h.db.seed('teaching_sessions', { id: v7(801), user_id: user, subject_id: IDS.subject, node_id: IDS.topic, status: 'finished', score: 82, deleted_at: null });
+  const closed = TrailStateSchema.parse((await call(trailOpen, 'trail-open', { subject_id: IDS.subject })).body);
+  assertEquals(closed.chapter_done?.title, 'Fotossíntese');
+  assertEquals(closed.chapter_done?.next_title, null);
+  assertEquals(closed.status, 'completed');
+  assertEquals(closed.progress, 1);
   // The spare practice question was discarded with the chapter.
   assert(h.db.rows('trail_steps').some((s) => s.status === 'discarded'));
   assertEquals(h.claude.calls.length, 4); // plan, lesson, re-teaching, chapter test
@@ -157,4 +185,26 @@ test('trail: a subject without ready topics cannot open a trail', async () => {
   const res = await trailOpen(request('trail-open', { body: { subject_id: IDS.subject }, idem: v7(1) }), h.deps);
   assertEquals(res.status, 404);
   assertEquals(h.claude.calls.length, 0);
+});
+
+test('trail: a finished unit offers its Chefão until it is defeated', async () => {
+  const h = makeHarness((params) => byTask(params, PLAN));
+  await seedWorld(h);
+  const unit = 'a0000000-0000-4000-8000-0000000000f1';
+  const topic2 = 'a0000000-0000-4000-8000-0000000000f2';
+  h.db.seed('knowledge_nodes', { id: unit, subject_id: IDS.subject, parent_id: null, kind: 'unit', title: 'Plantas', summary: null, learning_objectives: [], key_terms: [], formulas: [], deleted_at: null, position: 0 });
+  h.db.seed('knowledge_nodes', { id: topic2, subject_id: IDS.subject, parent_id: unit, kind: 'topic', title: 'Respiração', summary: null, learning_objectives: [], key_terms: [], formulas: [], deleted_at: null, position: 1 });
+  h.db.table('knowledge_nodes').find((r) => r.id === IDS.topic)!.parent_id = unit;
+  h.db.seed('node_sources', { id: v7(901), node_id: topic2, document_id: IDS.doc, page_start: 13, page_end: 14, origin: 'ai', deleted_at: null });
+
+  const open = async (n: number) => TrailStateSchema.parse(await json(await trailOpen(request('trail-open', { body: { subject_id: IDS.subject }, idem: v7(n) }), h.deps)));
+  const first = await open(1);
+  assertEquals(first.chapters.map((c) => c.unit_id), [unit, unit]);
+  assertEquals(first.boss, null);
+
+  // Both chapters done (as if walked through): the unit's Chefão is offered.
+  Object.assign(h.db.table('trails')[0]!, { chapter_index: 2, status: 'completed' });
+  assertEquals((await open(2)).boss, { unit_id: unit, title: 'Plantas' });
+  h.db.seed('boss_attempts', { id: v7(950), user_id: h.db.rows('trails')[0]!.user_id, unit_node_id: unit, passed: true, score: 0.8 });
+  assertEquals((await open(3)).boss, null);
 });

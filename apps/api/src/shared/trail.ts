@@ -5,6 +5,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   ApiFailure,
+  McqSinglePayloadSchema,
+  TRAIL,
   checkpointBlueprint,
   checkpointScore,
   chapterFraction,
@@ -31,6 +33,7 @@ import { callTask, unwrapResult } from './ai.ts';
 import { budgetCtxFor } from './ctx.ts';
 import { claudeDepsFor, type Deps } from './deps.ts';
 import { loadTopic, topicSlices, type TopicBundle } from './topic.ts';
+import { recordMistake } from './mistakes.ts';
 import { mapPages } from '../shared-p3/teaching.ts';
 
 const FEATURE = 'TRL-01';
@@ -51,6 +54,7 @@ export interface TrailRow {
   prompt_version: string | null;
   preparing_until: string | null;
   completed_at: string | null;
+  quiz_attempt_id?: string | null;
 }
 
 export interface QuestionContent {
@@ -86,6 +90,8 @@ export interface StepRow {
   response: string | null;
   correct: boolean | null;
   answered_at: string | null;
+  question_id?: string | null;
+  prompt_version: string;
 }
 
 export const isQuestionPurpose = (p: TrailStepPurpose) => p === 'practice' || p === 'remedial_question' || p === 'checkpoint';
@@ -503,11 +509,57 @@ function publicStep(row: StepRow, outline: Outline, position: { index: number; t
   return { ...base, kind: 'question', stem: q.stem, options: q.options.map((o) => ({ id: o.id, text: o.text })), position };
 }
 
+/** Ensine o Lucas on the topic (TRL-01.12): the best finished score and how many lessons were finished. */
+export async function lucasResult(db: SupabaseClient, userId: string, topicId: string): Promise<{ best: number | null; attempts: number }> {
+  const rows = await db.from('teaching_sessions').select('score').eq('user_id', userId).eq('node_id', topicId).eq('status', 'finished').is('deleted_at', null);
+  if (rows.error) throw rows.error;
+  const list = (rows.data as Array<{ score: number | null }>) ?? [];
+  const scores = list.map((r) => r.score).filter((x): x is number => typeof x === 'number');
+  return { best: scores.length ? Math.max(...scores) : null, attempts: list.length };
+}
+
+function unitOf(outline: Outline, topicId: string): NodeRow | null {
+  const parentId = outline.nodes.get(topicId)?.parent_id;
+  const parent = parentId ? outline.nodes.get(parentId) : undefined;
+  return parent && parent.kind === 'unit' ? parent : null;
+}
+
+/**
+ * The Chefão to offer (TRL-01.14): the latest unit of the path whose chapters (at least 2) are all done and whose
+ * boss the student has not defeated yet.
+ */
+async function bossFor(db: SupabaseClient, trail: TrailRow, outline: Outline): Promise<TrailState['boss']> {
+  const doneCount = trail.status === 'completed' ? trail.plan.length : trail.chapter_index;
+  const done = new Set(trail.plan.slice(0, doneCount).map((c) => c.topicId));
+  const byUnit = new Map<string, { topics: string[]; lastIndex: number }>();
+  trail.plan.forEach((ch, i) => {
+    const unit = unitOf(outline, ch.topicId);
+    if (!unit) return;
+    const entry = byUnit.get(unit.id) ?? { topics: [], lastIndex: -1 };
+    entry.topics.push(ch.topicId);
+    entry.lastIndex = i;
+    byUnit.set(unit.id, entry);
+  });
+  const ready = [...byUnit.entries()].filter(([, u]) => u.topics.length >= 2 && u.topics.every((t) => done.has(t))).sort((a, b) => b[1].lastIndex - a[1].lastIndex);
+  if (ready.length === 0) return null;
+  const beaten = await db.from('boss_attempts').select('unit_node_id').eq('user_id', trail.user_id).eq('passed', true).in('unit_node_id', ready.map(([id]) => id));
+  if (beaten.error) throw beaten.error;
+  const defeated = new Set(((beaten.data as Array<{ unit_node_id: string }>) ?? []).map((b) => b.unit_node_id));
+  const open = ready.find(([id]) => !defeated.has(id));
+  return open ? { unit_id: open[0], title: outline.nodes.get(open[0])?.title ?? '' } : null;
+}
+
 /**
  * The state the app shows (TrailState). When the next move is a step not yet shown, it is marked as served here,
  * so leaving and coming back resumes on the same step.
  */
-export async function buildState(deps: Deps, trail: TrailRow, steps: StepRow[], outline: Outline): Promise<TrailState> {
+export async function buildState(
+  deps: Deps,
+  trail: TrailRow,
+  steps: StepRow[],
+  outline: Outline,
+  extras: { chapterDone?: TrailState['chapter_done'] } = {},
+): Promise<TrailState> {
   const chapter = trail.plan[trail.chapter_index];
   const chapterSteps = chapter ? steps.filter((s) => s.topic_id === chapter.topicId) : [];
   const views = chapterSteps.map(toView);
@@ -516,6 +568,7 @@ export async function buildState(deps: Deps, trail: TrailRow, steps: StepRow[], 
   let preparing = false;
   let phase: TrailState['phase'] = trail.status === 'completed' || !chapter ? 'completed' : 'learning';
   let checkpoint: TrailState['checkpoint'] = null;
+  let teach: TrailState['teach'] = null;
 
   if (chapter && trail.status !== 'completed') {
     const round = Math.max(0, ...views.filter((s) => s.purpose === 'checkpoint').map((s) => s.round));
@@ -542,6 +595,11 @@ export async function buildState(deps: Deps, trail: TrailRow, steps: StepRow[], 
     } else if (move.kind === 'need') {
       preparing = true;
       if (move.need.kind === 'checkpoint') phase = 'checkpoint';
+    } else {
+      // Test passed: the chapter closes once the student teaches Lucas the topic (TRL-01.12).
+      phase = 'teach';
+      const lucas = await lucasResult(deps.db, trail.user_id, chapter.topicId);
+      teach = { topic_id: chapter.topicId, title: outline.nodes.get(chapter.topicId)?.title ?? '', pass_score: TRAIL.teachPassScore, best_score: lucas.best, attempts: lucas.attempts };
     }
   }
 
@@ -549,7 +607,7 @@ export async function buildState(deps: Deps, trail: TrailRow, steps: StepRow[], 
   const chapters = trail.plan.map((ch, i) => {
     const status: 'done' | 'current' | 'upcoming' = i < trail.chapter_index || trail.status === 'completed' ? 'done' : i === trail.chapter_index ? 'current' : 'upcoming';
     const states = status === 'current' ? conceptStates(ch, views) : ch.conceptIds.map((conceptId) => ({ conceptId, state: status === 'done' ? ('cleared' as const) : ('upcoming' as const) }));
-    return { topic_id: ch.topicId, title: title(ch.topicId), why: ch.why, status, concepts: states.map((s) => ({ id: s.conceptId, title: title(s.conceptId), state: s.state })) };
+    return { topic_id: ch.topicId, unit_id: unitOf(outline, ch.topicId)?.id ?? null, title: title(ch.topicId), why: ch.why, status, concepts: states.map((s) => ({ id: s.conceptId, title: title(s.conceptId), state: s.state })) };
   });
   const fraction = chapter ? chapterFraction(chapter, views) : 1;
   return {
@@ -563,17 +621,31 @@ export async function buildState(deps: Deps, trail: TrailRow, steps: StepRow[], 
     phase,
     checkpoint,
     step,
+    teach,
+    boss: await bossFor(deps.db, trail, outline),
+    chapter_done: extras.chapterDone ?? null,
     preparing,
     prefetch: !preparing && needsOf(trail, steps).some((n) => !n.blocking),
   };
 }
 
-/** After an answer: closes the chapter when its test was passed (spec 14 §8.2) and moves the path forward. */
-export async function advanceIfPassed(deps: Deps, trail: TrailRow, steps: StepRow[], now: Date): Promise<{ passed: boolean; trail: TrailRow }> {
+/**
+ * Closes the chapter when its test was passed and Lucas was taught the topic (spec 14 §8.2), and moves the path
+ * forward. Returns what finished, for the "capítulo concluído" screen.
+ */
+export async function advanceIfPassed(
+  deps: Deps,
+  trail: TrailRow,
+  steps: StepRow[],
+  outline: Outline,
+  now: Date,
+): Promise<{ trail: TrailRow; chapterDone: TrailState['chapter_done'] }> {
   const chapter = trail.plan[trail.chapter_index];
-  if (!chapter) return { passed: false, trail };
+  if (!chapter || trail.status === 'completed') return { trail, chapterDone: null };
   const chapterSteps = steps.filter((s) => s.topic_id === chapter.topicId);
-  if (nextTrailMove(chapter, chapterSteps.map(toView)).kind !== 'chapter_passed') return { passed: false, trail };
+  if (nextTrailMove(chapter, chapterSteps.map(toView)).kind !== 'chapter_passed') return { trail, chapterDone: null };
+  const lucas = await lucasResult(deps.db, trail.user_id, chapter.topicId);
+  if ((lucas.best ?? -1) < TRAIL.teachPassScore) return { trail, chapterDone: null };
   // Spare questions of the finished chapter are not needed any more.
   const discarded = await deps.db.from('trail_steps').update({ status: 'discarded' }).eq('trail_id', trail.id).eq('topic_id', chapter.topicId).eq('status', 'ready').is('served_seq', null);
   if (discarded.error) throw discarded.error;
@@ -583,7 +655,87 @@ export async function advanceIfPassed(deps: Deps, trail: TrailRow, steps: StepRo
   const patch = { chapter_index: chapterIndex, status: completed ? 'completed' : 'active', completed_at: completed ? now.toISOString() : null };
   const upd = await deps.db.from('trails').update(patch).eq('id', trail.id);
   if (upd.error) throw upd.error;
-  return { passed: true, trail: { ...trail, ...patch } as TrailRow };
+  const next = trail.plan[chapterIndex];
+  return {
+    trail: { ...trail, ...patch } as TrailRow,
+    chapterDone: { topic_id: chapter.topicId, title: outline.nodes.get(chapter.topicId)?.title ?? '', next_title: next ? (outline.nodes.get(next.topicId)?.title ?? null) : null },
+  };
+}
+
+/**
+ * The Caderno de Erros (TRL-01.13): a missed Trilha question becomes a personal bank question answered in the
+ * trail's implicit attempt, then a mistakes row with its remediation card, so the Caderno schedules its retries.
+ */
+export async function saveMistake(deps: Deps, trail: TrailRow, row: StepRow, timeSpentMs: number, now: Date): Promise<string | null> {
+  const { db } = deps;
+  const q = row.content as QuestionContent;
+  const payload = { options: q.options.map((o) => ({ id: o.id, text: o.text, rationale: o.rationale })), correct: q.correct };
+  // Bank questions follow the PRA-01 rules (4–5 options, no "todas as anteriores"); others stay out of the Caderno.
+  if (!McqSinglePayloadSchema.safeParse(payload).success) return null;
+
+  let attemptId = trail.quiz_attempt_id;
+  if (!attemptId) {
+    const quizId = deps.newId();
+    attemptId = deps.newId();
+    const quiz = await db.from('quizzes').insert({ id: quizId, owner_id: trail.user_id, subject_id: trail.subject_id, kind: 'trail', mode: 'practice', title: 'Trilha', question_ids: [] });
+    if (quiz.error) throw quiz.error;
+    const attempt = await db.from('quiz_attempts').insert({ id: attemptId, user_id: trail.user_id, quiz_id: quizId, status: 'submitted', started_at: now.toISOString(), finished_at: now.toISOString(), device_id: 'trail' });
+    if (attempt.error) throw attempt.error;
+    const linked = await db.from('trails').update({ quiz_attempt_id: attemptId }).eq('id', trail.id);
+    if (linked.error) throw linked.error;
+    trail.quiz_attempt_id = attemptId;
+  }
+
+  const questionId = deps.newId();
+  const conceptIds = row.concept_id !== row.topic_id ? [row.concept_id] : [];
+  const question = {
+    id: questionId,
+    subject_id: trail.subject_id,
+    node_id: row.topic_id,
+    concept_ids: conceptIds,
+    type: 'mcq_single' as const,
+    stem: q.stem,
+    payload,
+    explanation: q.explanation,
+    has_math: /\$/.test(q.stem + q.options.map((o) => o.text).join(' ')),
+    source_pages: row.source_pages ?? [],
+    origin: 'generated',
+    personal_for_user_id: trail.user_id,
+    prompt_version: row.prompt_version,
+  };
+  const inserted = await db.from('questions').insert(question);
+  if (inserted.error) throw inserted.error;
+
+  const answerId = deps.newId();
+  const response = { choice: row.response };
+  const answer = await db.from('attempt_answers').insert({
+    id: answerId,
+    attempt_id: attemptId,
+    user_id: trail.user_id,
+    question_id: questionId,
+    question_version: 1,
+    response,
+    correct: false,
+    score: 0,
+    grading_status: 'graded',
+    time_spent_ms: timeSpentMs,
+    answered_at: row.answered_at ?? now.toISOString(),
+  });
+  if (answer.error) throw answer.error;
+  const linked = await db.from('trail_steps').update({ question_id: questionId }).eq('id', row.id);
+  if (linked.error) throw linked.error;
+
+  const outcome = await recordMistake(db, deps.newId, {
+    userId: trail.user_id,
+    answerId,
+    question: { id: questionId, node_id: row.topic_id, subject_id: trail.subject_id, type: 'mcq_single', stem: q.stem, payload, explanation: q.explanation, concept_ids: conceptIds, source_pages: row.source_pages ?? [] },
+    score: 0,
+    confidence: null,
+    response,
+    timeSeconds: Math.round(timeSpentMs / 1000),
+    now,
+  });
+  return outcome.mistakeId;
 }
 
 export { checkpointScore };

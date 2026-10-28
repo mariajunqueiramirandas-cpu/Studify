@@ -34,6 +34,8 @@ export const TrailConceptStateSchema = z.enum(['cleared', 'shaky', 'current', 'u
 
 export const TrailChapterViewSchema = z.object({
   topic_id: UuidSchema,
+  /** The unit the topic belongs to (Chefão), null for a topic at the root. */
+  unit_id: UuidSchema.nullable(),
   title: z.string(),
   why: z.string().nullable(),
   status: z.enum(['done', 'current', 'upcoming']),
@@ -50,10 +52,18 @@ export const TrailStateSchema = z.object({
   progress: z.number().min(0).max(1),
   chapter_index: z.int().min(0),
   chapters: z.array(TrailChapterViewSchema),
-  phase: z.enum(['learning', 'checkpoint', 'completed']),
+  /** `teach`: the chapter test is passed and Ensine o Lucas on the topic closes the chapter (TRL-01.12). */
+  phase: z.enum(['learning', 'checkpoint', 'teach', 'completed']),
   checkpoint: z.object({ round: z.int().min(1), answered: z.int().min(0), total: z.int().min(0), correct: z.int().min(0) }).nullable(),
   /** The step to show now, or null while its content is being prepared (or the path is complete). */
   step: TrailStepSchema.nullable(),
+  teach: z
+    .object({ topic_id: UuidSchema, title: z.string(), pass_score: z.int().min(0).max(100), best_score: z.int().min(0).max(100).nullable(), attempts: z.int().min(0) })
+    .nullable(),
+  /** A unit whose chapters are all done and whose Chefão is not defeated yet (TRL-01.14). */
+  boss: z.object({ unit_id: UuidSchema, title: z.string() }).nullable(),
+  /** Set when this request finished a chapter. */
+  chapter_done: z.object({ topic_id: UuidSchema, title: z.string(), next_title: z.string().nullable() }).nullable(),
   /** The next step needs content: call trail-prepare and show "Preparando…". */
   preparing: z.boolean(),
   /** The buffer can be topped up: call trail-prepare in the background. */
@@ -90,8 +100,8 @@ export const TrailAnswerResSchema = z.object({
   feedback: TrailFeedbackSchema.nullable(),
   /** Set when this answer closed a chapter-test round. */
   checkpoint_result: z.object({ round: z.int().min(1), correct: z.int().min(0), total: z.int().min(1), passed: z.boolean() }).nullable(),
-  /** Set when this answer finished a chapter. */
-  chapter_done: z.object({ topic_id: UuidSchema, title: z.string(), next_title: z.string().nullable() }).nullable(),
+  /** A missed question saved to the Caderno de Erros (TRL-01.13). */
+  mistake_id: UuidSchema.nullable(),
   state: TrailStateSchema,
 });
 export type TrailAnswerRes = z.infer<typeof TrailAnswerResSchema>;

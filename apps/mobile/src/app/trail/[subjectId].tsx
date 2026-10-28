@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { TrailAnswerReq, TrailAnswerRes, TrailState, TrailStep } from '@studify/shared';
@@ -21,9 +21,14 @@ import {
   Screen,
   Skeleton,
   Text,
+  useOverlay,
 } from '../../components';
 import { isApiError } from '../../api/errors';
+import { ExplainSheet } from '../../features/learn/ExplainSheet';
 import { useCapi } from '../../features/motivation/capi';
+import { createQuiz } from '../../features/practice/api';
+import { rememberLearned } from '../../features/trail/learned';
+import { openTutor } from '../../features/tutor/open';
 import { useSubject } from '../../features/subjects/api';
 import { answerStep, openTrail, prepareTrail } from '../../features/trail/api';
 import { queryClient } from '../../api/queryClient';
@@ -47,12 +52,21 @@ async function untilReady(state: TrailState): Promise<TrailState> {
 
 type Milestone = { kind: 'chapter'; title: string; next: string | null } | { kind: 'retry'; correct: number; total: number } | { kind: 'passed'; correct: number; total: number };
 
-/** S-TRL-01 Trilha (TRL-01, spec 14 §5): one step at a time — lesson, questions, feedback, chapter test. */
+/** Concepts the path counts as learned: every concept of a finished chapter, and the cleared ones of the current. */
+function learnedOf(state: TrailState): string[] {
+  return state.chapters.flatMap((ch) => ch.concepts.filter((c) => ch.status === 'done' || c.state === 'cleared').map((c) => c.id));
+}
+
+/**
+ * S-TRL-01 Trilha (TRL-01, spec 14 §5): one step at a time — lesson, questions, feedback, chapter test, then
+ * Ensine o Lucas to close the chapter, and the unit's Chefão when a unit is done.
+ */
 export default function TrailScreen() {
   const { subjectId } = useLocalSearchParams<{ subjectId: string }>();
   const subject = useSubject(subjectId);
   const { colors: c } = useTheme();
   const capi = useCapi();
+  const overlay = useOverlay();
 
   const [state, setState] = useState<TrailState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +78,8 @@ export default function TrailScreen() {
   const [milestone, setMilestone] = useState<Milestone | null>(null);
   const [term, setTerm] = useState<{ term: string; definition: string } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [explainId, setExplainId] = useState<string | null>(null);
+  const [bossBusy, setBossBusy] = useState(false);
   const shownAt = useRef(0);
   // Each new state bumps the version; a background prefetch that comes back later never overwrites newer state.
   const version = useRef(0);
@@ -72,6 +88,9 @@ export default function TrailScreen() {
   const show = useCallback((s: TrailState) => {
     version.current += 1;
     shownAt.current = Date.now();
+    // Flashcards (TRL-01.15): what the path taught goes first among the new cards of the review queue.
+    rememberLearned(learnedOf(s));
+    if (s.chapter_done) setMilestone({ kind: 'chapter', title: s.chapter_done.title, next: s.chapter_done.next_title });
     setState(s);
   }, []);
 
@@ -110,6 +129,14 @@ export default function TrailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Back from Ensine o Lucas: ask again, so a good enough lesson closes the chapter.
+  const phase = state?.phase;
+  useFocusEffect(
+    useCallback(() => {
+      if (phase === 'teach') void load();
+    }, [phase, load]),
+  );
 
   // The buffer: when the server says more can be prepared ahead, do it in the background — once per step, so a
   // lookahead that keeps failing (budget, AI down) is not retried in a loop.
@@ -152,8 +179,7 @@ export default function TrailScreen() {
   };
 
   const next = async (res: TrailAnswerRes) => {
-    if (res.chapter_done) setMilestone({ kind: 'chapter', title: res.chapter_done.title, next: res.chapter_done.next_title });
-    else if (res.checkpoint_result && !res.checkpoint_result.passed) setMilestone({ kind: 'retry', correct: res.checkpoint_result.correct, total: res.checkpoint_result.total });
+    if (res.checkpoint_result) setMilestone({ kind: res.checkpoint_result.passed ? 'passed' : 'retry', correct: res.checkpoint_result.correct, total: res.checkpoint_result.total });
     setAnswer(null);
     setSelected(null);
     try {
@@ -165,6 +191,26 @@ export default function TrailScreen() {
     }
     void queryClient.invalidateQueries({ queryKey: ['trail', subjectId] });
   };
+
+  const teachLucas = () => {
+    if (state?.teach) router.push({ pathname: '/lucas/[nodeId]', params: { nodeId: state.teach.topic_id, subjectId } });
+  };
+
+  const fightBoss = async () => {
+    if (!state?.boss) return;
+    setBossBusy(true);
+    try {
+      const res = await createQuiz({ kind: 'boss', scope: { subject_id: subjectId, unit_node_id: state.boss.unit_id }, count: 10, mode: 'practice' });
+      router.push({ pathname: '/quiz/[quizId]', params: { quizId: res.quiz_id, attemptId: res.attempt_id } });
+    } catch (err) {
+      // The path itself is fine; only the Chefão could not start.
+      overlay.snack(isApiError(err) ? err.message : t('error.generation'));
+    } finally {
+      setBossBusy(false);
+    }
+  };
+
+  const bossButton = state?.boss ? <Button variant="secondary" icon="skull-outline" label={t('trail.boss_fight', { unit: state.boss.title })} loading={bossBusy} onPress={() => void fightBoss()} /> : null;
 
   if (error) {
     return (
@@ -191,6 +237,8 @@ export default function TrailScreen() {
       return milestone ? (
         <ActionBar>
           <Button label={t('trail.continue')} onPress={() => setMilestone(null)} />
+          {milestone.kind === 'chapter' ? bossButton : null}
+          {milestone.kind === 'chapter' ? <Button variant="text" icon="flash-outline" label={t('trail.review_cards')} onPress={() => router.push({ pathname: '/review', params: { subjectId } })} /> : null}
         </ActionBar>
       ) : null;
     }
@@ -198,6 +246,14 @@ export default function TrailScreen() {
       return (
         <ActionBar>
           <Button label={t('trail.done_review')} icon="flash-outline" onPress={() => router.replace({ pathname: '/review', params: { subjectId } })} />
+          {bossButton}
+        </ActionBar>
+      );
+    }
+    if (state.phase === 'teach') {
+      return (
+        <ActionBar>
+          <Button label={t('trail.teach_start')} icon="school-outline" onPress={teachLucas} />
         </ActionBar>
       );
     }
@@ -243,6 +299,8 @@ export default function TrailScreen() {
             {t('trail.done_body', { subject: subject.data?.name ?? '' })}
           </Text>
         </View>
+      ) : state.phase === 'teach' && state.teach ? (
+        <TeachView teach={state.teach} capiStage={capi.visible ? capi.stage : null} />
       ) : step ? (
         <StepView
           key={step.id}
@@ -253,10 +311,14 @@ export default function TrailScreen() {
           onSelect={setSelected}
           answer={answer?.stepId === step.id ? answer.res : null}
           onTerm={(name) => setTerm(step.terms.find((x) => x.term.toLowerCase() === name.toLowerCase()) ?? null)}
+          onExplain={() => setExplainId(step.id)}
+          onAskTutor={() => openTutor({ type: 'topic', subject_id: subjectId, node_id: chapter?.topic_id }, { prefill: step.kind === 'question' ? t('trail.tutor_prefill', { stem: step.stem.slice(0, 300) }) : undefined })}
         />
       ) : (
         <EmptyState icon="map-outline" message={t('trail.no_content')} />
       )}
+
+      <ExplainSheet visible={!!explainId} onClose={() => setExplainId(null)} target={explainId ? { target_type: 'trail_step', target_id: explainId } : null} subjectId={subjectId} />
 
       <BottomSheet visible={!!term} onClose={() => setTerm(null)} title={term?.term}>
         {term ? <RichContent variant="reading" text={term.definition} /> : null}
@@ -295,6 +357,7 @@ export default function TrailScreen() {
             </View>
           </View>
         ))}
+        {bossButton}
       </BottomSheet>
     </Screen>
   );
@@ -345,6 +408,27 @@ function MilestoneView({ milestone, capiStage }: { milestone: Milestone; capiSta
   );
 }
 
+/** The last step of a chapter (TRL-01.12): teach the topic to Lucas, scored like Ensine o Lucas anywhere else. */
+function TeachView({ teach, capiStage }: { teach: NonNullable<TrailState['teach']>; capiStage: ReturnType<typeof useCapi>['stage'] | null }) {
+  return (
+    <View style={{ gap: space.lg, alignItems: 'center', paddingTop: space.lg }}>
+      {capiStage ? <Capi stage={capiStage} mood="focused" size={120} /> : null}
+      <Text variant="label" weight="bold" tone="accent">
+        {t('trail.teach_label')}
+      </Text>
+      <Text variant="display" align="center">
+        {t('trail.teach_title', { title: teach.title })}
+      </Text>
+      <Text tone="secondary" align="center">
+        {t('trail.teach_body', { score: teach.pass_score })}
+      </Text>
+      {teach.best_score !== null ? (
+        <RichText align="center">{t('trail.teach_best', { best: teach.best_score, score: teach.pass_score })}</RichText>
+      ) : null}
+    </View>
+  );
+}
+
 const LABEL: Record<TrailStep['purpose'], string> = {
   lesson: 'trail.lesson',
   remedial_lesson: 'trail.remedial_lesson',
@@ -361,6 +445,8 @@ function StepView({
   onSelect,
   answer,
   onTerm,
+  onExplain,
+  onAskTutor,
 }: {
   step: TrailStep;
   subjectId: string;
@@ -369,6 +455,8 @@ function StepView({
   onSelect: (id: string) => void;
   answer: TrailAnswerRes | null;
   onTerm: (term: string) => void;
+  onExplain: () => void;
+  onAskTutor: () => void;
 }) {
   const { colors: c } = useTheme();
   const terms = step.terms.map((x) => x.term);
@@ -395,6 +483,10 @@ function StepView({
               {t('trail.term_hint')}
             </Text>
           ) : null}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            <Button compact variant="tonal" icon="sparkles-outline" label={t('notes.explain')} onPress={onExplain} />
+            <Button compact variant="text" icon="chatbubbles-outline" label={t('trail.ask_tutor')} onPress={onAskTutor} />
+          </View>
         </>
       ) : (
         <>
@@ -406,7 +498,17 @@ function StepView({
             disabled={!!answer}
             onSelect={onSelect}
           />
-          {answer?.feedback ? <Feedback feedback={answer.feedback} picked={selected} reteach={answer.state.preparing && !answer.feedback.correct} borderColor={answer.feedback.correct ? c.success : c.danger} /> : null}
+          {answer?.feedback ? (
+            <Feedback
+              feedback={answer.feedback}
+              picked={selected}
+              reteach={answer.state.preparing && !answer.feedback.correct}
+              saved={!!answer.mistake_id}
+              borderColor={answer.feedback.correct ? c.success : c.danger}
+              onExplain={onExplain}
+              onAskTutor={onAskTutor}
+            />
+          ) : null}
         </>
       )}
       <PageChips sources={step.source_pages} subjectId={subjectId} />
@@ -414,7 +516,23 @@ function StepView({
   );
 }
 
-function Feedback({ feedback, picked, reteach, borderColor }: { feedback: NonNullable<TrailAnswerRes['feedback']>; picked: string | null; reteach: boolean; borderColor: string }) {
+function Feedback({
+  feedback,
+  picked,
+  reteach,
+  saved,
+  borderColor,
+  onExplain,
+  onAskTutor,
+}: {
+  feedback: NonNullable<TrailAnswerRes['feedback']>;
+  picked: string | null;
+  reteach: boolean;
+  saved: boolean;
+  borderColor: string;
+  onExplain: () => void;
+  onAskTutor: () => void;
+}) {
   const { colors: c } = useTheme();
   const pickedRow = feedback.rationales.find((r) => r.id === picked);
   const right = feedback.rationales.find((r) => r.id === feedback.correct_option);
@@ -455,6 +573,15 @@ function Feedback({ feedback, picked, reteach, borderColor }: { feedback: NonNul
           {t('trail.reteach_soon')}
         </Text>
       ) : null}
+      {saved ? (
+        <Text variant="bodySmall" tone="secondary">
+          {t('trail.saved_to_caderno')}
+        </Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        {!feedback.correct ? <Button compact variant="tonal" icon="chatbubbles-outline" label={t('quiz.dont_understand')} onPress={onAskTutor} /> : null}
+        <Button compact variant="text" icon="sparkles-outline" label={t('notes.explain')} onPress={onExplain} />
+      </View>
     </View>
   );
 }

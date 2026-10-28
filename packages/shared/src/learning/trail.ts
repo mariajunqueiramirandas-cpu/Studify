@@ -19,6 +19,8 @@ export const TRAIL = {
   checkpointPass: 0.7,
   /** Concepts re-taught after a failed chapter test, weakest first. */
   remediationsAfterCheckpoint: 3,
+  /** Ensine o Lucas closes every chapter: a finished lesson on the topic at the "good" band or above (spec 12 §5.2). */
+  teachPassScore: 70,
 } as const;
 
 // ---------------------------------------------------------------- plan

@@ -1,11 +1,12 @@
-// trail-answer (TRL-01.5–01.7; api §4.11). Records the student's answer to the step on screen (or that a lesson
-// was read), returns the feedback that teaches (right option, why each option is right or wrong, a tip), writes
-// mastery evidence, scores a finished chapter-test round and moves the path to the next chapter when it passed.
-// Answering a step twice returns the first answer's feedback; it is never graded again.
+// trail-answer (TRL-01.5–01.7, 01.13; api §4.11). Records the student's answer to the step on screen (or that a
+// lesson was read), returns the feedback that teaches (right option, why each option is right or wrong, a tip),
+// writes mastery evidence, saves a miss to the Caderno de Erros, scores a finished chapter-test round and moves the
+// path on when the chapter is closed (test passed and Lucas taught). Answering a step twice returns the first
+// answer's feedback; it is never graded again.
 import { ApiFailure, TrailAnswerReqSchema, evidenceWeight, type TrailAnswerReq, type TrailAnswerRes } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { requireSubject } from '../shared/access.ts';
-import { advanceIfPassed, buildState, checkpointScore, isQuestionPurpose, loadOutline, loadSteps, loadTrail, toView, type QuestionContent } from '../shared/trail.ts';
+import { advanceIfPassed, buildState, checkpointScore, isQuestionPurpose, loadOutline, loadSteps, loadTrail, saveMistake, toView, type QuestionContent } from '../shared/trail.ts';
 
 export const handler = defineFunction<TrailAnswerReq>({
   name: 'trail-answer',
@@ -25,6 +26,7 @@ export const handler = defineFunction<TrailAnswerReq>({
     const question = isQuestionPurpose(row.purpose);
     if (question && input.response === null && row.status !== 'done') throw new ApiFailure('invalid_request', { message: 'Escolha uma alternativa.' });
 
+    let mistakeId: string | null = null;
     if (row.status === 'ready') {
       const answeredAt = ctx.now.toISOString();
       const correct = question ? input.response === (row.content as QuestionContent).correct : null;
@@ -43,6 +45,14 @@ export const handler = defineFunction<TrailAnswerReq>({
         );
         if (ev.error) throw ev.error;
         await deps.enqueue('mastery.recompute', { user_id: userId, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
+        if (!correct) {
+          // Best effort: the answer is already recorded, so a Caderno failure must not fail (and retry) the step.
+          try {
+            mistakeId = await saveMistake(deps, trail, row, input.time_spent_ms ?? 0, ctx.now);
+          } catch (err) {
+            console.warn('[trail-answer] caderno', err instanceof Error ? err.message : err);
+          }
+        }
       }
     }
 
@@ -64,18 +74,15 @@ export const handler = defineFunction<TrailAnswerReq>({
       if (score) checkpointResult = { round: row.round, ...score };
     }
 
-    let chapterDone: TrailAnswerRes['chapter_done'] = null;
-    const before = trail.plan[trail.chapter_index];
-    if (before && before.topicId === row.topic_id) {
-      const advanced = await advanceIfPassed(deps, trail, steps, ctx.now);
-      trail = advanced.trail;
-      if (advanced.passed) {
-        const next = trail.plan[trail.chapter_index];
-        chapterDone = { topic_id: before.topicId, title: outline.nodes.get(before.topicId)?.title ?? '', next_title: next ? (outline.nodes.get(next.topicId)?.title ?? null) : null };
-      }
-    }
+    const advanced = await advanceIfPassed(deps, trail, steps, outline, ctx.now);
+    trail = advanced.trail;
 
-    const body: TrailAnswerRes = { feedback, checkpoint_result: checkpointResult, chapter_done: chapterDone, state: await buildState(deps, trail, steps, outline) };
+    const body: TrailAnswerRes = {
+      feedback,
+      checkpoint_result: checkpointResult,
+      mistake_id: mistakeId,
+      state: await buildState(deps, trail, steps, outline, { chapterDone: advanced.chapterDone }),
+    };
     return ctx.json(body);
   },
 });

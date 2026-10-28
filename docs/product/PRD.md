@@ -246,7 +246,7 @@ Spec: [14-trilha](../specs/14-trilha.md)
 
 | ID | Feature | Phase |
 |---|---|---|
-| TRL-01 | Trilha: a guided path per subject — AI-chosen order, a short lesson per concept, questions with feedback, re-teaching on mistakes, a chapter test to move on; generated on demand and resumable | 5 |
+| TRL-01 | Trilha: a guided path per subject — AI-chosen order, a short lesson per concept, questions with feedback, re-teaching on mistakes, a chapter test and Ensine o Lucas to move on; tutor and "Explica de outro jeito" on every step, misses in the Caderno, learned concepts first in reviews, the unit Chefão; generated on demand and resumable | 5 |
 
 ## 6. Non-goals (explicitly cut)
 

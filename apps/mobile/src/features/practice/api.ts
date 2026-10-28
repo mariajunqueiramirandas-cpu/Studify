@@ -6,7 +6,7 @@ import { useSession } from '../auth/session';
 import { row, rows } from '../common/query';
 import type { MistakeCause, QuestionRow, QuestionType } from './types';
 
-export type QuizKind = 'practice' | 'mock_exam' | 'mistake_retry' | 'predicted_test' | 'boss' | 'feed' | 'duel' | 'battle' | 'enem_simulado';
+export type QuizKind = 'practice' | 'mock_exam' | 'mistake_retry' | 'predicted_test' | 'boss' | 'feed' | 'duel' | 'battle' | 'enem_simulado' | 'trail';
 export type QuizMode = 'practice' | 'exam_conditions' | 'relaxed';
 
 export interface QuizScope {

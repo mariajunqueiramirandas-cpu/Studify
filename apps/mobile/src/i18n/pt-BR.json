@@ -2485,7 +2485,7 @@
     "preparing_slow": "Tá demorando mais que o normal. Já já sai.",
     "checkpoint_intro": "Hora do teste do capítulo: {n} perguntas. Acerte 70% pra concluir.",
     "checkpoint_failed": "Você acertou {k} de {n}. Bora revisar o que faltou e tentar de novo.",
-    "checkpoint_passed": "Você acertou {k} de {n} no teste. Capítulo dominado!",
+    "checkpoint_passed": "Você acertou {k} de {n} no teste. Falta só um passo: ensinar pro Lucas.",
     "chapter_done": "Capítulo concluído: {title} 🎉",
     "chapter_next": "Próximo: {title}",
     "done_title": "Trilha concluída! 🏆",
@@ -2499,6 +2499,16 @@
     "concept_current": "Estudando",
     "concept_upcoming": "A seguir",
     "term_hint": "Toque nas palavras sublinhadas pra ver o significado.",
-    "no_content": "Essa matéria ainda não tem conteúdo pronto pra trilha. Envie o material e espera ele ficar pronto."
+    "no_content": "Essa matéria ainda não tem conteúdo pronto pra trilha. Envie o material e espera ele ficar pronto.",
+    "teach_label": "Último passo do capítulo",
+    "teach_title": "Ensine {title} pro Lucas",
+    "teach_body": "Explica com as suas palavras pro Lucas, um estudante virtual. Fazendo {score} pontos ou mais, o capítulo fica concluído.",
+    "teach_best": "Sua melhor aula: **{best}** pontos. Precisa de **{score}** — bora de novo? O Lucas vai ter dúvidas diferentes.",
+    "teach_start": "Ensinar o Lucas",
+    "boss_fight": "Enfrentar o Chefão: {unit}",
+    "review_cards": "Revisar os cartões",
+    "ask_tutor": "Perguntar ao tutor",
+    "tutor_prefill": "Não entendi essa pergunta da trilha: {stem}",
+    "saved_to_caderno": "Guardei essa no seu Caderno de Erros pra você revisar depois."
   }
 }

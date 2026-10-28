@@ -221,6 +221,7 @@ export const EXPLANATION_TARGET = [
   'glossary_term',
   'question_explanation',
   'card_back',
+  'trail_step',
 ] as const;
 export type ExplanationTarget = (typeof EXPLANATION_TARGET)[number];
 export const ExplanationTargetSchema = z.enum(EXPLANATION_TARGET);
@@ -458,6 +459,7 @@ export const QUIZ_KIND = [
   'duel',
   'battle',
   'enem_simulado',
+  'trail',
 ] as const;
 export type QuizKind = (typeof QUIZ_KIND)[number];
 export const QuizKindSchema = z.enum(QUIZ_KIND);

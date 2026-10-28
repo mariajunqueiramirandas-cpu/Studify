@@ -1043,5 +1043,5 @@ Pure functions in `packages/shared/src/learning/trail.ts`, tested in `test/learn
 | `trailNeeds` | Blocking need first, then one lookahead (next lesson · test on the last concept · next chapter's first lesson during the test); at most 2. |
 | `chapterFraction`, `trailProgress` | Each concept one unit, the test one more; path = (finished chapters + fraction) / chapters. |
 
-Evidence: every Trilha answer is a `mcq_single` event with source multiplier 1.0 (§5.2, source `trail`).
+Evidence: every Trilha answer is a `mcq_single` event with source multiplier 1.0 (§5.2, source `trail`). A passed test closes the chapter only with a finished Ensine o Lucas lesson on the topic at `TRAIL.teachPassScore` (70) or more; Lucas's own evidence (§5.2, `lucas` 0.75) is written by teaching-finish as usual. The device review queue (§3.1) puts the new cards of Trilha-learned concepts right after exam-scoped ones.
 

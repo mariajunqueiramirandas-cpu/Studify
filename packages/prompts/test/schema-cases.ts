@@ -311,6 +311,7 @@ const trailQuestion = {
     { id: 'A', text: 'Na mitocôndria', rationale: 'Lá ocorre o ciclo de Krebs.' },
     { id: 'B', text: 'No citoplasma', rationale: 'Correta: a glicólise é citoplasmática.' },
     { id: 'C', text: 'No núcleo', rationale: 'O núcleo guarda o DNA.' },
+    { id: 'D', text: 'No ribossomo', rationale: 'O ribossomo faz proteínas.' },
   ],
   correct: 'B',
   explanation: 'A glicólise acontece no citoplasma, antes da mitocôndria.',
@@ -322,10 +323,10 @@ const TRAIL_CASES: SchemaCase[] = [
   { name: 'TrailPlan', schema: S.TrailPlan, valid: { goal: 'Entender como a célula obtém energia.', chapters: [{ topic_key: 'T1', why: 'É a base do resto.', concept_keys: ['C1'] }] }, invalid: { goal: 'x', chapters: [{ topic_key: 'X1', why: 'a', concept_keys: [] }] } },
   { name: 'TrailTerm', schema: S.TrailTerm, valid: trailTerm, invalid: { term: '', definition: 'x' } },
   { name: 'TrailLessonBody', schema: S.TrailLessonBody, valid: trailLesson, invalid: { ...trailLesson, source_pages: [] } },
-  { name: 'TrailQuestion', schema: S.TrailQuestion, valid: trailQuestion, invalid: { ...trailQuestion, correct: 'D' } },
+  { name: 'TrailQuestion', schema: S.TrailQuestion, valid: trailQuestion, invalid: { ...trailQuestion, options: trailQuestion.options.slice(0, 3) } },
   { name: 'TrailLesson', schema: S.TrailLesson, valid: { lesson: trailLesson, questions: [trailQuestion, trailQuestion, trailQuestion] }, invalid: { lesson: trailLesson, questions: [trailQuestion] } },
-  { name: 'TrailRemediation', schema: S.TrailRemediation, valid: { lesson: trailLesson, question: trailQuestion }, invalid: { lesson: trailLesson, question: { ...trailQuestion, options: [trailQuestion.options[0], trailQuestion.options[0], trailQuestion.options[1]] } } },
-  { name: 'TrailCheckpoint', schema: S.TrailCheckpoint, valid: { questions: [{ ...trailQuestion, concept_key: 'c1' }] }, invalid: { questions: [{ ...trailQuestion, concept_key: 'c1', correct: 'D' }] } },
+  { name: 'TrailRemediation', schema: S.TrailRemediation, valid: { lesson: trailLesson, question: trailQuestion }, invalid: { lesson: trailLesson, question: { ...trailQuestion, options: [trailQuestion.options[0], trailQuestion.options[0], trailQuestion.options[1], trailQuestion.options[2]] } } },
+  { name: 'TrailCheckpoint', schema: S.TrailCheckpoint, valid: { questions: [{ ...trailQuestion, concept_key: 'c1' }] }, invalid: { questions: [{ ...trailQuestion, concept_key: 'c1', options: trailQuestion.options.slice(0, 3) }] } },
 ];
 
 export const SCHEMA_CASES: SchemaCase[] = [

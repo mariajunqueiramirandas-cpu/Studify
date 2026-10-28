@@ -132,7 +132,7 @@ export function toEventHandler(h: StreamHandlers) {
 
 /** LRN-03 "Explica de outro jeito" (SSE; cache hits stream instantly). */
 export function streamExplain(
-  target: { target_type: 'note_paragraph' | 'concept' | 'glossary_term' | 'question_explanation' | 'card_back'; target_id: string; paragraph_index?: number },
+  target: { target_type: 'note_paragraph' | 'concept' | 'glossary_term' | 'question_explanation' | 'card_back' | 'trail_step'; target_id: string; paragraph_index?: number },
   style: ExplainStyle,
   handlers: StreamHandlers,
   forceNew = false,

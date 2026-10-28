@@ -13,6 +13,7 @@ create table public.trails (                                  -- [svc]
   chapter_index    int not null default 0 check (chapter_index >= 0),
   prompt_version   text,                                       -- null when the outline order was used (fallback)
   preparing_until  timestamptz,                                -- lease: one content generation at a time
+  quiz_attempt_id  uuid references public.quiz_attempts(id) on delete set null,   -- holds the answers sent to the Caderno
   completed_at     timestamptz,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
@@ -38,6 +39,7 @@ create table public.trail_steps (                             -- [svc]
   content         jsonb not null check (jsonb_typeof(content) = 'object'),
   source_pages    jsonb not null default '[]'::jsonb check (jsonb_typeof(source_pages) = 'array'),
   response        text,                                       -- chosen option id
+  question_id     uuid references public.questions(id) on delete set null,   -- a missed question saved for the Caderno
   correct         boolean,
   answered_at     timestamptz,
   prompt_version  text not null,
@@ -62,3 +64,14 @@ alter table public.mastery_evidence drop constraint mastery_evidence_source_chec
 alter table public.mastery_evidence add constraint mastery_evidence_source_check
   check (source in ('quiz_answer','review','tutor_quiz','feed_question','duel','battle',
                     'teaching','boss','simulado','diagnostic','trail'));
+
+-- Missed Trilha questions are saved as personal questions answered in one implicit attempt per trail, so the
+-- Caderno de Erros (PRA-04) keeps them and schedules their retries like any other mistake.
+alter table public.quizzes drop constraint quizzes_kind_check;
+alter table public.quizzes add constraint quizzes_kind_check
+  check (kind in ('practice','mock_exam','mistake_retry','feed','predicted_test','boss','duel','battle','enem_simulado','trail'));
+
+-- "Explica de outro jeito" (LRN-03) on a Trilha lesson or question explains the step itself.
+alter table public.explanations drop constraint explanations_target_type_check;
+alter table public.explanations add constraint explanations_target_type_check
+  check (target_type in ('note_paragraph','concept','glossary_term','question_explanation','card_back','trail_step'));
