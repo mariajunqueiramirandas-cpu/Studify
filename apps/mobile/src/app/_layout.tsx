@@ -12,9 +12,10 @@ import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-rou
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { getApiUrl } from '../api/env';
 import { queryClient, startQueryPersistence } from '../api/queryClient';
 import { Button, ErrorState, MascotVisibleContext, OverlayProvider, Text } from '../components';
 import { DatabaseProvider } from '../db/DatabaseProvider';
@@ -128,7 +129,8 @@ function UpdateRequired() {
       <Text variant="title" align="center">
         {t('update.required')}
       </Text>
-      <Button label={t('update.install')} onPress={() => undefined} />
+      {/* /download lives at the site root, not under /api, and redirects to the newest APK. */}
+      <Button label={t('update.install')} onPress={() => void Linking.openURL(`${getApiUrl().replace(/\/api$/, '')}/download`)} />
     </View>
   );
 }
