@@ -8,6 +8,7 @@ import { runLucasTurn } from '../shared-p3/lucas.ts';
 
 export const handler = defineFunction<TeachingTurnReq>({
   name: 'teaching-turn',
+  claudeInsideStream: true,
   mutating: true,
   aiCall: true,
   input: TeachingTurnReqSchema,
@@ -16,10 +17,11 @@ export const handler = defineFunction<TeachingTurnReq>({
     const session = await loadOwnSession(deps.db, ctx.user.userId, input.session_id);
     if (!session) throw new ApiFailure('not_found');
     if (session.status !== 'active') throw new ApiFailure('invalid_request', { message: 'Essa aula já terminou.' });
-    // The call happens before the stream opens, so budget and AI errors keep their HTTP status.
-    const outcome = await runLucasTurn(deps, session, input.message, ctx.now);
+    // The stream opens before the call (ADR 0009): the heartbeat keeps the connection alive while Lucas thinks.
+    // Budget and AI errors arrive as the stream's `error` event, which the app reads as the same ApiError.
     return ctx.sse(async (writer) => {
       writer.send('meta', { request_id: ctx.requestId, session_id: session.id });
+      const outcome = await runLucasTurn(deps, session, input.message, ctx.now);
       writer.send('delta', { text: outcome.reply });
       writer.send('done', {
         stop_reason: 'end_turn',

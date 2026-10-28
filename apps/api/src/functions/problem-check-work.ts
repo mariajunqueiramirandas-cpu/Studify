@@ -12,6 +12,8 @@ import { claudeDepsFor } from '../shared/deps.ts';
 
 export const handler = defineFunction<z.infer<typeof ProblemCheckWorkReqSchema>>({
   name: 'problem-check-work',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: ProblemCheckWorkReqSchema,

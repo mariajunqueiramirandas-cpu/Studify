@@ -5,10 +5,13 @@
 import { TrailPrepareReqSchema, type TrailPrepareReq } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { requireSubject } from '../shared/access.ts';
-import { buildState, generate, loadOutline, loadSteps, loadTrail, needsOf, releaseLease, takeLease } from '../shared/trail.ts';
+import { buildState, loadOutline, loadSteps, loadTrail, needsOf, releaseLease, takeLease } from '../shared/trail.ts';
+import { generate } from '../shared/trail-generate.ts';
 
 export const handler = defineFunction<TrailPrepareReq>({
   name: 'trail-prepare',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: TrailPrepareReqSchema,
