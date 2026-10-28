@@ -79,5 +79,7 @@ export async function handleNotifyLive(ctx: JobContext, raw: Record<string, unkn
 export const jobs: JobDefinition[] = [
   { name: 'notify.dispatch', retryLimit: 3, handler: async (ctx, data) => void (await handleNotifyDispatch(ctx, data)) },
   // Not tracked: marking the job running here would queue another notify.live (and revive finished jobs).
-  { name: 'notify.live', retryLimit: 1, expireInSeconds: 120, tracksProgress: false, handler: async (ctx, data) => void (await handleNotifyLive(ctx, data)) },
+  // Each run is one Expo push (~4-8 s), and a stage change queues several at once: with one slot the
+  // backlog waited ~80-100 s (p50) and up to ~15 min during the progress loop, so run four at a time.
+  { name: 'notify.live', retryLimit: 1, expireInSeconds: 120, tracksProgress: false, concurrency: 4, handler: async (ctx, data) => void (await handleNotifyLive(ctx, data)) },
 ];
