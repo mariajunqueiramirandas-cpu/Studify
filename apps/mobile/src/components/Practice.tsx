@@ -87,16 +87,16 @@ export function FeedbackPanel({
       {!result.correct && pickedOption?.rationale ? (
         <View style={{ gap: space.xs }}>
           <Text variant="label">{t('quiz.why_wrong', { letter: pickedOption.id })}</Text>
-          <RichContent text={pickedOption.rationale} />
+          <RichContent variant="reading" text={pickedOption.rationale} />
         </View>
       ) : null}
       {correctOption?.rationale ? (
         <View style={{ gap: space.xs }}>
           <Text variant="label">{t('quiz.correct_answer')}</Text>
-          <RichContent text={correctOption.rationale} />
+          <RichContent variant="reading" text={correctOption.rationale} />
         </View>
       ) : null}
-      {question.type === 'true_false' && typeof p.justification === 'string' ? <RichContent text={p.justification} /> : null}
+      {question.type === 'true_false' && typeof p.justification === 'string' ? <RichContent variant="reading" text={p.justification} /> : null}
       {question.explanation ? (
         <View style={{ gap: space.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -105,7 +105,7 @@ export function FeedbackPanel({
             </Text>
             <ReadAloudButton id={`explanation:${question.id}`} text={question.explanation} size={20} />
           </View>
-          <RichContent text={question.explanation} />
+          <RichContent variant="reading" text={question.explanation} />
         </View>
       ) : null}
       <PageChips sources={question.source_pages} subjectId={question.subject_id} />

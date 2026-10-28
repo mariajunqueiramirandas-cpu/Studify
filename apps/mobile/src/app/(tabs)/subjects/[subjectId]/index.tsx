@@ -1,5 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
 import {
   BottomSheet,
@@ -14,9 +15,9 @@ import {
   Screen,
   Section,
   SkeletonList,
-  SubjectBadge,
   Text,
   useOverlay,
+  type IconName,
 } from '../../../../components';
 import { useSession } from '../../../../features/auth/session';
 import { colorKeyFromHex, setSubjectArchived, useDocuments, useSubject, useSubjectJobs, useSubjects } from '../../../../features/subjects/api';
@@ -25,7 +26,7 @@ import { useCanEditSubject, useMastery, useOutline } from '../../../../features/
 import { ProcessingCard, ingestionJob } from '../../../../features/subjects/ProcessingCard';
 import { openTutor } from '../../../../features/tutor/open';
 import { t } from '../../../../i18n';
-import { space } from '../../../../theme';
+import { space, subjectColor, useTheme } from '../../../../theme';
 
 /** S-MAT-03 {Matéria}: outline, materials, processing card, progress, shortcuts. */
 export default function SubjectHome() {
@@ -39,6 +40,7 @@ export default function SubjectHome() {
   const mastery = useMastery(subjectId);
   const canEdit = useCanEditSubject(subject.data);
   const overlay = useOverlay();
+  const { scheme } = useTheme();
   const [menu, setMenu] = useState(false);
 
   const masteryMap = useMemo(() => new Map([...(mastery.data?.values() ?? [])].map((m) => [m.node_id, m.mastery])), [mastery.data]);
@@ -58,7 +60,7 @@ export default function SubjectHome() {
 
   return (
     <Screen
-      title={s?.name ?? ''}
+      title=""
       onRefresh={refresh}
       refreshing={outline.isRefetching}
       actions={
@@ -68,21 +70,7 @@ export default function SubjectHome() {
         </>
       }
     >
-      {s ? (
-        <Row gap={space.md}>
-          <SubjectBadge color={colorKeyFromHex(s.color)} icon={s.icon} size={48} />
-          <View style={{ flex: 1, gap: 6 }}>
-            {topics.length ? (
-              <>
-                <Text variant="bodySmall" tone="secondary">
-                  {t('subjects.progress', { done: studied, total: topics.length })}
-                </Text>
-                <ProgressBar value={topics.length ? studied / topics.length : 0} />
-              </>
-            ) : null}
-          </View>
-        </Row>
-      ) : null}
+      {s ? <SubjectCover name={s.name} icon={s.icon} tint={subjectColor(colorKeyFromHex(s.color), scheme)} studied={studied} total={topics.length} dark={scheme === 'dark'} /> : null}
 
       <ProcessingCard subjectId={subjectId} job={ingestionJob(jobs.data)} documents={docs.data ?? []} />
 
@@ -147,5 +135,25 @@ export default function SubjectHome() {
         />
       </BottomSheet>
     </Screen>
+  );
+}
+
+/** The open notebook's cover: the subject's colour as a wash, its name set large, how much of it you've studied. */
+function SubjectCover({ name, icon, tint, studied, total, dark }: { name: string; icon: string | null; tint: string; studied: number; total: number; dark: boolean }) {
+  return (
+    <View style={{ marginHorizontal: -(space.lg + 4), marginTop: -space.sm, paddingHorizontal: space.lg + 4, paddingVertical: space.lg, gap: space.md, backgroundColor: `${tint}${dark ? '2A' : '1C'}`, borderBottomWidth: 3, borderBottomColor: tint }}>
+      <Ionicons name={(icon ?? 'book-outline') as IconName} size={30} color={tint} />
+      <Text variant="display" accessibilityRole="header">
+        {name}
+      </Text>
+      {total ? (
+        <View style={{ gap: space.xs }}>
+          <Text variant="bodySmall" tone="secondary">
+            {t('subjects.progress', { done: studied, total })}
+          </Text>
+          <ProgressBar value={studied / total} color={tint} height={6} />
+        </View>
+      ) : null}
+    </View>
   );
 }

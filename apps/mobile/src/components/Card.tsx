@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { radius, space, subjectColor, touch, useTheme } from '../theme';
+import Svg, { Path } from 'react-native-svg';
+import { FONTS, radius, space, subjectColor, touch, useTheme } from '../theme';
 import type { IconName } from './Button';
 import { Text } from './Text';
 
@@ -9,7 +10,7 @@ interface CardProps {
   children: ReactNode;
   onPress?: () => void;
   onLongPress?: () => void;
-  /** Subject color as the left accent bar (ux §6). */
+  /** Subject color, shown as a bookmark ribbon hanging from the top edge (ux §6). */
   accent?: string | null;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
@@ -22,11 +23,12 @@ export function Card({ children, onPress, onLongPress, accent, style, accessibil
   const bg = tone === 'soft' ? c.primarySoft : tone === 'outline' ? 'transparent' : c.surface1;
   const content = (
     <>
-      {accent ? <View style={[styles.accent, { backgroundColor: accent }]} /> : null}
-      <View style={[styles.inner, accent ? { paddingLeft: space.lg + 4 } : null]}>{children}</View>
+      {accent ? <Ribbon color={accent} /> : null}
+      <View style={[styles.inner, accent ? { paddingTop: space.lg + 8 } : null]}>{children}</View>
     </>
   );
-  const base = [styles.card, { backgroundColor: bg, borderColor: c.border, borderWidth: tone === 'outline' ? 1 : 0 }, style];
+  const border = tone === 'soft' ? 'transparent' : c.border;
+  const base = [styles.card, { backgroundColor: bg, borderColor: border, borderWidth: tone === 'outline' ? 1.5 : StyleSheet.hairlineWidth * 2 }, style];
   if (!onPress && !onLongPress) return <View style={base} testID={testID}>{content}</View>;
   return (
     <Pressable
@@ -35,10 +37,21 @@ export function Card({ children, onPress, onLongPress, accent, style, accessibil
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [...base, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [...base, pressed && { backgroundColor: tone === 'soft' ? c.primarySoft : c.surface2 }]}
     >
       {content}
     </Pressable>
+  );
+}
+
+/** A cloth bookmark in the subject's color, notched at the end. */
+function Ribbon({ color }: { color: string }) {
+  return (
+    <View style={styles.ribbon} pointerEvents="none">
+      <Svg width={12} height={18} viewBox="0 0 12 18">
+        <Path d="M0 0 H12 V18 L6 13.5 L0 18 Z" fill={color} />
+      </Svg>
+    </View>
   );
 }
 
@@ -58,7 +71,7 @@ interface ListItemProps {
 }
 
 export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onLongPress, chevron = !!onPress, destructive, accessibilityLabel, disabled, testID }: ListItemProps) {
-  const { colors: c } = useTheme();
+  const { colors: c, easyReading } = useTheme();
   return (
     <Pressable
       testID={testID}
@@ -71,7 +84,7 @@ export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onL
     >
       {icon ? <Ionicons name={icon} size={22} color={destructive ? c.danger : (iconColor ?? c.textSecondary)} /> : null}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="body" tone={destructive ? 'danger' : 'primary'}>
+        <Text variant="body" tone={destructive ? 'danger' : 'primary'} style={easyReading ? undefined : { fontFamily: FONTS.uiMedium }}>
           {title}
         </Text>
         {subtitle ? (
@@ -90,7 +103,7 @@ export function SubjectBadge({ color, icon, size = 40 }: { color?: string | null
   const theme = useTheme();
   const tint = subjectColor(color, theme.scheme);
   return (
-    <View style={{ width: size, height: size, borderRadius: radius.md, backgroundColor: `${tint}22`, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: radius.md, backgroundColor: `${tint}24`, borderLeftWidth: 4, borderLeftColor: tint, alignItems: 'center', justifyContent: 'center' }}>
       <Ionicons name={(icon ?? 'book-outline') as IconName} size={size * 0.55} color={tint} />
     </View>
   );
@@ -99,6 +112,6 @@ export function SubjectBadge({ color, icon, size = 40 }: { color?: string | null
 const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, overflow: 'hidden' },
   inner: { padding: space.lg, gap: space.sm },
-  accent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  ribbon: { position: 'absolute', left: space.lg, top: 0 },
   item: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, paddingVertical: space.sm, paddingHorizontal: space.xs, borderRadius: radius.sm },
 });

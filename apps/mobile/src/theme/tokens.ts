@@ -23,58 +23,76 @@ export interface Palette {
   focusRing: string;
   calmSurface: string;
   overlay: string;
+  /** Lagoon teal, the second accent (Capi's stopwatch): tips, key terms, list markers. */
+  lagoon: string;
+  /** Lamp yellow: the highlighter on bold study text, stars, small celebrations. */
+  lamp: string;
+  /** Translucent highlighter stroke laid under bold text in notes. */
+  highlight: string;
+  /** Capi's fur: warm accents next to the mascot. */
+  fur: string;
 }
 
+// "Riverbank study nook": reed-paper days and deep-indigo nights, with the book indigo from Capi's art as the
+// primary, lagoon teal as the second accent and lamp yellow as the highlighter.
 const light: Palette = {
-  bg: '#FFFFFF',
-  surface1: '#F7F7FA',
-  surface2: '#EEEEF3',
-  textPrimary: '#111827',
-  textSecondary: '#4B5563',
-  border: '#D1D5DB',
-  primary: '#4F46E5',
+  bg: '#EFF0E7',
+  surface1: '#FAFAF5',
+  surface2: '#E3E5D8',
+  textPrimary: '#1E2033',
+  textSecondary: '#555A69',
+  border: '#CED2C2',
+  primary: '#4A3FD1',
   onPrimary: '#FFFFFF',
-  primarySoft: '#EEF2FF',
-  success: '#15803D',
-  successSoft: '#ECFDF3',
-  warning: '#B45309',
-  warningSoft: '#FFF7E6',
-  danger: '#B91C1C',
-  dangerSoft: '#FEF2F2',
-  info: '#1D4ED8',
-  infoSoft: '#EFF6FF',
-  focusRing: '#4F46E5',
-  calmSurface: '#F2F6F5',
-  overlay: 'rgba(17,24,39,0.45)',
+  primarySoft: '#E5E3F8',
+  success: '#1D7548',
+  successSoft: '#DCEEDF',
+  warning: '#9C5800',
+  warningSoft: '#F8EBCF',
+  danger: '#B3362A',
+  dangerSoft: '#F7E0DA',
+  info: '#0E7470',
+  infoSoft: '#D8EDE8',
+  focusRing: '#4A3FD1',
+  calmSurface: '#E6ECE3',
+  overlay: 'rgba(30,32,51,0.45)',
+  lagoon: '#0C6F6A',
+  lamp: '#E9A62B',
+  highlight: 'rgba(242,179,61,0.42)',
+  fur: '#A06A3A',
 };
 
 const dark: Palette = {
-  bg: '#0F1115',
-  surface1: '#171A21',
-  surface2: '#1F232C',
-  textPrimary: '#F3F4F6',
-  textSecondary: '#9CA3AF',
-  border: '#2D3340',
-  primary: '#A5B4FC',
-  onPrimary: '#111827',
-  primarySoft: '#1E2140',
-  success: '#4ADE80',
-  successSoft: '#11291C',
-  warning: '#FBBF24',
-  warningSoft: '#2C2210',
-  danger: '#F87171',
-  dangerSoft: '#2E1416',
-  info: '#60A5FA',
-  infoSoft: '#122036',
-  focusRing: '#A5B4FC',
-  calmSurface: '#141B1A',
-  overlay: 'rgba(0,0,0,0.6)',
+  bg: '#16162A',
+  surface1: '#1F1F38',
+  surface2: '#2A2A48',
+  textPrimary: '#ECEBF5',
+  textSecondary: '#A9A8C4',
+  border: '#3A3A5E',
+  primary: '#B0A9FF',
+  onPrimary: '#16162A',
+  primarySoft: '#2D2A58',
+  success: '#6CD69C',
+  successSoft: '#163327',
+  warning: '#F4C25E',
+  warningSoft: '#372D18',
+  danger: '#FF8D7E',
+  dangerSoft: '#3B1D24',
+  info: '#62D5C8',
+  infoSoft: '#15333A',
+  focusRing: '#B0A9FF',
+  calmSurface: '#191E31',
+  overlay: 'rgba(6,6,16,0.62)',
+  lagoon: '#62D5C8',
+  lamp: '#F4C25E',
+  highlight: 'rgba(244,194,94,0.28)',
+  fur: '#D29A63',
 };
 
 // "Alto contraste" (WEL-04, ux §11) raises borders and secondary text.
 const highContrast: Record<ColorScheme, Partial<Palette>> = {
-  light: { textSecondary: '#1F2937', border: '#6B7280' },
-  dark: { textSecondary: '#E5E7EB', border: '#9CA3AF' },
+  light: { textSecondary: '#2C3040', border: '#6E7363' },
+  dark: { textSecondary: '#E2E1F0', border: '#8D8CB4' },
 };
 
 export function getPalette(scheme: ColorScheme, contrast = false): Palette {
@@ -84,7 +102,8 @@ export function getPalette(scheme: ColorScheme, contrast = false): Palette {
 
 // 8 dp scale with the 4 dp half step (ux §7.1).
 export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
-export const radius = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
+// Corners grow with the size of the thing: small controls are nearly square, sheets are soft. No capsules.
+export const radius = { xs: 4, sm: 6, md: 10, lg: 14, xl: 22, round: 999 } as const;
 export const touch = { min: 48, option: 56 } as const;
 export const maxContentWidth = 600;
 

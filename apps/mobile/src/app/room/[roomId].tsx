@@ -159,5 +159,5 @@ export default function Room() {
 
 const styles = StyleSheet.create({
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, justifyContent: 'center' },
-  reaction: { width: 52, height: 52, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  reaction: { width: 52, height: 52, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
 });

@@ -12,9 +12,9 @@ export function ProgressBar({ value, color, height = 8, label }: { value: number
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}
-      style={[styles.track, { height, backgroundColor: c.surface2, borderRadius: height }]}
+      style={[styles.track, { height, backgroundColor: c.surface2, borderRadius: radius.xs }]}
     >
-      <View style={{ width: `${pct * 100}%`, height, backgroundColor: color ?? c.primary, borderRadius: height }} />
+      <View style={{ width: `${pct * 100}%`, height, backgroundColor: color ?? c.primary, borderRadius: radius.xs }} />
     </View>
   );
 }
@@ -95,5 +95,5 @@ export function Stat({ value, label }: { value: string; label: string }) {
 const styles = StyleSheet.create({
   track: { width: '100%', overflow: 'hidden' },
   stepper: { flexDirection: 'row', gap: space.xs, paddingVertical: space.sm },
-  dot: { height: 6, borderRadius: radius.pill },
+  dot: { height: 5, borderRadius: radius.xs },
 });

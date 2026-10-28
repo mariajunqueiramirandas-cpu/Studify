@@ -88,7 +88,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-image',
     'expo-localization',
     'expo-font',
-    ['expo-splash-screen', { backgroundColor: '#FFFFFF', image: './assets/splash-icon.png', imageWidth: 160, dark: { backgroundColor: '#0F1115' } }],
+    ['expo-splash-screen', { backgroundColor: '#EFF0E7', image: './assets/splash-icon.png', imageWidth: 160, dark: { backgroundColor: '#16162A' } }],
     'expo-web-browser',
     '@react-native-google-signin/google-signin',
     'expo-sharing',

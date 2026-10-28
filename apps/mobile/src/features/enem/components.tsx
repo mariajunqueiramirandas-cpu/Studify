@@ -29,12 +29,12 @@ export function ScoreBar({ score, low, high, target }: { score: number; low?: nu
   const pct = (v: number) => `${Math.round(scalePos(v) * 100)}%` as const;
   return (
     <View
-      style={{ height: 14, borderRadius: radius.pill, backgroundColor: c.surface2, justifyContent: 'center' }}
+      style={{ height: 14, borderRadius: radius.xs, backgroundColor: c.surface2, justifyContent: 'center' }}
       accessibilityRole="image"
       accessibilityLabel={t('enem.score_a11y', { score, low: low ?? score, high: high ?? score })}
     >
       {low !== undefined && high !== undefined ? (
-        <View style={{ position: 'absolute', left: pct(low), width: `${Math.max(1, Math.round((scalePos(high) - scalePos(low)) * 100))}%`, top: 3, bottom: 3, borderRadius: radius.pill, backgroundColor: c.primarySoft }} />
+        <View style={{ position: 'absolute', left: pct(low), width: `${Math.max(1, Math.round((scalePos(high) - scalePos(low)) * 100))}%`, top: 3, bottom: 3, borderRadius: radius.xs, backgroundColor: c.primarySoft }} />
       ) : null}
       <View style={{ position: 'absolute', left: pct(score), width: 4, marginLeft: -2, top: 0, bottom: 0, borderRadius: 2, backgroundColor: c.primary }} />
       {target ? <View style={{ position: 'absolute', left: pct(target), width: 2, top: -3, bottom: -3, backgroundColor: c.success }} /> : null}
@@ -156,8 +156,8 @@ export function TextoBaseView({ value }: { value: TextoBase }) {
                   <Text variant="caption" style={{ width: 90 }}>
                     {p.x}
                   </Text>
-                  <View style={{ flex: 1, height: 10, borderRadius: radius.pill, backgroundColor: c.surface1 }}>
-                    <View style={{ width: `${Math.round((Math.abs(p.y) / max) * 100)}%`, height: 10, borderRadius: radius.pill, backgroundColor: c.primary }} />
+                  <View style={{ flex: 1, height: 10, borderRadius: radius.xs, backgroundColor: c.surface1 }}>
+                    <View style={{ width: `${Math.round((Math.abs(p.y) / max) * 100)}%`, height: 10, borderRadius: radius.xs, backgroundColor: c.primary }} />
                   </View>
                   <Text variant="caption" style={{ width: 48, textAlign: 'right' }}>
                     {String(p.y).replace('.', ',')}

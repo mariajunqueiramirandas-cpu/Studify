@@ -221,7 +221,7 @@ export default function TutorThread() {
                     {lastUser ? <Button compact variant="tonal" label={t('tutor.general_cta')} onPress={() => send(lastUser.text, true)} /> : null}
                   </View>
                 ) : null}
-                {item.text ? <RichContent text={item.text} /> : item.status === 'streaming' ? <Text tone="secondary">{status ?? '…'}</Text> : null}
+                {item.text ? <RichContent variant="reading" text={item.text} /> : item.status === 'streaming' ? <Text tone="secondary">{status ?? '…'}</Text> : null}
                 {item.distress ? <Banner kind="info" icon="heart-outline" message={t('help.card')} /> : null}
                 <PageChips sources={item.citations} subjectId={scope?.subject_id} max={6} />
                 {item.status === 'interrupted' ? (

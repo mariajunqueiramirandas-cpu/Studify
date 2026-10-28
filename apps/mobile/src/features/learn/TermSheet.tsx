@@ -15,7 +15,7 @@ export function TermSheet({ term, visible, onClose, subjectId, nodeId }: { term:
     <BottomSheet visible={visible && !!term} onClose={() => (setCreated(false), onClose())} title={term?.term}>
       {term ? (
         <>
-          <RichContent text={term.definition} />
+          <RichContent variant="reading" text={term.definition} />
           {term.example ? (
             <Text variant="bodySmall" tone="secondary">
               {t('glossary.example')}: {term.example}

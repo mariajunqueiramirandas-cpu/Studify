@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { energyBucketOf, orderByEnergy } from '@studify/shared';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActionBar,
   Banner,
@@ -37,9 +37,9 @@ import { useUnseenRetrospective } from '../../../features/retro/api';
 import { WeeklyCheckin } from '../../../features/wellbeing/WeeklyCheckin';
 import { WellbeingNudge } from '../../../features/wellbeing/WellbeingNudge';
 import { useFocusStore } from '../../../stores/focus';
-import { useSubjects } from '../../../features/subjects/api';
+import { colorKeyFromHex, useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
-import { space, useTheme } from '../../../theme';
+import { radius, space, subjectColor, useTheme } from '../../../theme';
 
 /** S-HOJE-01 Hoje (GOL-05): plan, countdowns, ≤ 3 cards, "Começar sessão". */
 export default function Today() {
@@ -57,7 +57,7 @@ export default function Today() {
   const retro = useUnseenRetrospective();
   const energy = usePerformanceWindows();
   const overlay = useOverlay();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const [quick, setQuick] = useState(false);
   const due = useLive((d) => dueCount(d), { tables: ['card_states', 'cards'] });
   const dueN = due.data ?? 0;
@@ -164,32 +164,13 @@ export default function Today() {
   return (
     <Screen
       root
-      title={greeting(profile?.display_name ?? '')}
+      title=""
       actions={
         <>
           <IconButton icon="timer-outline" label={t('focus.title')} onPress={() => router.push('/focus')} />
           <IconButton icon="camera-outline" label={t('cam.title')} onPress={() => router.push('/camera')} />
           <InboxBell />
         </>
-      }
-      context={
-        motivation.data ? (
-          <Row gap={space.md}>
-            {capi.visible ? (
-              <Pressable onPress={() => router.push('/profile/capi')} accessibilityRole="button" accessibilityLabel={t('capi.title')}>
-                <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={44} />
-              </Pressable>
-            ) : null}
-            {/* The ring and streak open Progresso (the trophy's old place in the bar is the bell now). */}
-            <Pressable onPress={() => router.push('/profile/progress')} accessibilityRole="button" accessibilityLabel={t('progress.title')} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, flexShrink: 1 }}>
-              <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={36} stroke={5} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
-              <Text variant="bodySmall" tone="secondary" style={{ flexShrink: 1 }}>
-                {motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}
-                {motivation.data.streak > 0 ? `  ·  ${t('streak.count', { n: motivation.data.streak })}` : ''}
-              </Text>
-            </Pressable>
-          </Row>
-        ) : null
       }
       footer={
         <ActionBar>
@@ -198,6 +179,32 @@ export default function Today() {
         </ActionBar>
       }
     >
+      <View style={styles.hero}>
+        <View style={{ flex: 1, gap: space.md }}>
+          <Text variant="display" accessibilityRole="header">
+            {greeting(profile?.display_name ?? '')}
+          </Text>
+          {motivation.data ? (
+            // The ring and streak open Progresso.
+            <Pressable onPress={() => router.push('/profile/progress')} accessibilityRole="button" accessibilityLabel={t('progress.title')} style={styles.goal}>
+              <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={34} stroke={5} color={colors.lagoon} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
+              <View style={{ flexShrink: 1 }}>
+                <Text variant="label">{motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}</Text>
+                {motivation.data.streak > 0 ? (
+                  <Text variant="bodySmall" tone="secondary">
+                    {t('streak.count', { n: motivation.data.streak })}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
+        {capi.visible ? (
+          <Pressable onPress={() => router.push('/profile/capi')} accessibilityRole="button" accessibilityLabel={t('capi.title')} style={{ marginTop: -space.md }}>
+            <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={116} />
+          </Pressable>
+        ) : null}
+      </View>
       {focusRunning ? <Banner kind="info" icon="timer-outline" message={t('focus.running_banner')} action={{ label: t('focus.open'), onPress: () => router.push('/focus') }} /> : null}
       {retro ? (
         <Banner kind="success" icon="sparkles-outline" title={t('retro.ready')} message={retro.title} action={{ label: t('retro.open'), onPress: () => router.push({ pathname: '/retro/[retroId]', params: { retroId: retro.id } }) }} />
@@ -206,25 +213,30 @@ export default function Today() {
       <WeeklyCheckin />
       {motivation.data?.streakResetNotice ? <Banner kind="neutral" message={t('streak.reset', { n: motivation.data.bestStreak })} /> : null}
       {upcoming.length ? (
-        <Row wrap>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.exams}>
           {upcoming.map((e: Exam) => (
-            <Pressable key={e.id} onPress={() => router.push({ pathname: '/goal/[goalId]/exam/[examId]', params: { goalId: e.goal_id, examId: e.id } })} accessibilityRole="button">
+            <Pressable
+              key={e.id}
+              onPress={() => router.push({ pathname: '/goal/[goalId]/exam/[examId]', params: { goalId: e.goal_id, examId: e.id } })}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.exam, { borderColor: colors.border, backgroundColor: pressed ? colors.surface2 : 'transparent' }]}
+            >
               <CountdownChip startsAt={e.starts_at ?? e.local_date} hasTime={!!e.starts_at} label={subjectName.get(e.subject_id ?? '') ?? e.title} />
             </Pressable>
           ))}
-        </Row>
+        </ScrollView>
       ) : null}
 
       {dueN > 0 ? (
         <Card onPress={() => router.push('/review')} accessibilityLabel={t('review.start')}>
-          <Row>
-            <Ionicons name="flash-outline" size={24} color={colors.primary} />
+          <Row gap={space.md}>
+            <View style={[styles.stack, { backgroundColor: colors.primarySoft }]}>
+              <Ionicons name="albums-outline" size={22} color={colors.primary} />
+            </View>
             <View style={{ flex: 1 }}>
               <RichText>{t('review.today', { n: dueN, min: Math.max(1, Math.round((dueN * 8) / 60)) })}</RichText>
             </View>
-            <Text variant="label" tone="accent">
-              {t('review.start')}
-            </Text>
+            <Ionicons name="arrow-forward" size={20} color={colors.primary} />
           </Row>
         </Card>
       ) : null}
@@ -246,9 +258,13 @@ export default function Today() {
               {t('energy.good_now')}
             </Text>
           ) : null}
-          {orderedItems.map((item) => (
-            <PlanRow key={item.id} item={item} onDone={() => toggleItem(item, 'done')} onSkip={() => toggleItem(item, 'skipped')} />
-          ))}
+          {orderedItems.length ? (
+            <View style={[styles.sheet, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              {orderedItems.map((item, i) => (
+                <PlanRow key={item.id} item={item} first={i === 0} color={item.subjectColor ? subjectColor(colorKeyFromHex(item.subjectColor), scheme) : colors.primary} onDone={() => toggleItem(item, 'done')} onSkip={() => toggleItem(item, 'skipped')} />
+              ))}
+            </View>
+          ) : null}
         </Section>
       ) : (
         <Card tone="soft">
@@ -267,44 +283,71 @@ export default function Today() {
   );
 }
 
-function PlanRow({ item, onDone, onSkip }: { item: TodayItem; onDone: () => void; onSkip: () => void }) {
+/** One line of the day's checklist: tick it, start a focus timer on it, or skip it. */
+function PlanRow({ item, first, color, onDone, onSkip }: { item: TodayItem; first: boolean; color: string; onDone: () => void; onSkip: () => void }) {
   const { colors } = useTheme();
   const done = item.status !== 'planned';
   // ENEM units open their own screen (simulado setup, redação, bank, Reta Final).
   const enem = enemRoute(item);
   return (
-    <Card accent={item.subjectColor} style={done ? { opacity: 0.6 } : undefined} onPress={!done && enem ? () => router.push(enem) : undefined}>
-      <Row>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="label" style={done ? { textDecorationLine: 'line-through' } : undefined}>
-            {item.title}
+    <Pressable
+      disabled={done || !enem}
+      onPress={enem ? () => router.push(enem) : undefined}
+      style={({ pressed }) => [styles.row, !first && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth * 2 }, pressed && { backgroundColor: colors.surface2 }]}
+    >
+      <Pressable
+        disabled={done}
+        onPress={onDone}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: item.status === 'done', disabled: done }}
+        accessibilityLabel={`${t('today.item_done')}: ${item.title}`}
+        hitSlop={8}
+        style={[styles.check, { borderColor: done ? colors.textSecondary : color, backgroundColor: item.status === 'done' ? colors.textSecondary : 'transparent' }]}
+      >
+        {item.status === 'done' ? <Ionicons name="checkmark" size={18} color={colors.surface1} /> : null}
+        {item.status === 'skipped' ? <Ionicons name="remove" size={18} color={colors.textSecondary} /> : null}
+      </Pressable>
+      <View style={{ flex: 1, gap: 2, opacity: done ? 0.6 : 1 }}>
+        <Text variant="label" style={done ? { textDecorationLine: 'line-through' } : undefined}>
+          {item.title}
+        </Text>
+        <Text variant="bodySmall" tone="secondary">
+          {item.minutes} min{item.status === 'done' ? `, ${t('plan.status.done').toLowerCase()}` : item.status === 'skipped' ? `, ${t('plan.status.skipped').toLowerCase()}` : ''}
+        </Text>
+        {item.focus && !done ? (
+          <Text variant="bodySmall" style={{ color: colors.lagoon }}>
+            {item.focus}
           </Text>
-          <Text variant="bodySmall" tone="secondary">
-            {item.minutes} min{item.status === 'done' ? ` · ${t('plan.status.done')}` : item.status === 'skipped' ? ` · ${t('plan.status.skipped')}` : ''}
-          </Text>
-          {item.focus && !done ? (
-            <Text variant="bodySmall" tone="accent">
-              {item.focus}
-            </Text>
-          ) : null}
-          {item.reason ? (
-            <Text variant="bodySmall" tone="secondary">
-              {item.reason}
-            </Text>
-          ) : null}
-        </View>
-        {!done ? (
-          <>
-            <IconButton
-              icon="timer-outline"
-              label={`${t('focus.start_for')}: ${item.title}`}
-              onPress={() => router.push({ pathname: '/focus', params: { planItemId: item.id, label: item.title, ...(item.goalId ? { goalId: item.goalId } : {}), ...(item.subjectId ? { subjectId: item.subjectId } : {}) } })}
-            />
-            <IconButton icon="checkmark-circle-outline" label={`${t('today.item_done')}: ${item.title}`} color={colors.success} onPress={onDone} />
-            <IconButton icon="arrow-redo-outline" label={`${t('today.item_skip')}: ${item.title}`} onPress={onSkip} />
-          </>
         ) : null}
-      </Row>
-    </Card>
+        {item.reason && !done ? (
+          <Text variant="bodySmall" tone="secondary">
+            {item.reason}
+          </Text>
+        ) : null}
+      </View>
+      {!done ? (
+        <View style={{ flexDirection: 'row', marginRight: -space.sm }}>
+          <IconButton
+            icon="timer-outline"
+            size={22}
+            label={`${t('focus.start_for')}: ${item.title}`}
+            onPress={() => router.push({ pathname: '/focus', params: { planItemId: item.id, label: item.title, ...(item.goalId ? { goalId: item.goalId } : {}), ...(item.subjectId ? { subjectId: item.subjectId } : {}) } })}
+          />
+          <IconButton icon="play-skip-forward-outline" size={22} color={colors.textSecondary} label={`${t('today.item_skip')}: ${item.title}`} onPress={onSkip} />
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  hero: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, marginTop: -space.md },
+  goal: { flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'flex-start' },
+  bleed: { marginHorizontal: -(space.lg + 4) },
+  exams: { paddingHorizontal: space.lg + 4, gap: space.sm },
+  exam: { borderWidth: 1, borderRadius: radius.md, paddingVertical: space.sm, paddingLeft: space.sm, paddingRight: space.lg },
+  stack: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  sheet: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingVertical: space.md, paddingLeft: space.lg, paddingRight: space.sm },
+  check: { width: 26, height: 26, borderRadius: radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+});

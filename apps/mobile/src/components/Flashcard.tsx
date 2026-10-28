@@ -60,11 +60,9 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
       {tags?.length ? (
         <View style={styles.tags}>
           {tags.map((tag) => (
-            <View key={tag} style={[styles.tag, { backgroundColor: c.primarySoft }]}>
-              <Text variant="label" tone="accent">
-                {tag}
-              </Text>
-            </View>
+            <Text key={tag} variant="label" style={{ color: c.lagoon }}>
+              {tag}
+            </Text>
           ))}
         </View>
       ) : null}
@@ -73,6 +71,7 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
           <Text variant="label" tone="secondary">
             {t('review.front')}
           </Text>
+          <View style={[styles.rule, { backgroundColor: c.danger }]} />
           <View style={styles.content}>
             {occlusion ? <OcclusionCardImage media={occlusion} uri={mediaUri ?? null} revealed={false} /> : null}
             <RichContent text={frontText} variant={occlusion ? 'body' : 'cardFace'} align="center" />
@@ -82,6 +81,7 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
           <Text variant="label" tone="secondary">
             {t('review.back')}
           </Text>
+          <View style={[styles.rule, { backgroundColor: c.primary }]} />
           <View style={styles.content}>
             {occlusion ? <OcclusionCardImage media={occlusion} uri={mediaUri ?? null} revealed /> : null}
             <RichContent text={backText} variant="cardFace" align="center" />
@@ -95,9 +95,10 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, gap: space.sm, minHeight: 320 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  tag: { borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 4 },
-  face: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: radius.xl, borderWidth: 1, padding: space.xl, backfaceVisibility: 'hidden', gap: space.md },
-  back: { borderWidth: 2 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.md, rowGap: space.xs },
+  // An index card: a coloured rule under the header line, the answer area below it.
+  face: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: radius.lg, borderWidth: 1, padding: space.xl, paddingTop: space.lg, backfaceVisibility: 'hidden', gap: space.md },
+  rule: { height: 1.5, marginHorizontal: -space.xl, opacity: 0.45 },
+  back: { borderWidth: 1 },
   content: { flex: 1, justifyContent: 'center' },
 });

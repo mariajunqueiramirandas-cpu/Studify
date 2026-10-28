@@ -370,9 +370,9 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 | `BottomTabBar` | 5 tabs, labels always visible, badge dot for Turma requests |
 | `Button` (primary / secondary / text / destructive) | Min height 48 dp; primary is full-width in the thumb zone |
 | `IconButton` | 48×48 dp touch target, 24 dp icon, mandatory accessibility label |
-| `Chip` (filter / scope / status / **PageChip**) | PageChip = 📄 + page label; tap and long-press behaviors (§5.3) |
-| `Card` (subject, topic, plan item, test, Hoje card) | Subject cards carry the subject color as a left accent bar |
-| `CountdownChip` | "Faltam 3 dias" / "É amanhã!" / "Hoje às 14:00" |
+| `Chip` (filter / scope / status / **PageChip**) | Squared key when tappable, inline text when it only states something; PageChip is a footnote link (icon + page label), tap and long-press behaviors (§5.3) |
+| `Card` (subject, topic, plan item, test, Hoje card) | The subject color hangs as a bookmark ribbon from the top edge |
+| `CountdownChip` | Calendar leaf with the day, then "Faltam 3 dias" / "É amanhã!" / "Hoje às 14:00" |
 | `ProgressBar`, `ProgressRing`, `GoalRing` | Goal ring on Hoje; readiness ring on tests |
 | `Flashcard` | Front/back, flip animation (reduced-motion: crossfade), tags |
 | `RatingBar` | 4 buttons with intervals; 2-button variant for Feed/widget |
@@ -396,7 +396,7 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 | `MiniPlayer`, `PlayerControls`, `RaiseHandButton` | Podcast |
 | `Stepper` | Wizard progress dots with "Pular por enquanto" |
 | `DatePicker`, `TimePicker`, `MinutesSlider`, `SegmentedControl` | dd/mm, 24 h |
-| `Capi` | Mascot illustrations by state (proposal, §9) |
+| `Capi`, `CapiScene` | Mascot illustrations by stage and mood with accessories; scenes for empty / hello / offline (§9) |
 
 ## 7. Layout and typography
 
@@ -408,29 +408,36 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 - **Thumb zone:** primary actions in the bottom 40%; destructive actions never in the thumb zone's default position.
 - Tablets: not a target in v1. Layouts must not break on large screens (max content width 600 dp, centered).
 
-### 7.2 Typography (proposal)
+### 7.2 Typography
 
-| Role | Size / line height (sp) | Weight | Proposal |
-|---|---|---|---|
-| Display (Hoje greeting, scores) | 28 / 34 | 700 | Nunito |
-| Title (screen titles) | 22 / 28 | 700 | Nunito |
-| Heading (sections, card titles) | 18 / 24 | 600 | Nunito |
-| Body | 16 / 24 | 400 | Inter |
-| Body small (metadata) | 14 / 20 | 400 | Inter |
-| Label (buttons, chips) | 14 / 20 | 600 | Inter |
-| Card face (flashcards, Feed) | 20 / 28 (min 18) | 500 | Inter |
+Three faces, each with one job:
 
-- Both proposed typefaces are free (SIL OFL) with full PT-BR diacritic support.
-- **Leitura facilitada** (WEL-04) switches to a dyslexia-friendly typeface and increases spacing (letter +0.05 em, line height ×1.2, paragraph spacing ×1.5). Candidates to test with users: Lexend, Atkinson Hyperlegible, OpenDyslexic.
+| Role | Size / line height (sp) | Face |
+|---|---|---|
+| Display (screen heroes, lesson titles, Hoje greeting) | 32 / 36, tracking −0.6 | Bricolage Grotesque ExtraBold |
+| Title (app bar, sheets) | 24 / 29 | Bricolage Grotesque ExtraBold |
+| Heading (sections, card titles) | 19 / 24 | Bricolage Grotesque Bold |
+| Body (UI text) | 16 / 24 | Figtree Regular |
+| Body small (metadata) | 14 / 20 | Figtree Regular |
+| Label (buttons, chips, tabs) | 15 / 20 | Figtree SemiBold (Bold on primary buttons) |
+| Reading (explanations, rationales, tutor answers, term definitions) | 18 / 29 | Literata Regular |
+| Card face (flashcards) | 21 / 30 | Literata Medium |
+
+- Bricolage carries the voice; Figtree is for everything you operate; Literata is for everything you study.
+- All are free (SIL OFL) with full PT-BR diacritics. The note reader's WebView embeds WOFF2 subsets (`apps/mobile/scripts/reader-fonts.py`), so lessons keep their type offline.
+- **Leitura facilitada** (WEL-04) switches every face, including the note reader, to Atkinson Hyperlegible and increases spacing (letter +0.05 em, line height ×1.2).
 - Never below 14 sp for text a student must read; 12 sp only for legal footnotes, never for content.
 
 ### 7.3 Study-content styles (Markdown + KaTeX)
 
-- Headings in notes use the Heading style; sections like "Ideia central", "Cuidado na prova" get an icon and a tinted surface.
-- **Formulas:** inline `$…$` matches body size; display `$$…$$` is centered and scrolls horizontally inside its own box if too wide (never the page).
-- **Tables:** horizontally scrollable container, sticky first column, zebra rows using `surface-2`.
-- **Key terms** are underlined with a dotted line (tap → S-MAT-13). Underline is used for nothing else.
-- **Code** (rare: Informática) uses a monospace face at 14 sp.
+- The lesson page reads like a book: Literata 17 px at 1.7 line height, hyphenated, with old-style figures; headings in Bricolage with generous space above.
+- **Bold is a highlighter**: bold text sits on a lamp-yellow marker stroke. Bold is used for what the student must remember, nothing else.
+- Study sections: **Ideia central** is set larger as the lead; **Cuidado na prova** sits on a warm tinted panel; **Conexões** is quieter.
+- Lists use small lagoon diamonds; ordered lists use Bricolage numerals in the primary color. Blockquotes are margin notes with a lagoon rule.
+- **Citations** are footnote links (document icon + "p. 14"), never bubbles.
+- **Formulas:** inline `$…$` matches body size; display `$$…$$` sits on its own soft panel and scrolls horizontally inside it if too wide (never the page).
+- **Tables:** horizontally scrollable, hairline rows, sticky first column, Figtree header row.
+- **Key terms** are underlined with a lagoon dotted line (tap → S-MAT-13). Underline is used for nothing else.
 - Generated content always shows "Gerado por IA" in the metadata line (SP-10).
 
 ## 8. Color and theming
@@ -442,24 +449,29 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 - Contrast: text ≥ 4.5:1, large text and UI components ≥ 3:1 (WCAG 2.2 AA), in both themes. Every token pair below must be re-verified with a contrast checker before release.
 - **Color is never the only signal**: ratings, correct/incorrect, mastery and readiness always pair color with text or an icon.
 
-### 8.2 Semantic tokens (proposal)
+### 8.2 Semantic tokens
+
+"Riverbank study nook": reed-paper days and deep-indigo nights. The primary is the book indigo from Capi's art, lagoon teal (the stopwatch) is the second accent, lamp yellow is the highlighter.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `bg` | `#FFFFFF` | `#0F1115` | App background |
-| `surface-1` | `#F7F7FA` | `#171A21` | Cards |
-| `surface-2` | `#EEEEF3` | `#1F232C` | Nested surfaces, table zebra |
-| `text-primary` | `#111827` | `#F3F4F6` | Body text |
-| `text-secondary` | `#4B5563` | `#9CA3AF` | Metadata |
-| `border` | `#D1D5DB` | `#2D3340` | Dividers, outlines |
-| `primary` | `#4F46E5` | `#A5B4FC` | Primary actions, focus |
-| `on-primary` | `#FFFFFF` | `#111827` | Text on primary |
-| `success` | `#15803D` | `#4ADE80` | Correct, "Bom" rating |
-| `warning` | `#B45309` | `#FBBF24` | "Difícil", fading memory, tight plan |
-| `danger` | `#B91C1C` | `#F87171` | Wrong, "Errei", destructive |
-| `info` | `#1D4ED8` | `#60A5FA` | "Fácil", "Conhecimento geral" badge, tips |
-| `focus-ring` | `#4F46E5` | `#A5B4FC` | 2 dp focus outline |
-| `calm-surface` | `#F2F6F5` | `#141B1A` | Modo Véspera and Modo foco background |
+| `bg` | `#EFF0E7` | `#16162A` | App background (paper / night) |
+| `surface-1` | `#FAFAF5` | `#1F1F38` | Cards, sheets, fields |
+| `surface-2` | `#E3E5D8` | `#2A2A48` | Wells, tracks, table headers |
+| `text-primary` | `#1E2033` | `#ECEBF5` | Body text (ink) |
+| `text-secondary` | `#555A69` | `#A9A8C4` | Metadata |
+| `border` | `#CED2C2` | `#3A3A5E` | Dividers, outlines |
+| `primary` | `#4A3FD1` | `#B0A9FF` | Primary actions, focus |
+| `on-primary` | `#FFFFFF` | `#16162A` | Text on primary |
+| `success` | `#1D7548` | `#6CD69C` | Correct, "Bom" rating |
+| `warning` | `#9C5800` | `#F4C25E` | "Difícil", fading memory, tight plan |
+| `danger` | `#B3362A` | `#FF8D7E` | Wrong, "Errei", destructive |
+| `info` | `#0E7470` | `#62D5C8` | "Fácil", "Conhecimento geral" badge, tips |
+| `lagoon` | `#0C6F6A` | `#62D5C8` | Key terms, list markers, goal ring |
+| `lamp` / `highlight` | `#E9A62B` / 42 % | `#F4C25E` / 28 % | Highlighter under bold study text |
+| `calm-surface` | `#E6ECE3` | `#191E31` | Modo Véspera and Modo foco background |
+
+All text pairs pass WCAG AA (4.5:1) on `bg`, `surface-1` and their soft tints.
 
 **Rating colors:** Errei = `danger`, Difícil = `warning`, Bom = `success`, Fácil = `info`.
 
@@ -469,12 +481,13 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 
 Twelve subject hues the student can choose from, each with a light-theme value (used for accents on white) and a dark-theme value. Proposal (Tailwind 600 / 400 steps): indigo, blue, sky, teal, green, lime, amber, orange, red, pink, purple, slate. Subject color is used as an accent only (left bar, icon background, Feed accent), never as a text color on surfaces unless it passes 4.5:1.
 
-## 9. Visual identity direction (proposal)
+## 9. Visual identity
 
-- **Tone:** friendly, clean, a little playful — a study buddy, not a school portal and not a game.
-- **Mascot (proposal from spec 13):** **Capi**, a capybara. Calm, unbothered, encouraging — a good fit for "estuda no seu ritmo". States: *animada* (celebrations), *focada* (Modo foco), *descansando* (streak reset, rest days), *com sono* (late night). Capi never guilt-trips and never appears in Modo Véspera beyond a small calm illustration.
-- **Illustration:** flat, rounded shapes, two-tone using the primary color + one accent; used in empty states and onboarding only.
-- **Icons:** one outline icon set at 24 dp (e.g. Lucide or Material Symbols Rounded), filled variant for the active tab.
+- **Tone:** cozy and calm, a study nook you can sit in for hours: a study buddy, not a school portal and not a game.
+- **No capsules.** Corners grow with the size of the thing (4 → 22 dp). Tappable choices are squared keys that ink in when chosen; statuses are inline text with an icon or a small diamond, never a pill.
+- **Study objects look like study objects:** flashcards are index cards with a rule under the header, subjects are notebooks with a coloured binding, exam countdowns are calendar leaves, a subject colour on a card is a bookmark ribbon, the plan is a checklist.
+- **Mascot:** **Capi**, a capybara, drawn as illustrations per stage (filhote, jovem, adulta, sábia) and mood (comemorando, curiosa, focada, descansando, sonolenta), with unlockable accessories drawn on top from per-pose anchors (`apps/mobile/src/components/capi-anchors.ts`). Scenes for empty, first-run and offline moments. Capi never guilt-trips; hiding Capi also swaps the scenes for icons.
+- **Icons:** Ionicons outline at 24 dp, filled variant for the active tab.
 - **App icon and logo:** to be designed; must read at 48 dp on a busy home screen.
 
 ## 10. Motion

@@ -1,5 +1,5 @@
 import { Text as RNText, type TextProps, type TextStyle } from 'react-native';
-import { useTheme, type TypeVariant } from '../theme';
+import { boldFamily, useTheme, type TypeVariant } from '../theme';
 
 type Tone = 'primary' | 'secondary' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'onPrimary';
 
@@ -24,12 +24,11 @@ export function Text({ variant = 'body', tone = 'primary', align, weight, style,
     info: c.info,
     onPrimary: c.onPrimary,
   }[tone];
-  const boldFamily = theme.easyReading ? 'AtkinsonHyperlegible_700Bold' : 'Inter_600SemiBold';
   return (
     <RNText
       allowFontScaling
       maxFontSizeMultiplier={2}
-      style={[theme.type(variant), { color, textAlign: align }, weight === 'bold' && { fontFamily: boldFamily }, style]}
+      style={[theme.type(variant), { color, textAlign: align }, weight === 'bold' && { fontFamily: boldFamily(variant, theme.easyReading) }, style]}
       {...rest}
     />
   );
@@ -42,7 +41,7 @@ export function Text({ variant = 'body', tone = 'primary', align, weight, style,
 export function RichText({ children, ...props }: Omit<AppTextProps, 'children'> & { children: string }) {
   const theme = useTheme();
   const parts = children.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter(Boolean);
-  const bold = theme.easyReading ? 'AtkinsonHyperlegible_700Bold' : 'Inter_600SemiBold';
+  const bold = boldFamily(props.variant ?? 'body', theme.easyReading);
   return (
     <Text {...props}>
       {parts.map((part, i) => {

@@ -41,7 +41,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border, height: 58 + bottomPad, paddingTop: 4, paddingBottom: bottomPad },
+        tabBarStyle: { backgroundColor: colors.surface1, borderTopColor: colors.border, height: 58 + bottomPad, paddingTop: 4, paddingBottom: bottomPad },
         tabBarLabelStyle: { ...type('label'), fontSize: 12 },
         tabBarItemStyle: { paddingVertical: 4 },
       }}

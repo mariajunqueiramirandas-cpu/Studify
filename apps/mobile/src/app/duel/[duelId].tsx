@@ -111,7 +111,7 @@ export default function DuelScreen() {
         <Card style={{ borderColor: fb.correct ? colors.success : colors.danger, borderWidth: 2 }}>
           <Text variant="heading">{fb.correct ? t('quiz.correct') : t('quiz.wrong_generic')}</Text>
           <Text variant="label">{t('battle.points', { n: fb.points })}</Text>
-          {fb.explanation ? <RichContent text={fb.explanation} /> : null}
+          {fb.explanation ? <RichContent variant="reading" text={fb.explanation} /> : null}
           <PageChips sources={fb.source_pages} subjectId={q.question.subject_id} />
         </Card>
       </Screen>

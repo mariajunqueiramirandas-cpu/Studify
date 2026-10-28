@@ -2,8 +2,9 @@ import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 import '../i18n';
 import { AtkinsonHyperlegible_400Regular, AtkinsonHyperlegible_700Bold } from '@expo-google-fonts/atkinson-hyperlegible';
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
-import { Nunito_600SemiBold, Nunito_700Bold } from '@expo-google-fonts/nunito';
+import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
+import { Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from '@expo-google-fonts/figtree';
+import { Literata_400Regular, Literata_400Regular_Italic, Literata_500Medium, Literata_700Bold } from '@expo-google-fonts/literata';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { ShareIntentProvider } from 'expo-share-intent';
@@ -15,7 +16,7 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { queryClient, startQueryPersistence } from '../api/queryClient';
-import { Button, ErrorState, OverlayProvider, Text } from '../components';
+import { Button, ErrorState, MascotVisibleContext, OverlayProvider, Text } from '../components';
 import { DatabaseProvider } from '../db/DatabaseProvider';
 import { startSync, useSyncStatus } from '../db/sync';
 import { SessionProvider, useSession } from '../features/auth/session';
@@ -146,8 +147,10 @@ function Themed({ children }: { children: React.ReactNode }) {
 
 function Navigator() {
   const { colors, scheme } = useTheme();
+  const { profile } = useSession();
+  const mascot = (profile?.settings as { mascot?: { visible?: boolean } } | null | undefined)?.mascot?.visible !== false;
   return (
-    <>
+    <MascotVisibleContext.Provider value={mascot}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'slide_from_right' }}>
         <Stack.Screen name="(tabs)" />
@@ -160,18 +163,23 @@ function Navigator() {
         <Stack.Screen name="notifications/index" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <AuthGate />
-    </>
+    </MascotVisibleContext.Provider>
   );
 }
 
 export default function RootLayout() {
   useEffect(() => startQueryPersistence(), []);
   const [fontsLoaded] = useFonts({
-    Nunito_600SemiBold,
-    Nunito_700Bold,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
+    Figtree_400Regular,
+    Figtree_500Medium,
+    Figtree_600SemiBold,
+    Figtree_700Bold,
+    Literata_400Regular,
+    Literata_400Regular_Italic,
+    Literata_500Medium,
+    Literata_700Bold,
     AtkinsonHyperlegible_400Regular,
     AtkinsonHyperlegible_700Bold,
   });

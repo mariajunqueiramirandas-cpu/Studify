@@ -52,6 +52,6 @@ export function ReadAloudButton({ id, text, size = 22 }: { id: string; text: str
 }
 
 const styles = StyleSheet.create({
-  mic: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  mic: { width: 48, height: 48, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
   partial: { maxWidth: 220, marginTop: space.xs },
 });

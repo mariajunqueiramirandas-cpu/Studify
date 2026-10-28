@@ -45,9 +45,10 @@ export function Button({
   testID,
 }: ButtonProps) {
   const { colors: c } = useTheme();
+  // One loud button per screen (primary); the rest stay quiet: an inked outline, a tinted fill or plain text.
   const palette: Record<Variant, { bg: string; fg: string; border?: string }> = {
     primary: { bg: c.primary, fg: c.onPrimary },
-    secondary: { bg: 'transparent', fg: c.primary, border: c.primary },
+    secondary: { bg: c.surface1, fg: c.textPrimary, border: c.border },
     tonal: { bg: c.primarySoft, fg: c.primary },
     text: { bg: 'transparent', fg: c.primary },
     destructive: { bg: c.danger, fg: c.onPrimary },
@@ -68,7 +69,8 @@ export function Button({
         styles.base,
         compact && styles.compact,
         fullWidth && styles.full,
-        { backgroundColor: p.bg, borderColor: p.border ?? 'transparent', opacity: disabled ? 0.45 : pressed ? 0.85 : 1 },
+        { backgroundColor: p.bg, borderColor: p.border ?? 'transparent', opacity: disabled ? 0.45 : 1 },
+        pressed && !inactive && { transform: [{ scale: 0.98 }], opacity: 0.9 },
         variant === 'text' && styles.textVariant,
         style,
       ]}
@@ -78,7 +80,7 @@ export function Button({
       ) : (
         <View style={styles.row}>
           {icon ? <Ionicons name={icon} size={20} color={p.fg} /> : null}
-          <Text variant="label" tone={tone} style={{ color: p.fg }} numberOfLines={2} align="center">
+          <Text variant="label" tone={tone} weight={variant === 'primary' || variant === 'destructive' ? 'bold' : undefined} style={{ color: p.fg }} numberOfLines={2} align="center">
             {label}
           </Text>
           {iconRight ? <Ionicons name={iconRight} size={20} color={p.fg} /> : null}
@@ -129,7 +131,7 @@ export function ActionBar({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: touch.min,
+    minHeight: 52,
     paddingHorizontal: space.xl,
     paddingVertical: space.md,
     borderRadius: radius.md,
@@ -137,11 +139,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compact: { minHeight: 40, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  compact: { minHeight: 42, paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: radius.sm },
   full: { alignSelf: 'stretch' },
   textVariant: { paddingHorizontal: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  icon: { width: touch.min, height: touch.min, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: touch.min, height: touch.min, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
   actionBar: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,

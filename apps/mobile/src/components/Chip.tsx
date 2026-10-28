@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { t } from '../i18n';
 import { countdown, pageLabel, parseDate, daysBetween } from '../features/common/format';
-import { radius, space, useTheme } from '../theme';
+import { FONTS, radius, space, useTheme } from '../theme';
 import type { IconName } from './Button';
 import { Text } from './Text';
 
@@ -18,12 +18,16 @@ interface ChipProps {
   testID?: string;
 }
 
-/** Filter / scope / status chip (ux §6). */
+/**
+ * Filter / scope / status chip (ux §6). A chip you can tap is a squared key that inks in when chosen; a chip that
+ * only states something (a risk, a rubric score) is plain inline text with an icon, never a capsule.
+ */
 export function Chip({ label, selected, onPress, icon, disabled, accessibilityLabel, tone = 'default', testID }: ChipProps) {
   const { colors: c } = useTheme();
-  const toneColor = { default: c.primary, success: c.success, warning: c.warning, danger: c.danger, info: c.info }[tone];
-  const bg = selected ? toneColor : c.surface1;
-  const fg = selected ? c.onPrimary : tone === 'default' ? c.textPrimary : toneColor;
+  const toneColor = { default: c.textPrimary, success: c.success, warning: c.warning, danger: c.danger, info: c.info }[tone];
+  if (!onPress && !selected) return <Meta icon={icon} text={label} color={tone === 'default' ? c.textSecondary : toneColor} accessibilityLabel={accessibilityLabel} />;
+  const ink = tone === 'default' ? c.textPrimary : toneColor;
+  const fg = selected ? c.bg : c.textPrimary;
   return (
     <Pressable
       testID={testID}
@@ -31,13 +35,17 @@ export function Chip({ label, selected, onPress, icon, disabled, accessibilityLa
       accessibilityState={{ selected: !!selected, disabled: !!disabled }}
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={disabled ? undefined : onPress}
-      hitSlop={6}
+      hitSlop={4}
       style={({ pressed }) => [
         styles.chip,
-        { backgroundColor: bg, borderColor: selected ? toneColor : c.border, opacity: disabled ? 0.45 : pressed ? 0.8 : 1 },
+        {
+          backgroundColor: selected ? ink : pressed ? c.surface2 : c.surface1,
+          borderColor: selected ? ink : c.border,
+          opacity: disabled ? 0.45 : 1,
+        },
       ]}
     >
-      {selected ? <Ionicons name="checkmark" size={16} color={fg} /> : icon ? <Ionicons name={icon} size={16} color={fg} /> : null}
+      {selected ? <Ionicons name="checkmark" size={16} color={fg} /> : icon ? <Ionicons name={icon} size={16} color={c.textSecondary} /> : null}
       <Text variant="label" style={{ color: fg }} numberOfLines={1}>
         {label}
       </Text>
@@ -47,6 +55,20 @@ export function Chip({ label, selected, onPress, icon, disabled, accessibilityLa
 
 export function ChipGroup({ children }: { children: React.ReactNode }) {
   return <View style={styles.group}>{children}</View>;
+}
+
+/** A line of metadata: optional icon, then text in a quiet color. Replaces status pills and badges. */
+export function Meta({ icon, text, color, accessibilityLabel }: { icon?: IconName; text: string; color?: string; accessibilityLabel?: string }) {
+  const { colors: c } = useTheme();
+  const tint = color ?? c.textSecondary;
+  return (
+    <View style={styles.meta} accessible accessibilityLabel={accessibilityLabel ?? text}>
+      {icon ? <Ionicons name={icon} size={15} color={tint} /> : <View style={[styles.metaDot, { backgroundColor: tint }]} />}
+      <Text variant="bodySmall" style={{ color: tint }} numberOfLines={1}>
+        {text}
+      </Text>
+    </View>
+  );
 }
 
 export interface SourceRef {
@@ -65,16 +87,11 @@ interface PageChipProps {
   classOnly?: boolean;
 }
 
-/** 📄 p. 12 → opens the citation view at that page with the passage highlighted (ING-08, TRU-01). */
+/** A footnote-style link: p. 12 → opens the citation view at that page with the passage highlighted (ING-08, TRU-01). */
 export function PageChip({ source, subjectId, documentTitle, removed, classOnly }: PageChipProps) {
   const { colors: c } = useTheme();
-  const label = removed
-    ? t('global.source_removed')
-    : classOnly
-      ? t('global.source_class_only')
-      : documentTitle
-        ? `📄 ${documentTitle} · ${pageLabel(source.page_start, source.page_end).replace('📄 ', '')}`
-        : pageLabel(source.page_start, source.page_end);
+  const page = pageLabel(source.page_start, source.page_end);
+  const label = removed ? t('global.source_removed') : classOnly ? t('global.source_class_only') : documentTitle ? `${documentTitle}, ${page}` : page;
   const disabled = removed || classOnly;
   const open = () =>
     router.push({
@@ -86,19 +103,18 @@ export function PageChip({ source, subjectId, documentTitle, removed, classOnly 
         ...(source.cited_text ? { cite: source.cited_text.slice(0, 300) } : {}),
       },
     });
+  const tint = disabled ? c.textSecondary : c.primary;
   return (
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={disabled ? label : `Abrir página ${source.page_start} do material${documentTitle ? ` ${documentTitle}` : ''}`}
       accessibilityState={{ disabled: !!disabled }}
       onPress={disabled ? undefined : open}
-      hitSlop={8}
-      style={({ pressed }) => [
-        styles.page,
-        { backgroundColor: c.surface2, borderColor: c.border, opacity: disabled ? 0.6 : pressed ? 0.7 : 1 },
-      ]}
+      hitSlop={10}
+      style={({ pressed }) => [styles.page, { opacity: disabled ? 0.7 : pressed ? 0.55 : 1 }]}
     >
-      <Text variant="label" style={{ color: disabled ? c.textSecondary : c.primary }} numberOfLines={1}>
+      <Ionicons name={disabled ? 'document-outline' : 'document-text-outline'} size={15} color={tint} />
+      <Text variant="label" style={{ color: tint }} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -108,7 +124,7 @@ export function PageChip({ source, subjectId, documentTitle, removed, classOnly 
 export function PageChips({ sources, subjectId, max = 3 }: { sources: SourceRef[] | null | undefined; subjectId?: string | null; max?: number }) {
   if (!sources?.length) return null;
   return (
-    <View style={styles.group}>
+    <View style={styles.pages}>
       {sources.slice(0, max).map((s, i) => (
         <PageChip key={`${s.document_id}-${s.page_start}-${i}`} source={s} subjectId={subjectId} />
       ))}
@@ -116,18 +132,35 @@ export function PageChips({ sources, subjectId, max = 3 }: { sources: SourceRef[
   );
 }
 
-/** "Faltam 3 dias" / "É amanhã!" / "Hoje às 14:00" */
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** A tear-off calendar leaf with the day, then "Faltam 3 dias" / "É amanhã!" / "Hoje às 14:00" beside it. */
 export function CountdownChip({ startsAt, hasTime = true, label }: { startsAt: string; hasTime?: boolean; label?: string }) {
-  const { colors: c } = useTheme();
-  const days = daysBetween(new Date(), parseDate(startsAt));
+  const { colors: c, easyReading } = useTheme();
+  const date = parseDate(startsAt);
+  const days = daysBetween(new Date(), date);
   const urgent = days <= 1;
   const text = countdown(startsAt, hasTime);
+  const tint = urgent ? c.warning : c.primary;
   return (
-    <View style={[styles.countdown, { backgroundColor: urgent ? c.warningSoft : c.primarySoft }]}>
-      <Ionicons name="calendar-outline" size={14} color={urgent ? c.warning : c.primary} />
-      <Text variant="label" style={{ color: urgent ? c.warning : c.primary }} numberOfLines={1}>
-        {label ? `${label} · ${text}` : text}
-      </Text>
+    <View style={styles.countdown} accessible accessibilityLabel={label ? `${label}. ${text}` : text}>
+      <View style={[styles.leaf, { backgroundColor: c.surface1, borderColor: c.border }]}>
+        <View style={[styles.leafTop, { backgroundColor: tint }]} />
+        <Text style={[styles.leafDay, { color: c.textPrimary }, !easyReading && { fontFamily: FONTS.display }]}>{date.getDate()}</Text>
+        <Text variant="bodySmall" style={[styles.leafMonth, { color: c.textSecondary }]}>
+          {MONTHS[date.getMonth()]}
+        </Text>
+      </View>
+      <View style={{ flexShrink: 1 }}>
+        {label ? (
+          <Text variant="label" numberOfLines={1}>
+            {label}
+          </Text>
+        ) : null}
+        <Text variant="bodySmall" style={{ color: urgent ? c.warning : c.textSecondary }} numberOfLines={1}>
+          {text}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -150,13 +183,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    minHeight: 36,
+    minHeight: 40,
     paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
+    borderRadius: radius.sm,
+    borderWidth: 1.5,
   },
   group: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  page: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: space.md, minHeight: 32, justifyContent: 'center', alignSelf: 'flex-start' },
-  countdown: { flexDirection: 'row', alignItems: 'center', gap: space.xs, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs, alignSelf: 'flex-start' },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  metaDot: { width: 6, height: 6, borderRadius: 1.5, transform: [{ rotate: '45deg' }] },
+  pages: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
+  page: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32, alignSelf: 'flex-start' },
+  countdown: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  leaf: { width: 48, borderRadius: radius.sm, borderWidth: 1, alignItems: 'center', paddingBottom: 3, overflow: 'hidden' },
+  leafTop: { alignSelf: 'stretch', height: 5, marginBottom: 2 },
+  leafDay: { fontSize: 20, lineHeight: 23 },
+  leafMonth: { lineHeight: 16 },
   ai: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
 });

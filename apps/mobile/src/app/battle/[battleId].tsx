@@ -165,7 +165,7 @@ export default function BattleScreen() {
       {reveal ? (
         <View style={{ gap: space.md }}>
           {!reveal.distribution ? <Text variant="bodySmall" tone="secondary">{t('battle.distribution_hidden')}</Text> : null}
-          {reveal.explanation ? <RichContent text={reveal.explanation} /> : null}
+          {reveal.explanation ? <RichContent variant="reading" text={reveal.explanation} /> : null}
           <Leaderboard rows={reveal.leaderboard.map((p) => ({ id: p.user_id, name: p.nickname, score: p.score, rank: p.rank }))} meId={userId ?? ''} />
         </View>
       ) : null}

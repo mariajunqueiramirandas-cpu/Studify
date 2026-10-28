@@ -1,9 +1,10 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { View } from 'react-native';
-import { Card, ListItem, Screen, Text, useOverlay } from '../../../components';
+import { Pressable, View } from 'react-native';
+import { Capi, Card, ListItem, Screen, Text, useOverlay } from '../../../components';
 import { useSyncStatus } from '../../../db/sync';
 import { useSession } from '../../../features/auth/session';
+import { useCapi } from '../../../features/motivation/capi';
 import { t } from '../../../i18n';
 import { space } from '../../../theme';
 
@@ -12,11 +13,22 @@ export default function Profile() {
   const { profile, signOut } = useSession();
   const sync = useSyncStatus();
   const overlay = useOverlay();
+  const capi = useCapi();
   return (
     <Screen title={t('profile.title')} root largeTitle>
-      <View style={{ gap: space.xs }}>
-        <Text variant="title">{profile?.display_name}</Text>
-        {profile?.display_name_status === 'pending' ? <Text variant="bodySmall" tone="secondary">Nome em análise</Text> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <View style={{ flex: 1, gap: space.xs }}>
+          <Text variant="title">{profile?.display_name}</Text>
+          {profile?.display_name_status === 'pending' ? <Text variant="bodySmall" tone="secondary">Nome em análise</Text> : null}
+          <Text variant="bodySmall" tone="secondary">
+            {t('capi.stage_title', { stage: t(`capi.stage.${capi.stage}`) })}
+          </Text>
+        </View>
+        {capi.visible ? (
+          <Pressable onPress={() => router.push('/profile/capi')} accessibilityRole="button" accessibilityLabel={t('capi.title')}>
+            <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={92} />
+          </Pressable>
+        ) : null}
       </View>
       <Card>
         <ListItem icon="flag-outline" title={t('profile.goals')} onPress={() => router.push('/profile/goals')} />

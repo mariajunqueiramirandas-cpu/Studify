@@ -120,7 +120,7 @@ export default function EssayResult() {
           </Text>
           <ReadAloudButton id={`essay:${e.id}`} text={f.model_answer} />
         </Row>
-        <RichContent text={f.model_answer} />
+        <RichContent variant="reading" text={f.model_answer} />
       </Card>
       <Button
         variant="tonal"

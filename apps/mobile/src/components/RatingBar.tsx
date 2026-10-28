@@ -35,9 +35,9 @@ export function RatingBar({ intervals, onRate, twoButton, disabled }: RatingBarP
             onPress={() => onRate(r)}
             accessibilityRole="button"
             accessibilityLabel={ms != null ? t('review.rating_a11y', { label, interval: longInterval(ms) }) : label}
-            style={({ pressed }) => [styles.btn, { borderColor: color, backgroundColor: pressed ? `${color}22` : c.bg }]}
+            style={({ pressed }) => [styles.btn, { borderColor: c.border, borderTopColor: color, backgroundColor: pressed ? `${color}22` : c.surface1 }]}
           >
-            <Text variant="label" style={{ color }}>
+            <Text variant="label" weight="bold" style={{ color }}>
               {label}
             </Text>
             {ms != null ? (
@@ -54,5 +54,5 @@ export function RatingBar({ intervals, onRate, twoButton, disabled }: RatingBarP
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.sm },
-  btn: { flex: 1, minHeight: 64, borderRadius: radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center', paddingVertical: space.sm },
+  btn: { flex: 1, minHeight: 66, borderRadius: radius.md, borderWidth: 1, borderTopWidth: 4, alignItems: 'center', justifyContent: 'center', paddingVertical: space.sm },
 });

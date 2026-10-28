@@ -62,7 +62,7 @@ function revealedCardId(): string | null {
 type Hex = `#${string}`;
 
 // Fixed light palette (RemoteViews cannot follow the app theme at runtime); AA contrast on white.
-const C = { bg: '#FFFFFF', text: '#111827', muted: '#4B5563', primary: '#4F46E5', primarySoft: '#E0E7FF', onPrimarySoft: '#3730A3', againBg: '#FEE2E2', again: '#991B1B', goodBg: '#DCFCE7', good: '#166534' } as const;
+const C = { bg: '#FAFAF5', text: '#1E2033', muted: '#555A69', primary: '#4A3FD1', primarySoft: '#E5E3F8', onPrimarySoft: '#33299E', againBg: '#F7E0DA', again: '#8F2A20', goodBg: '#DCEEDF', good: '#185F3B' } as const;
 
 function Button({ label, action, data, bg, color, compact }: { label: string; action: string; data: Record<string, string>; bg: Hex; color: Hex; compact: boolean }) {
   return (

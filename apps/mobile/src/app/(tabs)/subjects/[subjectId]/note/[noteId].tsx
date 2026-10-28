@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { AiBadge, Button, ErrorState, MarkdownView, PageChips, Row, Screen, Skeleton, useOnline, useOverlay } from '../../../../../components';
+import { AiBadge, Button, ErrorState, MarkdownView, PageChips, Row, Screen, Skeleton, Text, useOnline, useOverlay } from '../../../../../components';
 import { requestNote, useNote } from '../../../../../features/learn/api';
 import { ExplainSheet } from '../../../../../features/learn/ExplainSheet';
 import { useNode } from '../../../../../features/subjects/outline';
 import { FlagSheet } from '../../../../../features/trust/FlagSheet';
 import { t } from '../../../../../i18n';
+import { space } from '../../../../../theme';
 
 /** S-MAT-10 Resumo — full-screen reader (LRN-01). Depth switching lives on the topic screen. */
 export default function NoteReader() {
@@ -20,7 +21,10 @@ export default function NoteReader() {
   if (note.isError) return <Screen title=""><ErrorState onRetry={note.refetch} /></Screen>;
   const n = note.data;
   return (
-    <Screen title={node?.title ?? t('topic.tabs').split(' · ')[0]}>
+    <Screen title="">
+      <Text variant="display" accessibilityRole="header" style={{ marginTop: -space.sm }}>
+        {node?.title ?? t('topic.tabs').split(' · ')[0]}
+      </Text>
       {!n ? <Skeleton height={300} /> : null}
       {n ? (
         <>

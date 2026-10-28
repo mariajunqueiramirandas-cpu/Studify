@@ -35,7 +35,7 @@ export function Banner({ kind = 'info', icon, title, message, action, onDismiss,
       <Ionicons name={icon ?? s.icon} size={22} color={s.fg} style={{ marginTop: 1 }} />
       <View style={{ flex: 1, gap: space.xs }}>
         {title ? (
-          <Text variant="label" style={{ color: c.textPrimary }}>
+          <Text variant="label" weight="bold" style={{ color: c.textPrimary }}>
             {title}
           </Text>
         ) : null}
@@ -86,6 +86,6 @@ export function OfflineBanner() {
 }
 
 const styles = StyleSheet.create({
-  banner: { flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radius.md, alignItems: 'flex-start' },
+  banner: { flexDirection: 'row', gap: space.md, paddingVertical: space.md, paddingHorizontal: space.lg, borderRadius: radius.lg, alignItems: 'flex-start' },
   offline: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.xs },
 });

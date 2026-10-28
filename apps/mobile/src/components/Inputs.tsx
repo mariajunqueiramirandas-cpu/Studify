@@ -38,7 +38,7 @@ export function TextField({ label, hint, error, counter, style, multiline, value
           type('body'),
           styles.input,
           multiline && styles.multiline,
-          { color: c.textPrimary, borderColor: error ? c.danger : focused ? c.focusRing : c.border, borderWidth: focused || error ? 2 : 1, backgroundColor: c.bg },
+          { color: c.textPrimary, borderColor: error ? c.danger : focused ? c.focusRing : c.border, borderWidth: focused || error ? 2 : 1, backgroundColor: c.surface1 },
           style,
         ]}
         {...rest}
@@ -92,12 +92,13 @@ export function SwitchRow({ label, hint, value, onChange, disabled }: { label: s
   );
 }
 
+/** Underlined tabs: the chosen option is inked and sits on a bar; no track, no capsule. */
 export function SegmentedControl<T extends string>({ options, value, onChange, label }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; label?: string }) {
   const { colors: c } = useTheme();
   return (
     <View style={{ gap: space.xs }}>
       {label ? <Text variant="label">{label}</Text> : null}
-      <View style={[styles.segment, { backgroundColor: c.surface2 }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <View style={[styles.segment, { borderBottomColor: c.border }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {options.map((o) => {
           const selected = o.value === value;
           return (
@@ -106,11 +107,12 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
               accessibilityRole="radio"
               accessibilityState={{ selected }}
               onPress={() => onChange(o.value)}
-              style={[styles.segmentItem, selected && { backgroundColor: c.bg, borderColor: c.primary, borderWidth: 1.5 }]}
+              style={({ pressed }) => [styles.segmentItem, pressed && !selected && { opacity: 0.6 }]}
             >
-              <Text variant="label" style={{ color: selected ? c.primary : c.textSecondary }} align="center" numberOfLines={2}>
+              <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: selected ? c.textPrimary : c.textSecondary }} align="center" numberOfLines={2}>
                 {o.label}
               </Text>
+              <View style={[styles.segmentBar, { backgroundColor: selected ? c.primary : 'transparent' }]} />
             </Pressable>
           );
         })}
@@ -185,7 +187,7 @@ export function DateField({ label, value, onChange, mode = 'date', minimumDate, 
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value ? (mode === 'date' ? shortDate(value) : timeHM(value)) : placeholder ?? ''}`}
         onPress={() => setOpen(true)}
-        style={[styles.input, styles.dateBtn, { borderColor: c.border }]}
+        style={[styles.input, styles.dateBtn, { borderColor: c.border, backgroundColor: c.surface1 }]}
       >
         <Ionicons name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={20} color={c.textSecondary} />
         <Text>{display}</Text>
@@ -210,10 +212,11 @@ const styles = StyleSheet.create({
   input: { minHeight: touch.min, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, paddingVertical: space.xs },
-  segment: { flexDirection: 'row', borderRadius: radius.md, padding: 3, gap: 3 },
-  segmentItem: { flex: 1, minHeight: 44, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xs },
+  segment: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth * 2, gap: space.xs },
+  segmentItem: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.xs, gap: space.sm },
+  segmentBar: { alignSelf: 'stretch', height: 3, borderTopLeftRadius: 2, borderTopRightRadius: 2, marginBottom: -1 },
   radio: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1.5, minHeight: touch.option },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: touch.option },
-  stepBtn: { width: touch.min, height: touch.min, borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: touch.min, height: touch.min, borderRadius: radius.round, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   dateBtn: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1 },
 });
