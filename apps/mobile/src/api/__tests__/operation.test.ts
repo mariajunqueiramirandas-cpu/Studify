@@ -114,10 +114,18 @@ describe('untilSettled (ADR 0009)', () => {
 });
 
 describe('retryAfterMs', () => {
+  const retryAfter = (value: string | null) => (name: string) => (name === 'retry-after' ? value : null);
+
   it('reads seconds, defaults to one second and caps long waits', () => {
-    expect(retryAfterMs(() => '2')).toBe(2000);
-    expect(retryAfterMs(() => null)).toBe(1000);
-    expect(retryAfterMs(() => 'soon')).toBe(1000);
-    expect(retryAfterMs(() => '60')).toBe(5000);
+    expect(retryAfterMs(retryAfter('2'))).toBe(2000);
+    expect(retryAfterMs(retryAfter(null))).toBe(1000);
+    expect(retryAfterMs(retryAfter('soon'))).toBe(1000);
+    expect(retryAfterMs(retryAfter('60'))).toBe(5000);
+  });
+
+  it('prefers x-retry-after-ms when the server sends it', () => {
+    const headers: Record<string, string> = { 'x-retry-after-ms': '500', 'retry-after': '1' };
+    expect(retryAfterMs((name) => headers[name] ?? null)).toBe(500);
+    expect(retryAfterMs((name) => ({ 'x-retry-after-ms': 'soon' })[name] ?? null)).toBe(1000);
   });
 });

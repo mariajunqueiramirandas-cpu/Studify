@@ -45,7 +45,7 @@ async function untilReady(state: TrailState): Promise<TrailState> {
   let cur = state;
   for (let attempt = 0; cur.preparing && attempt < 20; attempt++) {
     const next = await prepareTrail(cur.trail_id);
-    if (next.preparing) await sleep(1500);
+    if (next.preparing) await sleep(500);
     cur = next;
   }
   return cur;
@@ -99,20 +99,26 @@ export default function TrailScreen() {
 
   /** Shows `s`, first waiting for its content when the next step is still being written. */
   const land = useCallback(
-    async (s: TrailState | Promise<TrailState>) => {
-      let cur = await s;
-      if (cur.preparing) {
+    async (s: TrailState | Promise<TrailState>, writing = false) => {
+      // `writing`: the next step is already being written, so the wait shows at once, not when it lands.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const wait = () => {
         setWaiting(true);
-        const timer = setTimeout(() => setSlow(true), 12_000);
-        try {
+        timer = setTimeout(() => setSlow(true), 12_000);
+      };
+      if (writing) wait();
+      try {
+        let cur = await s;
+        if (cur.preparing) {
+          if (!writing) wait();
           cur = await untilReady(cur);
-        } finally {
-          clearTimeout(timer);
-          setWaiting(false);
-          setSlow(false);
         }
+        show(cur);
+      } finally {
+        clearTimeout(timer);
+        setWaiting(false);
+        setSlow(false);
       }
-      show(cur);
     },
     [show],
   );
@@ -184,7 +190,7 @@ export default function TrailScreen() {
     setAnswer(null);
     setSelected(null);
     try {
-      await land(pending.current ?? res.state);
+      await land(pending.current ?? res.state, res.state.preparing);
     } catch (err) {
       fail(err);
     } finally {

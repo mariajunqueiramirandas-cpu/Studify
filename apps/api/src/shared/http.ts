@@ -18,7 +18,7 @@ export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers':
     'authorization, apikey, content-type, idempotency-key, x-studify-version, x-studify-schema, x-studify-operations, x-device-id, x-client-info',
-  'Access-Control-Expose-Headers': 'x-ai-usage-today, x-request-id, x-operation-status, retry-after',
+  'Access-Control-Expose-Headers': 'x-ai-usage-today, x-request-id, x-operation-status, retry-after, x-retry-after-ms',
   'Access-Control-Max-Age': '600',
 };
 
@@ -74,6 +74,8 @@ export const OPERATION_STATUS_HEADER = 'x-operation-status';
  */
 export const CLIENT_OPERATIONS_HEADER = 'x-studify-operations';
 const RETRY_AFTER_SECONDS = 1;
+// Apps that read `x-retry-after-ms` ask again sooner; older builds keep to `Retry-After` (whole seconds).
+const RETRY_AFTER_MS = 500;
 
 function followsOperations(req: Request): boolean {
   return req.headers.get(CLIENT_OPERATIONS_HEADER) === '1';
@@ -100,6 +102,7 @@ function runningResponse(key: string, requestId: string): Response {
     'x-request-id': requestId,
     [OPERATION_STATUS_HEADER]: 'running',
     'Retry-After': String(RETRY_AFTER_SECONDS),
+    'X-Retry-After-Ms': String(RETRY_AFTER_MS),
   });
 }
 

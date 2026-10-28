@@ -16,10 +16,10 @@ export const handler = defineFunction<TrailAnswerReq>({
     const { deps, input } = ctx;
     const { db } = deps;
     const userId = ctx.user.userId;
-    let trail = await loadTrail(db, userId, input.trail_id);
-    const subject = await requireSubject(db, userId, trail.subject_id, 'read');
-    const outline = await loadOutline(db, userId, subject.id);
-    const steps = await loadSteps(db, trail.id);
+    const [loaded, steps] = await Promise.all([loadTrail(db, userId, input.trail_id), loadSteps(db, input.trail_id)]);
+    let trail = loaded;
+    // The outline is read while the access check runs; it is only used once the check has passed.
+    const [, outline] = await Promise.all([requireSubject(db, userId, trail.subject_id, 'read'), loadOutline(db, userId, trail.subject_id)]);
     const row = steps.find((s) => s.id === input.step_id);
     if (!row) throw new ApiFailure('not_found');
     if (row.served_seq == null || row.status === 'discarded') throw new ApiFailure('invalid_request', { message: 'Esse passo não está na tela.' });
@@ -39,20 +39,22 @@ export const handler = defineFunction<TrailAnswerReq>({
         // Mastery evidence (learning-engine §5.2): a multiple-choice answer, source multiplier 1.0.
         const score = correct ? 1 : 0;
         const weight = evidenceWeight({ id: row.id, conceptId: row.concept_id, answeredAt: ctx.now, questionType: 'mcq_single', source: 'trail', score });
-        const ev = await db.from('mastery_evidence').upsert(
+        // The evidence, the recompute job and the Caderno entry do not depend on each other: write them together.
+        const evidence = db.from('mastery_evidence').upsert(
           [{ user_id: userId, node_id: row.concept_id, subject_id: trail.subject_id, source: 'trail', outcome: score, weight, ref_type: 'trail_step', ref_id: row.id, occurred_at: answeredAt }],
           { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
         );
+        const recompute = deps.enqueue('mastery.recompute', { user_id: userId, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
+        // Best effort: the answer is already recorded, so a Caderno failure must not fail (and retry) the step.
+        const caderno = correct
+          ? Promise.resolve(null)
+          : saveMistake(deps, trail, row, input.time_spent_ms ?? 0, ctx.now).catch((err) => {
+              console.warn('[trail-answer] caderno', err instanceof Error ? err.message : err);
+              return null;
+            });
+        const [ev, , saved] = await Promise.all([evidence, recompute, caderno]);
         if (ev.error) throw ev.error;
-        await deps.enqueue('mastery.recompute', { user_id: userId, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
-        if (!correct) {
-          // Best effort: the answer is already recorded, so a Caderno failure must not fail (and retry) the step.
-          try {
-            mistakeId = await saveMistake(deps, trail, row, input.time_spent_ms ?? 0, ctx.now);
-          } catch (err) {
-            console.warn('[trail-answer] caderno', err instanceof Error ? err.message : err);
-          }
-        }
+        mistakeId = saved;
       }
     }
 

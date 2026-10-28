@@ -134,13 +134,17 @@ export async function loadOutline(db: SupabaseClient, userId: string, subjectId:
   const byId = new Map(rows.map((n) => [n.id, n]));
 
   const ids = rows.map((n) => n.id);
-  const settings = ids.length ? await db.from('node_user_settings').select('node_id, excluded').eq('user_id', userId).is('deleted_at', null).in('node_id', ids) : { data: [], error: null };
+  const topicIds = rows.filter((n) => n.kind === 'topic').map((n) => n.id);
+  // The three lookups only need the node ids, so they run together: one round trip instead of three.
+  const [settings, sources, prereqs] = await Promise.all([
+    ids.length ? db.from('node_user_settings').select('node_id, excluded').eq('user_id', userId).is('deleted_at', null).in('node_id', ids) : { data: [], error: null },
+    topicIds.length ? db.from('node_sources').select('node_id').in('node_id', topicIds).is('deleted_at', null) : { data: [], error: null },
+    ids.length ? db.from('node_prerequisites').select('node_id, prerequisite_node_id').in('node_id', ids).is('deleted_at', null) : { data: [], error: null },
+  ]);
   if (settings.error) throw settings.error;
   const excluded = new Set(((settings.data as Array<{ node_id: string; excluded: boolean }>) ?? []).filter((s) => s.excluded).map((s) => s.node_id));
   const isExcluded = (n: NodeRow): boolean => excluded.has(n.id) || (n.parent_id !== null && byId.has(n.parent_id) && isExcluded(byId.get(n.parent_id)!));
 
-  const topicIds = rows.filter((n) => n.kind === 'topic').map((n) => n.id);
-  const sources = topicIds.length ? await db.from('node_sources').select('node_id').in('node_id', topicIds).is('deleted_at', null) : { data: [], error: null };
   if (sources.error) throw sources.error;
   const withPages = new Set(((sources.data as Array<{ node_id: string }>) ?? []).map((s) => s.node_id));
 
@@ -157,7 +161,6 @@ export async function loadOutline(db: SupabaseClient, userId: string, subjectId:
       concepts: rows.filter((c) => c.kind === 'concept' && c.parent_id === n.id && !isExcluded(c)).map((c) => ({ id: c.id, title: c.title, order: c.position })),
     }));
 
-  const prereqs = ids.length ? await db.from('node_prerequisites').select('node_id, prerequisite_node_id').in('node_id', ids).is('deleted_at', null) : { data: [], error: null };
   if (prereqs.error) throw prereqs.error;
   const prerequisites = ((prereqs.data as Array<{ node_id: string; prerequisite_node_id: string }>) ?? []).map((p) => ({ nodeId: p.node_id, prerequisiteId: p.prerequisite_node_id }));
   return { topics, prerequisites, nodes: byId };
@@ -434,21 +437,24 @@ export async function saveMistake(deps: Deps, trail: TrailRow, row: StepRow, tim
 
   const answerId = deps.newId();
   const response = { choice: row.response };
-  const answer = await db.from('attempt_answers').insert({
-    id: answerId,
-    attempt_id: attemptId,
-    user_id: trail.user_id,
-    question_id: questionId,
-    question_version: 1,
-    response,
-    correct: false,
-    score: 0,
-    grading_status: 'graded',
-    time_spent_ms: timeSpentMs,
-    answered_at: row.answered_at ?? now.toISOString(),
-  });
+  // The answer and the link back to the step both only need the question: write them together.
+  const [answer, linked] = await Promise.all([
+    db.from('attempt_answers').insert({
+      id: answerId,
+      attempt_id: attemptId,
+      user_id: trail.user_id,
+      question_id: questionId,
+      question_version: 1,
+      response,
+      correct: false,
+      score: 0,
+      grading_status: 'graded',
+      time_spent_ms: timeSpentMs,
+      answered_at: row.answered_at ?? now.toISOString(),
+    }),
+    db.from('trail_steps').update({ question_id: questionId }).eq('id', row.id),
+  ]);
   if (answer.error) throw answer.error;
-  const linked = await db.from('trail_steps').update({ question_id: questionId }).eq('id', row.id);
   if (linked.error) throw linked.error;
 
   const outcome = await recordMistake(db, deps.newId, {

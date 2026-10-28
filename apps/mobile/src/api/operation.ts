@@ -39,8 +39,10 @@ export function isRunning(status: number, header: (name: string) => string | nul
   return status === 202 && header(RUNNING_HEADER) === 'running';
 }
 
-/** How long to wait before asking again, from `Retry-After` (seconds), bounded. */
+/** How long to wait before asking again: `x-retry-after-ms` when the server sends it, else `Retry-After` (seconds), bounded. */
 export function retryAfterMs(header: (name: string) => string | null): number {
+  const ms = Number(header('x-retry-after-ms'));
+  if (Number.isFinite(ms) && ms > 0) return Math.min(MAX_RETRY_AFTER_MS, Math.round(ms));
   const seconds = Number(header('retry-after'));
   if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_RETRY_AFTER_MS;
   return Math.min(MAX_RETRY_AFTER_MS, Math.round(seconds * 1000));
