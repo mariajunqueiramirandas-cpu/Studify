@@ -6,7 +6,8 @@ import * as Haptics from 'expo-haptics';
 import { options, t } from '../i18n';
 import type { Confidence, MistakeCause, Option, QuestionRow, QuestionResponse, GradeResult } from '../features/practice/types';
 import { MISTAKE_CAUSES } from '../features/practice/types';
-import { radius, space, useTheme } from '../theme';
+import { cheer, thud } from '../lib/haptics';
+import { radius, shade, space, useTheme } from '../theme';
 import { Button } from './Button';
 import { Chip, ChipGroup, PageChips } from './Chip';
 import { RichContent } from './MarkdownView';
@@ -72,14 +73,20 @@ export function FeedbackPanel({
 
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(result.correct ? 'Resposta certa' : `Resposta errada.${letter ? ` A certa é a ${letter}.` : ''}`);
-  }, [result.correct, letter]);
+    if (result.pending) return;
+    if (result.correct) cheer();
+    else thud();
+  }, [result.correct, result.pending, letter]);
 
   const color = result.pending ? c.info : result.correct ? c.success : partial ? c.warning : c.danger;
+  const soft = result.pending ? c.infoSoft : result.correct ? c.successSoft : partial ? c.warningSoft : c.dangerSoft;
   return (
-    <View style={[styles.feedback, { borderColor: color, backgroundColor: c.surface1 }]} accessibilityLiveRegion="polite">
-      <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
-        <Ionicons name={result.pending ? 'time-outline' : result.correct ? 'checkmark-circle' : 'close-circle'} size={26} color={color} />
-        <RichText variant="heading" style={{ flex: 1 }}>
+    <View style={[styles.feedback, { borderColor: color, borderBottomColor: shade(color, 0.25), backgroundColor: c.surface1 }]} accessibilityLiveRegion="polite">
+      <View style={[styles.verdict, { backgroundColor: soft }]}>
+        <View style={[styles.badge, { backgroundColor: color }]}>
+          <Ionicons name={result.pending ? 'time-outline' : result.correct ? 'checkmark' : partial ? 'remove' : 'close'} size={24} color={c.onPrimary} />
+        </View>
+        <RichText variant="heading" style={{ flex: 1, color }}>
           {header}
         </RichText>
       </View>
@@ -87,16 +94,16 @@ export function FeedbackPanel({
       {!result.correct && pickedOption?.rationale ? (
         <View style={{ gap: space.xs }}>
           <Text variant="label">{t('quiz.why_wrong', { letter: pickedOption.id })}</Text>
-          <RichContent text={pickedOption.rationale} />
+          <RichContent variant="reading" text={pickedOption.rationale} />
         </View>
       ) : null}
       {correctOption?.rationale ? (
         <View style={{ gap: space.xs }}>
           <Text variant="label">{t('quiz.correct_answer')}</Text>
-          <RichContent text={correctOption.rationale} />
+          <RichContent variant="reading" text={correctOption.rationale} />
         </View>
       ) : null}
-      {question.type === 'true_false' && typeof p.justification === 'string' ? <RichContent text={p.justification} /> : null}
+      {question.type === 'true_false' && typeof p.justification === 'string' ? <RichContent variant="reading" text={p.justification} /> : null}
       {question.explanation ? (
         <View style={{ gap: space.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -105,7 +112,7 @@ export function FeedbackPanel({
             </Text>
             <ReadAloudButton id={`explanation:${question.id}`} text={question.explanation} size={20} />
           </View>
-          <RichContent text={question.explanation} />
+          <RichContent variant="reading" text={question.explanation} />
         </View>
       ) : null}
       <PageChips sources={question.source_pages} subjectId={question.subject_id} />
@@ -213,6 +220,8 @@ export function Celebrate({ text, calm }: { text: string; calm?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  feedback: { borderWidth: 2, borderRadius: radius.lg, padding: space.lg, gap: space.md },
+  feedback: { borderWidth: 2, borderBottomWidth: 5, borderRadius: radius.xl, padding: space.lg, gap: space.md, overflow: 'hidden' },
+  verdict: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginHorizontal: -space.lg, marginTop: -space.lg, paddingHorizontal: space.lg, paddingVertical: space.md },
+  badge: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   lbRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.md },
 });

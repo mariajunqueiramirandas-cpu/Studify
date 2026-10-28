@@ -60,7 +60,7 @@ export default function EnemItem() {
                 </Text>
                 <AiBadge />
               </Row>
-              <RichContent text={q.explanation} />
+              <RichContent variant="reading" text={q.explanation} />
               <Text variant="label">{t('bank.wrong_why')}</Text>
               {options
                 .filter((o) => o.id !== q.payload.correct && o.rationale && o.rationale !== '—')

@@ -29,9 +29,9 @@ describe('pt-BR formatting (copy-pt-br §2)', () => {
     expect(longInterval(3 * 86_400_000)).toBe('3 dias');
   });
   it('formats page chips as 📄 p. N / p. N–M', () => {
-    expect(pageLabel(12)).toBe('📄 p. 12');
-    expect(pageLabel(12, 14)).toBe('📄 p. 12–14');
-    expect(pageLabel(12, 12)).toBe('📄 p. 12');
+    expect(pageLabel(12)).toBe('p. 12');
+    expect(pageLabel(12, 14)).toBe('p. 12–14');
+    expect(pageLabel(12, 12)).toBe('p. 12');
   });
   it('formats weekday dates as "qua, 14/11"', () => {
     expect(weekdayDate('2026-11-11')).toBe('qua, 11/11');

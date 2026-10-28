@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { Grade } from 'ts-fsrs';
-import { ActionBar, Banner, BottomSheet, Button, EmptyState, Flashcard, IconButton, ListItem, PageChips, ProgressBar, RatingBar, Row, Screen, Text, useOverlay } from '../components';
+import { ActionBar, Banner, BottomSheet, Button, EmptyState, Flashcard, IconButton, ListItem, PageChips, RatingBar, Row, Screen, SessionProgress, Text, useOverlay } from '../components';
 import { useDb } from '../db/DatabaseProvider';
 import { formatMinutes } from '../features/common/format';
 import { buildLocalQueue, previewIntervals, type ReviewCard } from '../features/memory/local';
@@ -13,6 +13,7 @@ import { useCardMnemonic } from '../features/mnemonics/api';
 import { FlagSheet } from '../features/trust/FlagSheet';
 import { options, t } from '../i18n';
 import { useSessionStore } from '../stores/session';
+import { cheer, thud } from '../lib/haptics';
 import { space } from '../theme';
 import { ReadAloudButton } from '../features/voice/VoiceButtons';
 import { WellbeingNudge } from '../features/wellbeing/WellbeingNudge';
@@ -59,6 +60,8 @@ export default function Review() {
   const rate = async (rating: Grade) => {
     if (!current) return;
     const card = current;
+    if (rating === 1) thud();
+    else if (rating >= 3) cheer();
     try {
       await store.answer(db, rating, { durationMs: Date.now() - shownAt.current, source: source ?? 'session', hintUsed: hint });
       overlay.undo(`${options('review.rating.again').length ? '' : ''}${[t('review.rating.again'), t('review.rating.hard'), t('review.rating.good'), t('review.rating.easy')][rating - 1]}`, () => void store.undo(db));
@@ -89,7 +92,7 @@ export default function Review() {
   const tags = current ? [...(current.isNew ? [t('review.tag.new')] : []), ...(current.examTag ? [t('review.tag.exam', { subject: current.examTag.subjectName, n: current.examTag.days })] : [])] : [];
   return (
     <Screen
-      title={queue ? t('review.progress', { i: Math.min(store.index + 1, queue.length), n: queue.length }) : t('review.title')}
+      title=""
       immersive
       scroll={false}
       onBack={async () => {
@@ -102,12 +105,19 @@ export default function Review() {
       footer={
         current ? (
           <ActionBar>
-            {store.revealed ? <RatingBar intervals={intervals} onRate={(r) => void rate(r as Grade)} /> : <Button label={t('review.reveal')} onPress={store.reveal} />}
+            {store.revealed ? <RatingBar intervals={intervals} onRate={(r) => void rate(r as Grade)} /> : <Button label={t('review.reveal')} icon="sync-outline" onPress={store.reveal} />}
           </ActionBar>
         ) : null
       }
     >
-      {queue ? <ProgressBar value={queue.length ? store.index / queue.length : 0} /> : null}
+      {queue ? (
+        <Row gap={space.md}>
+          <SessionProgress value={queue.length ? store.index / queue.length : 0} label={t('review.progress', { i: Math.min(store.index + 1, queue.length), n: queue.length })} />
+          <Text variant="label" weight="bold" tone="secondary">
+            {`${Math.min(store.index + 1, queue.length)}/${queue.length}`}
+          </Text>
+        </Row>
+      ) : null}
       {queue && queue.length > 150 && store.index === 0 ? (
         <Banner kind="info" message={t('review.recovery', { n: queue.length, d: Math.ceil(queue.length / 100) })} />
       ) : null}

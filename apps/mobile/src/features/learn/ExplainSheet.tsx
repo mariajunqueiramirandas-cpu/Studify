@@ -65,7 +65,7 @@ export function ExplainSheet({ visible, onClose, target, subjectId }: { visible:
       {status === 'streaming' && !text ? <Text tone="secondary">{t('tutor.thinking')}</Text> : null}
       {text ? (
         <View style={{ gap: space.sm }}>
-          <RichContent text={text} />
+          <RichContent variant="reading" text={text} />
           <PageChips sources={cites} subjectId={subjectId} />
           <AiBadge />
         </View>

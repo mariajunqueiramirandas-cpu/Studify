@@ -81,7 +81,7 @@ export default function Result() {
             const result: GradeResult = { correct: a.correct, score: a.score, typo: null, pending: a.grading_status === 'pending' };
             return (
               <View key={a.id} style={{ gap: space.sm }}>
-                <RichContent text={q.stem} />
+                <RichContent variant="reading" text={q.stem} />
                 {a.ai_feedback ? <Button compact variant="tonal" label={t('grading.title')} onPress={() => setGrading({ a, q })} /> : <FeedbackPanel question={q} response={a.response as QuestionResponse} result={result} />}
               </View>
             );
@@ -126,11 +126,11 @@ export default function Result() {
                   return body ? (
                     <View key={title} style={{ gap: 4 }}>
                       <Text variant="label">{title}</Text>
-                      <RichContent text={body} />
+                      <RichContent variant="reading" text={body} />
                     </View>
                   ) : null;
                 })
-              : grading.a.ai_feedback?.summary ? <RichContent text={grading.a.ai_feedback.summary} /> : null}
+              : grading.a.ai_feedback?.summary ? <RichContent variant="reading" text={grading.a.ai_feedback.summary} /> : null}
             <Text variant="bodySmall" tone="secondary">
               {t('grading.disclaimer')}
             </Text>

@@ -34,7 +34,7 @@ export function SubjectForm({ value, onChange, suggestions = true }: { value: Su
               accessibilityState={{ selected }}
               accessibilityLabel={SUBJECT_COLORS[key].label}
               onPress={() => onChange({ ...value, color: key })}
-              style={{ width: 48, height: 48, borderRadius: radius.pill, backgroundColor: SUBJECT_COLORS[key][scheme], alignItems: 'center', justifyContent: 'center', borderWidth: selected ? 3 : 0, borderColor: colors.textPrimary }}
+              style={{ width: 48, height: 48, borderRadius: radius.round, backgroundColor: SUBJECT_COLORS[key][scheme], alignItems: 'center', justifyContent: 'center', borderWidth: selected ? 3 : 0, borderColor: colors.textPrimary }}
             >
               {selected ? <Ionicons name="checkmark" size={22} color="#fff" /> : null}
             </Pressable>

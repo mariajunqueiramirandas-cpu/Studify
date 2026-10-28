@@ -1,10 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { maxContentWidth, radius, space, useTheme } from '../theme';
+import { maxContentWidth, space, useTheme } from '../theme';
 import { IconButton } from './Button';
+import { Meta } from './Chip';
 import { Text } from './Text';
 import { OfflineBanner } from './Banner';
 
@@ -34,7 +35,7 @@ export function AppBar({ title, root, onBack, actions, context, closeIcon, large
         )}
         <View style={styles.titleWrap}>
           {title ? (
-            <Text variant={large ? 'display' : 'title'} numberOfLines={2} accessibilityRole="header">
+            <Text variant={large || root ? 'display' : 'title'} numberOfLines={2} accessibilityRole="header">
               {title}
             </Text>
           ) : null}
@@ -122,15 +123,23 @@ export function Screen({
   );
 }
 
-export function Section({ title, action, children, style }: { title?: string; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+/** A titled group. The subtitle hugs its heading; the content sits one step below both. */
+export function Section({ title, subtitle, action, children, style }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[styles.section, style]}>
+    <View style={[styles.section, title ? styles.titled : null, style]}>
       {title ? (
-        <View style={styles.sectionHeader}>
-          <Text variant="heading" accessibilityRole="header" style={{ flex: 1 }}>
-            {title}
-          </Text>
-          {action}
+        <View style={{ gap: space.xxs }}>
+          <View style={styles.sectionHeader}>
+            <Text variant="heading" accessibilityRole="header" style={{ flex: 1 }}>
+              {title}
+            </Text>
+            {action}
+          </View>
+          {subtitle ? (
+            <Text variant="bodySmall" tone="secondary">
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       {children}
@@ -151,28 +160,20 @@ export function Divider() {
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginVertical: space.sm }} />;
 }
 
+/** Status text with an icon (kept for older call sites; same as Meta, no capsule). */
 export function Pill({ icon, text, color }: { icon?: React.ComponentProps<typeof Ionicons>['name']; text: string; color?: string }) {
-  const { colors: c } = useTheme();
-  const tint = color ?? c.textSecondary;
-  return (
-    <View style={[styles.pill, { borderColor: c.border }]}>
-      {icon ? <Ionicons name={icon} size={14} color={tint} /> : null}
-      <Text variant="bodySmall" style={{ color: tint }}>
-        {text}
-      </Text>
-    </View>
-  );
+  return <Meta icon={icon} text={text} color={color} />;
 }
 
 const styles = StyleSheet.create({
-  appBar: { paddingHorizontal: space.xs, paddingBottom: space.xs },
-  appBarRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56 },
-  titleWrap: { flex: 1, paddingHorizontal: space.xs },
+  appBar: { paddingHorizontal: space.xs, paddingBottom: space.sm },
+  appBarRow: { flexDirection: 'row', alignItems: 'center', minHeight: 60 },
+  titleWrap: { flex: 1, paddingHorizontal: space.sm },
   actions: { flexDirection: 'row', alignItems: 'center' },
   context: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   content: { width: '100%', maxWidth: maxContentWidth, alignSelf: 'center', gap: space.lg },
-  padded: { paddingHorizontal: space.lg, paddingTop: space.sm },
+  padded: { paddingHorizontal: space.gutter, paddingTop: space.sm },
   section: { gap: space.md },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: space.xs, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: 2 },
+  titled: { marginTop: space.sm },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 32 },
 });

@@ -41,7 +41,7 @@ export default function CapiSettings() {
     <Screen title={t('capi.title')}>
       <Card tone="soft">
         <View style={{ alignItems: 'center', gap: space.sm }}>
-          <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={160} />
+          <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={220} />
           <Text variant="heading" align="center">
             {t('capi.stage_title', { stage: t(`capi.stage.${capi.stage}`) })}
           </Text>

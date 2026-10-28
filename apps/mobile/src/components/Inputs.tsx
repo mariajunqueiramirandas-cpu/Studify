@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View, type TextInputProps } from 'react-native';
 import { shortDate, timeHM, weekdayDate } from '../features/common/format';
+import { tap } from '../lib/haptics';
 import { radius, space, touch, useTheme } from '../theme';
 import { Text } from './Text';
 
@@ -18,7 +19,7 @@ export function TextField({ label, hint, error, counter, style, multiline, value
   const [focused, setFocused] = useState(false);
   const len = value?.length ?? 0;
   return (
-    <View style={{ gap: space.xs }}>
+    <View style={{ gap: space.sm }}>
       {label ? <Text variant="label">{label}</Text> : null}
       <TextInput
         accessibilityLabel={label ?? rest.placeholder}
@@ -38,7 +39,7 @@ export function TextField({ label, hint, error, counter, style, multiline, value
           type('body'),
           styles.input,
           multiline && styles.multiline,
-          { color: c.textPrimary, borderColor: error ? c.danger : focused ? c.focusRing : c.border, borderWidth: focused || error ? 2 : 1, backgroundColor: c.bg },
+          { color: c.textPrimary, borderColor: error ? c.danger : focused ? c.focusRing : c.border, borderWidth: focused || error ? 2 : 1, backgroundColor: c.surface1 },
           style,
         ]}
         {...rest}
@@ -69,7 +70,11 @@ export function SwitchRow({ label, hint, value, onChange, disabled }: { label: s
       accessibilityState={{ checked: value, disabled: !!disabled }}
       accessibilityLabel={label}
       accessibilityHint={hint}
-      onPress={() => !disabled && onChange(!value)}
+      onPress={() => {
+        if (disabled) return;
+        tap();
+        onChange(!value);
+      }}
       style={[styles.switchRow, disabled && { opacity: 0.5 }]}
     >
       <View style={{ flex: 1, gap: 2 }}>
@@ -82,7 +87,10 @@ export function SwitchRow({ label, hint, value, onChange, disabled }: { label: s
       </View>
       <Switch
         value={value}
-        onValueChange={onChange}
+        onValueChange={(v) => {
+          tap();
+          onChange(v);
+        }}
         disabled={disabled}
         trackColor={{ true: c.primary, false: c.border }}
         thumbColor={c.bg}
@@ -92,12 +100,20 @@ export function SwitchRow({ label, hint, value, onChange, disabled }: { label: s
   );
 }
 
+/** Underlined tabs: the chosen option is inked and sits on a bar; no track, no capsule. */
 export function SegmentedControl<T extends string>({ options, value, onChange, label }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; label?: string }) {
   const { colors: c } = useTheme();
   return (
     <View style={{ gap: space.xs }}>
       {label ? <Text variant="label">{label}</Text> : null}
-      <View style={[styles.segment, { backgroundColor: c.surface2 }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.segment, { borderBottomColor: c.border }]}
+        contentContainerStyle={styles.segmentRow}
+        accessibilityRole="radiogroup"
+        accessibilityLabel={label}
+      >
         {options.map((o) => {
           const selected = o.value === value;
           return (
@@ -105,16 +121,20 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
               key={o.value}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
-              onPress={() => onChange(o.value)}
-              style={[styles.segmentItem, selected && { backgroundColor: c.bg, borderColor: c.primary, borderWidth: 1.5 }]}
+              onPress={() => {
+                if (!selected) tap();
+                onChange(o.value);
+              }}
+              style={({ pressed }) => [styles.segmentItem, pressed && !selected && { opacity: 0.6 }]}
             >
-              <Text variant="label" style={{ color: selected ? c.primary : c.textSecondary }} align="center" numberOfLines={2}>
+              <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: selected ? c.textPrimary : c.textSecondary }} align="center" numberOfLines={1}>
                 {o.label}
               </Text>
+              <View style={[styles.segmentBar, { backgroundColor: selected ? c.primary : 'transparent' }]} />
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -131,7 +151,10 @@ export function RadioList<T extends string>({ options, value, onChange }: { opti
             accessibilityRole="radio"
             accessibilityState={{ selected }}
             accessibilityLabel={o.hint ? `${o.label}. ${o.hint}` : o.label}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              tap();
+              onChange(o.value);
+            }}
             style={[styles.radio, { borderColor: selected ? c.primary : c.border, backgroundColor: selected ? c.primarySoft : c.surface1 }]}
           >
             <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? c.primary : c.textSecondary} />
@@ -185,7 +208,7 @@ export function DateField({ label, value, onChange, mode = 'date', minimumDate, 
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value ? (mode === 'date' ? shortDate(value) : timeHM(value)) : placeholder ?? ''}`}
         onPress={() => setOpen(true)}
-        style={[styles.input, styles.dateBtn, { borderColor: c.border }]}
+        style={[styles.input, styles.dateBtn, { borderColor: c.border, backgroundColor: c.surface1 }]}
       >
         <Ionicons name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={20} color={c.textSecondary} />
         <Text>{display}</Text>
@@ -210,10 +233,13 @@ const styles = StyleSheet.create({
   input: { minHeight: touch.min, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, paddingVertical: space.xs },
-  segment: { flexDirection: 'row', borderRadius: radius.md, padding: 3, gap: 3 },
-  segmentItem: { flex: 1, minHeight: 44, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xs },
+  // Tabs size to their labels and share any spare width; when they don't fit, the row scrolls instead of wrapping.
+  segment: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth * 2 },
+  segmentRow: { flexGrow: 1, gap: space.sm },
+  segmentItem: { flexGrow: 1, minHeight: 46, alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.xxs, gap: space.sm },
+  segmentBar: { alignSelf: 'stretch', height: 3, borderTopLeftRadius: 2, borderTopRightRadius: 2, marginBottom: -1 },
   radio: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1.5, minHeight: touch.option },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: touch.option },
-  stepBtn: { width: touch.min, height: touch.min, borderRadius: radius.pill, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: touch.min, height: touch.min, borderRadius: radius.round, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   dateBtn: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1 },
 });

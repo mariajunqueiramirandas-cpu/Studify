@@ -1,15 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { radius, space, subjectColor, touch, useTheme } from '../theme';
+import Svg, { Path } from 'react-native-svg';
+import { depth, FONTS, radius, shade, space, subjectColor, touch, useTheme } from '../theme';
 import type { IconName } from './Button';
+import { Tactile } from './Tactile';
 import { Text } from './Text';
 
 interface CardProps {
   children: ReactNode;
   onPress?: () => void;
   onLongPress?: () => void;
-  /** Subject color as the left accent bar (ux §6). */
+  /** Subject color, shown as a bookmark ribbon hanging from the top edge (ux §6). */
   accent?: string | null;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
@@ -20,25 +22,51 @@ interface CardProps {
 export function Card({ children, onPress, onLongPress, accent, style, accessibilityLabel, tone = 'default', testID }: CardProps) {
   const { colors: c } = useTheme();
   const bg = tone === 'soft' ? c.primarySoft : tone === 'outline' ? 'transparent' : c.surface1;
+  // A card holding only list rows becomes a list: rows run edge to edge, split by inset hairlines.
+  const rows = Children.toArray(children);
+  const list = rows.length > 0 && rows.every((r) => isValidElement(r) && r.type === ListItem);
   const content = (
     <>
-      {accent ? <View style={[styles.accent, { backgroundColor: accent }]} /> : null}
-      <View style={[styles.inner, accent ? { paddingLeft: space.lg + 4 } : null]}>{children}</View>
+      {accent ? <Ribbon color={accent} /> : null}
+      {list ? (
+        <View style={styles.list}>{rows.map((r, i) => cloneElement(r as ReactElement<ListItemProps>, { inList: true, first: i === 0 }))}</View>
+      ) : (
+        <View style={[styles.inner, accent ? { paddingTop: space.lg + 8 } : null]}>{children}</View>
+      )}
     </>
   );
-  const base = [styles.card, { backgroundColor: bg, borderColor: c.border, borderWidth: tone === 'outline' ? 1 : 0 }, style];
+  const border = tone === 'soft' ? 'transparent' : c.border;
+  const base = [styles.card, { backgroundColor: bg, borderColor: border, borderWidth: tone === 'outline' ? 1.5 : StyleSheet.hairlineWidth * 2 }, style];
   if (!onPress && !onLongPress) return <View style={base} testID={testID}>{content}</View>;
+  // Tappable cards stand on a ledge and sink when pressed, so you can tell them from the ones you only read.
+  const rim = tone === 'soft' ? shade(c.primarySoft, 0.08) : c.border;
   return (
-    <Pressable
+    <Tactile
       testID={testID}
-      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [...base, pressed && { opacity: 0.85 }]}
+      color={bg === 'transparent' ? c.bg : bg}
+      borderColor={rim}
+      ledge={shade(rim, 0.14)}
+      borderWidth={1.5}
+      depth={depth.sm}
+      style={[styles.card, style]}
+      pressedStyle={tone === 'soft' ? undefined : { backgroundColor: c.surface2 }}
     >
       {content}
-    </Pressable>
+    </Tactile>
+  );
+}
+
+/** A cloth bookmark in the subject's color, notched at the end. */
+function Ribbon({ color }: { color: string }) {
+  return (
+    <View style={styles.ribbon} pointerEvents="none">
+      <Svg width={12} height={18} viewBox="0 0 12 18">
+        <Path d="M0 0 H12 V18 L6 13.5 L0 18 Z" fill={color} />
+      </Svg>
+    </View>
   );
 }
 
@@ -55,10 +83,13 @@ interface ListItemProps {
   accessibilityLabel?: string;
   disabled?: boolean;
   testID?: string;
+  /** Set by Card when the row is part of a list card. */
+  inList?: boolean;
+  first?: boolean;
 }
 
-export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onLongPress, chevron = !!onPress, destructive, accessibilityLabel, disabled, testID }: ListItemProps) {
-  const { colors: c } = useTheme();
+export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onLongPress, chevron = !!onPress, destructive, accessibilityLabel, disabled, testID, inList, first }: ListItemProps) {
+  const { colors: c, easyReading } = useTheme();
   return (
     <Pressable
       testID={testID}
@@ -67,11 +98,12 @@ export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onL
       accessibilityState={{ disabled: !!disabled }}
       onPress={disabled ? undefined : onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [styles.item, pressed && onPress ? { backgroundColor: c.surface2 } : null, disabled && { opacity: 0.5 }]}
+      style={({ pressed }) => [styles.item, inList && styles.listRow, pressed && onPress ? { backgroundColor: c.surface2 } : null, disabled && { opacity: 0.5 }]}
     >
+      {inList && !first ? <View style={[styles.divider, { left: icon ? space.lg + 22 + space.md : space.lg, backgroundColor: c.border }]} /> : null}
       {icon ? <Ionicons name={icon} size={22} color={destructive ? c.danger : (iconColor ?? c.textSecondary)} /> : null}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="body" tone={destructive ? 'danger' : 'primary'}>
+        <Text variant="body" tone={destructive ? 'danger' : 'primary'} style={easyReading ? undefined : { fontFamily: FONTS.uiMedium }}>
           {title}
         </Text>
         {subtitle ? (
@@ -90,7 +122,7 @@ export function SubjectBadge({ color, icon, size = 40 }: { color?: string | null
   const theme = useTheme();
   const tint = subjectColor(color, theme.scheme);
   return (
-    <View style={{ width: size, height: size, borderRadius: radius.md, backgroundColor: `${tint}22`, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: radius.md, backgroundColor: `${tint}24`, borderLeftWidth: 4, borderLeftColor: tint, alignItems: 'center', justifyContent: 'center' }}>
       <Ionicons name={(icon ?? 'book-outline') as IconName} size={size * 0.55} color={tint} />
     </View>
   );
@@ -99,6 +131,9 @@ export function SubjectBadge({ color, icon, size = 40 }: { color?: string | null
 const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, overflow: 'hidden' },
   inner: { padding: space.lg, gap: space.sm },
-  accent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  ribbon: { position: 'absolute', left: space.lg, top: 0 },
+  list: { paddingVertical: space.xs },
+  listRow: { paddingHorizontal: space.lg, paddingVertical: space.md, borderRadius: 0 },
+  divider: { position: 'absolute', top: 0, right: 0, height: StyleSheet.hairlineWidth * 2 },
   item: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, paddingVertical: space.sm, paddingHorizontal: space.xs, borderRadius: radius.sm },
 });

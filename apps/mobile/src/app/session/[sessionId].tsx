@@ -3,7 +3,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { uuidv7 } from 'uuidv7';
-import { ActionBar, Button, Card, ProgressBar, Row, Screen, Text, useOnline, useOverlay } from '../../components';
+import { ActionBar, Button, Card, Row, Screen, SessionProgress, Text, useOnline, useOverlay } from '../../components';
 import { useDb } from '../../db/DatabaseProvider';
 import { enqueueOutbox } from '../../db/outbox';
 import { useSession } from '../../features/auth/session';
@@ -147,7 +147,7 @@ export default function SessionRunner() {
         </ActionBar>
       }
     >
-      <ProgressBar value={progress} label={t('session.title')} />
+      <SessionProgress value={progress} label={t('session.title')} />
       <WellbeingNudge surface="session" />
       {blocks.length === 0 ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
       {blocks.map((b, i) => {

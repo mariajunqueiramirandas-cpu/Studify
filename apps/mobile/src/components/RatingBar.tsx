@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { t } from '../i18n';
 import { longInterval, shortInterval } from '../features/common/format';
-import { radius, space, useTheme } from '../theme';
+import { depth, radius, shade, space, useTheme } from '../theme';
+import { Tactile } from './Tactile';
 import { Text } from './Text';
 
 export type Rating = 1 | 2 | 3 | 4;
@@ -29,23 +30,26 @@ export function RatingBar({ intervals, onRate, twoButton, disabled }: RatingBarP
       {buttons.map(({ r, label, color }) => {
         const ms = intervals?.[r];
         return (
-          <Pressable
+          <Tactile
             key={r}
             disabled={disabled}
             onPress={() => onRate(r)}
-            accessibilityRole="button"
             accessibilityLabel={ms != null ? t('review.rating_a11y', { label, interval: longInterval(ms) }) : label}
-            style={({ pressed }) => [styles.btn, { borderColor: color, backgroundColor: pressed ? `${color}22` : c.bg }]}
+            color={color}
+            ledge={shade(color, 0.3)}
+            depth={depth.md}
+            radius={radius.lg}
+            style={styles.btn}
           >
-            <Text variant="label" style={{ color }}>
+            <Text variant="label" weight="bold" style={{ color: c.onPrimary }}>
               {label}
             </Text>
             {ms != null ? (
-              <Text variant="bodySmall" tone="secondary">
+              <Text variant="bodySmall" style={{ color: c.onPrimary }}>
                 {shortInterval(ms)}
               </Text>
             ) : null}
-          </Pressable>
+          </Tactile>
         );
       })}
     </View>
@@ -54,5 +58,5 @@ export function RatingBar({ intervals, onRate, twoButton, disabled }: RatingBarP
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.sm },
-  btn: { flex: 1, minHeight: 64, borderRadius: radius.md, borderWidth: 2, alignItems: 'center', justifyContent: 'center', paddingVertical: space.sm },
+  btn: { flex: 1, minHeight: 68, alignItems: 'center', justifyContent: 'center', paddingVertical: space.sm, gap: 2 },
 });

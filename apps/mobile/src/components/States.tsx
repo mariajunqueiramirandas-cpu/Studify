@@ -4,16 +4,25 @@ import { Animated, StyleSheet, View, type DimensionValue } from 'react-native';
 import { t } from '../i18n';
 import { radius, space, useTheme } from '../theme';
 import { Button, type IconName } from './Button';
+import { CapiScene, useMascotVisible } from './Capi';
 import { Text } from './Text';
 
-/** One sentence + one primary action — never just "Nada aqui" (ux §5.5). */
-export function EmptyState({ icon = 'sparkles-outline', title, message, action }: { icon?: IconName; title?: string; message: string; action?: { label: string; onPress: () => void; icon?: IconName } }) {
+/**
+ * One sentence + one primary action — never just "Nada aqui" (ux §5.5). Capi with the empty box keeps it company;
+ * `compact` (inside a tab or a short list) and a hidden mascot use the icon instead.
+ */
+export function EmptyState({ icon = 'sparkles-outline', title, message, action, compact }: { icon?: IconName; title?: string; message: string; action?: { label: string; onPress: () => void; icon?: IconName }; compact?: boolean }) {
   const { colors: c } = useTheme();
+  const mascot = useMascotVisible();
   return (
-    <View style={styles.center}>
-      <View style={[styles.illustration, { backgroundColor: c.primarySoft }]}>
-        <Ionicons name={icon} size={36} color={c.primary} />
-      </View>
+    <View style={[styles.center, compact && styles.compact]}>
+      {mascot && !compact ? (
+        <CapiScene scene="empty" size={148} />
+      ) : (
+        <View style={[styles.illustration, { backgroundColor: c.primarySoft }]}>
+          <Ionicons name={icon} size={30} color={c.primary} />
+        </View>
+      )}
       {title ? (
         <Text variant="heading" align="center">
           {title}
@@ -30,9 +39,10 @@ export function EmptyState({ icon = 'sparkles-outline', title, message, action }
 /** Plain PT-BR + "Tentar de novo". No codes, no stack traces. */
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   const { colors: c } = useTheme();
+  const mascot = useMascotVisible();
   return (
     <View style={styles.center} accessibilityRole="alert">
-      <Ionicons name="cloud-offline-outline" size={36} color={c.textSecondary} />
+      {mascot ? <CapiScene scene="offline" size={140} /> : <Ionicons name="cloud-offline-outline" size={36} color={c.textSecondary} />}
       <Text variant="body" align="center">
         {message ?? t('error.generic')}
       </Text>
@@ -70,6 +80,7 @@ export function SkeletonList({ rows = 4, height = 64 }: { rows?: number; height?
 }
 
 const styles = StyleSheet.create({
-  center: { alignItems: 'center', justifyContent: 'center', gap: space.md, paddingVertical: space.xxl, paddingHorizontal: space.lg },
-  illustration: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center', gap: space.md, paddingVertical: space.xl, paddingHorizontal: space.lg },
+  compact: { paddingVertical: space.lg },
+  illustration: { width: 64, height: 64, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
 });

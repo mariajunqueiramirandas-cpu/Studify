@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Image, Linking, View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { supabase } from '../../api/supabase';
-import { ActionBar, Banner, Button, Screen, Spacer, Text, TextField, useOnline, useOverlay } from '../../components';
+import { ActionBar, Banner, Button, CapiScene, Screen, Spacer, Text, TextField, useOnline, useOverlay } from '../../components';
 import { classifyGoogleError, signInWithGoogle, googleAvailable } from '../../features/auth/google';
 import { t } from '../../i18n';
 import { sitePage } from '../../features/common/links';
@@ -69,13 +69,13 @@ export default function SignIn() {
         </ActionBar>
       }
     >
-      <Spacer size={space.xxxl} />
-      <View style={{ alignItems: 'center', gap: space.lg }}>
-        <Image source={require('../../../assets/icon.png')} style={{ width: 88, height: 88, borderRadius: 22 }} accessibilityIgnoresInvertColors accessible={false} />
-        <Text variant="display" align="center">
+      <Spacer size={space.xl} />
+      <View style={{ alignItems: 'center', gap: space.md }}>
+        <CapiScene scene="hello" size={200} />
+        <Text variant="display" align="center" style={{ fontSize: 40, lineHeight: 44 }}>
           Studify
         </Text>
-        <Text variant="heading" align="center">
+        <Text variant="heading" tone="secondary" align="center">
           {t('auth.title')}
         </Text>
       </View>

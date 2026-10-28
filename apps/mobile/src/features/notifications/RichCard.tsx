@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   segment: { flex: 1, borderRadius: 4, overflow: 'hidden' },
   stepLabels: { flexDirection: 'row', gap: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  chip: { paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius.pill },
+  chip: { paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius.xs },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   cardFace: { borderWidth: 1, borderRadius: radius.md, padding: space.md, gap: space.sm },
   medal: { width: 56, height: 56, borderRadius: 28, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },

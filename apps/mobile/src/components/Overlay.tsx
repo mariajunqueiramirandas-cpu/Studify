@@ -189,12 +189,12 @@ export function useOverlay(): OverlayApi {
 }
 
 const styles = StyleSheet.create({
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.lg, gap: space.sm },
-  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: space.sm },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: space.gutter, paddingTop: space.md, gap: space.sm },
+  handle: { width: 40, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: space.md },
   dialogBackdrop: { flex: 1, justifyContent: 'center', padding: space.xl },
   dialog: { borderRadius: radius.lg, padding: space.xl, gap: space.md },
   dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm, marginTop: space.sm },
   input: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.md, minHeight: 48, fontSize: 16 },
-  snackWrap: { position: 'absolute', left: space.lg, right: space.lg },
+  snackWrap: { position: 'absolute', left: space.gutter, right: space.gutter },
   snack: { flexDirection: 'row', alignItems: 'center', gap: space.md, borderRadius: radius.md, paddingHorizontal: space.lg, paddingVertical: space.md },
 });

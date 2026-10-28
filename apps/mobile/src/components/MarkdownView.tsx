@@ -1,81 +1,17 @@
-import katex from 'katex';
 import MarkdownIt from 'markdown-it';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { t } from '../i18n';
 import { useOverlay } from './Overlay';
-import { radius, space, useTheme, type Palette } from '../theme';
+import { boldFamily, FONTS, radius, space, useTheme, type Palette } from '../theme';
+import { documentHtml, hasMath, noteBody, renderMath } from './reader-html';
 import { Text } from './Text';
 
-// mobile-app.md §8: Markdown + LaTeX ($…$, $$…$$). Raw HTML is disabled; remote images are
-// never loaded; links show their domain and open only after confirmation.
-// KaTeX renders to MathML, which Android System WebView (Chromium) draws natively — so math
-// works offline with no bundled fonts, and TalkBack can read it (ux §11 Math).
+export { hasMath } from './reader-html';
 
+// The native renderer below parses short content; the reader's own parser lives in reader-html.ts.
 const md = new MarkdownIt({ html: false, linkify: true, breaks: false, typographer: true });
-
-function renderMath(src: string): string {
-  // Protect math before Markdown sees it (underscores and asterisks inside formulas).
-  const blocks: string[] = [];
-  const stash = (html: string) => {
-    blocks.push(html);
-    return `@@MATH${blocks.length - 1}@@`;
-  };
-  const tex = (expr: string, display: boolean) => {
-    try {
-      return katex.renderToString(expr, { output: 'mathml', displayMode: display, throwOnError: false, strict: 'ignore' });
-    } catch {
-      return `<code>${expr.replace(/</g, '&lt;')}</code>`;
-    }
-  };
-  let out = src.replace(/\$\$([\s\S]+?)\$\$/g, (_, e: string) => stash(`<div class="math-block">${tex(e.trim(), true)}</div>`));
-  out = out.replace(/(^|[^\\$])\$([^\n$]+?)\$/g, (_, pre: string, e: string) => pre + stash(tex(e.trim(), false)));
-  let html = md.render(out);
-  html = html.replace(/@@MATH(\d+)@@/g, (_, i: string) => blocks[Number(i)] ?? '');
-  return html;
-}
-
-export function hasMath(text: string | null | undefined): boolean {
-  return !!text && /\$[^$]+\$/.test(text);
-}
-
-function documentHtml(body: string, c: Palette, opts: { fontScale: number; easyReading: boolean }) {
-  const font = opts.easyReading ? "'Atkinson Hyperlegible', system-ui, sans-serif" : 'system-ui, sans-serif';
-  const spacing = opts.easyReading ? 'letter-spacing:0.05em;line-height:1.8;' : 'line-height:1.5;';
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=4">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
-<style>
-html,body{margin:0;padding:0;background:transparent;color:${c.textPrimary};font-family:${font};font-size:${16 * opts.fontScale}px;${spacing}}
-p{margin:0 0 0.8em}
-h1,h2,h3{font-weight:700;line-height:1.3;margin:1em 0 0.4em}
-h1{font-size:1.35em}h2{font-size:1.2em}h3{font-size:1.1em}
-a{color:${c.primary}}
-a.term{color:inherit;text-decoration:underline dotted;text-underline-offset:3px}
-a.cite{display:inline-block;text-decoration:none;font-size:0.85em;font-weight:600;padding:0 8px;border-radius:999px;background:${c.surface2};border:1px solid ${c.border};color:${c.primary};margin-left:2px}
-code{font-family:monospace;font-size:0.875em;background:${c.surface2};padding:1px 4px;border-radius:4px}
-pre{background:${c.surface2};padding:12px;border-radius:8px;overflow-x:auto}
-blockquote{margin:0 0 0.8em;padding:8px 12px;border-left:4px solid ${c.primary};background:${c.primarySoft};border-radius:4px}
-.table-wrap{overflow-x:auto;margin:0 0 0.8em}
-table{border-collapse:collapse;min-width:100%}
-th,td{border:1px solid ${c.border};padding:6px 10px;text-align:left;vertical-align:top}
-th{background:${c.surface2}}
-tr:nth-child(even) td{background:${c.surface1}}
-th:first-child,td:first-child{position:sticky;left:0;background:${c.surface1}}
-.math-block{overflow-x:auto;text-align:center;margin:0.6em 0}
-math{font-size:1.05em}
-ul,ol{padding-left:1.4em;margin:0 0 0.8em}
-li{margin:0.2em 0}
-hr{border:none;border-top:1px solid ${c.border};margin:1em 0}
-img{display:none}
-</style></head><body><div id="c">${body}</div>
-<script>
-document.querySelectorAll('table').forEach(function(t){var w=document.createElement('div');w.className='table-wrap';t.parentNode.insertBefore(w,t);w.appendChild(t);});
-function post(o){window.ReactNativeWebView.postMessage(JSON.stringify(o));}
-function h(){post({type:'height',value:document.getElementById('c').getBoundingClientRect().height+8});}
-document.addEventListener('click',function(e){var a=e.target.closest('a');if(!a)return;e.preventDefault();post({type:'link',href:a.getAttribute('href')});});
-new ResizeObserver(h).observe(document.getElementById('c'));h();
-</script></body></html>`;
-}
 
 export interface MarkdownViewProps {
   markdown: string;
@@ -88,29 +24,13 @@ export interface MarkdownViewProps {
   citations?: unknown[];
 }
 
-function linkifyTerms(markdown: string, terms: string[] | undefined): string {
-  if (!terms?.length) return markdown;
-  let out = markdown;
-  for (const term of terms.slice(0, 40)) {
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // First occurrence only, outside existing links and math.
-    out = out.replace(new RegExp(`(^|[^\\w\\[$])(${escaped})(?![\\w\\]])`, 'i'), (m, pre: string, word: string) => `${pre}[${word}](term:${encodeURIComponent(term)})`);
-  }
-  return out;
-}
-
 /** Long-form content (notes): one WebView per screen with auto height. */
 export function MarkdownView({ markdown, onCitation, onTerm, terms }: MarkdownViewProps) {
   const theme = useTheme();
   const overlay = useOverlay();
   const [height, setHeight] = useState(80);
   const html = useMemo(() => {
-    const withCites = markdown.replace(/\[\[cite:(\d+)(?::([^\]]*))?\]\]/g, (_, i: string, label?: string) => `[${label ? `📄 ${label}` : '📄'}](cite:${i})`);
-    return documentHtml(
-      renderMath(linkifyTerms(withCites, terms)).replace(/<a href="cite:/g, '<a class="cite" href="cite:').replace(/<a href="term:/g, '<a class="term" href="term:'),
-      theme.colors,
-      { fontScale: 1, easyReading: theme.easyReading },
-    );
+    return documentHtml(noteBody(markdown, terms, t('global.source')), theme.colors, { fontScale: 1, easyReading: theme.easyReading, mode: 'reader' });
   }, [markdown, terms, theme.colors, theme.easyReading]);
 
   const onMessage = async (e: WebViewMessageEvent) => {
@@ -149,7 +69,7 @@ export function MarkdownView({ markdown, onCitation, onTerm, terms }: MarkdownVi
 
 type Token = ReturnType<typeof md.parse>[number];
 
-function renderInline(tokens: Token[] | null, c: Palette, keyBase: string, bold: string): ReactNode[] {
+function renderInline(tokens: Token[] | null, c: Palette, keyBase: string, bold: string, italic: string | undefined): ReactNode[] {
   if (!tokens) return [];
   const out: ReactNode[] = [];
   let strong = false;
@@ -169,7 +89,7 @@ function renderInline(tokens: Token[] | null, c: Palette, keyBase: string, bold:
     else if (tk.type === 'text')
       out.push(
         strong || em ? (
-          <Text key={`${keyBase}-${i}`} style={[strong && { fontFamily: bold }, em && { fontStyle: 'italic' }]}>
+          <Text key={`${keyBase}-${i}`} style={[strong && { fontFamily: bold }, strong && literata(bold) && { backgroundColor: c.highlight }, em && (italic && !strong ? { fontFamily: italic } : { fontStyle: 'italic' })]}>
             {tk.content}
           </Text>
         ) : (
@@ -180,11 +100,17 @@ function renderInline(tokens: Token[] | null, c: Palette, keyBase: string, bold:
   return out;
 }
 
+const literata = (family: string) => family.startsWith('Literata');
+
+type RichVariant = 'body' | 'cardFace' | 'bodySmall' | 'reading';
+
 /** Card faces, options and feed items. Falls back to MathView when the text has math. */
-export function RichContent({ text, variant = 'body', align }: { text: string; variant?: 'body' | 'cardFace' | 'bodySmall'; align?: 'left' | 'center' }) {
+export function RichContent({ text, variant = 'body', align }: { text: string; variant?: RichVariant; align?: 'left' | 'center' }) {
   const theme = useTheme();
   const c = theme.colors;
-  const bold = theme.easyReading ? 'AtkinsonHyperlegible_700Bold' : 'Inter_600SemiBold';
+  const bold = boldFamily(variant, theme.easyReading);
+  // Android only finds the italic face by name.
+  const italic = !theme.easyReading && (variant === 'cardFace' || variant === 'reading') ? FONTS.readItalic : undefined;
   if (hasMath(text)) return <MathView text={text} variant={variant} align={align} />;
   const tokens = md.parse(text ?? '', {});
   const blocks: ReactNode[] = [];
@@ -207,7 +133,7 @@ export function RichContent({ text, variant = 'body', align }: { text: string; v
       blocks.push(
         <Text key={i} variant={heading ? 'heading' : variant} align={align} style={listDepth > 0 ? { paddingLeft: space.md * listDepth } : undefined}>
           {prefix}
-          {renderInline(tk.children, c, String(i), bold)}
+          {renderInline(tk.children, c, String(i), bold, italic)}
         </Text>,
       );
     }
@@ -216,13 +142,14 @@ export function RichContent({ text, variant = 'body', align }: { text: string; v
 }
 
 /** Small WebView for one formula-bearing item (pooled in spirit: render only when visible). */
-export function MathView({ text, variant = 'body', align }: { text: string; variant?: 'body' | 'cardFace' | 'bodySmall'; align?: 'left' | 'center' }) {
+export function MathView({ text, variant = 'body', align }: { text: string; variant?: RichVariant; align?: 'left' | 'center' }) {
   const theme = useTheme();
   const [height, setHeight] = useState(40);
-  const scale = variant === 'cardFace' ? 1.25 : variant === 'bodySmall' ? 0.875 : 1;
+  const scale = variant === 'cardFace' ? 1.3 : variant === 'reading' ? 1.12 : variant === 'bodySmall' ? 0.875 : 1;
+  const face = variant === 'cardFace' || variant === 'reading' ? 'read' : 'ui';
   const html = useMemo(
-    () => documentHtml(`<div style="text-align:${align ?? 'left'}">${renderMath(text)}</div>`, theme.colors, { fontScale: scale, easyReading: theme.easyReading }),
-    [text, theme.colors, theme.easyReading, scale, align],
+    () => documentHtml(`<div style="text-align:${align ?? 'left'}">${renderMath(text)}</div>`, theme.colors, { fontScale: scale, easyReading: theme.easyReading, mode: 'snippet', face }),
+    [text, theme.colors, theme.easyReading, scale, align, face],
   );
   return (
     <View style={{ height, width: '100%' }} accessible accessibilityLabel={text.replace(/\$/g, '')}>

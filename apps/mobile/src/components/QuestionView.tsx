@@ -3,8 +3,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { t } from '../i18n';
 import type { Option, QuestionResponse, QuestionRow } from '../features/practice/types';
-import { radius, space, touch, useTheme } from '../theme';
+import { depth, radius, shade, space, touch, useTheme } from '../theme';
 import { IconButton } from './Button';
+import { Tactile } from './Tactile';
 import { FindErrorQuestion, ProblemQuestion } from './QuestionTypes3';
 import { RichContent } from './MarkdownView';
 import { Text } from './Text';
@@ -33,7 +34,7 @@ export function QuestionView({ question, response, onChange, revealed, submitOnT
       {header}
       {question.stimulus?.markdown ? <Stimulus text={question.stimulus.markdown} /> : null}
       {question.stimulus?.table_markdown ? <Stimulus text={question.stimulus.table_markdown} /> : null}
-      {question.type !== 'fill_blank' && question.type !== 'true_false' && !stemInHeader ? <RichContent text={question.stem} /> : null}
+      {question.type !== 'fill_blank' && question.type !== 'true_false' && !stemInHeader ? <RichContent text={question.stem} variant="reading" /> : null}
       <Body question={question} response={response} onChange={onChange} revealed={revealed} submitOnTap={submitOnTap} distribution={distribution} hintsUsed={hintsUsed} onHint={onHint} />
     </View>
   );
@@ -89,7 +90,7 @@ function Body({ question, response, onChange, revealed, submitOnTap, distributio
       const correct = p.correct as boolean;
       return (
         <View style={{ gap: space.md }}>
-          <RichContent text={question.stem && question.stem !== p.statement ? `${question.stem}\n\n${String(p.statement ?? '')}` : String(p.statement ?? question.stem)} />
+          <RichContent variant="reading" text={question.stem && question.stem !== p.statement ? `${question.stem}\n\n${String(p.statement ?? '')}` : String(p.statement ?? question.stem)} />
           <Options
             options={[
               { id: 'true', text: t('quiz.true') },
@@ -161,19 +162,24 @@ export function Options({ options, selected, correct, onSelect, disabled, multi,
         const icon = isCorrect ? 'checkmark-circle' : isWrongPick ? 'close-circle' : null;
         const share = distribution && total > 0 ? (distribution[o.id] ?? 0) / total : null;
         return (
-          <Pressable
+          <Tactile
             key={o.id}
             disabled={disabled}
             onPress={() => onSelect(o.id)}
             accessibilityRole={multi ? 'checkbox' : 'radio'}
             accessibilityState={{ selected: isSel, checked: multi ? isSel : undefined, disabled: !!disabled }}
             accessibilityLabel={`${letters ? `${o.id}. ` : ''}${o.text}${isCorrect ? `. ${t('quiz.correct_answer')}` : ''}`}
-            style={[styles.option, { borderColor: border, backgroundColor: bg }]}
+            color={bg}
+            borderColor={border}
+            ledge={shade(border, isSel || isCorrect || isWrongPick ? 0.18 : 0.12)}
+            borderWidth={2}
+            depth={depth.md}
+            style={styles.option}
           >
             {share != null ? <View style={[styles.distBar, { width: `${share * 100}%`, backgroundColor: `${c.primary}22` }]} /> : null}
             {letters ? (
-              <View style={[styles.letter, { backgroundColor: isSel || isCorrect ? border : c.surface2 }]}>
-                <Text variant="label" style={{ color: isSel || isCorrect ? c.onPrimary : c.textPrimary }}>
+              <View style={[styles.letter, { backgroundColor: isSel || isCorrect ? border : 'transparent', borderColor: isSel || isCorrect ? border : c.border }]}>
+                <Text variant="label" weight="bold" style={{ color: isSel || isCorrect ? c.onPrimary : c.textPrimary }}>
                   {o.id}
                 </Text>
               </View>
@@ -189,7 +195,7 @@ export function Options({ options, selected, correct, onSelect, disabled, multi,
               </Text>
             ) : null}
             {icon ? <Ionicons name={icon} size={24} color={border} /> : null}
-          </Pressable>
+          </Tactile>
         );
       })}
     </View>
@@ -204,7 +210,7 @@ function FillBlank({ text, response, onChange, disabled }: { text: string; respo
     <View style={{ gap: space.md }}>
       {parts.map((part, i) => {
         const m = part.match(/\{\{\s*(\w+)\s*\}\}/);
-        if (!m) return part.trim() ? <RichContent key={i} text={part.trim()} /> : null;
+        if (!m) return part.trim() ? <RichContent key={i} variant="reading" text={part.trim()} /> : null;
         const id = m[1]!;
         return (
           <TextInput
@@ -386,9 +392,9 @@ function ShortAnswer({ response, onChange, disabled, long }: { response: Questio
 }
 
 const styles = StyleSheet.create({
-  option: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, borderWidth: 1.5, borderRadius: radius.md, padding: space.md, overflow: 'hidden' },
-  letter: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  option: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option + 4, padding: space.md, overflow: 'hidden' },
+  letter: { width: 32, height: 32, borderRadius: radius.sm, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   input: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm, minHeight: touch.min },
-  matchChip: { borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.sm, minHeight: 40, justifyContent: 'center' },
+  matchChip: { borderWidth: 1.5, borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm, minHeight: 40, justifyContent: 'center' },
   distBar: { position: 'absolute', left: 0, top: 0, bottom: 0 },
 });

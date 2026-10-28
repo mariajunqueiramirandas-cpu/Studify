@@ -136,7 +136,7 @@ export function ExplainPanel({ capture }: { capture: CaptureRow }) {
         </Card>
       ) : null}
       <Card>
-        {text ? <RichContent text={text} /> : state === 'streaming' ? <Skeleton height={60} /> : null}
+        {text ? <RichContent variant="reading" text={text} /> : state === 'streaming' ? <Skeleton height={60} /> : null}
         {error ? <Banner kind="warning" message={error} action={{ label: t('global.retry'), onPress: () => run(focus) }} /> : null}
         <PageChips sources={citations} subjectId={capture.match?.subject_id} max={6} />
         {state === 'done' ? <AiBadge general={!capture.match} /> : null}
@@ -237,7 +237,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
               <Text variant="label" tone="accent">
                 {t('cam.hint_of', { i: h.level, n: ladder.total_levels })}
               </Text>
-              <RichContent text={h.text_md} />
+              <RichContent variant="reading" text={h.text_md} />
             </View>
           ))}
           {ladder.assumptions.length ? <Text variant="bodySmall" tone="secondary">{t('cam.assumptions', { list: ladder.assumptions.join('; ') })}</Text> : null}
@@ -261,7 +261,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
       ) : null}
       {solution ? (
         <Card>
-          {solution.text ? <RichContent text={solution.text} /> : <Skeleton height={60} />}
+          {solution.text ? <RichContent variant="reading" text={solution.text} /> : <Skeleton height={60} />}
           <PageChips sources={solution.citations} subjectId={capture.match?.subject_id} max={6} />
           {!solution.streaming ? <AiBadge general={!capture.match} /> : null}
         </Card>
@@ -271,7 +271,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
       {final ? (
         <View style={{ borderLeftWidth: 4, borderColor: c.success, paddingLeft: space.md, gap: space.xs, borderRadius: radius.sm }}>
           <Text variant="label">{t('cam.final_answer')}</Text>
-          <RichContent text={final.answer} />
+          <RichContent variant="reading" text={final.answer} />
           {final.why_others_wrong.map((w) => (
             <Text key={w.option} variant="bodySmall" tone="secondary">
               {w.option}) {w.reason}

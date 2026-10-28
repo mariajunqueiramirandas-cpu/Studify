@@ -1,12 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   Section,
   ActionBar,
   AiBadge,
   Banner,
-  BottomSheet,
   Button,
   Card,
   EmptyState,
@@ -30,12 +29,13 @@ import { createUserCard, generateMoreCards, generateMoreQuestions, NOTE_DEPTHS, 
 import { ExplainSheet } from '../../../../../features/learn/ExplainSheet';
 import { TermSheet } from '../../../../../features/learn/TermSheet';
 import { createQuiz } from '../../../../../features/practice/api';
-import { useSubject } from '../../../../../features/subjects/api';
+import { colorKeyFromHex, useSubject } from '../../../../../features/subjects/api';
 import { useMastery, useNode, useOutline } from '../../../../../features/subjects/outline';
 import { FlagSheet } from '../../../../../features/trust/FlagSheet';
 import { openTutor } from '../../../../../features/tutor/open';
 import { options, t } from '../../../../../i18n';
-import { space } from '../../../../../theme';
+import { space, subjectColor, useTheme } from '../../../../../theme';
+import { CapiCheer } from '../../../../../features/motivation/CapiCheer';
 import { ReadAloudButton } from '../../../../../features/voice/VoiceButtons';
 import { FindingsList, useTopicFindingCount } from '../../../../../features/material/FindingsList';
 import { useClassSummary } from '../../../../../features/class/turma5';
@@ -75,24 +75,22 @@ export default function TopicScreen() {
 
   return (
     <Screen
-      title={node?.title ?? ''}
+      title=""
       actions={<IconButton icon="chatbubbles-outline" label={t('global.ask_tutor')} onPress={() => openTutor({ type: 'topic', subject_id: subjectId, node_id: nodeId })} />}
-      context={
-        <Row>
-          <Text variant="bodySmall" tone="secondary" style={{ flex: 1 }} numberOfLines={1}>
-            {[subject.data?.name, unit?.title].filter(Boolean).join(' · ')}
-            {firstSource ? ` · ${pageLabel(firstSource.page_start, firstSource.page_end)}` : ''}
-          </Text>
-          {findingCount > 0 ? <Text accessibilityLabel={t('findings.badge_a11y', { n: findingCount })}>⚠️</Text> : null}
-          {m != null ? <PctRing value={m} size={40} label={`Domínio ${Math.round(m * 100)}%`} /> : null}
-        </Row>
-      }
       footer={
         <ActionBar>
           <Button label={t('topic.practice')} icon="help-circle-outline" loading={busy} disabled={!online} disabledReason={t('offline.ai_disabled')} onPress={() => practice(10)} />
         </ActionBar>
       }
     >
+      <LessonHeader
+        title={node?.title ?? ''}
+        trail={[subject.data?.name, unit?.title].filter(Boolean).join(' / ')}
+        color={subject.data?.color}
+        pages={firstSource ? pageLabel(firstSource.page_start, firstSource.page_end) : null}
+        findings={findingCount}
+        mastery={m}
+      />
       <SegmentedControl<Tab>
         value={tab}
         onChange={setTab}
@@ -147,7 +145,7 @@ export default function TopicScreen() {
       {node && tab === 'notes' && classSummary.data ? (
         <Section title={t('divide.class_summary')}>
           <Card tone="soft">
-            <RichContent text={classSummary.data.body} />
+            <RichContent variant="reading" text={classSummary.data.body} />
             {classSummary.data.credits.length ? (
               <Text variant="caption" tone="secondary">
                 {t('divide.credits', { names: classSummary.data.credits.join(', ') })}
@@ -164,6 +162,72 @@ export default function TopicScreen() {
       ) : null}
       {node && tab === 'notes' ? <TopicFacts objectives={node.learning_objectives} formulas={node.formulas} sources={node.sources} subjectId={subjectId} /> : null}
     </Screen>
+  );
+}
+
+/** The lesson's title page: where it lives, its name set large, and how well you know it. */
+function LessonHeader({ title, trail, color, pages, findings, mastery }: { title: string; trail: string; color?: string | null; pages: string | null; findings: number; mastery: number | null | undefined }) {
+  const { colors: c, scheme } = useTheme();
+  return (
+    <View style={{ gap: space.sm, marginTop: -space.sm }}>
+      {trail ? (
+        <Row gap={space.sm}>
+          <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: color ? subjectColor(colorKeyFromHex(color), scheme) : c.primary, transform: [{ rotate: '45deg' }] }} />
+          <Text variant="label" tone="secondary" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {trail}
+          </Text>
+        </Row>
+      ) : null}
+      <Text variant="display" accessibilityRole="header">
+        {title}
+      </Text>
+      <Row gap={space.lg} wrap>
+        {mastery != null ? (
+          <Row gap={space.sm}>
+            <PctRing value={mastery} size={34} label={`Domínio ${Math.round(mastery * 100)}%`} />
+            <Text variant="bodySmall" tone="secondary">
+              domínio
+            </Text>
+          </Row>
+        ) : null}
+        {pages ? (
+          <Text variant="bodySmall" tone="secondary">
+            {pages}
+          </Text>
+        ) : null}
+        {findings > 0 ? (
+          <Text variant="bodySmall" style={{ color: c.warning }} accessibilityLabel={t('findings.badge_a11y', { n: findings })}>
+            {t('findings.badge_a11y', { n: findings })}
+          </Text>
+        ) : null}
+      </Row>
+    </View>
+  );
+}
+
+/** Resumo rápido · Resumo · Aprofundado as words you mark with the highlighter. */
+function DepthPicker({ value, onChange, labels }: { value: NoteDepth; onChange: (d: NoteDepth) => void; labels: string[] }) {
+  const { colors: c } = useTheme();
+  return (
+    <Row gap={space.xs} wrap style={{ marginTop: space.xs }}>
+      {NOTE_DEPTHS.map((d, i) => {
+        const selected = d === value;
+        return (
+          <Pressable
+            key={d}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(d)}
+            hitSlop={6}
+            style={({ pressed }) => ({ paddingHorizontal: space.sm, paddingVertical: space.xs, borderRadius: 4, backgroundColor: selected ? c.highlight : pressed ? c.surface2 : 'transparent' })}
+          >
+            <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: selected ? c.textPrimary : c.textSecondary }}>
+              {labels[i] ?? d}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </Row>
   );
 }
 
@@ -246,7 +310,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
 
   return (
     <View style={{ gap: space.md }}>
-      <SegmentedControl<NoteDepth> value={depth} onChange={setDepth} options={NOTE_DEPTHS.map((d, i) => ({ value: d, label: depthLabels[i] ?? d }))} />
+      <DepthPicker value={depth} onChange={setDepth} labels={depthLabels} />
       {notes.isLoading ? (
         <View style={{ gap: space.sm }}>
           <Skeleton height={20} />
@@ -260,17 +324,24 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
             const c = note.citations[i];
             if (c) router.push({ pathname: '/subjects/[subjectId]/document/[documentId]', params: { subjectId, documentId: c.document_id, page: String(c.page_start), ...(c.cited_text ? { cite: c.cited_text.slice(0, 300) } : {}) } });
           }} />
-          <PageChips sources={note.citations} subjectId={subjectId} max={4} />
-          <Row wrap>
-            <AiBadge />
-            <View style={{ flex: 1 }} />
-            <ReadAloudButton id={`note:${note.id}`} text={note.body} />
-            <Button compact variant="text" label={t('global.report_error')} onPress={() => setFlag(true)} />
-          </Row>
-          <Button variant="tonal" icon="bulb-outline" label={t('notes.explain')} disabled={!online} onPress={() => setExplain(true)} />
-          <Card tone="soft">
-            <Text variant="heading">{t('notes.retrieval')}</Text>
-            <Button label={t('notes.retrieval_cta')} loading={busy} disabled={!online} onPress={onRetrieval} />
+          <View style={{ gap: space.xs }}>
+            <PageChips sources={note.citations} subjectId={subjectId} max={4} />
+            <Row wrap>
+              <AiBadge />
+              <View style={{ flex: 1 }} />
+              <ReadAloudButton id={`note:${note.id}`} text={note.body} />
+              <Button compact variant="text" label={t('global.report_error')} onPress={() => setFlag(true)} />
+            </Row>
+          </View>
+          <Button variant="secondary" icon="bulb-outline" label={t('notes.explain')} disabled={!online} onPress={() => setExplain(true)} />
+          <Card tone="soft" style={{ marginTop: space.md }}>
+            <Row gap={space.md}>
+              <Text variant="title" style={{ flex: 1 }}>
+                {t('notes.retrieval')}
+              </Text>
+              <CapiCheer happy={false} size={84} />
+            </Row>
+            <Button label={t('notes.retrieval_cta')} icon="flash-outline" loading={busy} disabled={!online} onPress={onRetrieval} />
           </Card>
           <FlagSheet visible={flag} onClose={() => setFlag(false)} itemType="note" itemId={note.id} shared={false} />
           <ExplainSheet visible={explain} onClose={() => setExplain(false)} target={{ target_type: 'concept', target_id: nodeId }} subjectId={subjectId} />
@@ -278,7 +349,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
       ) : depth === 'deep' ? (
         deep ? (
           <View style={{ gap: space.sm }}>
-            <RichContent text={deep.text || t('tutor.thinking')} />
+            <RichContent variant="reading" text={deep.text || t('tutor.thinking')} />
             {deep.streaming ? <Text tone="secondary">Gerando… leva uns 30 segundos</Text> : <AiBadge />}
           </View>
         ) : (

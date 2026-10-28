@@ -182,7 +182,7 @@ export default function Feed() {
                 {item.content.formula_latex ? <RichContent text={`$$${item.content.formula_latex}$$`} /> : null}
                 {item.content.question ? (
                   <View style={{ gap: space.sm }}>
-                    <RichContent text={item.content.question.stem} />
+                    <RichContent variant="reading" text={item.content.question.stem} />
                     <Options
                       options={item.content.question.options}
                       selected={answers[item.id] ? [answers[item.id]!] : []}
