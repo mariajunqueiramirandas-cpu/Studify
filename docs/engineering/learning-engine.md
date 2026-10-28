@@ -300,7 +300,7 @@ evidence_count = card reviews + question-type evidence events (raw count)
 
 | Source | `source_multiplier` | Notes |
 |---|---|---|
-| Quiz, simulado, Caderno retry, session retrieval check (spec 07 §8.4.3), Feed quick question | 1.0 | |
+| Quiz, simulado, Caderno retry, session retrieval check (spec 07 §8.4.3), Feed quick question, Trilha question (TRL-01) | 1.0 | |
 | Tutor "Me testa" (`tutor_quiz`, TUT-02.5) | 0.5 | `s` = tool `score` |
 | Duel / battle answer | 0.75 | Time pressure inflates guessing |
 | Ensine o Lucas (INT-02), per key concept at session end | 0.75 | `s` = 1 correct / 0.5 partial / 0 wrong; a `major` taught error on the concept forces `s = 0` |
@@ -1030,3 +1030,18 @@ Defaults 22:00–07:00 (≥ 8 h; under-18s can't disable — mobile-app §5.3); 
 | L10 | Overconfidence effect in the planner ("priority boost", PRA-05.5) had no number. | `π × 1.15` (§11.4) and `+0.2` in selection (§6.3). | 05 PRA-05.5, 07 §8.2.4. |
 | L11 | Planner block sizes (`max_block_min`, `min_block_min`) and `max_subjects_per_day` had no defaults. | 30 / 10 / 3 (§11.2, §11.5); settings in `study_preferences`. | 07 §8.2.2, §8.2.5. |
 | L12 | Spec 07 §8.2.5 has no rule for a unit that can't be placed by its deadline even though the aggregate feasibility check passed (block granularity), and no full candidate ordering. | Explicit candidate order (deadline → π → unit kind → map order → id) and a repair step (§11.5 step 5). | 07 §8.2.5. |
+
+## 23. Trilha (TRL-01)
+
+Pure functions in `packages/shared/src/learning/trail.ts`, tested in `test/learning/trail.test.ts` ([spec 14 §8](../specs/14-trilha.md#8-rules-and-algorithms)).
+
+| Function | Rule |
+|---|---|
+| `normalizeTrailPlan` | Model order kept; unknown/repeated ids dropped, missing appended in outline order; stable topological repair (concept edges across topics lifted to topics); cycles broken at the earliest item. |
+| `conceptOutcome` | cleared: 2 correct learning-phase answers · shaky: 5 answers without that · open otherwise. |
+| `nextTrailMove` | Resume a served step → first open concept: lesson → re-teach the last miss → next practice question → chapter test (`checkpointBlueprint`, 4–10, weak first) → pass at 0.7, else re-teach up to 3 missed concepts and run a new round. |
+| `trailNeeds` | Blocking need first, then one lookahead (next lesson · test on the last concept · next chapter's first lesson during the test); at most 2. |
+| `chapterFraction`, `trailProgress` | Each concept one unit, the test one more; path = (finished chapters + fraction) / chapters. |
+
+Evidence: every Trilha answer is a `mcq_single` event with source multiplier 1.0 (§5.2, source `trail`). A passed test closes the chapter only with a finished Ensine o Lucas lesson on the topic at `TRAIL.teachPassScore` (70) or more; Lucas's own evidence (§5.2, `lucas` 0.75) is written by teaching-finish as usual. The device review queue (§3.1) puts the new cards of Trilha-learned concepts right after exam-scoped ones.
+

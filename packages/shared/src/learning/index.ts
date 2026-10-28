@@ -218,3 +218,32 @@ export type { FindingSeverityName, FindingStatusName, FindingLike } from './mate
 
 export { VISUAL_LIMITS, visualSpecErrors, flowchartLayout, cycleLayout, hierarchyLayout, timelineOrder } from './visuals.ts';
 export type { VisualNode, VisualSpecShape, PlacedNode } from './visuals.ts';
+
+export {
+  TRAIL,
+  stableTopoOrder,
+  normalizeTrailPlan,
+  trailOutlineHash,
+  conceptOutcome,
+  checkpointSize,
+  checkpointScore,
+  nextTrailMove,
+  currentConcept,
+  conceptStates,
+  trailNeeds,
+  chapterFraction,
+  trailProgress,
+  checkpointBlueprint,
+} from './trail.ts';
+export type {
+  TrailOutlineTopic,
+  TrailPrerequisite,
+  TrailChapter,
+  ProposedChapter,
+  TrailStepPurpose,
+  TrailStepStatus,
+  TrailStepView,
+  TrailNeed,
+  TrailMove,
+  TrailConceptState,
+} from './trail.ts';

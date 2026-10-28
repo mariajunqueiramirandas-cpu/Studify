@@ -1,6 +1,7 @@
 import type { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { BottomTabBarHeightContext } from 'expo-router/tabs';
+import { useContext, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { maxContentWidth, space, useTheme } from '../theme';
@@ -92,9 +93,14 @@ export function Screen({
 }: ScreenProps) {
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
+  // Inside the tabs the tab bar already sits on the bottom inset; adding it again left a blank strip
+  // between the footer and the tab bar.
+  const inTabs = useContext(BottomTabBarHeightContext) !== undefined;
+  const bottomInset = inTabs ? 0 : insets.bottom;
   const bg = calm ? c.calmSurface : c.bg;
+  // Without a ScrollView the body fills the screen, so flex children (a flashcard, a pager) get the room.
   const body = (
-    <View style={[styles.content, padded && styles.padded, contentStyle]}>{children}</View>
+    <View style={[styles.content, !scroll && styles.fill, padded && styles.padded, contentStyle]}>{children}</View>
   );
   return (
     <KeyboardAvoidingView
@@ -109,7 +115,7 @@ export function Screen({
       {scroll ? (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: footer ? space.lg : insets.bottom + space.xxl }}
+          contentContainerStyle={{ paddingBottom: footer ? space.lg : bottomInset + space.xxl }}
           keyboardShouldPersistTaps="handled"
           refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.primary} colors={[c.primary]} /> : undefined}
         >
@@ -118,7 +124,7 @@ export function Screen({
       ) : (
         <View style={{ flex: 1 }}>{body}</View>
       )}
-      {footer ? <View style={{ paddingBottom: insets.bottom, backgroundColor: bg }}>{footer}</View> : null}
+      {footer ? <View style={{ paddingBottom: bottomInset, backgroundColor: bg }}>{footer}</View> : null}
     </KeyboardAvoidingView>
   );
 }
@@ -172,6 +178,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center' },
   context: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   content: { width: '100%', maxWidth: maxContentWidth, alignSelf: 'center', gap: space.lg },
+  fill: { flex: 1 },
   padded: { paddingHorizontal: space.gutter, paddingTop: space.sm },
   section: { gap: space.md },
   titled: { marginTop: space.sm },

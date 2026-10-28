@@ -40,6 +40,8 @@ const EXPORT_TABLES: ReadonlyArray<{ table: string; column: string; userKey?: bo
   { table: 'streaks', column: 'user_id' },
   { table: 'plan_items', column: 'user_id' },
   { table: 'plan_runs', column: 'user_id' },
+  { table: 'trails', column: 'user_id' },
+  { table: 'trail_steps', column: 'user_id' },
 ];
 
 const CARD_COLUMNS = ['id', 'subject_id', 'node_id', 'type', 'front', 'back', 'origin', 'status', 'created_at', 'updated_at'];

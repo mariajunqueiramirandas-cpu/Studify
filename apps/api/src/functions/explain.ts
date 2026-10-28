@@ -1,4 +1,4 @@
-// explain (LRN-03). Explains a note paragraph, concept, glossary term, question explanation or card back in
+// explain (LRN-03). Explains a note paragraph, concept, glossary term, question explanation, card back or Trilha step in
 // another style. A shared cache hit (explanations, same target, style and prompt version) streams the stored
 // body at no cost. "Tentar de novo" (force_new) writes a personal explanation.
 import { ApiFailure, ExplainReqSchema, type ExplainReq } from '@studify/shared';
@@ -80,6 +80,21 @@ async function resolveTarget(deps: Deps, userId: string, req: Req): Promise<Targ
       const subject = await requireSubject(db, userId, q.data.subject_id as string, 'read');
       await addPages(q.data.source_pages);
       return { subject, text: `${q.data.stem}\n${q.data.explanation ?? ''}`, pages: pagesOf };
+    }
+    case 'trail_step': {
+      // TRL-01.9: a Trilha lesson, or a question once answered (explaining it before would give the answer away).
+      const step = await db.from('trail_steps').select('id, user_id, trail_id, status, content, source_pages').eq('id', req.target_id).maybeSingle();
+      if (step.error) throw step.error;
+      if (!step.data || step.data.user_id !== userId) throw new ApiFailure('not_found');
+      const content = step.data.content as { title?: string; body?: string; stem?: string; explanation?: string };
+      if (content.stem && step.data.status !== 'done') throw new ApiFailure('invalid_request', { message: 'Responda a pergunta antes.' });
+      const trail = await db.from('trails').select('subject_id').eq('id', step.data.trail_id).maybeSingle();
+      if (trail.error) throw trail.error;
+      if (!trail.data) throw new ApiFailure('not_found');
+      const subject = await requireSubject(db, userId, trail.data.subject_id as string, 'read');
+      await addPages(step.data.source_pages);
+      const text = content.stem ? `${content.stem}\n${content.explanation ?? ''}` : `${content.title ?? ''}\n${content.body ?? ''}`;
+      return { subject, text, pages: pagesOf };
     }
     case 'card_back': {
       const card = await db.from('cards').select('id, subject_id, front, back, source_pages, personal_for_user_id').eq('id', req.target_id).is('deleted_at', null).maybeSingle();

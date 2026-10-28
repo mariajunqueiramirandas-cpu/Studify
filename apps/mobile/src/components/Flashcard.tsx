@@ -95,7 +95,7 @@ export function Flashcard({ front, back, flipped, onFlip, tags, type, clozeIndex
           </View>
           <View style={styles.hint}>
             <Ionicons name="sync-outline" size={16} color={c.textSecondary} />
-            <Text variant="bodySmall" tone="secondary">
+            <Text variant="bodySmall" tone="secondary" style={{ flexShrink: 1 }}>
               {t('review.tap_to_flip')}
             </Text>
           </View>

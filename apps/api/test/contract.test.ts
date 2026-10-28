@@ -25,6 +25,9 @@ import { handler as reportCreate } from '../src/functions/report-create.ts';
 import { handler as scopeResolve } from '../src/functions/scope-resolve.ts';
 import { handler as planRecompute } from '../src/functions/plan-recompute.ts';
 import { handler as vesperaPrepare } from '../src/functions/vespera-prepare.ts';
+import { handler as trailOpen } from '../src/functions/trail-open.ts';
+import { handler as trailPrepare } from '../src/functions/trail-prepare.ts';
+import { handler as trailAnswer } from '../src/functions/trail-answer.ts';
 
 import type { Deps } from '../src/shared/deps.ts';
 
@@ -54,6 +57,9 @@ const FUNCTIONS: Array<[string, Handler, boolean, unknown]> = [
   ['scope-resolve', scopeResolve, true, {}],
   ['plan-recompute', planRecompute, true, {}],
   ['vespera-prepare', vesperaPrepare, true, {}],
+  ['trail-open', trailOpen, true, {}],
+  ['trail-prepare', trailPrepare, true, {}],
+  ['trail-answer', trailAnswer, true, { trail_id: 'x' }],
 ];
 
 for (const [name, handler, mutating, invalid] of FUNCTIONS) {

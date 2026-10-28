@@ -59,6 +59,9 @@ import { handler as syncPush } from './functions/sync-push.ts';
 import { handler as teachingFinish } from './functions/teaching-finish.ts';
 import { handler as teachingStart } from './functions/teaching-start.ts';
 import { handler as teachingTurn } from './functions/teaching-turn.ts';
+import { handler as trailAnswer } from './functions/trail-answer.ts';
+import { handler as trailOpen } from './functions/trail-open.ts';
+import { handler as trailPrepare } from './functions/trail-prepare.ts';
 import { handler as tutorChat } from './functions/tutor-chat.ts';
 import { handler as uploadPhotos } from './functions/upload-photos.ts';
 import { handler as vesperaPrepare } from './functions/vespera-prepare.ts';
@@ -124,6 +127,9 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['teaching-finish', teachingFinish],
   ['teaching-start', teachingStart],
   ['teaching-turn', teachingTurn],
+  ['trail-answer', trailAnswer],
+  ['trail-open', trailOpen],
+  ['trail-prepare', trailPrepare],
   ['tutor-chat', tutorChat],
   ['upload-photos', uploadPhotos],
   ['vespera-prepare', vesperaPrepare],

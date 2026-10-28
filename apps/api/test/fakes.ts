@@ -24,6 +24,8 @@ const UNIQUE: Record<string, string[][]> = {
   document_slices: [['document_id', 'purpose', 'page_start', 'page_end']],
   idempotency_keys: [['user_id', 'function_name', 'key']],
   mastery_evidence: [['ref_type', 'ref_id', 'node_id']],
+  trails: [['id'], ['user_id', 'subject_id']],
+  trail_steps: [['id'], ['trail_id', 'created_seq']],
   exam_scope_nodes: [['exam_id', 'node_id']],
   invites: [['id']],
   profiles: [['id']],
@@ -257,13 +259,14 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
     this.#filters.push((r) => r[col] !== null && r[col] !== undefined);
     return this;
   }
-  /** PostgREST `or` with `col.is.null` / `col.eq.value` terms (what the handlers use). */
+  /** PostgREST `or` with `col.is.null` / `col.eq.value` / `col.lt.value` terms (what the handlers use). */
   or(expr: string) {
     const terms = expr.split(',').map((t) => {
       const [col, op, ...rest] = t.split('.');
       const value = rest.join('.');
       if (op === 'is' && value === 'null') return (r: Row) => r[col!] === null || r[col!] === undefined;
       if (op === 'eq') return (r: Row) => String(r[col!]) === value;
+      if (op === 'lt') return (r: Row) => r[col!] != null && compare(r[col!], value) < 0;
       throw new Error(`fake: unsupported or term ${t}`);
     });
     this.#filters.push((r) => terms.some((f) => f(r)));

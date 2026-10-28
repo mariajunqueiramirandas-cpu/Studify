@@ -36,6 +36,10 @@ import {
   MnemonicOptions,
   ContributionReview,
   PeerQuestionValidation,
+  TrailPlan,
+  TrailLesson,
+  TrailRemediation,
+  TrailCheckpoint,
   type AnyTaskDef,
   type BuiltPrompt,
   type PromptMessage,
@@ -77,6 +81,11 @@ export const OUTPUT_SCHEMAS: Readonly<Record<string, ZodType>> = {
   'mnemonics.suggest': MnemonicOptions,
   'divide.review': ContributionReview,
   'peer.validate': PeerQuestionValidation,
+  // Trilha (TRL-01)
+  'trail.plan': TrailPlan,
+  'trail.lesson': TrailLesson,
+  'trail.remediate': TrailRemediation,
+  'trail.checkpoint': TrailCheckpoint,
 };
 
 export function taskDef(id: string): AnyTaskDef {

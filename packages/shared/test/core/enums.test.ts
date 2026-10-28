@@ -31,7 +31,7 @@ describe('ENUMS registry', () => {
 
   it('maps the documented value lists (spot checks against data-model.md)', () => {
     expect(ENUMS['documents.status']).toEqual(['uploaded', 'processing', 'ready', 'failed', 'waiting_budget']);
-    expect(ENUMS['quizzes.kind']).toHaveLength(9);
+    expect(ENUMS['quizzes.kind']).toHaveLength(10);
     expect(ENUMS['mistakes.cause']).toEqual(['didnt_know', 'confused', 'careless', 'misread']);
     expect(ENUMS['subjects.enem_area']).toEqual(['LC', 'CH', 'CN', 'MT']);
     expect(ENUMS['notes.depth']).toContain('class_summary');
@@ -55,9 +55,9 @@ describe('ENUMS registry', () => {
 });
 
 describe('FEATURE_IDS', () => {
-  it('has 89 unique PRD IDs', () => {
-    expect(FEATURE_IDS).toHaveLength(89);
-    expect(new Set(FEATURE_IDS).size).toBe(89);
+  it('has 90 unique PRD IDs', () => {
+    expect(FEATURE_IDS).toHaveLength(90);
+    expect(new Set(FEATURE_IDS).size).toBe(90);
   });
 
   it('matches the PRD §5 feature catalog exactly', () => {

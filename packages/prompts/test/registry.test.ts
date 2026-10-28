@@ -8,8 +8,8 @@ describe('task registry', () => {
     expect(TASK_BY_ID.size).toBe(ids.length);
   });
 
-  it('covers the Phase 0–5 catalog (78 tasks)', () => {
-    expect(TASKS.length).toBe(78);
+  it('covers the Phase 0–5 catalog and the Trilha (82 tasks)', () => {
+    expect(TASKS.length).toBe(82);
   });
 
   it('gives every task a prompt_version of the form <task id>@v<n>', () => {

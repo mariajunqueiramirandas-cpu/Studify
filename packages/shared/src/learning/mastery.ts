@@ -37,6 +37,7 @@ const SOURCE_MULTIPLIER: Readonly<Record<EvidenceSource, number>> = {
   caderno_retry: 1.0,
   session_check: 1.0,
   feed_quick: 1.0,
+  trail: 1.0,
   tutor_quiz: 0.5,
   duel: 0.75,
   battle: 0.75,
