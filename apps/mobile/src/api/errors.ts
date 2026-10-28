@@ -32,6 +32,8 @@ export type ApiErrorCode =
   | 'app_update_required'
   | 'unauthorized'
   | 'offline'
+  /** The app stopped waiting (ADR 0009): no answer within the deadline. The work may still finish on the server. */
+  | 'timeout'
   | 'unknown';
 
 export class ApiError extends Error {
