@@ -104,6 +104,9 @@ export const moderateMember = (classGroupId: string, userId: string, action: 'ap
 
 export const leaveClassGroup = (classGroupId: string) => rpc<void>('leave_class_group', { class_group_id: classGroupId });
 
+/** SOC-01.15: owner only; the caller confirms by typing the Turma name. */
+export const deleteClassGroup = (classGroupId: string) => rpc<void>('delete_class_group', { class_group_id: classGroupId });
+
 export const createSharedSubject = (classGroupId: string, name: string, color: string, icon: string) => rpc<string>('create_shared_subject', { class_group_id: classGroupId, name, color, icon });
 
 export const blockUser = (userId: string) => rpc<void>('block_user', { user_id: userId });
