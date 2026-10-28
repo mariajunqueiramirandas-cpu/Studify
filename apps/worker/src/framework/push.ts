@@ -47,8 +47,14 @@ export interface ExpoPushMessage {
   body?: string;
   data: Record<string, unknown>;
   sound?: 'default';
-  channelId: string;
+  /**
+   * Omitted for data-only messages too: any presentational field (title, body, icon, channelId) makes Expo send an
+   * FCM notification message, which Android draws by itself (blank, default icon) while the app is in background.
+   */
+  channelId?: string;
   priority?: 'default' | 'high';
+  /** Headless delivery: the app's FCM service receives the message even in background (data-only pushes). */
+  contentAvailable?: boolean;
 }
 
 export type ExpoPushTicket =
@@ -212,11 +218,12 @@ export function createPushService(deps: PushDeps) {
   /** Data-only delivery of live progress and cancels: no log, no cap, no receipts follow-up beyond tokens. */
   async function deliverEphemeral(prefs: PushPrefs | null, message: PushMessage): Promise<PushOutcome> {
     if (!prefs || !deps.expo || prefs.tokens.length === 0 || prefs.notifications[message.channel] === false) return 'dropped';
+    // No channelId: the native module picks the channel from the rich payload.
     const messages: ExpoPushMessage[] = prefs.tokens.map((to) => ({
       to,
       data: { ...(message.data ?? {}), type: typeOf(message) },
-      channelId: message.channel,
       priority: 'high',
+      contentAvailable: true,
     }));
     await sendAll(deps.expo, messages);
     return 'sent';

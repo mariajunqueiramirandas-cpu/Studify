@@ -22,6 +22,14 @@ export function documentObjectPath(storagePath: string): string {
   return storagePath.startsWith('documents/') ? storagePath : `documents/${storagePath}`;
 }
 
+/**
+ * document_slices.storage_path written by the worker is relative to the `slices` bucket (`{document_id}/{start}-{end}.pdf`);
+ * the API writes it with the prefix. Both are accepted, like documentObjectPath.
+ */
+export function sliceObjectPath(storagePath: string): string {
+  return storagePath.startsWith('slices/') ? storagePath : `slices/${storagePath}`;
+}
+
 /** True when the object exists. Storage errors other than "not found" are rethrown. */
 export async function objectExists(db: SupabaseClient, path: string): Promise<boolean> {
   const { bucket, object } = splitStoragePath(path);

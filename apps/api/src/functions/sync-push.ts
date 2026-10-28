@@ -261,7 +261,9 @@ async function replayTouchedCards(st: PushState): Promise<SyncCardState[]> {
     const prev = sorted[sorted.length - 2];
     const elapsedDays = prev && last ? Math.max(0, Math.floor((last.reviewedAt.getTime() - prev.reviewedAt.getTime()) / 86_400_000)) : 0;
     const prior = existing.get(cardId);
-    const introducedAt = (prior?.introduced_at as string | null | undefined) ?? sorted[0]?.reviewedAt.toISOString() ?? null;
+    // PostgREST returns timestamptz as `…+00:00`; the wire contract (and the device) take the `Z` form.
+    const priorIntroduced = prior?.introduced_at as string | null | undefined;
+    const introducedAt = priorIntroduced ? new Date(priorIntroduced).toISOString() : (sorted[0]?.reviewedAt.toISOString() ?? null);
     const suspended = (prior?.suspended as boolean | undefined) ?? false;
     const hidden = (prior?.hidden as boolean | undefined) ?? false;
     const leech = isLeech(state);

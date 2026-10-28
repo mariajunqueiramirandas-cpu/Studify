@@ -5,6 +5,7 @@ import { ApiFailure, ArgumentStartReqSchema, type ArgumentStartReq, type Argumen
 import { defineFunction } from '../shared/http.ts';
 import { requireSubject } from '../shared/access.ts';
 import { loadTopic, topicSlices } from '../shared/topic.ts';
+import { storedSliceOf } from '../shared/retrieval.ts';
 import { argumentOpening } from '../shared-p4/argument.ts';
 import { requireAllowedText } from '../shared-p4/moderation.ts';
 
@@ -36,7 +37,7 @@ export const handler = defineFunction<ArgumentStartReq>({
       subjectId = bundle.subject.id;
       try {
         const { prepared } = await topicSlices(deps, bundle);
-        context.slices = prepared.map((p) => ({ row_id: p.rowId, document_id: p.documentId, title: p.title, pages: p.pages, storage_path: p.storagePath }));
+        context.slices = prepared.map(storedSliceOf);
       } catch (err) {
         // A topic without pages still debates, just without 📄 citations.
         if (!(err instanceof ApiFailure)) throw err;

@@ -25,6 +25,9 @@ import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
 import { mapLimit } from './concurrency.ts';
 import { uuidV7 } from '@studify/shared';
 
+/** Topics whose S4 requests are prepared at once (loads, existing-output checks, slices). */
+const PREPARE_CONCURRENCY = 6;
+
 export const FAILURE_BODY: Readonly<Record<string, string>> = {
   password_protected: 'Esse PDF tem senha. Tira a senha e envia de novo.',
   corrupt: 'Não consegui abrir esse arquivo. Ele pode estar corrompido — tenta baixar de novo.',
@@ -447,6 +450,11 @@ async function runConcepts(stage: Stage, payload: TopicContentPayload, genBatchI
 /** After S2: S3 prerequisites and S4 content run as their own jobs (both read the written concepts). */
 export async function continueAfterConcepts(stage: Stage, payload: TopicContentPayload): Promise<void> {
   const { ctx } = stage;
+  // The student sees "Resumos e cartões" now, not when the S4 job has prepared its requests: until then the app sat
+  // on "Encontrando conceitos · 15 de 15" for a minute or more.
+  if (payload.aiJobId) {
+    await applyProgress(ctx.db, payload.aiJobId, { stage: 'S4', status: 'running', items_total: payload.nodeIds.length, items_done: 0 });
+  }
   if (payload.documentId) {
     await ctx.enqueue('ingest.prerequisites', {
       subject_id: payload.subjectId,
@@ -514,21 +522,20 @@ async function runContent(stage: Stage, payload: TopicContentPayload, genBatchId
   const kinds = expandKinds(payload.kinds).filter((k) => k !== 'concepts');
   const feedEnabled = await tableExists(sql, 'public.feed_items');
   const docLanguage = payload.documentId ? (await loadDocument(sql, payload.documentId))?.language ?? null : null;
-  const items = [];
-  const topicIds: string[] = [];
-  for (const topicId of payload.nodeIds) {
+  // Topics are prepared in parallel (each one is a dozen database round trips plus its slices): one at a time, the
+  // requests of a 15-topic material took over a minute to build before the first call. Order is kept.
+  const prepared = await mapLimit(payload.nodeIds, PREPARE_CONCURRENCY, async (topicId) => {
     const bundle = await loadTopicBundle(sql, topicId);
-    if (!bundle) continue;
+    if (!bundle) return null;
     const present = payload.force ? new Set<TopicKind>() : await existingKinds(sql, topicId);
     // PRA-08.1: problem sets only for quantitative topics.
     const wanted = kinds.filter((k) => !present.has(k) && (k !== 'feed' || feedEnabled) && (k !== 'problems' || isQuantitativeTopic(bundle)));
-    if (wanted.length === 0) continue;
+    if (wanted.length === 0) return null;
     const refs = await topicSliceRefs(env, bundle.sources);
-    if (refs.length === 0) continue;
-    topicIds.push(topicId);
-    for (const kind of wanted) {
-      items.push(
-        await topicItem(env, bundle, kind, refs, {
+    if (refs.length === 0) return null;
+    const topicItems = await Promise.all(
+      wanted.map((kind) =>
+        topicItem(env, bundle, kind, refs, {
           jobId: payload.aiJobId,
           userId: payload.userId,
           documentId: payload.documentId,
@@ -536,8 +543,16 @@ async function runContent(stage: Stage, payload: TopicContentPayload, genBatchId
           force: payload.force,
           language: contentLanguageOf(bundle, docLanguage),
         }),
-      );
-    }
+      ),
+    );
+    return { topicId, items: topicItems };
+  });
+  const topicIds: string[] = [];
+  const items = [];
+  for (const entry of prepared) {
+    if (!entry) continue;
+    topicIds.push(entry.topicId);
+    items.push(...entry.items);
   }
   if (items.length === 0) {
     await finishTopics(stage, payload, [], new Set(payload.nodeIds), new Set());

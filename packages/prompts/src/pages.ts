@@ -58,3 +58,18 @@ export function checkPageRefs(refs: readonly PageRefLike[], allowed: Record<stri
 export function checkPageNumbers(pages: readonly number[], allowed: readonly number[]): string[] {
   return pages.filter((p) => !allowed.includes(p)).map((p) => `página ${p} não foi enviada`);
 }
+
+/**
+ * A topic's pages plus one page of context on each side of every run of consecutive pages (page 1 and the last
+ * page are the limits), so a subject that starts or ends across a page break is never cut. `focus` keeps the
+ * topic's own pages; the prompt tells the model what the others are for (contextPagesNote).
+ */
+export function withContextPages(pages: readonly number[], pageCount: number | null): { pages: number[]; focus: number[] } {
+  const focus = [...new Set(pages)].filter((p) => p >= 1 && (pageCount === null || p <= pageCount)).sort((a, b) => a - b);
+  const all = new Set(focus);
+  for (const page of focus) {
+    if (page - 1 >= 1) all.add(page - 1);
+    if (pageCount !== null && page + 1 <= pageCount) all.add(page + 1);
+  }
+  return { pages: [...all].sort((a, b) => a - b), focus };
+}

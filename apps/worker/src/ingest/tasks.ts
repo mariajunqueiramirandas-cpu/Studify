@@ -56,6 +56,8 @@ export interface SliceRef {
   documentId: string;
   title: string;
   pages: number[];
+  /** The topic's own pages when `pages` also holds context pages (topicSliceRefs). */
+  focusPages?: number[];
   tokenCount: number | null;
   source: { kind: 'base64'; data: string } | { kind: 'file'; fileId: string };
 }
@@ -65,6 +67,7 @@ export function toPdfSlices(refs: readonly SliceRef[]): PdfSlice[] {
     documentId: ref.documentId,
     title: ref.title,
     pages: ref.pages,
+    ...(ref.focusPages ? { focusPages: ref.focusPages } : {}),
     source:
       ref.source.kind === 'base64'
         ? { type: 'base64' as const, media_type: 'application/pdf' as const, data: ref.source.data }

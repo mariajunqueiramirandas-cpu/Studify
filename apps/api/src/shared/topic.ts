@@ -1,7 +1,7 @@
 // Loads what a topic-level generation needs (ai-pipeline §3, data-model §5.2–5.3): the topic node, its
 // concepts, the subject's language, and the pages of each source document, prepared as PDF slices.
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PdfSlice, TopicInput } from '@studify/prompts';
+import { withContextPages, type PdfSlice, type TopicInput } from '@studify/prompts';
 import { ApiFailure } from '@studify/shared';
 import { requireNode, type SubjectRow } from './access.ts';
 import type { Deps } from './deps.ts';
@@ -24,7 +24,7 @@ export interface TopicBundle {
   keyTerms: string[];
   formulas: Array<{ latex: string; description: string }>;
   concepts: ConceptRow[];
-  sources: Array<{ documentId: string; title: string; storagePath: string; pages: number[] }>;
+  sources: Array<{ documentId: string; title: string; storagePath: string; pageCount: number | null; pages: number[] }>;
   contentLanguage: string;
   languageSubject: boolean;
 }
@@ -48,16 +48,24 @@ export async function loadTopic(db: SupabaseClient, userId: string, nodeId: stri
   const sourceRows = sources.data as Array<{ document_id: string; page_start: number; page_end: number }>;
   const docIds = [...new Set(sourceRows.map((r) => r.document_id))];
   const docs = docIds.length
-    ? await db.from('documents').select('id, title, storage_path, deleted_at').in('id', docIds)
+    ? await db.from('documents').select('id, title, storage_path, page_count, deleted_at').in('id', docIds)
     : { data: [], error: null };
   if (docs.error) throw docs.error;
-  const docById = new Map((docs.data as Array<{ id: string; title: string; storage_path: string; deleted_at: string | null }>).map((d) => [d.id, d]));
+  const docById = new Map(
+    (docs.data as Array<{ id: string; title: string; storage_path: string; page_count: number | null; deleted_at: string | null }>).map((d) => [d.id, d]),
+  );
 
-  const byDoc = new Map<string, { documentId: string; title: string; storagePath: string; pages: Set<number> }>();
+  const byDoc = new Map<string, { documentId: string; title: string; storagePath: string; pageCount: number | null; pages: Set<number> }>();
   for (const row of sourceRows) {
     const doc = docById.get(row.document_id);
     if (!doc || doc.deleted_at) continue;
-    const entry = byDoc.get(row.document_id) ?? { documentId: row.document_id, title: doc.title, storagePath: doc.storage_path, pages: new Set<number>() };
+    const entry = byDoc.get(row.document_id) ?? {
+      documentId: row.document_id,
+      title: doc.title,
+      storagePath: doc.storage_path,
+      pageCount: doc.page_count ?? null,
+      pages: new Set<number>(),
+    };
     for (let p = Number(row.page_start); p <= Number(row.page_end); p += 1) entry.pages.add(p);
     byDoc.set(row.document_id, entry);
   }
@@ -75,6 +83,7 @@ export async function loadTopic(db: SupabaseClient, userId: string, nodeId: stri
       documentId: s.documentId,
       title: s.title,
       storagePath: s.storagePath,
+      pageCount: s.pageCount,
       pages: [...s.pages].sort((a, b) => a - b),
     })),
     contentLanguage: subject.content_language ?? 'pt-BR',
@@ -96,20 +105,28 @@ export function topicInput(bundle: TopicBundle): TopicInput & { objectives: stri
   };
 }
 
-/** Slices for every source document of the topic (purpose `topic`), in document order. */
+/**
+ * Slices for every source document of the topic (purpose `topic`), in document order. Each run of the topic's pages
+ * carries one neighboring page on each side as context (withContextPages), so a subject cut by a page break is
+ * sent whole; `focusPages` tells the prompt which pages are the topic's own.
+ */
 export async function topicSlices(deps: Deps, bundle: TopicBundle): Promise<{ slices: PdfSlice[]; prepared: PreparedSlice[] }> {
   if (bundle.sources.length === 0) throw new ApiFailure('not_found', { message: 'Esse tópico não tem páginas de material.' });
   const prepared: PreparedSlice[] = [];
   for (const source of bundle.sources) {
+    const { pages, focus } = withContextPages(source.pages, source.pageCount);
     const parts = await prepareSlices(deps.db, {
       documentId: source.documentId,
       title: source.title,
       storagePath: source.storagePath,
-      pages: source.pages,
+      pages,
       purpose: 'topic',
       newId: deps.newId,
     });
-    prepared.push(...parts);
+    for (const part of parts) {
+      const focusPages = part.pages.filter((p) => focus.includes(p));
+      prepared.push(focusPages.length < part.pages.length ? { ...part, focusPages } : part);
+    }
   }
   return { slices: prepared.map(toPdfSlice), prepared };
 }

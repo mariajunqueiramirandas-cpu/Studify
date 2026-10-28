@@ -16,6 +16,7 @@ import {
   wrapUntrusted,
   TAG,
   documentBlocks,
+  withContextPages,
   studySections,
   STUDY_NOTE_RULES,
 } from '../src/index.ts';
@@ -67,6 +68,33 @@ describe('page validation', () => {
     expect(map.labels).toEqual({ D1: 'doc-1' });
     expect(map.allowedPages).toEqual({ D1: [151, 152, 153] });
     expect(map.blocks[0]?.title).toBe('Documento D1 — Apostila — páginas originais 151–153');
+    expect(map.blocks[0]?.context).toBeUndefined();
+  });
+
+  it('names the topic pages and says what the context pages are for', () => {
+    const map = documentBlocks([
+      { documentId: 'doc-1', title: 'Apostila', pages: [1, 2, 3, 4], focusPages: [2, 3], source: { type: 'file', file_id: 'f1' } },
+    ]);
+    // Context pages stay citable: a passage that continues on them is cited where it is.
+    expect(map.allowedPages).toEqual({ D1: [1, 2, 3, 4] });
+    expect(map.blocks[0]?.title).toBe('Documento D1 — Apostila — páginas originais 1–4 (do tópico: 2–3)');
+    const context = map.blocks[0]?.context ?? '';
+    expect(context).toContain('O conteúdo deste tópico está nas páginas 2–3.');
+    expect(context).toContain('As páginas 1, 4 vêm de partes vizinhas do material');
+    expect(context).toContain('Não crie conceitos, notas, cartões ou questões sobre assuntos que aparecem só nas páginas de contexto');
+  });
+});
+
+describe('withContextPages', () => {
+  it('adds one page on each side of every run, within the document', () => {
+    expect(withContextPages([2, 3], 11)).toEqual({ pages: [1, 2, 3, 4], focus: [2, 3] });
+    expect(withContextPages([1], 11)).toEqual({ pages: [1, 2], focus: [1] });
+    expect(withContextPages([10, 11], 11)).toEqual({ pages: [9, 10, 11], focus: [10, 11] });
+    expect(withContextPages([2, 3, 7], 11)).toEqual({ pages: [1, 2, 3, 4, 6, 7, 8], focus: [2, 3, 7] });
+  });
+
+  it('does not pad past an unknown end', () => {
+    expect(withContextPages([5], null)).toEqual({ pages: [4, 5], focus: [5] });
   });
 });
 

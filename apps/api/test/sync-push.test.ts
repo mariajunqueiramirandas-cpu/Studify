@@ -45,6 +45,17 @@ test('sync-push: re-pushing the same ids inserts nothing new and acks them again
   assertEquals(second.card_states[0].reps, 2, 'replay still folds the two logs once');
 });
 
+test('sync-push: an existing introduced_at in PostgREST form (+00:00) is returned as an ISO instant', async () => {
+  const h = makeHarness();
+  await seedWorld(h);
+  // PostgREST renders timestamptz as `…+00:00`; the ack contract only takes `…Z` (500 on every later review before).
+  h.db.seed('card_states', { user_id: ALICE.id, card_id: IDS.card, suspended: false, hidden: false, introduced_at: '2026-10-20T12:00:00.123+00:00' });
+  const res = await handler(push([review(v7(13), IDS.card, new Date(NOW_MS - 60_000).toISOString())]), h.deps);
+  assertEquals(res.status, 200);
+  const body = await json(res);
+  assertEquals(body.card_states[0].introduced_at, '2026-10-20T12:00:00.123Z');
+});
+
 test('sync-push: a review more than 5 min in the future is clamped to receipt and flagged clock_skew', async () => {
   const h = makeHarness();
   await seedWorld(h);
