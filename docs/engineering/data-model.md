@@ -128,7 +128,7 @@ erDiagram
 | B. Subjects & knowledge map | `subjects`, `subject_user_settings`, `documents`, `document_pages`, `document_slices`, `knowledge_nodes`, `node_sources`, `node_prerequisites`, `node_relations`, `node_user_settings`, `node_events`, `schedule_imports`, `material_findings`, `material_finding_votes` | [§4](#4-core-ddl-phase-01), [§5.2](#52-subjects-documents-knowledge-map) |
 | C. Content items | `notes`, `note_highlights`, `topic_reads`, `glossary_terms`, `glossary_term_overrides`, `explanations`, `explanation_feedback`, `visuals`, `cards`, `card_overrides`, `questions`, `concept_contrasts`, `feed_items`, `mnemonics`, `memory_palaces`, `item_revisions`, `item_hides` | [§4](#4-core-ddl-phase-01), [§5.3](#53-content-items) |
 | D. Learning state | `card_states`, `review_logs`, `mastery`, `mastery_evidence`, `quizzes`, `quiz_attempts`, `attempt_answers`, `mistakes`, `essays`, `feed_impressions`, view `calibration_stats` | [§4](#4-core-ddl-phase-01), [§5.4](#54-per-user-learning-state) |
-| E. Goals & planning | `goals`, `exams`, `exam_scope_items`, `exam_scope_nodes`, `grading_rules`, `grade_components`, `plan_runs`, `plan_items`, `study_sessions`, `availability_exceptions`, `readiness_snapshots`, `performance_windows`, `teacher_profiles`, `topic_predictions`, `exam_outcome_topics` | [§4](#4-core-ddl-phase-01), [§5.5](#55-goals-exams-grading-planning) |
+| E. Goals & planning | `goals`, `exams`, `exam_scope_items`, `exam_scope_nodes`, `grading_rules`, `grade_components`, `plan_runs`, `plan_items`, `plan_coach`, `study_sessions`, `availability_exceptions`, `readiness_snapshots`, `performance_windows`, `teacher_profiles`, `topic_predictions`, `exam_outcome_topics` | [§4](#4-core-ddl-phase-01), [§5.5](#55-goals-exams-grading-planning) |
 | F. Tutor | `tutor_threads`, `tutor_messages` | [§5.6](#56-tutor) |
 | G. Social & moderation | `duels`, `battles`, `battle_players`, `private.question_served`, `private.class_insights`, `study_rooms`, `divide_plans`, `contributions`, `question_votes`, `league_entries`, `quiz_shares`, `content_flags`, `private.moderation_actions` | [§5.7](#57-social-and-moderation) |
 | H. Interactive & camera | `podcast_episodes`, `podcast_plays`, `podcast_interactions`, `teaching_sessions`, `argument_sessions`, `camera_captures` | [§5.8](#58-interactive-learning-and-camera) |
@@ -924,6 +924,12 @@ Unique `(owner_profile_id, school_year, coalesce(subject_id, '00000000-0000-0000
 
 #### `plan_runs` [svc] — GOL-04.9
 `user_id`, `version int`, `trigger` (`goal_created` · `exam_changed` · `scope_changed` · `day_missed` · `grade_logged` · `user_rebalance` · `nightly` · `availability_changed` · `material_added`), `input_hash text`, `feasible bool`, `triage jsonb`, `computed_by` (`server` · `device`). Unique `(user_id, version)`.
+
+#### `topic_study_estimates` [svc] — GOL-04 §8.2.2
+PK `(node_id, document_id)`: `minutes int` (1–600, the model's first-time study estimate for that topic's pages in that document, from `ingest.topicDetail`), `prompt_version`. Service only (no client access). The planner sums them per topic; `knowledge_nodes.est_learn_minutes` caches the sum.
+
+#### `plan_coach` [svc] — GOL-04.10
+One row per student (`user_id` PK): `plan_run_id` (the run that used it, N), `local_date` (study day it was written for), `signals_hash text` (same hash → no new AI call), `output jsonb` (`{headline, watch_out, exams: [{exam_id, title, strategy, risk}], topics: [{node_id, title, priority, approach, focus, why}], next_steps: [{when, title, detail, node_id}]}`), `prompt_version`, `calls_date`, `calls_today int` (daily call cap). The student selects their own row; only the worker writes. Per-topic texts are also copied to `plan_items.reason_params.coach`.
 
 #### `study_sessions` [sync] — GOL-05, FED-01, WEL-01/02, MOT-01 (R17)
 | Column | Type | Null / default | Notes |

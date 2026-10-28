@@ -44,6 +44,7 @@ export {
   buildParams,
   assertRequestShape,
   toJsonSchema,
+  choicesFromPages,
   estimateMicroUsd,
   estimateInputTokens,
 } from "./request.ts";
@@ -66,6 +67,7 @@ export {
   DEFAULT_OUTPUT_TOKENS,
   DEFAULT_TOKENS_PER_PAGE,
   nextMaxTokensClass,
+  requestMaxTokensClass,
   requiresStreaming,
   PRICE_VERSION,
   PRICES,
@@ -98,6 +100,8 @@ export {
 
 // Types
 export type {
+  ChoiceKind,
+  Choices,
   Effort,
   MaxTokensClass,
   BudgetClass,

@@ -204,9 +204,10 @@ export interface GlossaryInput {
 }
 
 const GLOSSARY_RULES = [
-  'Tarefa: escreva o glossário do tópico: uma definição para cada termo listado (e para outros termos centrais do material deste tópico, se houver).',
-  '- definition: até 40 palavras, no idioma do conteúdo. Em matéria de idioma, em português do Brasil.',
-  '- example: um exemplo curto, ou null se não couber.',
+  'Tarefa: escreva o glossário do tópico: uma definição para cada termo listado (e para outros termos centrais do material deste tópico, se houver). No máximo 40 termos no total.',
+  '- term: até 80 caracteres.',
+  '- definition: até 40 palavras e 300 caracteres, no idioma do conteúdo. Em matéria de idioma, em português do Brasil.',
+  '- example: um exemplo curto (até 200 caracteres), ou null se não couber.',
   '- aliases: plural, abreviações e sinônimos que aparecem no material (até 6).',
   '- concept_key: a chave do conceito ao qual o termo pertence, da lista fornecida.',
   '- source_pages: páginas originais onde o termo aparece no material.',
@@ -215,7 +216,7 @@ const GLOSSARY_RULES = [
 
 export const glossaryDefine = defineTask<GlossaryInput, ReturnType<typeof GlossaryTerms.parse>>({
   id: 'glossary.define',
-  version: 1,
+  version: 2,
   features: ['LRN-02'],
   effort: 'low',
   maxTokensClass: 'M',

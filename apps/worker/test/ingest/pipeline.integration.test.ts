@@ -108,6 +108,7 @@ function respond(req: MockRequest): MockResponse | undefined {
           ? { key: 'c1', title: 'Membrana plasmática', summary: 'Controla a passagem de substâncias.', page_start: 3, page_end: 3, key_terms: ['bicamada'], formulas: [] }
           : { key: 'c1', title: 'Mitocôndria', summary: 'Produz ATP.', page_start: 1, page_end: 2, key_terms: ['ATP'], formulas: [] },
       ],
+      study_minutes: isMembrana ? 7 : 12,
     });
   }
   if (body.includes('indique pré-requisitos reais')) return text({ edges: [] });
@@ -351,6 +352,13 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       [subjectId],
     );
     expect(topicStatus.rows.map((r) => r.content_status)).toEqual(['ready', 'ready']);
+    // The model's study time per topic (GOL-04 §8.2.2): stored per document and cached on the topic.
+    const estimates = await pool.query<{ minutes: number; est_learn_minutes: number }>(
+      `select e.minutes, n.est_learn_minutes from public.topic_study_estimates e join public.knowledge_nodes n on n.id = e.node_id
+        where n.subject_id = $1 order by e.minutes`,
+      [subjectId],
+    );
+    expect(estimates.rows).toEqual([{ minutes: 7, est_learn_minutes: 7 }, { minutes: 12, est_learn_minutes: 12 }]);
 
     const cards = await pool.query<{ n: string }>(`select count(*)::text as n from public.cards where subject_id = $1 and origin = 'generated'`, [subjectId]);
     expect(Number(cards.rows[0]?.n)).toBe(2);
@@ -508,12 +516,12 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     expect(generating.rows.map((r) => r.status)).toEqual(['generating']);
   }, 180_000);
 
-  it('re-runs a refused batch item on the standard API and still writes its output', async () => {
+  it('does not pay twice for a refused batch item: the item fails and the rest of the material is written', async () => {
     const store = new FakeObjectStore();
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
-    // The Organelas glossary is refused inside the Batch (stop_reason refusal). The standard-API retry is not
-    // a batch item (no custom_id), so it gets the normal answer.
+    // The Organelas glossary is refused inside the Batch (stop_reason refusal): a billed outcome, so it is not
+    // re-run on the standard API (one paid attempt per item).
     mock.setHandler((req) => {
       if (req.customId && req.bodyText.includes('escreva o glossário do tópico') && !req.bodyText.includes('bicamada')) {
         return { kind: 'message', message: { stop_reason: 'refusal', refusal_category: 'bio', content: [] } };
@@ -528,12 +536,12 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       expect(backend.failedJobs).toEqual([]);
 
       const glossary = await pool.query<{ term: string }>(`select term from public.glossary_terms where subject_id = $1 order by term`, [subjectId]);
-      expect(glossary.rows.map((r) => r.term)).toEqual(['ATP', 'Bicamada lipídica']);
+      expect(glossary.rows.map((r) => r.term)).toEqual(['Bicamada lipídica']);
       const rerun = await pool.query<{ n: string }>(
         `select count(*)::text as n from public.ai_usage where subject_id = $1 and task = 'glossary.define' and batch = false`,
         [subjectId],
       );
-      expect(Number(rerun.rows[0]?.n)).toBe(1);
+      expect(Number(rerun.rows[0]?.n)).toBe(0);
       const doc = await pool.query<{ status: string }>(`select status from public.documents where id = $1`, [docId]);
       expect(doc.rows[0]?.status).toBe('ready');
     } finally {

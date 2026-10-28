@@ -85,3 +85,6 @@ export {
   suggestedReminderTimes,
 } from './energy.ts';
 export type { ResidualEvent, WindowStat, PerformanceWindows, MinuteInterval, BlockUnit, PlacedBlock } from './energy.ts';
+
+export { learnPace, reviewSecondsFrom, PACE_ALPHA, PACE_MAX, PACE_MIN, PACE_MIN_SAMPLES, REVIEW_SECONDS_MIN_SAMPLES } from './pace.ts';
+export type { PaceSample } from './pace.ts';

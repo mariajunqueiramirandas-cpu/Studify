@@ -4,7 +4,7 @@
 // -> budget settle. Runtime-neutral: the client, budget store and usage sink are injected.
 
 import { assertRequestShape, buildParams, estimateMicroUsd } from "./request.ts";
-import { requiresStreaming, nextMaxTokensClass } from "./models.ts";
+import { requestMaxTokensClass, requiresStreaming } from "./models.ts";
 import { AiError, BudgetExceededError, classifyError } from "./errors.ts";
 import { buildUsageRow, summarizeMessage } from "./usage.ts";
 import { extractContent, mapSpanCitations, parseStructured } from "./interpret.ts";
@@ -128,11 +128,10 @@ async function attemptLoop<T>(
     ...(options.signal ? { signal: options.signal } : {}),
   };
 
-  let cls = task.maxTokensClass;
+  // One paid request per call (pause_turn continuations aside): no truncation or validation retry.
+  const cls = requestMaxTokensClass(task);
   let messages: readonly BetaMessageParam[] = call.messages;
   let continuations = 0;
-  let truncationRetried = false;
-  let validationRetried = false;
   let attempt = 0;
   const requestIds: string[] = [];
 
@@ -214,14 +213,7 @@ async function attemptLoop<T>(
 
       case "max_tokens":
       case "model_context_window_exceeded": {
-        // Structured output: retry once with the next max_tokens class; prose keeps its text (TUT-01).
-        const next = task.output.mode === "structured" ? nextMaxTokensClass(cls) : null;
-        if (next && !truncationRetried) {
-          truncationRetried = true;
-          cls = next;
-          hooks?.onReset();
-          continue;
-        }
+        // No retry (one paid request per call); prose keeps its text (TUT-01).
         return {
           status: "truncated",
           reason: message.stop_reason === "max_tokens" ? "max_tokens" : "context_window",
@@ -234,14 +226,10 @@ async function attemptLoop<T>(
     }
 
     if (task.output.mode === "structured") {
+      // No validation retry: limits are stated in the schema the model reads, and items that still break them are
+      // dropped (salvage) so one bad item does not cost the whole call.
       const parsed = parseStructured(extracted.text, task);
-      if (parsed.ok) return { status: "ok", data: parsed.data, ...meta() };
-      if (!validationRetried) {
-        // One retry with the same request and no prompt change (architecture §5).
-        validationRetried = true;
-        hooks?.onReset();
-        continue;
-      }
+      if (parsed.ok) return { status: "ok", data: parsed.data, ...(parsed.salvage ? { salvage: parsed.salvage } : {}), ...meta() };
       return { status: "invalid_output", issues: parsed.issues, ...meta() };
     }
 

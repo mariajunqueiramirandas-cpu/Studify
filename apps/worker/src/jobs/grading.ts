@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { evidenceWeight, type EvidenceQuestionType } from '@studify/shared';
 import { cardsRemediation, gradeShortAnswer, RemediationCard, ShortAnswerGrade, type RemediationInput, type ShortAnswerInput } from '@studify/prompts';
-import { parseQuestionPayload } from '@studify/shared';
+import { parseQuestionPayload, storedRemediationCard } from '@studify/shared';
 import type { JobContext, JobDefinition } from '../framework/types.ts';
 import { runPrompt, type AiScope } from '../lib/ai-adapter.ts';
 import { IN_CHUNK, chunk, unwrap, unwrapRows } from '../lib/db.ts';
@@ -189,7 +189,8 @@ export async function handleGradingAnswer(ctx: JobContext, data: Record<string, 
       'subjects',
     ) as { owner_class_group_id: string | null } | null;
     const personalFor = shared?.owner_class_group_id ? answer.user_id : null;
-    let remediation = grader.remediation;
+    // The grader's card fits this answer; else the card written with the question; an AI call only without both.
+    let remediation = grader.remediation ?? storedRemediationCard(question.payload);
     if (!remediation && studentText.trim().length > 0) {
       const input: RemediationInput = {
         question: { type: qtype, stem: question.stem, correctAnswer: parsed.model_answer, explanation: question.explanation ?? '' },

@@ -7,6 +7,7 @@ import type { JobContext } from '../framework/types.ts';
 import { budgetFor } from './env.ts';
 import { listNodes, type NodeRow } from './repo.ts';
 import { prepareCall } from './tasks.ts';
+import { withShortCache } from '../lib/ai-adapter.ts';
 
 export interface PrereqResult {
   status: 'ok' | 'skipped' | 'failed';
@@ -58,7 +59,7 @@ export async function runPrerequisites(
     { jobId: input.aiJobId, feature: 'ING-03', userId: input.userId },
   );
   const prepared = prepareCall('ingest.prerequisites', built, budget, []);
-  const result: CallResult<unknown> = await callClaude(ctx.ai, prepared.call);
+  const result: CallResult<unknown> = await callClaude(ctx.ai, withShortCache(prepared.call));
   if (result.status !== 'ok') return { status: 'failed', written: 0, dropped: 0 };
 
   const byKey = new Map(promptNodes.map((n) => [n.key, n]));

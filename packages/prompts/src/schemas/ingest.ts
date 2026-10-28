@@ -72,6 +72,8 @@ export const TopicConcepts = z.strictObject({
     )
     .min(1)
     .max(15),
+  /** Minutes a typical student needs to learn the topic from the pages sent, first time (GOL-04 §8.2.2). */
+  study_minutes: z.number().int().min(3).max(240),
 });
 
 /** T3 output (ING-03.5): prerequisite edges. Cycles are dropped in code. */

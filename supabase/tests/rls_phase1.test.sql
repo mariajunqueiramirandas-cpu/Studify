@@ -155,6 +155,8 @@ insert into public.tutor_messages (id, thread_id, user_id, role, content, mode) 
 -- Planning and predictions: readiness of alice, teacher profile of the Turma subject, a prediction on e_alice.
 insert into public.readiness_snapshots (user_id, exam_id, local_date, readiness) values
   ('11111111-1111-4111-8111-111111111111', 'a2000000-0000-4000-8000-000000000001', (now() at time zone 'America/Sao_Paulo')::date, 0.5);
+insert into public.plan_coach (user_id, local_date, signals_hash, output, prompt_version, calls_date) values
+  ('11111111-1111-4111-8111-111111111111', (now() at time zone 'America/Sao_Paulo')::date, 'h', '{"headline":"x"}', 'plan.coach@v1', (now() at time zone 'America/Sao_Paulo')::date);
 insert into public.teacher_profiles (id, subject_id, teacher_key, teacher_display, confidence) values
   ('b3000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 'prof-x', 'Prof X', 'mid');
 insert into public.topic_predictions (id, target_type, target_id, node_id, weight) values
@@ -425,6 +427,14 @@ select test_helpers.check_rows('bob reads no readiness of alice', 'authenticated
   $$select exam_id from public.readiness_snapshots$$, 0);
 select test_helpers.check_err('clients cannot write readiness', 'authenticated', pg_temp.u('alice'),
   $$insert into public.readiness_snapshots (user_id, exam_id, local_date, readiness) values ('11111111-1111-4111-8111-111111111111', 'a2000000-0000-4000-8000-000000000001', '2026-06-01', 0.1)$$);
+select test_helpers.check_rows('alice reads her plan coach', 'authenticated', pg_temp.u('alice'),
+  $$select user_id from public.plan_coach$$, 1);
+select test_helpers.check_rows('bob reads no plan coach of alice', 'authenticated', pg_temp.u('bob'),
+  $$select user_id from public.plan_coach$$, 0);
+select test_helpers.check_err('clients cannot write the plan coach', 'authenticated', pg_temp.u('alice'),
+  $$update public.plan_coach set signals_hash = 'x' where user_id = '11111111-1111-4111-8111-111111111111'$$);
+select test_helpers.check_err('clients cannot read topic study estimates (service only)', 'authenticated', pg_temp.u('alice'),
+  $$select node_id from public.topic_study_estimates$$);
 select test_helpers.check_rows('members read the Turma teacher profile', 'authenticated', pg_temp.u('bob'),
   $$select id from public.teacher_profiles$$, 1);
 select test_helpers.check_rows('dave reads no teacher profile', 'authenticated', pg_temp.u('dave'),

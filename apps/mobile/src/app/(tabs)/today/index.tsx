@@ -24,7 +24,8 @@ import { useDb } from '../../../db/DatabaseProvider';
 import { useLive } from '../../../db/hooks';
 import { useSession } from '../../../features/auth/session';
 import { daysBetween, greeting, parseDate } from '../../../features/common/format';
-import { updatePlanItem, useGoalExams, useGoals, useUpcomingExams, type Exam } from '../../../features/goals/api';
+import { updatePlanItem, useGoalExams, useGoals, usePlanCoach, useUpcomingExams, type Exam } from '../../../features/goals/api';
+import { CoachCard } from '../../../features/goals/CoachCard';
 import { enemRoute } from '../../../features/enem/format';
 import { useTodayPlan, type TodayItem } from '../../../features/goals/today';
 import { dueCount } from '../../../features/memory/local';
@@ -47,6 +48,7 @@ export default function Today() {
   const plan = useTodayPlan();
   const goals = useGoals();
   const exams = useUpcomingExams();
+  const coach = usePlanCoach();
   const pastExams = useGoalExams(goals.data?.[0]?.id);
   const subjects = useSubjects();
   const motivation = useMotivation();
@@ -229,6 +231,9 @@ export default function Today() {
 
       {cards.map((c) => c.node)}
 
+      {/* The coach's day counts go stale: show it only when it was written today or yesterday (GOL-04.10). */}
+      {activeGoal && coach.data && daysBetween(parseDate(coach.data.localDate), parseDate(plan.day)) <= 1 ? <CoachCard coach={coach.data} /> : null}
+
       {activeGoal ? (
         <Section
           title={t('today.plan_title')}
@@ -277,6 +282,11 @@ function PlanRow({ item, onDone, onSkip }: { item: TodayItem; onDone: () => void
           <Text variant="bodySmall" tone="secondary">
             {item.minutes} min{item.status === 'done' ? ` · ${t('plan.status.done')}` : item.status === 'skipped' ? ` · ${t('plan.status.skipped')}` : ''}
           </Text>
+          {item.focus && !done ? (
+            <Text variant="bodySmall" tone="accent">
+              {item.focus}
+            </Text>
+          ) : null}
           {item.reason ? (
             <Text variant="bodySmall" tone="secondary">
               {item.reason}

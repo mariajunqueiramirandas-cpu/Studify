@@ -3,7 +3,8 @@
 // renames fields, attaches the real Zod schema (needed for the JSON schema sent to the API) and records
 // which slice each document block refers to, so citations map back to original pages.
 import { getTask, AcheOErroItems, Outline, PageTranscriptions, PrereqEdges, ProblemSet, TopicCards, TopicConcepts, TopicQuestions, FeedItems, GlossaryTerms, type BuiltPrompt, type PdfSlice, type TextBlock } from '@studify/prompts';
-import type { BudgetContext, DocumentSlice, SystemBlock, TaskCall, TaskDef as AiTaskDef } from '@studify/ai';
+import { choicesFromPages } from '@studify/ai';
+import type { BudgetContext, Choices, DocumentSlice, SystemBlock, TaskCall, TaskDef as AiTaskDef } from '@studify/ai';
 import type { z } from 'zod';
 
 /** Schema per structured task (the prompts TaskDef does not expose its Zod schema). */
@@ -104,6 +105,7 @@ export function prepareCall(
   built: BuiltPrompt,
   ctx: BudgetContext,
   slices: readonly SliceRef[],
+  choices: Choices = {},
 ): PreparedCall {
   const task = aiTask(taskId);
   const call: TaskCall<unknown> = {
@@ -112,6 +114,8 @@ export function prepareCall(
     system: toSystem(built.system),
     messages: built.messages as unknown as TaskCall<unknown>['messages'],
     sources: toDocumentSlices(slices),
+    // Labels and pages sent (and the caller's keys) as schema enums: the output cannot cite anything else.
+    choices: { ...choicesFromPages(built.documents?.allowedPages), ...choices },
   };
   return { call, built };
 }

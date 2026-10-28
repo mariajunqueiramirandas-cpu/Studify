@@ -41,6 +41,13 @@ describe('evaluateText (PRA-08.4 parser)', () => {
     expect(evaluateText('v_0 + a t', { v_0: 2, a: 3, t: 4 })).toBe(14);
   });
 
+  it('keeps a bound multi-letter name as one variable (generated problems use v0, massa, dt)', () => {
+    expect(evaluateText('v0 + a*t', { v0: 2, a: 3, t: 4 })).toBe(14);
+    expect(evaluateText('massa*g', { massa: 2, g: 10 })).toBe(20);
+    expect(evaluateText('dx/dt', { dx: 6, dt: 3 })).toBe(2);
+    expect(evaluateText('2xy', { x: 2, y: 5, xy: 100 })).toBe(200);
+  });
+
   it('returns null for invalid, unbound or non-finite expressions', () => {
     expect(evaluateText('')).toBeNull();
     expect(evaluateText('2 +')).toBeNull();

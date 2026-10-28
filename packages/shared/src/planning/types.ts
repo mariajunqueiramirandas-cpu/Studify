@@ -47,8 +47,10 @@ export interface PlanTopic {
   subjectId: string;
   /** Knowledge-map order (unit → topic). Ties are broken by this, then by id. */
   order: number;
-  /** Source pages used for est_learn_minutes (learning-engine §11.1). */
-  sources: Array<{ kind: MaterialKind; pages: number }>;
+  /** Source pages used for est_learn_minutes (learning-engine §11.1); `minutes` is the model's estimate for that source. */
+  sources: Array<{ kind: MaterialKind; pages: number; minutes?: number | null }>;
+  /** κ for this topic's subject (the student's measured pace); falls back to settings.pace. */
+  pace?: number;
   /** Placeholder topic from GOL-03.4: only upload_material work, no learn/practice. */
   isPlaceholder?: boolean;
   /** cov_n: the topic has been studied (learn done, ≥ 5 card reviews or ≥ 3 questions). */

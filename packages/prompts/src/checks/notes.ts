@@ -52,7 +52,7 @@ export function citationCoverage(paragraphs: readonly ParagraphCitations[]): num
   return eligible.filter((p) => p.citations >= 1).length / eligible.length;
 }
 
-/** §8.2 threshold: below 0.6 → retry once, then store with low_citation_coverage. */
+/** §8.2 threshold: below 0.6 → store with low_citation_coverage (no retry, ai-pipeline R13). */
 export function lowCitationCoverage(paragraphs: readonly ParagraphCitations[]): boolean {
   return citationCoverage(paragraphs) < 0.6;
 }

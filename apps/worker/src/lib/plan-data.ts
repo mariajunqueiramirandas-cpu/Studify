@@ -141,7 +141,7 @@ export interface PlanBuildData {
   scope: ScopeRow[];
   nodes: NodeInfo[];
   excludedNodeIds: ReadonlySet<string>;
-  sourcesByNode: ReadonlyMap<string, Array<{ kind: MaterialKind; pages: number }>>;
+  sourcesByNode: ReadonlyMap<string, Array<{ kind: MaterialKind; pages: number; minutes?: number | null }>>;
   masteries: ReadonlyMap<string, NodeMastery>;
   exceptions: Array<{ local_date: string; minutes: number }>;
   /** Review minutes per planned day from forecastReviewLoad (learning-engine §3.4). */
@@ -151,7 +151,14 @@ export interface PlanBuildData {
   mode: 'normal' | 'desperate';
   editedDay?: string;
   sessionStartedToday?: boolean;
+  /** κ, the student's measured pace (plan-context measuredPace); absent → 1 (spec 07 §8.2.1). */
+  pace?: { overall: number; bySubject: ReadonlyMap<string, number> };
+  /** ω per scope topic of a test (the AI coach priorities, GOL-04.10); null keeps the default ∝ learn minutes. */
+  topicWeights?: (scopeTopicIds: readonly string[]) => Record<string, number> | null;
 }
+
+/** Coach texts per topic, written on that topic's plan items (reason_params.coach). */
+export type CoachReasons = ReadonlyMap<string, { why: string; focus: string; approach: string }>;
 
 export interface BuiltPlanInput {
   input: PlanInput;
@@ -187,7 +194,7 @@ export function mapOrderOf(nodes: readonly NodeInfo[]): Map<string, number> {
   return new Map(sorted.map((t, i) => [t.id, i] as const));
 }
 
-function availabilityFrom(prefs: PrefsRow | null): number[] {
+export function availabilityFrom(prefs: PrefsRow | null): number[] {
   return prefs && prefs.minutes_by_weekday.length === 7 ? prefs.minutes_by_weekday : [...DEFAULT_AVAILABILITY_MINUTES];
 }
 
@@ -230,7 +237,7 @@ export function buildPlanInput(data: PlanBuildData): BuiltPlanInput {
         status: 'scheduled' as const,
         weight: e.weight && e.weight > 0 ? e.weight : 1,
         scopeTopicIds,
-        topicWeights: null,
+        topicWeights: data.topicWeights?.(scopeTopicIds) ?? null,
         requiredRatio: null,
       };
     });
@@ -245,6 +252,7 @@ export function buildPlanInput(data: PlanBuildData): BuiltPlanInput {
       isPlaceholder: n.isPlaceholder,
       studied: m?.studied ?? false,
       mastery: m?.mastery ?? null,
+      ...(data.pace ? { pace: data.pace.bySubject.get(n.subjectId) ?? data.pace.overall } : {}),
     };
   });
 
@@ -359,11 +367,13 @@ export function planItemRows(
   planRunId: string,
   run: PlanRun,
   built: Pick<BuiltPlanInput, 'subjectOfTopic' | 'goalOfExam'>,
+  coach?: CoachReasons,
 ): Array<Omit<PlanItemRow, 'id'>> {
   return run.items
     .filter((item) => item.minutes >= 1)
     .map((item: PlanItem) => {
       const examId = item.examIds[0] ?? null;
+      const advice = item.topicId ? coach?.get(item.topicId) : undefined;
       return {
         user_id: userId,
         goal_id: examId ? (built.goalOfExam.get(examId) ?? null) : null,
@@ -388,6 +398,7 @@ export function planItemRows(
           examIds: item.examIds,
           startMin: item.startMin,
           endMin: item.endMin,
+          ...(advice ? { coach: { why: advice.why, focus: advice.focus, approach: advice.approach } } : {}),
         },
       };
     });

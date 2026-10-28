@@ -87,21 +87,21 @@ describe('podcast.generate (INT-01)', () => {
     expect(env.db.rows('podcast_episodes')[0]!.audio_path).toBe(`audio/answers/${USER}/${EPISODE}.mp3`);
   });
 
-  it('fails the episode when the script cites pages that were not sent, twice', async () => {
+  it('fails the episode when the script cites pages that were not sent, after one call (no retry)', async () => {
     seedEpisode();
     env.claude.reply('roteiro de um episódio', script(750, [{ doc: 'D1', page_start: 9, page_end: 9 }]));
     const outcome = await handlePodcastGenerate(env.ctx, { episode_id: EPISODE });
     expect(outcome.status).toBe('failed');
     expect(env.db.rows('podcast_episodes')[0]).toMatchObject({ status: 'failed', error_code: 'script_invalid' });
-    expect(env.claude.calls.length).toBe(2);
+    expect(env.claude.calls.length).toBe(1);
   });
 
-  it('accepts a second script that only misses the word budget', async () => {
+  it('accepts a script that only misses the word budget, with one call', async () => {
     seedEpisode();
     env.claude.reply('roteiro de um episódio', script(1000));
     const outcome = await handlePodcastGenerate(env.ctx, { episode_id: EPISODE });
     expect(outcome.status).toBe('ready');
-    expect(env.claude.calls.length).toBe(2);
+    expect(env.claude.calls.length).toBe(1);
   });
 
   it('mapScript drops references outside the pages sent', () => {

@@ -2428,5 +2428,23 @@
       "lost": "Derrota",
       "draw": "Empate"
     }
+  },
+  "coach": {
+    "title": "Seu plano até a prova",
+    "open": "Ver estratégia completa",
+    "priorities": "O que mais importa agora",
+    "steps": "Próximos passos",
+    "when": {
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "this_week": "Esta semana",
+      "before_exam": "Antes da prova"
+    },
+    "risk": {
+      "low": "No caminho",
+      "medium": "Atenção",
+      "high": "Apertado"
+    },
+    "disclaimer": "Estratégia feita por IA a partir do seu desempenho. Ela se ajusta conforme você estuda."
   }
 }

@@ -3,7 +3,7 @@
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
 import { cardTargetCount, decodeQuestion, getTask, topicQuotas, type QuestionDraft as ModelQuestionDraft } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
-import { checkProblemConsistency, uuidV7 } from '@studify/shared';
+import { checkProblemConsistency, parseQuestionPayload, uuidV7, type QuestionType } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
 import type pg from 'pg';
 import { tableExists, withTransaction, type Sql } from '../framework/db.ts';
@@ -234,7 +234,7 @@ export async function buildKindCall(
     case 'glossary':
       built = getTask(taskId).build({
         topicTitle: bundle.title,
-        keyTerms: bundle.concepts.flatMap((c) => c.keyTerms.map((term) => ({ term, conceptKey: c.key }))),
+        keyTerms: glossaryTerms(bundle),
         slices,
         contentLanguage,
         languageSubject,
@@ -285,8 +285,28 @@ export async function buildKindCall(
       });
       break;
   }
-  const prepared = prepareCall(taskId, built, budget, refs);
+  // Every kind but `concepts` (which creates the keys) must use the topic's concept keys: sent as an enum.
+  const conceptKeys = kind === 'concepts' ? [] : bundle.concepts.map((c) => c.key);
+  const prepared = prepareCall(taskId, built, budget, refs, conceptKeys.length ? { concept: conceptKeys } : {});
   return { kind, taskId, call: prepared.call, refs: [...refs], promptVersion: built.promptVersion };
+}
+
+/** GlossaryTerms holds 40 terms: the listed ones stay well under it, so the model has room for central extras. */
+const GLOSSARY_INPUT_TERMS = 30;
+
+/** Key terms of the topic's concepts, first occurrence of each normalized term only, capped. */
+function glossaryTerms(bundle: TopicBundle): Array<{ term: string; conceptKey: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ term: string; conceptKey: string }> = [];
+  for (const concept of bundle.concepts) {
+    for (const term of concept.keyTerms) {
+      const key = normalizeTerm(term);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ term, conceptKey: concept.key });
+    }
+  }
+  return out.slice(0, GLOSSARY_INPUT_TERMS);
 }
 
 async function existingItems(sql: Sql, bundle: TopicBundle, kind: TopicKind): Promise<string[]> {
@@ -322,7 +342,14 @@ async function existingItems(sql: Sql, bundle: TopicBundle, kind: TopicKind): Pr
     return rows.map((r) => r.stem);
   }
   if (kind === 'feed') {
-    return [];
+    const { rows } = await sql.query<{ title: string }>(
+      `select content->>'title' as title from public.feed_items
+        where node_id = $1 and deleted_at is null and status = 'active' and personal_for_user_id is null
+          and content->>'title' is not null
+        limit 100`,
+      [bundle.topicId],
+    );
+    return rows.map((r) => r.title);
   }
   return [];
 }
@@ -404,13 +431,17 @@ export interface WriteContext {
 /** Concept rows (S2). Duplicate normalized titles keep the existing concept and add the sources (ING-03.11). */
 export async function writeConcepts(
   ctx: WriteContext,
-  data: { concepts: Array<{ key: string; title: string; summary: string; page_start: number; page_end: number; key_terms: string[]; formulas: Array<{ latex: string; description: string }> }> },
+  data: {
+    concepts: Array<{ key: string; title: string; summary: string; page_start: number; page_end: number; key_terms: string[]; formulas: Array<{ latex: string; description: string }> }>;
+    study_minutes?: number;
+  },
   existingTitles: Map<string, string>,
 ): Promise<{ written: number; dropped: number }> {
   let written = 0;
   let dropped = 0;
   const allowed = labelMapAllowed(ctx.labels);
   await withTransaction(ctx.pool, async (client) => {
+    if (typeof data.study_minutes === 'number' && data.study_minutes > 0) await writeStudyEstimate(client, ctx, data.study_minutes);
     let position = (await client.query<{ n: number }>(
       `select coalesce(max(position) + 1, 0) as n from public.knowledge_nodes where parent_id = $1 and kind = 'concept' and deleted_at is null`,
       [ctx.bundle.topicId],
@@ -465,6 +496,31 @@ function documentForPages(allowed: ReadonlyArray<{ documentId: string; pages: re
     if (entry.pages.includes(start) && entry.pages.includes(end)) return entry.documentId;
   }
   return null;
+}
+
+/**
+ * The topic's study minutes for the documents of this call (GOL-04 §8.2.2), split by their share of the pages sent,
+ * and the cached total on knowledge_nodes.est_learn_minutes. A later estimate for the same document replaces it.
+ */
+async function writeStudyEstimate(sql: Sql, ctx: WriteContext, minutes: number): Promise<void> {
+  const byDoc = new Map<string, number>();
+  for (const [label, documentId] of Object.entries(ctx.labels.labels)) {
+    byDoc.set(documentId, (byDoc.get(documentId) ?? 0) + (ctx.labels.allowedPages[label]?.length ?? 0));
+  }
+  const totalPages = [...byDoc.values()].reduce((a, b) => a + b, 0);
+  for (const [documentId, pages] of byDoc) {
+    const share = totalPages > 0 ? pages / totalPages : 1 / byDoc.size;
+    await sql.query(
+      `insert into public.topic_study_estimates (node_id, document_id, minutes, prompt_version) values ($1, $2, $3, $4)
+       on conflict (node_id, document_id) do update set minutes = excluded.minutes, prompt_version = excluded.prompt_version`,
+      [ctx.bundle.topicId, documentId, Math.max(1, Math.round(minutes * share)), ctx.promptVersion],
+    );
+  }
+  await sql.query(
+    `update public.knowledge_nodes set est_learn_minutes = (select sum(minutes) from public.topic_study_estimates where node_id = $1)
+      where id = $1`,
+    [ctx.bundle.topicId],
+  );
 }
 
 async function addSource(sql: Sql, nodeId: string, documentId: string, pageStart: number, pageEnd: number): Promise<void> {
@@ -668,6 +724,15 @@ export async function writeQuestions(
         continue;
       }
       const row = mapped.value;
+      try {
+        // The contract grading reads at answer time (somatória values, absolute alternatives…): a row it
+        // rejects would only fail when a student answers it.
+        parseQuestionPayload(row.type as QuestionType, row.payload);
+      } catch {
+        dropped++;
+        reasons.payload_contract = (reasons.payload_contract ?? 0) + 1;
+        continue;
+      }
       await client.query(
         `insert into public.questions
            (subject_id, node_id, concept_ids, type, stem, stimulus, payload, explanation, bloom_level, difficulty,

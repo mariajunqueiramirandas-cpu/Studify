@@ -295,30 +295,28 @@ export async function handlePodcastGenerate(ctx: JobContext, raw: Record<string,
     languageSubject: subject.is_language_subject,
   };
 
-  // Script with one retry when validation fails (ai-pipeline `podcast.script`).
+  // One paid call for the script (no retry). The word budget is a target, not a contract: a miss on length alone
+  // still makes a usable episode.
   let script: PodcastScriptDoc | null = null;
   let issues: string[] = [];
-  for (let attempt = 1; attempt <= 2 && !script; attempt++) {
-    let outcome;
-    try {
-      outcome = await runPrompt(ctx.ai, {
-        task: getTask('podcast.script'),
-        schema: PodcastScriptSchema as unknown as z.ZodType<ModelScript>,
-        input,
-        scope: { userId: requester, classGroupId: episode.class_group_id, subjectId: subject.id, jobId: payload.ai_job_id ?? null, feature: 'INT-01' },
-      });
-    } catch (err) {
-      if (err instanceof BudgetExceededError) return fail(ctx, episode.id, 'budget_exceeded');
-      throw err;
-    }
-    if (outcome.result.status !== 'ok') {
-      issues = [outcome.result.status];
-      continue;
-    }
+  let outcome;
+  try {
+    outcome = await runPrompt(ctx.ai, {
+      task: getTask('podcast.script'),
+      schema: PodcastScriptSchema as unknown as z.ZodType<ModelScript>,
+      input,
+      scope: { userId: requester, classGroupId: episode.class_group_id, subjectId: subject.id, jobId: payload.ai_job_id ?? null, feature: 'INT-01' },
+    });
+  } catch (err) {
+    if (err instanceof BudgetExceededError) return fail(ctx, episode.id, 'budget_exceeded');
+    throw err;
+  }
+  if (outcome.result.status !== 'ok') {
+    issues = [outcome.result.status];
+  } else {
     const mapped = mapScript(outcome.result.data as ModelScript, keyToNode, outcome.documents);
     issues = validatePodcastScript(mapped, { targetWords, pageAllowed: pageAllowedIn(outcome.documents) });
-    // The word budget is a target, not a contract: a second miss on length alone still makes a usable episode.
-    if (issues.length === 0 || (attempt === 2 && issues.every((i) => i.startsWith('word count')))) script = mapped;
+    if (issues.every((i) => i.startsWith('word count'))) script = mapped;
   }
   if (!script) {
     ctx.log.warn({ episode: episode.id, issues: issues.slice(0, 5) }, 'podcast script invalid');

@@ -61,7 +61,7 @@ function normalize(source: string): string {
     .replace(/√/g, ' sqrt ');
 }
 
-function tokenize(source: string): Token[] {
+function tokenize(source: string, names: ReadonlySet<string>): Token[] {
   const text = normalize(source);
   const tokens: Token[] = [];
   let i = 0;
@@ -96,7 +96,7 @@ function tokenize(source: string): Token[] {
     if (/[a-zA-Zπ_]/.test(ch)) {
       let j = i;
       while (j < text.length && /[a-zA-Zπ_0-9]/.test(text[j]!)) j++;
-      tokens.push(...splitIdentifier(text.slice(i, j)));
+      tokens.push(...splitIdentifier(text.slice(i, j), names));
       i = j;
       continue;
     }
@@ -117,10 +117,12 @@ function tokenize(source: string): Token[] {
 
 /**
  * "2xy" style products: an identifier that is not a function or constant is split into single-letter
- * variables followed by digits (x2 → x·2 is not allowed; x_1 stays one variable).
+ * variables followed by digits (x2 → x·2 is not allowed; x_1 stays one variable). A name the caller binds
+ * (`names`, e.g. the `given` of a generated problem: v0, massa) is one variable.
  */
-function splitIdentifier(id: string): Token[] {
+function splitIdentifier(id: string, names: ReadonlySet<string>): Token[] {
   const lower = id.toLowerCase();
+  if (names.has(id)) return [{ t: 'id', v: id }];
   if (FUNCTIONS[lower] || CONSTANTS[lower] !== undefined || id.includes('_') || id.length === 1) {
     return [{ t: 'id', v: FUNCTIONS[lower] || CONSTANTS[lower] !== undefined ? lower : id }];
   }
@@ -128,7 +130,7 @@ function splitIdentifier(id: string): Token[] {
   for (const fn of Object.keys(FUNCTIONS).sort((a, b) => b.length - a.length)) {
     if (lower.startsWith(fn) && lower.length > fn.length) {
       const rest = id.slice(fn.length);
-      return [{ t: 'id', v: fn }, ...(/^[0-9]+$/.test(rest) ? [{ t: 'num', v: Number(rest) } as Token] : splitIdentifier(rest))];
+      return [{ t: 'id', v: fn }, ...(/^[0-9]+$/.test(rest) ? [{ t: 'num', v: Number(rest) } as Token] : splitIdentifier(rest, names))];
     }
   }
   const out: Token[] = [];
@@ -225,9 +227,9 @@ class Parser {
 }
 
 /** Parses an expression. Throws ExpressionError on invalid input. */
-export function parseExpression(source: string): ExprNode {
+export function parseExpression(source: string, names: ReadonlySet<string> = new Set()): ExprNode {
   if (source.length > MAX_EXPRESSION_LENGTH) throw new ExpressionError('expression too long');
-  return new Parser(tokenize(source)).parse();
+  return new Parser(tokenize(source, names)).parse();
 }
 
 /** Variable names used by an expression (the constant e counts as a variable only when bound). */
@@ -289,7 +291,7 @@ export function evaluateExpression(node: ExprNode, vars: Readonly<Record<string,
 /** Parses and evaluates in one step. Returns null when the text is not a valid, finite expression. */
 export function evaluateText(source: string, vars: Readonly<Record<string, number>> = {}): number | null {
   try {
-    const value = evaluateExpression(parseExpression(source), vars);
+    const value = evaluateExpression(parseExpression(source, new Set(Object.keys(vars))), vars);
     return Number.isFinite(value) ? value : null;
   } catch {
     return null;

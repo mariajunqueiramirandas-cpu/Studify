@@ -286,19 +286,18 @@ export async function handleImportItem(ctx: JobContext, data: Record<string, unk
       }
     }
 
-    // 3. Commented solution: must reach the official key; one regeneration, else flagged (ENM-02.5).
+    // 3. Commented solution: must reach the official key, which the prompt receives; one paid call, else flagged
+    // for review (ENM-02.5).
     let explanation: z.infer<typeof EnemItemExplanation> | null = null;
     let explanationStatus: 'ok' | 'flagged' | 'pending' = 'pending';
     if (!item.annulled && item.answer_key) {
-      for (let attempt = 1; attempt <= 2 && !explanation; attempt++) {
-        const ex: Awaited<ReturnType<typeof runPrompt<unknown, z.infer<typeof EnemItemExplanation>>>> = await runPrompt(ctx.ai, {
-          task: getTask('enem.bank.explain'),
-          schema: EnemItemExplanation as unknown as z.ZodType<z.infer<typeof EnemItemExplanation>>,
-          input: { ...ref, crops: usableCrops, transcriptionMd, officialKey: item.answer_key, skill: item.skill_code ? { code: item.skill_code, competency: 0, description: null } : null },
-          scope,
-        });
-        if (ex.result.status === 'ok' && (ex.result.data as z.infer<typeof EnemItemExplanation>).chosen_answer === item.answer_key) explanation = ex.result.data as z.infer<typeof EnemItemExplanation>;
-      }
+      const ex = await runPrompt(ctx.ai, {
+        task: getTask('enem.bank.explain'),
+        schema: EnemItemExplanation as unknown as z.ZodType<z.infer<typeof EnemItemExplanation>>,
+        input: { ...ref, crops: usableCrops, transcriptionMd, officialKey: item.answer_key, skill: item.skill_code ? { code: item.skill_code, competency: 0, description: null } : null },
+        scope,
+      });
+      if (ex.result.status === 'ok' && (ex.result.data as z.infer<typeof EnemItemExplanation>).chosen_answer === item.answer_key) explanation = ex.result.data as z.infer<typeof EnemItemExplanation>;
       explanationStatus = explanation ? 'ok' : 'flagged';
       if (!explanation) notes.push('explanation_off_key');
     } else if (!item.annulled) {

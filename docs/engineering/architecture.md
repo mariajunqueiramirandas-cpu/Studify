@@ -236,7 +236,7 @@ sequenceDiagram
 | Time | Store UTC (`timestamptz`); display in `America/Sao_Paulo` or device time zone. Dates for plans are local dates. |
 | Money/cost | Store AI cost estimates in micro-dollars (integer). |
 | Feature IDs | Reference PRD IDs (e.g. `MEM-02`) in commits, PR titles, code comments for non-obvious logic, and `ai_usage.feature`. |
-| AI outputs | Every AI output is validated with a Zod schema before it is stored. Invalid output → retry once → mark item failed. |
+| AI outputs | Every AI output is validated with a Zod schema before it is stored. One paid attempt (ai-pipeline R13): invalid list items are dropped, anything else invalid → mark item failed. |
 | Citations | Every generated item stores `source_pages` as `{document_id, page_start, page_end}[]` referencing **original** page numbers. |
 | Errors in UI | Friendly PT-BR messages; never show raw errors or stack traces. |
 | Feature flags | `profiles.settings.flags` + a server-side `feature_flags` table, so phases can be released to the Turma gradually. |

@@ -92,6 +92,15 @@ export function nextMaxTokensClass(cls: MaxTokensClass): MaxTokensClass | null {
   return i >= 0 && i < CLASS_ORDER.length - 1 ? (CLASS_ORDER[i + 1] ?? null) : null;
 }
 
+/**
+ * The max_tokens class a request is sent with. Structured output gets the next class up front, because a cut-off
+ * JSON is lost and nothing re-asks (one paid request per call); max_tokens is a ceiling, only written tokens are
+ * billed. Prose keeps its class: a cut-off answer keeps its text (TUT-01).
+ */
+export function requestMaxTokensClass(task: { maxTokensClass: MaxTokensClass; output: { mode: string } }): MaxTokensClass {
+  return task.output.mode === "structured" ? (nextMaxTokensClass(task.maxTokensClass) ?? task.maxTokensClass) : task.maxTokensClass;
+}
+
 /** L and XL must stream on synchronous calls (§2.2). */
 export function requiresStreaming(cls: MaxTokensClass): boolean {
   return cls === "L" || cls === "XL";

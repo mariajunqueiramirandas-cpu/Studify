@@ -22,6 +22,7 @@ import { JobDataError, chunk, unwrap, unwrapRows, uniq } from '../lib/db.ts';
 import { computeMasteries, type NodeInfo } from '../lib/learning-state.ts';
 import { buildPlanInput, carryOverDone, planItemRows, planRunRecord, plannerTriggerOf, topicOf, type PlanItemRow } from '../lib/plan-data.ts';
 import { loadPlanContext, type PlanContext } from '../lib/plan-context.ts';
+import { coachFor, coachTopicWeights, type CoachGuidance } from '../lib/plan-coach.ts';
 import { ensureEnemTags, enemItemRows, loadEnemPlanContext, planEnem } from '../lib/enem-plan.ts';
 import { wallClockOf } from '@studify/shared';
 import { addDays, localHour, safeTimeZone } from '../lib/time.ts';
@@ -148,8 +149,11 @@ export function samePlan(run: PlanRun, previous: readonly PlanItemRow[], extra: 
   return before.length === after.length && before.every((v, i) => v === after[i]);
 }
 
-/** Replans one user from a loaded context. Identical inputs to the last run write nothing. */
-export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger: ReplanTrigger): Promise<ReplanResult> {
+/**
+ * Replans one user from a loaded context. Identical inputs to the last run write nothing, unless the coach wrote
+ * new guidance (the items must carry its texts). `coach` sets topic weights and per-topic reasons (GOL-04.10).
+ */
+export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger: ReplanTrigger, coach: CoachGuidance | null = null): Promise<ReplanResult> {
   // ENEM goal (spec 07 §8.9): ENEM takes its share of each day first; the school planner sees the rest.
   const enem = await loadEnemPlanContext(ctx, planCtx);
   const enemPlan = enem ? planEnem(planCtx, enem) : null;
@@ -171,12 +175,14 @@ export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger:
     previousItems: enem ? planCtx.previousRows.filter((r) => r.goal_id !== enem.goalId) : planCtx.previousRows,
     desperate: planCtx.desperate,
     mode: planCtx.desperate ? 'desperate' : 'normal',
+    pace: planCtx.pace,
+    topicWeights: (scope) => coachTopicWeights(scope, (id) => estLearnMinutes(planCtx.sourcesByNode.get(id) ?? []), coach),
   });
   const run: PlanRun = buildPlan(built.input, trigger);
   // No-op check on the resulting plan, not the input hash: the hash includes the previous items, so it
   // changes after every write. Same blocks on the same days with the same minutes → nothing new.
   const extra = (enemPlan?.items ?? []).map((i) => ({ id: i.id, day: i.day, minutes: i.minutes, status: 'planned' }));
-  if (planCtx.latestRun && samePlan(run, planCtx.previousRows, extra)) return { status: 'unchanged' };
+  if (planCtx.latestRun && !coach?.fresh && samePlan(run, planCtx.previousRows, extra)) return { status: 'unchanged' };
 
   const version = (planCtx.latestRun?.version ?? 0) + 1;
   const inserted = unwrap(
@@ -184,7 +190,8 @@ export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger:
     'plan_runs insert',
   ) as { id: string } | null;
   if (!inserted) throw new JobDataError('plan_runs insert returned no row', 'db_error');
-  const schoolRows = planItemRows(planCtx.userId, inserted.id, run, built);
+  const schoolRows = planItemRows(planCtx.userId, inserted.id, run, built, coach?.reasons);
+  if (coach?.fresh) unwrap(await ctx.supabase.from('plan_coach').update({ plan_run_id: inserted.id }).eq('user_id', planCtx.userId), 'plan_coach');
   const schoolOrder = new Map<string, number>();
   for (const r of schoolRows) schoolOrder.set(r.local_date, Math.max(schoolOrder.get(r.local_date) ?? -1, r.order_in_day));
   const enemIds = new Set(extra.map((e) => e.id));
@@ -202,9 +209,18 @@ export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger:
 async function planOne(ctx: JobContext, userId: string, trigger: ReplanTrigger, withReadiness: boolean): Promise<ReplanResult | null> {
   const planCtx = await loadPlanContext(ctx, userId);
   if (!planCtx) return null;
-  const result = await replanUser(ctx, planCtx, trigger);
+  const scopeByExam = scopeTopicsByExam(planCtx);
+  const snapshots = readinessFor(planCtx, scopeByExam);
+  // The coach (GOL-04.10) decides the priorities; the plan never waits on it: a failure leaves the default weights.
+  let guidance: CoachGuidance | null = null;
+  try {
+    guidance = (await coachFor(ctx, planCtx, trigger, scopeByExam, snapshots)).guidance;
+  } catch (err) {
+    ctx.log.warn({ err: err instanceof Error ? err.message : 'unknown' }, 'plan.coach: skipped');
+  }
+  const result = await replanUser(ctx, planCtx, trigger, guidance);
   if (withReadiness) {
-    const rows = readinessFor(planCtx, scopeTopicsByExam(planCtx)).map((s) => s.row);
+    const rows = snapshots.map((s) => s.row);
     if (rows.length > 0) unwrap(await ctx.supabase.from('readiness_snapshots').upsert(rows, { onConflict: 'user_id,exam_id,local_date' }), 'readiness_snapshots');
   }
   return result;

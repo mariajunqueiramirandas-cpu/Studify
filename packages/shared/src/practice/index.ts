@@ -17,6 +17,7 @@ export {
   QUESTION_PAYLOAD_SCHEMAS,
   QuestionPayloadSchema,
   parseQuestionPayload,
+  storedRemediationCard,
   McqSingleResponseSchema,
   MultiSelectResponseSchema,
   TrueFalseResponseSchema,

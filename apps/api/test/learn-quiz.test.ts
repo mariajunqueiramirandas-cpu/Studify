@@ -52,6 +52,31 @@ test('quiz-submit: the server scores every answer, creates a Caderno entry, a re
   assertEquals(h.claude.calls.length, 0, 'auto-graded answers never call Claude');
 });
 
+test('quiz-submit: the remediation card is the one written with the question when it has one (PRA-02.3)', async () => {
+  const h = makeHarness();
+  await seedWorld(h);
+  const withCard = mcq(IDS.question, 'A');
+  withCard.payload = { ...(withCard.payload as object), remediation_card: { front: 'Onde fica a clorofila?', back: 'No cloroplasto.' } };
+  h.db.seed('questions', [withCard]);
+  h.db.seed('quizzes', { id: IDS.quiz, owner_id: ALICE.id, question_ids: [IDS.question], kind: 'practice', goal_id: null });
+  h.db.seed('quiz_attempts', { id: IDS.attempt, user_id: ALICE.id, quiz_id: IDS.quiz, status: 'in_progress', device_id: 'device-1', started_at: '2026-10-27T14:00:00Z' });
+  const res = await quizSubmit(
+    request('quiz-submit', {
+      idem: v7(505),
+      body: {
+        attempt_id: IDS.attempt,
+        finished_at: '2026-10-27T14:20:00Z',
+        answers: [{ id: v7(506), question_id: IDS.question, response: { choice: 'B' }, confidence: 4, time_spent_ms: 9000 }],
+      },
+    }),
+    h.deps,
+  );
+  assertEquals(res.status, 200);
+  const card = h.db.rows('cards').find((c) => c.origin === 'from_mistake');
+  assertEquals(card?.front, 'Onde fica a clorofila?');
+  assertEquals(card?.back, 'No cloroplasto.');
+});
+
 test('quiz-submit: another student’s attempt is not found, and a submitted attempt cannot be sent twice', async () => {
   const h = makeHarness();
   await seedWorld(h);

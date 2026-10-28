@@ -5,7 +5,7 @@ const QuickQuestion = z.strictObject({
   stem: z.string().min(1).max(200),
   options: z
     .array(z.strictObject({ id: z.string().regex(/^[A-D]$/), text: z.string().min(1).max(120), rationale: z.string().min(1).max(140) }))
-    .min(3)
+    .min(2) // Verdadeiro/Falso as A/B (spec 06 FED-01.2)
     .max(4),
   correct: z.string().regex(/^[A-D]$/),
 });
@@ -39,6 +39,8 @@ export const FeedItem = FeedItemBase.superRefine((v, ctx) => {
   }
 });
 
+// Spec 06 §7 targets 3 items per concept (1 micro_lesson + 2 quick_question), 1–2 did_you_know and up to 3
+// diagrams per topic: 50 covers a topic at the 15-concept cap of TopicConcepts.
 export const FeedItems = z.strictObject({
-  items: z.array(FeedItem).min(1).max(12),
+  items: z.array(FeedItem).min(1).max(50),
 });

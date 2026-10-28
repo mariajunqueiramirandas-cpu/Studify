@@ -68,6 +68,37 @@ describe("toJsonSchema", () => {
     expect(json.additionalProperties).toBe(false);
     expect((json.properties as Record<string, unknown>).n).toMatchObject({ type: "integer" });
   });
+
+  it("sends x-choice values as enums of this call's choices, and plain types without them", () => {
+    const Key = z.string().min(1).max(40).meta({ "x-choice": "concept" });
+    const Page = z.number().int().min(1).meta({ "x-choice": "page" });
+    const schema = z.object({ keys: z.array(Key), page: Page, other: Key.nullable() });
+    const withChoices = JSON.stringify(toJsonSchema(schema, { concept: ["c2", "c1", "c1"], page: [14, 12, 13] }));
+    expect(withChoices).toContain('"enum":["c1","c2"]');
+    expect(withChoices).toContain('"type":"integer","enum":[12,13,14]');
+    expect(withChoices).not.toContain("x-choice");
+    const plain = JSON.stringify(toJsonSchema(schema));
+    expect(plain).not.toContain("enum");
+    expect(plain).not.toContain("x-choice");
+  });
+
+  it("restates every removed limit in the description the model reads", () => {
+    const schema = z.object({
+      text: z.string().min(1).max(300).describe("o enunciado"),
+      code: z.string().min(2).max(2),
+      items: z.array(z.string()).min(3).max(8),
+      some: z.array(z.string()).max(4),
+      score: z.number().int().min(1).max(5),
+      page: z.number().int().min(1),
+    });
+    const props = toJsonSchema(schema).properties as Record<string, { description?: string }>;
+    expect(props.text?.description).toBe("o enunciado (até 300 caracteres)");
+    expect(props.code?.description).toBe("exatamente 2 caracteres");
+    expect(props.items?.description).toBe("de 3 a 8 itens");
+    expect(props.some?.description).toBe("até 4 itens");
+    expect(props.score?.description).toBe("valor >= 1 e <= 5");
+    expect(props.page?.description).toBe("valor >= 1");
+  });
 });
 
 describe("assertRequestShape (default model and API rules)", () => {

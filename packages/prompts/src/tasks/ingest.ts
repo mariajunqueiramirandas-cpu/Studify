@@ -132,11 +132,12 @@ const TOPIC_DETAIL_RULES = [
   '- key_terms: termos que um estudante precisa conhecer (até 12). formulas: só fórmulas que estão no material, em LaTeX.',
   '- summary: 1 ou 2 frases, até 240 caracteres.',
   '- Fique dentro das páginas do tópico.',
+  '- study_minutes: quantos minutos um estudante do ensino médio, estudando sozinho pela primeira vez, leva para entender o conteúdo destas páginas (ler, entender os exemplos e anotar). Sem contar exercícios. Julgue pela densidade real: um slide com poucas palavras leva 1 a 2 minutos; uma página de apostila com texto corrido, 3 a 5; uma página de livro com fórmulas, gráficos ou exemplos resolvidos, 6 a 10. Some página por página.',
 ];
 
 export const ingestTopicDetail = defineTask<TopicDetailInput, ReturnType<typeof TopicConcepts.parse>>({
   id: 'ingest.topicDetail',
-  version: 1,
+  version: 2,
   features: ['ING-03.4'],
   effort: 'medium',
   maxTokensClass: 'L',

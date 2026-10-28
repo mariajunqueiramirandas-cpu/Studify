@@ -21,6 +21,17 @@ export interface TodayItem {
   goalId: string | null;
   reasonKey: string | null;
   reasonParams: Record<string, unknown> | null;
+  /** The coach's focus for this topic (GOL-04.10), null without coach guidance. */
+  focus: string | null;
+}
+
+/** The coach texts a plan item carries in reason_params.coach (GOL-04.10). */
+function coachOf(params: Record<string, unknown> | null): { why: string | null; focus: string | null } {
+  const coach = params?.coach as { why?: unknown; focus?: unknown } | undefined;
+  return {
+    why: typeof coach?.why === 'string' && coach.why ? coach.why : null,
+    focus: typeof coach?.focus === 'string' && coach.focus ? coach.focus : null,
+  };
 }
 
 /** The plan items of one study day with their display titles (shared by Hoje and the local reminders). */
@@ -42,6 +53,8 @@ export function readPlanItems(db: AppDb, day: string): TodayItem[] {
     const s = i.subjectId ? sMap.get(i.subjectId) : undefined;
     const unit = t(`plan.units.${i.unitType === 'learn_light' ? 'learn' : i.unitType === 'upload_material' ? 'upload' : i.unitType === 'warmup' ? 'review' : i.unitType}`, { defaultValue: i.unitType });
     const topic = ids.map((id) => nMap.get(id)).filter(Boolean)[0];
+    const params = (i.reasonParams as Record<string, unknown> | null) ?? null;
+    const coach = coachOf(params);
     return {
       id: i.id,
       title: [unit, topic ?? s?.name].filter(Boolean).join(': '),
@@ -54,10 +67,11 @@ export function readPlanItems(db: AppDb, day: string): TodayItem[] {
       minutes: i.minutes,
       status: i.status,
       pinned: !!i.pinned,
-      reason: i.reasonKey ? t(i.reasonKey, { ...((i.reasonParams as Record<string, unknown> | null) ?? {}), defaultValue: '' }) || null : null,
+      reason: coach.why ?? (i.reasonKey ? t(i.reasonKey, { ...(params ?? {}), defaultValue: '' }) || null : null),
       goalId: i.goalId ?? null,
       reasonKey: i.reasonKey ?? null,
-      reasonParams: (i.reasonParams as Record<string, unknown> | null) ?? null,
+      reasonParams: params,
+      focus: coach.focus,
     };
   });
 }

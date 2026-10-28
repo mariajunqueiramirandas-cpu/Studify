@@ -1,6 +1,6 @@
 // Loads everything the planner, the nightly replan and the véspera need for one user, in one place.
 // Reads only. Returns null when the profile is gone (deleted account).
-import { forecastReviewLoad, type LearningParams, type QueueCard } from '@studify/shared';
+import { forecastReviewLoad, learnPace, reviewSecondsFrom, type LearningParams, type PaceSample, type QueueCard } from '@studify/shared';
 import type { JobContext } from '../framework/types.ts';
 import { IN_CHUNK, chunk, unwrap, unwrapRows, uniq } from './db.ts';
 import { computeMasteries, loadLearningData, paramsFor, userSubjectIds, type LearningData, type NodeInfo, type NodeMastery } from './learning-state.ts';
@@ -20,7 +20,7 @@ export interface PlanContext {
   scope: ScopeRow[];
   nodes: NodeInfo[];
   excludedNodeIds: Set<string>;
-  sourcesByNode: Map<string, Array<{ kind: 'slides' | 'notes' | 'textbook' | 'other'; pages: number }>>;
+  sourcesByNode: Map<string, Array<{ kind: MaterialSourceKind; pages: number; minutes: number | null }>>;
   learning: LearningData;
   masteries: Map<string, NodeMastery>;
   exceptions: Array<{ local_date: string; minutes: number }>;
@@ -29,7 +29,11 @@ export interface PlanContext {
   latestRun: { id: string; version: number; input_hash: string } | null;
   reviewMinutesByDay: Record<string, number>;
   mapOrder: Map<string, number>;
+  /** κ, the student's measured pace (overall and per subject). */
+  pace: { overall: number; bySubject: Map<string, number> };
 }
+
+type MaterialSourceKind = 'slides' | 'notes' | 'textbook' | 'other';
 
 interface ProfileRow {
   timezone: string | null;
@@ -104,12 +108,30 @@ export async function loadPlanContext(ctx: JobContext, userId: string): Promise<
       kindOf.set(d.id, d.kind);
     }
   }
-  const sourcesByNode = new Map<string, Array<{ kind: 'slides' | 'notes' | 'textbook' | 'other'; pages: number }>>();
-  for (const s of sourceRows) {
-    const list = sourcesByNode.get(s.node_id) ?? [];
-    list.push({ kind: materialKindOf(kindOf.get(s.document_id) ?? 'other'), pages: s.page_end - s.page_start + 1 });
-    sourcesByNode.set(s.node_id, list);
+  // The model's study-time estimate per (topic, document), from ingest.topicDetail (GOL-04 §8.2.2).
+  const estimateOf = new Map<string, number>();
+  for (const part of chunk(topicIds, IN_CHUNK)) {
+    for (const e of unwrapRows<{ node_id: string; document_id: string; minutes: number }>(
+      await ctx.supabase.from('topic_study_estimates').select('node_id,document_id,minutes').in('node_id', part),
+      'topic_study_estimates',
+    )) {
+      estimateOf.set(`${e.node_id}|${e.document_id}`, e.minutes);
+    }
   }
+  // One source per (topic, document): its pages summed over the ranges, with the document's estimate when there is one.
+  const byNodeDoc = new Map<string, { nodeId: string; kind: MaterialSourceKind; pages: number; minutes: number | null }>();
+  for (const s of sourceRows) {
+    const key = `${s.node_id}|${s.document_id}`;
+    const cur = byNodeDoc.get(key);
+    if (cur) cur.pages += s.page_end - s.page_start + 1;
+    else byNodeDoc.set(key, { nodeId: s.node_id, kind: materialKindOf(kindOf.get(s.document_id) ?? 'other'), pages: s.page_end - s.page_start + 1, minutes: estimateOf.get(key) ?? null });
+  }
+  const sourcesByNode = new Map<string, Array<{ kind: MaterialSourceKind; pages: number; minutes: number | null }>>();
+  for (const src of byNodeDoc.values()) {
+    sourcesByNode.set(src.nodeId, [...(sourcesByNode.get(src.nodeId) ?? []), { kind: src.kind, pages: src.pages, minutes: src.minutes }]);
+  }
+  const pace = await measuredPace(ctx, userId, now);
+  const reviewSeconds = await measuredReviewSeconds(ctx, userId, prefs?.review_seconds_estimate ?? null);
 
   const masteries = computeMasteries(learning, now, paramsFor(retention, timeZone));
   const exceptions = unwrapRows<{ local_date: string; minutes: number }>(
@@ -118,7 +140,7 @@ export async function loadPlanContext(ctx: JobContext, userId: string): Promise<
   );
 
   const params = paramsFor(retention, timeZone);
-  const reviewMinutesByDay = reviewForecast(learning, exams, today, now, params, prefs, nodes);
+  const reviewMinutesByDay = reviewForecast(learning, exams, today, now, params, reviewSeconds ?? params.reviewSecondsDefault, nodes);
 
   const desperate = unwrap(
     await ctx.supabase
@@ -163,7 +185,57 @@ export async function loadPlanContext(ctx: JobContext, userId: string): Promise<
     latestRun,
     reviewMinutesByDay,
     mapOrder: mapOrderOf(nodes),
+    pace,
   };
+}
+
+/** Days of finished learn blocks that feed κ. */
+const PACE_WINDOW_DAYS = 60;
+
+/**
+ * κ from the student's finished learn blocks (spec 07 §8.2.1): the minutes the plan gave each block against the active
+ * minutes of the sessions that worked on it. Practice and reviews are time-boxed, so they say nothing about pace.
+ */
+async function measuredPace(ctx: JobContext, userId: string, now: Date): Promise<{ overall: number; bySubject: Map<string, number> }> {
+  const since = new Date(now.getTime() - PACE_WINDOW_DAYS * 86_400_000).toISOString();
+  const sessions = unwrapRows<{ plan_item_id: string; active_minutes: number; started_at: string }>(
+    await ctx.supabase
+      .from('study_sessions')
+      .select('plan_item_id,active_minutes,started_at')
+      .eq('user_id', userId)
+      .not('plan_item_id', 'is', null)
+      .gte('started_at', since)
+      .limit(500),
+    'study_sessions',
+  );
+  const actual = new Map<string, { minutes: number; at: number }>();
+  for (const s of sessions) {
+    const cur = actual.get(s.plan_item_id);
+    const at = Date.parse(s.started_at);
+    actual.set(s.plan_item_id, { minutes: (cur?.minutes ?? 0) + s.active_minutes, at: Math.max(cur?.at ?? 0, at) });
+  }
+  const samples: PaceSample[] = [];
+  for (const part of chunk([...actual.keys()], IN_CHUNK)) {
+    for (const item of unwrapRows<{ id: string; minutes: number; subject_id: string | null }>(
+      await ctx.supabase.from('plan_items').select('id,minutes,subject_id').in('id', part).in('unit_type', ['learn', 'learn_light']).eq('status', 'done'),
+      'plan_items',
+    )) {
+      const a = actual.get(item.id);
+      if (a) samples.push({ subjectId: item.subject_id, plannedMinutes: item.minutes, actualMinutes: a.minutes, at: a.at });
+    }
+  }
+  return learnPace(samples);
+}
+
+/** Seconds per review from the student's last review durations; null keeps the stored or default value. */
+async function measuredReviewSeconds(ctx: JobContext, userId: string, stored: number | null): Promise<number | null> {
+  const logs = unwrapRows<{ duration_ms: number | null }>(
+    await ctx.supabase.from('review_logs').select('duration_ms').eq('user_id', userId).is('undoes_log_id', null).order('reviewed_at', { ascending: false }).limit(200),
+    'review_logs',
+  );
+  const durations = logs.map((l) => l.duration_ms).filter((d): d is number => typeof d === 'number').reverse();
+  const measured = reviewSecondsFrom(durations, -1);
+  return measured > 0 ? measured : stored;
 }
 
 function reviewForecast(
@@ -172,7 +244,7 @@ function reviewForecast(
   today: string,
   now: Date,
   params: LearningParams,
-  prefs: PrefsRow | null,
+  reviewSeconds: number,
   nodes: readonly NodeInfo[],
 ): Record<string, number> {
   const horizonEnd = exams.reduce((acc, e) => (e.local_date > acc ? e.local_date : acc), addDays(today, 30));
@@ -186,7 +258,7 @@ function reviewForecast(
     state: c.state,
   }));
   const days = forecastReviewLoad(cards, [], today, to, now, params, {
-    reviewSeconds: prefs?.review_seconds_estimate ?? params.reviewSecondsDefault,
+    reviewSeconds,
   });
   return Object.fromEntries(days.map((d) => [d.date, d.estMinutes]));
 }

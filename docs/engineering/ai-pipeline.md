@@ -69,7 +69,7 @@ Every response is checked **before** reading `content`. Content is read by block
 |---|---|
 | `end_turn` | Normal. Validate (Zod / citations mapping), then store. |
 | `tool_use` | Only tutor tools (TUT-02) and nothing else in v1: record in `tutor_messages.tool_events`, send `tool_result` "ok" on the next turn (spec 03 §7). |
-| `max_tokens` | Structured: retry once with the next `max_tokens` class; then mark the item `failed`. Prose to a user: keep the text, end with "…" and show "Continuar" (TUT-01). |
+| `max_tokens` | Structured: never re-asked (one paid attempt, R13); the request already carries the next `max_tokens` class (`requestMaxTokensClass`), so a cut-off means the item is `failed`. Prose to a user: keep the text, end with "…" and show "Continuar" (TUT-01). |
 | `pause_turn` | Server tools only (web search in ENM-05.5 / ENM-09, code execution in CAM-02.6 / PRA-08): re-send the conversation including the paused assistant turn to let it continue; at most 3 continuations, then fail the step. |
 | `refusal` | The model declined (Haiku 5.5 has no fallback chain; on a model that has one, the chain already declined). Log `stop_details.category` in `ai_usage.refusal_category`. Discard any partial streamed output (it is billed, but never stored or shown). Show the spec's PT-BR message (e.g. "Não consegui processar essa parte do material", "Não posso ajudar com isso aqui."). Ingestion marks the document/topic `ai_refused` with "Tentar de novo" / "Pular" (spec 01 §7). |
 
@@ -207,9 +207,10 @@ export async function callClaude<T>(call: TaskCall<T>) {
 | Task id | Features | Trigger | Runs | Input | Output | Effort | Class | Cache | Volume | Budget |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `scope.match` | GOL-03 | Content list typed/pasted/photographed | Edge (target < 15 s p50) | Content list text or image; subject outline | `S:ScopeMatch` | `medium` | S | SYS, OL | 1 per exam | user |
+| `plan.coach` | GOL-04.10 | Replan (`plan.recompute`, `plan.nightly`) when the coached signals changed; ≤ 3 per student per study day | Worker | Upcoming tests (≤ 45 days: date, weight, readiness, predicted grade), ≤ 40 scope topics (mastery, accuracy, open mistakes by cause, overconfidence, teacher points share, learn minutes, days since studied), next-7-day minutes and review load, last-7-day adherence | `S:PlanCoach` (keys T*/E* validated; priorities become topic weights ω, never feasibility) | `medium` | M | SYS | ≈ 1 per active student per day | user |
 | `vespera.cheatsheet` | GOL-07 | D − 1 04:00 local, or on open | Worker | In-scope `tldr` notes (with citations), glossary, unresolved mistakes | `S:Cheatsheet` (`source_pages` ⊆ pages cited by input notes) | `medium` | M | SYS, notes block | 1 per exam | user |
 
-The planner, required-grade math, readiness and predicted grade use **no AI** (spec 07 §7.3).
+The planner's priorities come from `plan.coach` (spec 07 GOL-04.10, §7.3); its time math (availability, deadlines, feasibility, triage, placement), required-grade math, readiness and predicted grade use **no AI**.
 
 ### 3.8 Prova Provável — [spec 08](../specs/08-prova-provavel.md)
 
@@ -345,9 +346,9 @@ The Citations API and structured outputs (`output_config.format`) **cannot be co
 ### 5.1 Structured outputs
 
 - Schemas live in `packages/shared/schemas/ai/*.ts` as Zod; the JSON schema sent to the API is generated from the Zod schema. `additionalProperties: false` everywhere.
-- Unsupported JSON-schema constraints (complex array constraints, etc.) are stripped by the SDK helper and enforced by our own Zod pass. **Zod validation always runs**, even though the API constrains the output: refusals and `max_tokens` stops can still return off-schema text.
+- The API rejects `minItems` above 1 and ignores `maxLength` and numeric ranges, so `toJsonSchema` removes length, count and range keywords and **restates each one in the node's `description`** ("até 300 caracteres", "de 3 a 8 itens", "valor >= 1 e <= 5"): the model reads every limit Zod enforces. **Zod validation always runs** after the response; cross-field rules (sums, ids in order, "correct among the options") are stated in the task prompt.
 - New schemas compile on first use (one-time latency, cached ~24 h by the API). Pre-warm new schema versions with a staging call after deploy so the first student doesn't pay the latency.
-- Validation failure → retry once with the same request (no prompt change); second failure → item/job marked `failed` with `error_code = 'ai_invalid_output'`; the user sees the spec's fallback (e.g. manual topic picker for GOL-03).
+- **No validation retry** (R13). When every Zod issue sits inside items of a top-level list (`items.3.text`), those items are dropped and the rest is kept (`salvage` on the result, logged); otherwise the item/job is marked `failed` with `error_code = 'ai_invalid_output'` and the user sees the spec's fallback (e.g. manual topic picker for GOL-03).
 - Field order matters for streamed structured outputs: put the field the app renders first at the top of the schema (`lucas_reply` in `S:LucasTurn`).
 
 ### 5.2 Citations API
@@ -477,11 +478,11 @@ await db.aiBatches.insert({ id: batch.id, job_id: wave.jobId, submitted_at: now(
 | Result | Handling |
 |---|---|
 | `succeeded`, `stop_reason = end_turn` | Validate (Zod or citation mapping), store, record `ai_usage` (batch discount applied). |
-| `succeeded`, `stop_reason = refusal` | Re-run that one request on the **standard API** (the on-demand lane), without `fallbacks` (Haiku 5.5 has none). Still refused → mark the topic/item `ai_refused`. |
-| `succeeded`, `stop_reason = max_tokens` | Re-submit in the next wave with class XL (streamed on the standard API if urgent). |
-| `succeeded` but invalid output | Retry once (next wave or standard API), then `failed`. |
+| `succeeded`, `stop_reason = refusal` | Billed: not re-run (R13). Mark the topic/item `ai_refused`. |
+| `succeeded`, `stop_reason = max_tokens` | Billed: not re-run (R13); the request already carried the next class. Mark `failed`. |
+| `succeeded` but invalid output | Item salvage as in §5.1, else `failed` (no retry, R13). |
 | `errored`, `invalid_request` | Bug: log with request params hash, alert, mark `failed` (no blind retry). |
-| `errored`, other | Retry once in the next wave. |
+| `errored`, other | Nothing billed: run once on the standard API. |
 | `canceled` / `expired` | Re-submit on the standard API (concurrency 4). |
 
 - When an on-demand lane result already filled a topic, the late batch result is discarded (cost accepted, spec 01 §8.4).
@@ -751,7 +752,7 @@ try {
 |---|---|---|
 | 429 / 5xx / 529 overloaded / connection | SDK retries (`maxRetries: 2`, built-in backoff); then PT-BR "Tá meio cheio por aqui, tenta de novo em instantes." | pg-boss retry with exponential backoff (2 s, 8 s, 30 s, 2 min, 10 min), max 5 |
 | 400 | Report to Sentry with params hash; user sees a generic error | Mark item/job `failed`; alert |
-| Invalid structured output | One automatic retry, then the spec's manual fallback | Retry once, then `failed` (§5.1) |
+| Invalid structured output | No retry: item salvage, else the spec's manual fallback (§5.1) | No retry: item salvage, else `failed` (§5.1) |
 | `refusal` | §2.4 | §2.4 / §7.3 |
 | Stream interrupted | App shows partial text with "Tentar de novo"; partial is not stored | Retry the whole call |
 
@@ -807,3 +808,4 @@ Worker jobs carry `ai_jobs.id`; a retried job checks which items already exist (
 | R10 | Specs list a single cached topic slice for both notes (citations on) and items (citations off). | Citations on/off is part of the prefix: two cached variants per topic; Batch waves group by variant (§6.1). | 01 §7 "Caching" paragraph. |
 | R11 | Owner decision 2026-10-27: default model `claude-haiku-5-5`, effort `high` for every task, no server-side fallback on Haiku 5.5. The specs still say `claude-opus-5-5`, `fallbacks: "default"` on all synchronous calls and per-task efforts. | This document and `packages/ai` (`DEFAULT_MODEL`, `effortFor`, `syncRequestDefaults`, `PRICES`) follow the decision. Spec model and fallback lines are superseded until updated. | Every spec that names `claude-opus-5-5` or `fallbacks` (`grep -rn "opus-5-5\|fallbacks" docs/specs`, specs 00 to 13): "model `claude-haiku-5-5`, effort `high`; fallbacks only on models that have one, never on Batch". |
 | R12 | ADR 0003 §5 per-task effort values (R2 above). | Superseded by the 2026-10-27 decision: every task runs at `high` (`effortFor`). Per-task values in §3 are hints. | ADR 0003 §5 (amendment added). |
+| R13 | Owner decision 2026-10-28: **one paid attempt per AI call.** Specs say "retry once" on invalid output, `max_tokens`, refusals, failed checks (notes structure, citation coverage, podcast script, ENEM explanation off key) and re-run billed batch items. | `callClaude` sends one request (pause_turn continuations of the same answer aside): no validation or truncation retry; structured output gets the next `max_tokens` class up front; schema limits are restated in descriptions; invalid list items are dropped instead of re-asking. Worker waves call each item once; batch items are re-run only when the batch billed nothing (`errored`, `canceled`, `expired`, missing). Free retries stay: SDK retries on 429/5xx/connection (nothing generated, nothing billed) and job retries after such errors. | Every spec "retry once" / "regenerate once" / "one retry" line (`grep -rni "retry once\|one retry\|regenerate once" docs/specs`). |

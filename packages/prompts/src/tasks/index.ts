@@ -70,6 +70,7 @@ export const TASKS: readonly AnyTaskDef[] = [
   feed.feedTopUp,
   goals.vesperaCheatsheet,
   goals.goalsDiagnostic,
+  goals.planCoach,
   prova.pastTestExtract,
   prova.teacherProfileBuild,
   prova.predictedTestGenerate,
