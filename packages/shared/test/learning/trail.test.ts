@@ -216,9 +216,13 @@ describe('buffer (spec 14 §8.3)', () => {
     expect(trailNeeds(CH, sim.steps, { chapter: next, steps: [{ ...sim.steps[0]!, id: 'n1', conceptId: 'c3' }] })).toEqual([]);
   });
 
-  it('never asks for more than two generations at once', () => {
+  it('writes the current lesson and the two concepts after it, and no more', () => {
     const big: TrailChapter = { topicId: 't', why: null, conceptIds: ['a', 'b', 'c', 'd'] };
-    expect(trailNeeds(big, [], null).length).toBeLessThanOrEqual(2);
+    expect(trailNeeds(big, [], null)).toEqual([
+      { need: { kind: 'teach', conceptId: 'a' }, blocking: true, nextChapter: false },
+      { need: { kind: 'teach', conceptId: 'b' }, blocking: false, nextChapter: false },
+      { need: { kind: 'teach', conceptId: 'c' }, blocking: false, nextChapter: false },
+    ]);
   });
 });
 

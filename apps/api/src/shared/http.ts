@@ -56,6 +56,11 @@ export interface FnSpec<I> {
    */
   deferred?: boolean | ((input: I) => boolean);
   /**
+   * For a deferred function whose call may need no AI work at all (a resume rather than a new plan): when this
+   * resolves true, the call runs inline and answers at once instead of through the job queue.
+   */
+  inlineWhen?: (input: I, deps: Deps, userId: string) => Promise<boolean>;
+  /**
    * ADR 0009: the handler makes its plain Claude calls inside its SSE producer, after the stream opened, so the
    * heartbeat keeps the connection alive while it waits. Declares that to the no-sync-Claude check.
    */
@@ -179,7 +184,7 @@ export async function runFunction<I>(req: Request, deps: Deps, spec: FnSpec<I>):
     }
 
     const follows = followsOperations(req);
-    const deferred = follows && deps.defer !== undefined && isDeferred(spec, input);
+    const deferred = follows && deps.defer !== undefined && isDeferred(spec, input) && !(await spec.inlineWhen?.(input, deps, user.userId));
     let key = '';
     if (spec.mutating || deferred) {
       key = req.headers.get('idempotency-key') ?? '';

@@ -105,3 +105,21 @@ export const TrailAnswerResSchema = z.object({
   state: TrailStateSchema,
 });
 export type TrailAnswerRes = z.infer<typeof TrailAnswerResSchema>;
+
+/**
+ * trail-grade: the verdict of a question, as soon as it is recorded (same input as trail-answer). The explanation,
+ * the tip and the next state come from trail-settle.
+ */
+export const TrailGradeResSchema = z.object({
+  correct: z.boolean(),
+  correct_option: z.string(),
+});
+export type TrailGradeRes = z.infer<typeof TrailGradeResSchema>;
+
+/** trail-settle: what a graded question leaves behind (mastery, the Caderno, the chapter). Returns a TrailAnswerRes. */
+export const TrailSettleReqSchema = z.object({
+  trail_id: UuidSchema,
+  step_id: UuidSchema,
+  time_spent_ms: z.int().min(0).max(3_600_000).optional(),
+});
+export type TrailSettleReq = z.infer<typeof TrailSettleReqSchema>;

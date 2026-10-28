@@ -215,3 +215,23 @@ test('an older app build (no x-studify-operations) keeps the old contract: inlin
   release();
   await original;
 });
+
+const resumable = defineFunction<{ n: number }>({
+  name: 'test-deferred-resumable',
+  mutating: true,
+  deferred: true,
+  inlineWhen: async (input) => input.n === 0,
+  input: z.object({ n: z.number() }),
+  run: async (ctx) => ctx.json({ n: ctx.input.n }),
+});
+
+test('a deferred call whose inlineWhen holds runs inline; otherwise it is queued as before', async () => {
+  const { h, jobs } = harness();
+  const resume = await resumable(request('test-deferred-resumable', { body: { n: 0 }, idem: v7(9001) }), h.deps);
+  assertEquals(resume.status, 200);
+  assertEquals(jobs.length, 0);
+
+  const work = await resumable(request('test-deferred-resumable', { body: { n: 1 }, idem: v7(9002) }), h.deps);
+  assert(isRunning(work), 'a call that needs work is answered running');
+  assertEquals(jobs.length, 1);
+});

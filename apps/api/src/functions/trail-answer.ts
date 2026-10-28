@@ -2,11 +2,12 @@
 // lesson was read), returns the feedback that teaches (right option, why each option is right or wrong, a tip),
 // writes mastery evidence, saves a miss to the Caderno de Erros, scores a finished chapter-test round and moves the
 // path on when the chapter is closed (test passed and Lucas taught). Answering a step twice returns the first
-// answer's feedback; it is never graded again.
-import { ApiFailure, TrailAnswerReqSchema, evidenceWeight, type TrailAnswerReq, type TrailAnswerRes } from '@studify/shared';
+// answer's feedback; it is never graded again. The app now grades a question with trail-grade and settles it with
+// trail-settle; this call remains for lessons and for app builds that predate the split.
+import { ApiFailure, TrailAnswerReqSchema, type TrailAnswerReq, type TrailAnswerRes } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { requireSubject } from '../shared/access.ts';
-import { advanceIfPassed, buildState, checkpointScore, isQuestionPurpose, loadOutline, loadSteps, loadTrail, saveMistake, toView, type QuestionContent } from '../shared/trail.ts';
+import { advanceIfPassed, buildState, checkpointScore, feedbackOf, isQuestionPurpose, loadOutline, loadSteps, loadTrail, recordQuestionAnswer, toView, type QuestionContent } from '../shared/trail.ts';
 
 export const handler = defineFunction<TrailAnswerReq>({
   name: 'trail-answer',
@@ -34,40 +35,7 @@ export const handler = defineFunction<TrailAnswerReq>({
       const upd = await db.from('trail_steps').update(patch).eq('id', row.id).eq('status', 'ready');
       if (upd.error) throw upd.error;
       Object.assign(row, patch);
-
-      if (question) {
-        // Mastery evidence (learning-engine §5.2): a multiple-choice answer, source multiplier 1.0.
-        const score = correct ? 1 : 0;
-        const weight = evidenceWeight({ id: row.id, conceptId: row.concept_id, answeredAt: ctx.now, questionType: 'mcq_single', source: 'trail', score });
-        // The evidence, the recompute job and the Caderno entry do not depend on each other: write them together.
-        const evidence = db.from('mastery_evidence').upsert(
-          [{ user_id: userId, node_id: row.concept_id, subject_id: trail.subject_id, source: 'trail', outcome: score, weight, ref_type: 'trail_step', ref_id: row.id, occurred_at: answeredAt }],
-          { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
-        );
-        const recompute = deps.enqueue('mastery.recompute', { user_id: userId, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
-        // Best effort: the answer is already recorded, so a Caderno failure must not fail (and retry) the step.
-        const caderno = correct
-          ? Promise.resolve(null)
-          : saveMistake(deps, trail, row, input.time_spent_ms ?? 0, ctx.now).catch((err) => {
-              console.warn('[trail-answer] caderno', err instanceof Error ? err.message : err);
-              return null;
-            });
-        const [ev, , saved] = await Promise.all([evidence, recompute, caderno]);
-        if (ev.error) throw ev.error;
-        mistakeId = saved;
-      }
-    }
-
-    let feedback: TrailAnswerRes['feedback'] = null;
-    if (question) {
-      const q = row.content as QuestionContent;
-      feedback = {
-        correct: row.correct === true,
-        correct_option: q.correct,
-        explanation: q.explanation,
-        tip: q.tip,
-        rationales: q.options.map((o) => ({ id: o.id, text: o.text, rationale: o.rationale })),
-      };
+      if (question) mistakeId = await recordQuestionAnswer(deps, trail, row, input.time_spent_ms ?? 0, ctx.now, true);
     }
 
     let checkpointResult: TrailAnswerRes['checkpoint_result'] = null;
@@ -80,7 +48,7 @@ export const handler = defineFunction<TrailAnswerReq>({
     trail = advanced.trail;
 
     const body: TrailAnswerRes = {
-      feedback,
+      feedback: question ? feedbackOf(row) : null,
       checkpoint_result: checkpointResult,
       mistake_id: mistakeId,
       state: await buildState(deps, trail, steps, outline, { chapterDone: advanced.chapterDone }),

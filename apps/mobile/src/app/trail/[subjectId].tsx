@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import type { TrailAnswerReq, TrailAnswerRes, TrailState, TrailStep } from '@studify/shared';
+import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailState, TrailStep } from '@studify/shared';
 import {
   ActionBar,
   BottomSheet,
@@ -30,7 +30,7 @@ import { createQuiz } from '../../features/practice/api';
 import { rememberLearned } from '../../features/trail/learned';
 import { openTutor } from '../../features/tutor/open';
 import { useSubject } from '../../features/subjects/api';
-import { answerStep, openTrail, prepareTrail } from '../../features/trail/api';
+import { answerStep, gradeStep, openTrail, prepareTrail, settleStep } from '../../features/trail/api';
 import { queryClient } from '../../api/queryClient';
 import { cheer, thud } from '../../lib/haptics';
 import { t } from '../../i18n';
@@ -52,6 +52,9 @@ async function untilReady(state: TrailState): Promise<TrailState> {
 }
 
 type Milestone = { kind: 'chapter'; title: string; next: string | null } | { kind: 'retry'; correct: number; total: number } | { kind: 'passed'; correct: number; total: number };
+
+/** A question after the student answered: the verdict at once, the explanation when trail-settle returns. */
+type Answered = { stepId: string; grade: TrailGradeRes; settle: TrailAnswerRes | null };
 
 /** Concepts the path counts as learned: every concept of a finished chapter, and the cleared ones of the current. */
 function learnedOf(state: TrailState): string[] {
@@ -75,7 +78,7 @@ export default function TrailScreen() {
   const [slow, setSlow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [answer, setAnswer] = useState<{ stepId: string; res: TrailAnswerRes } | null>(null);
+  const [answer, setAnswer] = useState<Answered | null>(null);
   const [milestone, setMilestone] = useState<Milestone | null>(null);
   const [term, setTerm] = useState<{ term: string; definition: string } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
@@ -85,6 +88,8 @@ export default function TrailScreen() {
   // Each new state bumps the version; a background prefetch that comes back later never overwrites newer state.
   const version = useRef(0);
   const pending = useRef<Promise<TrailState> | null>(null);
+  // trail-settle for the question on screen; Continue waits for it.
+  const settling = useRef<Promise<TrailAnswerRes> | null>(null);
 
   const show = useCallback((s: TrailState) => {
     version.current += 1;
@@ -154,7 +159,13 @@ export default function TrailScreen() {
     if (prefetched.current === key) return;
     prefetched.current = key;
     const at = version.current;
+    // Each call writes one lesson; keep asking while the buffer still wants more (spec 14 §8.3), at most three more.
+    const fill = async (cur: TrailState): Promise<TrailState> => {
+      for (let i = 0; i < 3 && cur.prefetch && !cur.preparing && version.current === at; i++) cur = await prepareTrail(cur.trail_id);
+      return cur;
+    };
     prepareTrail(state.trail_id)
+      .then(fill)
       .then((next) => {
         if (version.current === at && !next.preparing) setState(next);
       })
@@ -165,19 +176,30 @@ export default function TrailScreen() {
 
   const submit = async (response: TrailAnswerReq['response']) => {
     if (!state || !step) return;
+    const body = { trail_id: state.trail_id, step_id: step.id, response, time_spent_ms: since(shownAt.current) };
     setBusy(true);
     try {
-      const res = await answerStep({ trail_id: state.trail_id, step_id: step.id, response, time_spent_ms: since(shownAt.current) });
-      // The next step may need content (a re-explanation after a miss): start it while the student reads.
-      pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
-      pending.current.catch(() => undefined);
-      if (res.feedback) {
-        if (res.feedback.correct) cheer();
-        else thud();
-        setAnswer({ stepId: step.id, res });
-      } else {
+      if (response === null) {
+        const res = await answerStep(body);
+        // The next step may need content (a re-explanation after a miss): start it while the student reads.
+        pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
+        pending.current.catch(() => undefined);
         await next(res);
+        return;
       }
+      // The verdict shows at once; the explanation, the Caderno and the next step follow in the background.
+      const grade = await gradeStep(body);
+      if (grade.correct) cheer();
+      else thud();
+      setAnswer({ stepId: step.id, grade, settle: null });
+      settling.current = settleStep({ trail_id: state.trail_id, step_id: step.id, time_spent_ms: body.time_spent_ms }).then((res) => {
+        // The next step may need content (a re-explanation after a miss): start it while the student reads.
+        pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
+        pending.current.catch(() => undefined);
+        setAnswer((cur) => (cur?.stepId === step.id ? { ...cur, settle: res } : cur));
+        return res;
+      });
+      settling.current.catch(fail);
     } catch (err) {
       fail(err);
     } finally {
@@ -195,8 +217,19 @@ export default function TrailScreen() {
       fail(err);
     } finally {
       pending.current = null;
+      settling.current = null;
     }
     void queryClient.invalidateQueries({ queryKey: ['trail', subjectId] });
+  };
+
+  // Continue: the verdict is already on screen; move on once trail-settle has produced the next step.
+  const advance = async () => {
+    if (!settling.current) return;
+    try {
+      await next(await settling.current);
+    } catch (err) {
+      fail(err);
+    }
   };
 
   const teachLucas = () => {
@@ -275,7 +308,7 @@ export default function TrailScreen() {
     if (answer) {
       return (
         <ActionBar>
-          <Button label={t('trail.continue')} onPress={() => void next(answer.res)} />
+          <Button label={t('trail.continue')} loading={!answer.settle} onPress={() => void advance()} />
         </ActionBar>
       );
     }
@@ -316,7 +349,7 @@ export default function TrailScreen() {
           checkpoint={state.checkpoint}
           selected={selected}
           onSelect={setSelected}
-          answer={answer?.stepId === step.id ? answer.res : null}
+          answer={answer?.stepId === step.id ? answer : null}
           onTerm={(name) => setTerm(step.terms.find((x) => x.term.toLowerCase() === name.toLowerCase()) ?? null)}
           onExplain={() => setExplainId(step.id)}
           onAskTutor={() => openTutor({ type: 'topic', subject_id: subjectId, node_id: chapter?.topic_id }, { prefill: step.kind === 'question' ? t('trail.tutor_prefill', { stem: step.stem.slice(0, 300) }) : undefined })}
@@ -460,7 +493,7 @@ function StepView({
   checkpoint: TrailState['checkpoint'];
   selected: string | null;
   onSelect: (id: string) => void;
-  answer: TrailAnswerRes | null;
+  answer: Answered | null;
   onTerm: (term: string) => void;
   onExplain: () => void;
   onAskTutor: () => void;
@@ -501,17 +534,15 @@ function StepView({
           <Options
             options={step.options.map((o) => ({ id: o.id, text: o.text }))}
             selected={selected ? [selected] : []}
-            correct={answer?.feedback ? [answer.feedback.correct_option] : undefined}
+            correct={answer ? [answer.grade.correct_option] : undefined}
             disabled={!!answer}
             onSelect={onSelect}
           />
-          {answer?.feedback ? (
+          {answer ? (
             <Feedback
-              feedback={answer.feedback}
+              answer={answer}
               picked={selected}
-              reteach={answer.state.preparing && !answer.feedback.correct}
-              saved={!!answer.mistake_id}
-              borderColor={answer.feedback.correct ? c.success : c.danger}
+              borderColor={answer.grade.correct ? c.success : c.danger}
               onExplain={onExplain}
               onAskTutor={onAskTutor}
             />
@@ -524,47 +555,51 @@ function StepView({
 }
 
 function Feedback({
-  feedback,
+  answer,
   picked,
-  reteach,
-  saved,
   borderColor,
   onExplain,
   onAskTutor,
 }: {
-  feedback: NonNullable<TrailAnswerRes['feedback']>;
+  answer: Answered;
   picked: string | null;
-  reteach: boolean;
-  saved: boolean;
   borderColor: string;
   onExplain: () => void;
   onAskTutor: () => void;
 }) {
   const { colors: c } = useTheme();
-  const pickedRow = feedback.rationales.find((r) => r.id === picked);
-  const right = feedback.rationales.find((r) => r.id === feedback.correct_option);
+  const { grade, settle } = answer;
+  const feedback = settle?.feedback ?? null;
+  const reteach = !!settle?.state.preparing && !grade.correct;
+  const saved = !!settle?.mistake_id;
+  const pickedRow = feedback?.rationales.find((r) => r.id === picked);
+  const right = feedback?.rationales.find((r) => r.id === grade.correct_option);
   return (
     <View
       accessibilityLiveRegion="polite"
       style={{ borderWidth: 2, borderBottomWidth: 5, borderColor, borderBottomColor: shade(borderColor, 0.25), borderRadius: radius.xl, padding: space.lg, gap: space.md, backgroundColor: c.surface1 }}
     >
       <RichText variant="heading" style={{ color: borderColor }}>
-        {feedback.correct ? t('trail.correct') : t('trail.wrong', { letter: feedback.correct_option })}
+        {grade.correct ? t('trail.correct') : t('trail.wrong', { letter: grade.correct_option })}
       </RichText>
-      {!feedback.correct && pickedRow ? (
+      {feedback && !grade.correct && pickedRow ? (
         <View style={{ gap: space.xxs }}>
           <Text variant="label">{t('trail.why_wrong', { letter: pickedRow.id })}</Text>
           <RichContent variant="reading" text={pickedRow.rationale} />
         </View>
       ) : null}
-      {right ? (
+      {feedback && right ? (
         <View style={{ gap: space.xxs }}>
           <Text variant="label">{t('trail.why_right', { letter: right.id })}</Text>
           <RichContent variant="reading" text={right.rationale} />
         </View>
       ) : null}
-      <RichContent variant="reading" text={feedback.explanation} />
-      {feedback.tip ? (
+      {feedback ? (
+        <RichContent variant="reading" text={feedback.explanation} />
+      ) : (
+        <Text tone="secondary">{t('trail.explanation_loading')}</Text>
+      )}
+      {feedback?.tip ? (
         <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', backgroundColor: c.infoSoft, borderRadius: radius.md, padding: space.md }}>
           <Ionicons name="bulb-outline" size={20} color={c.info} />
           <View style={{ flex: 1, gap: space.xxs }}>
@@ -586,7 +621,7 @@ function Feedback({
         </Text>
       ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-        {!feedback.correct ? <Button compact variant="tonal" icon="chatbubbles-outline" label={t('quiz.dont_understand')} onPress={onAskTutor} /> : null}
+        {!grade.correct ? <Button compact variant="tonal" icon="chatbubbles-outline" label={t('quiz.dont_understand')} onPress={onAskTutor} /> : null}
         <Button compact variant="text" icon="sparkles-outline" label={t('notes.explain')} onPress={onExplain} />
       </View>
     </View>
