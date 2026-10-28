@@ -4,7 +4,7 @@
 // are replayed with their documents rebuilt from the same stored slices, so the replayed prefix is identical.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PdfSlice } from '@studify/prompts';
-import { downloadBytes } from './storage.ts';
+import { downloadBytes, sliceObjectPath } from './storage.ts';
 import { toBase64, prepareSlices, type PreparedSlice } from './slices.ts';
 import type { Deps } from './deps.ts';
 
@@ -91,7 +91,7 @@ export async function slicesFromStored(deps: Deps, stored: StoredSlice[], cache:
   for (const s of stored) {
     let data = cache.get(s.row_id);
     if (!data) {
-      data = toBase64(await downloadBytes(deps.db, s.storage_path));
+      data = toBase64(await downloadBytes(deps.db, sliceObjectPath(s.storage_path)));
       cache.set(s.row_id, data);
     }
     out.push({ documentId: s.document_id, title: s.title, pages: s.pages, source: { type: 'base64', media_type: 'application/pdf', data } });
