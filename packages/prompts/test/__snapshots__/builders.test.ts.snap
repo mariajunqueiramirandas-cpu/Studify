@@ -77,7 +77,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "acheOErro.generate@v1",
+  "promptVersion": "acheOErro.generate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -123,10 +123,10 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "type": "ephemeral",
       },
       "text": "Tarefa: escreva 5 itens de "Ache o Erro" do tópico.
-- Cada item é uma afirmação, um parágrafo curto ou uma resolução passo a passo, dividido em segmentos S1, S2… (frases ou passos).
+- Cada item é uma afirmação, um parágrafo curto ou uma resolução passo a passo, dividido em 3 a 8 segmentos S1, S2, S3… em ordem (frases, trechos ou passos; até 400 caracteres cada). Uma afirmação curta também é dividida em pelo menos 3 trechos.
 - Exatamente um segmento tem um erro plantado, plausível e baseado num engano comum do material. Um item (e só um) pode não ter erro: error_segment_id, error_type e corrected_text ficam null.
 - error_type: conceitual, calculo, sinal, unidade, definicao, data_nome, causa_efeito.
-- explanation: por que o segmento está errado (ou por que não há erro), em até 3 frases. corrected_text: o segmento corrigido.
+- explanation: por que o segmento está errado (ou por que não há erro), em até 3 frases. corrected_text: o segmento corrigido. concept_keys: de 1 a 3 chaves.
 - Os segmentos certos são fiéis ao material. source_pages obrigatório.
 - Varie os tipos de erro e não repita afirmações existentes.",
       "type": "text",
@@ -1468,7 +1468,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "cards.generate@v1",
+  "promptVersion": "cards.generate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -1518,7 +1518,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
 - Pergunta específica e sem ambiguidade ("Qual organela produz ATP?", não "Fale sobre a mitocôndria"). Nada de perguntas de sim ou não.
 - Se um termo puder significar coisas diferentes em matérias distintas, use um prefixo de contexto ("Em Química: …").
 - Listas com mais de 3 itens viram vários cartões.
-- type cloze: cloze_text usa {{c1::termo}}. A lacuna é um termo-chave, número ou nome, nunca uma palavra trivial; a frase restante precisa determinar a resposta. No máximo 3 lacunas por frase; com várias lacunas, escreva um cartão por lacuna. front é a frase sem marcações; back é o termo oculto.
+- type cloze: cloze_text usa {{c1::termo}}. A lacuna é um termo-chave, número ou nome, nunca uma palavra trivial; a frase restante precisa determinar a resposta. No máximo 3 lacunas por frase (c1, c2, c3); uma frase com várias lacunas é UM cartão com todas as marcações no cloze_text (o app cria um cartão por lacuna). front é a frase sem marcações; back é o termo da c1.
 - type reverse: só para termo e definição ou vocabulário, quando as duas direções fazem sentido.
 - type basic: front é a pergunta, back é a resposta. cloze_text é null.
 - Varie os tipos de conhecimento: definições, causa e efeito, comparações, etapas de um processo, exemplos, fórmulas (pergunte sobre o significado ou o uso, não só sobre os símbolos).
@@ -1611,7 +1611,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "cards.more@v1",
+  "promptVersion": "cards.more@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -1661,7 +1661,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
 - Pergunta específica e sem ambiguidade ("Qual organela produz ATP?", não "Fale sobre a mitocôndria"). Nada de perguntas de sim ou não.
 - Se um termo puder significar coisas diferentes em matérias distintas, use um prefixo de contexto ("Em Química: …").
 - Listas com mais de 3 itens viram vários cartões.
-- type cloze: cloze_text usa {{c1::termo}}. A lacuna é um termo-chave, número ou nome, nunca uma palavra trivial; a frase restante precisa determinar a resposta. No máximo 3 lacunas por frase; com várias lacunas, escreva um cartão por lacuna. front é a frase sem marcações; back é o termo oculto.
+- type cloze: cloze_text usa {{c1::termo}}. A lacuna é um termo-chave, número ou nome, nunca uma palavra trivial; a frase restante precisa determinar a resposta. No máximo 3 lacunas por frase (c1, c2, c3); uma frase com várias lacunas é UM cartão com todas as marcações no cloze_text (o app cria um cartão por lacuna). front é a frase sem marcações; back é o termo da c1.
 - type reverse: só para termo e definição ou vocabulário, quando as duas direções fazem sentido.
 - type basic: front é a pergunta, back é a resposta. cloze_text é null.
 - Varie os tipos de conhecimento: definições, causa e efeito, comparações, etapas de um processo, exemplos, fórmulas (pergunte sobre o significado ou o uso, não só sobre os símbolos).
@@ -2992,7 +2992,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "feed.generate@v1",
+  "promptVersion": "feed.generate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -3043,7 +3043,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
 - quick_question: respondível em 20 segundos. 3 ou 4 alternativas (A, B, C, D) ou verdadeiro e falso como A (Verdadeiro) e B (Falso). rationale de cada alternativa com até 140 caracteres. correct é o id da resposta certa. Mesmas regras de distratores de uma prova: plausíveis, sem "todas as anteriores".
 - diagram: figure_page é uma das páginas com figura da lista. caption até 160 caracteres. question é opcional ("O que é isso?").
 - did_you_know: até 240 caracteres, ligado a um conceito do material. Se trouxer fato fora do material, external_knowledge = true. Nada sensacional nem inadequado para menores.
-- Todo item traz concept_key (da lista) e source_pages (páginas originais). Não repita títulos já existentes.
+- Todo item traz title (até 80 caracteres), body não vazio (até 280; numa quick_question, uma frase de contexto ou de dica), concept_key (da lista) e source_pages (páginas originais). Não repita títulos já existentes.
 - Não aponte páginas que não estejam nos blocos enviados.",
       "type": "text",
     },
@@ -3135,7 +3135,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "feed.topUp@v1",
+  "promptVersion": "feed.topUp@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -3186,7 +3186,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
 - quick_question: respondível em 20 segundos. 3 ou 4 alternativas (A, B, C, D) ou verdadeiro e falso como A (Verdadeiro) e B (Falso). rationale de cada alternativa com até 140 caracteres. correct é o id da resposta certa. Mesmas regras de distratores de uma prova: plausíveis, sem "todas as anteriores".
 - diagram: figure_page é uma das páginas com figura da lista. caption até 160 caracteres. question é opcional ("O que é isso?").
 - did_you_know: até 240 caracteres, ligado a um conceito do material. Se trouxer fato fora do material, external_knowledge = true. Nada sensacional nem inadequado para menores.
-- Todo item traz concept_key (da lista) e source_pages (páginas originais). Não repita títulos já existentes.
+- Todo item traz title (até 80 caracteres), body não vazio (até 280; numa quick_question, uma frase de contexto ou de dica), concept_key (da lista) e source_pages (páginas originais). Não repita títulos já existentes.
 - Não aponte páginas que não estejam nos blocos enviados.",
       "type": "text",
     },
@@ -3378,7 +3378,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "glossary.define@v1",
+  "promptVersion": "glossary.define@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -3423,9 +3423,10 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "ttl": "1h",
         "type": "ephemeral",
       },
-      "text": "Tarefa: escreva o glossário do tópico: uma definição para cada termo listado (e para outros termos centrais do material deste tópico, se houver).
-- definition: até 40 palavras, no idioma do conteúdo. Em matéria de idioma, em português do Brasil.
-- example: um exemplo curto, ou null se não couber.
+      "text": "Tarefa: escreva o glossário do tópico: uma definição para cada termo listado (e para outros termos centrais do material deste tópico, se houver). No máximo 40 termos no total.
+- term: até 80 caracteres.
+- definition: até 40 palavras e 300 caracteres, no idioma do conteúdo. Em matéria de idioma, em português do Brasil.
+- example: um exemplo curto (até 200 caracteres), ou null se não couber.
 - aliases: plural, abreviações e sinônimos que aparecem no material (até 6).
 - concept_key: a chave do conceito ao qual o termo pertence, da lista fornecida.
 - source_pages: páginas originais onde o termo aparece no material.
@@ -6346,7 +6347,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "problems.generate@v1",
+  "promptVersion": "problems.generate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -6396,6 +6397,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
 - problems: a quantidade pedida. Cada problema tem statement, given (variáveis e valores numéricos usados), final_answer, answer_format (numeric, expression ou choice), unit, tolerance, solution_steps, 3 dicas e source_pages.
 - hints: 1 = qual conceito ou fórmula se aplica; 2 = como montar; 3 = o próximo passo. Nenhuma dica dá a resposta.
 - check_expression: uma expressão (sintaxe de calculadora: + - * / ^, sqrt, sin, cos, log, ln) que, com os valores de given, calcula final_answer. Em answer_format expression, check_expression é uma forma equivalente de final_answer. Null só em choice.
+- Nomes em given: letras, dígitos e _ (v0, v_0, massa); use em check_expression exatamente esses nomes. Funções trigonométricas usam radianos: para um ângulo em graus, escreva sin(30*pi/180).
 - Confira as contas com cuidado: o app descarta problemas cuja check_expression não bate com final_answer.
 - Use números com ponto decimal em given, final_answer e tolerance.",
       "type": "text",
@@ -6483,7 +6485,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "questions.generate@v1",
+  "promptVersion": "questions.generate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -6533,7 +6535,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "type": "ephemeral",
       },
       "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
-- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
+- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 5 alternativas (A a E), como nas provas brasileiras; 4 (A a D) só quando o material mostra questões com 4 alternativas. Ids em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
 - multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
 - true_false: {"statement":"…","correct":true,"justification":"…"}.
 - fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.
@@ -6635,7 +6637,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "questions.more@v1",
+  "promptVersion": "questions.more@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -6685,7 +6687,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "type": "ephemeral",
       },
       "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
-- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
+- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 5 alternativas (A a E), como nas provas brasileiras; 4 (A a D) só quando o material mostra questões com 4 alternativas. Ids em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
 - multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
 - true_false: {"statement":"…","correct":true,"justification":"…"}.
 - fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.
@@ -6769,7 +6771,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "questions.variant@v1",
+  "promptVersion": "questions.variant@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -6822,7 +6824,7 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
         "type": "ephemeral",
       },
       "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
-- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
+- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 5 alternativas (A a E), como nas provas brasileiras; 4 (A a D) só quando o material mostra questões com 4 alternativas. Ids em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
 - multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
 - true_false: {"statement":"…","correct":true,"justification":"…"}.
 - fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.

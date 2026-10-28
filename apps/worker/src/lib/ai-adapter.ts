@@ -47,6 +47,23 @@ function systemOf(built: BuiltPrompt): SystemBlock[] {
   return built.system.map((block) => (block.cache_control ? { text: block.text, cacheTtl: block.cache_control.ttl } : { text: block.text }));
 }
 
+/**
+ * The call with every 1h cache breakpoint turned into 5m. The 1h TTL exists for Batch waves, whose requests can
+ * run an hour apart. Worker calls are standard calls: their reuse (retries, the next item of the same task) comes
+ * within minutes and every read refreshes the 5m TTL, so a 1h write (2× input) buys nothing over 5m (1.25×).
+ */
+export function withShortCache<T>(call: TaskCall<T>): TaskCall<T> {
+  const system = call.system.map((b) => (b.cacheTtl === '1h' ? { ...b, cacheTtl: '5m' as const } : b));
+  const messages = call.messages.map((m) => {
+    if (typeof m.content === 'string') return m;
+    const content = (m.content as Array<{ cache_control?: { type: 'ephemeral'; ttl?: string } }>).map((b) =>
+      b.cache_control?.ttl === '1h' ? { ...b, cache_control: { ...b.cache_control, ttl: '5m' } } : b,
+    );
+    return { ...m, content } as typeof m;
+  });
+  return { ...call, system, messages };
+}
+
 /** Runs one structured prompt task through callClaude (reserve → call → validate → settle). */
 export async function runPrompt<I, O>(deps: ClaudeDeps, run: PromptRun<I, O>): Promise<PromptOutcome<O>> {
   const built = run.task.build(run.input);
@@ -75,7 +92,7 @@ export async function runPrompt<I, O>(deps: ClaudeDeps, run: PromptRun<I, O>): P
     messages: built.messages as unknown as TaskCall<O>['messages'],
     sources: sourcesOf(built.documents),
   };
-  const result = await callClaude(deps, call);
+  const result = await callClaude(deps, withShortCache(call));
   return { result, documents: built.documents ?? null };
 }
 
@@ -131,5 +148,5 @@ export async function runText<I>(deps: ClaudeDeps, run: TextRun<I>): Promise<Cal
     ...(built.tools ? { tools: built.tools as unknown as TaskCall<string>['tools'] } : {}),
     sources: sourcesOf(built.documents),
   };
-  return callClaude(deps, call);
+  return callClaude(deps, withShortCache(call));
 }

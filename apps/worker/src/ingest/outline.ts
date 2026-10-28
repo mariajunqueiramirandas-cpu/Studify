@@ -14,6 +14,7 @@ import { planOutlineSlices, type PageSpan } from './slice-plan.ts';
 import { normalizeOutline, type NormalizedOutline, type OutlineOut } from './outline-normalize.ts';
 import { listNodes, nodeSourcesOfDocument, documentHasNodes, patchDocument, type DocumentRecord, type NodeRow } from './repo.ts';
 import { MAX_SLICE_BYTES } from './limits.ts';
+import { withShortCache } from '../lib/ai-adapter.ts';
 
 export const OUTLINE_CONCURRENCY = 4;
 export const S1_RETRY_DELAYS_MS = [2_000, 8_000, 30_000];
@@ -111,7 +112,7 @@ export async function runOutlineCalls(
         existing,
       });
       const prepared = prepareCall('ingest.outline', built, budgetFor({ ...doc, documentId: doc.id }, { jobId: input.jobId, feature: 'ING-03' }), [ref]);
-      return withS1Retries(env, () => callClaude(env.ctx.ai, prepared.call));
+      return withS1Retries(env, () => callClaude(env.ctx.ai, withShortCache(prepared.call)));
     });
 
     const outlines: unknown[] = [];
@@ -129,7 +130,7 @@ export async function runOutlineCalls(
       existing,
     });
     const mergeCall = prepareCall('ingest.outlineMerge', mergeBuilt, budgetFor({ ...doc, documentId: doc.id }, { jobId: input.jobId, feature: 'ING-03' }), []);
-    const merged = await callClaude(env.ctx.ai, mergeCall.call);
+    const merged = await callClaude(env.ctx.ai, withShortCache(mergeCall.call));
     if (merged.status === 'refused') return { status: 'failed', code: 'ai_refused' };
     if (merged.status !== 'ok') return { status: 'failed', code: 'ai_failed' };
     return { status: 'ok', outline: merged.data as OutlineOut, sliceCount: slices.length };

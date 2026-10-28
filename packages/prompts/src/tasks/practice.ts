@@ -31,7 +31,7 @@ export function topUpQuotas(options: { quantitative: boolean }): QuotaMap {
 
 const QUESTION_RULES = [
   'Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):',
-  '- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 4 ou 5 alternativas, ids A, B, C, D, E em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.',
+  '- mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 5 alternativas (A a E), como nas provas brasileiras; 4 (A a D) só quando o material mostra questões com 4 alternativas. Ids em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.',
   '- multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.',
   '- true_false: {"statement":"…","correct":true,"justification":"…"}.',
   '- fill_blank: {"text":"… {{1}} … {{2}} …","blanks":[{"id":1,"accepted":["…","…"]},{"id":2,"accepted":["…"]}]}. id é número; aceite sinônimos e variações de grafia.',
@@ -70,7 +70,7 @@ const QUESTIONS_TASK = 'Tarefa: escreva as questões do tópico seguindo as cota
 
 export const questionsGenerate = defineTask<QuestionsInput, ReturnType<typeof TopicQuestions.parse>>({
   id: 'questions.generate',
-  version: 1,
+  version: 2,
   features: ['PRA-01.4', 'PRA-02'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -84,7 +84,7 @@ export const questionsGenerate = defineTask<QuestionsInput, ReturnType<typeof To
 
 export const questionsMore = defineTask<QuestionsInput, ReturnType<typeof TopicQuestions.parse>>({
   id: 'questions.more',
-  version: 1,
+  version: 2,
   features: ['PRA-01.4'],
   effort: 'medium',
   maxTokensClass: 'M',
@@ -134,7 +134,7 @@ const VARIANT_RULES = [
 
 export const questionsVariant = defineTask<VariantInput, ReturnType<typeof SingleQuestion.parse>>({
   id: 'questions.variant',
-  version: 1,
+  version: 2,
   features: ['PRA-04.4'],
   effort: 'low',
   maxTokensClass: 'S',

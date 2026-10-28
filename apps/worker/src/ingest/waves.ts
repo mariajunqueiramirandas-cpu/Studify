@@ -8,6 +8,7 @@ import { getTask } from '@studify/prompts';
 import { getDocument, type PipelineEnv } from './env.ts';
 import { buildPagesCustomId, buildTopicCustomId, type TopicKind } from './custom-id.ts';
 import { aiTask, prepareCall, toPdfSlices, type SliceRef } from './tasks.ts';
+import { withShortCache } from '../lib/ai-adapter.ts';
 import {
   buildKindCall,
   featureOf,
@@ -190,7 +191,7 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
     let handled = false;
     for (let attempt = 1; attempt <= 2 && !handled && !summary.budgetExceeded; attempt++) {
       try {
-        const result = await callClaude(env.ctx.ai, call);
+        const result = await callClaude(env.ctx.ai, withShortCache(call));
         if (result.status === 'ok') {
           try {
             handled = await writeOutcome(env, item, result.data, result.text, result.citations);
@@ -200,14 +201,18 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
             break;
           }
         } else {
-          env.ctx.log.warn({ customId: item.customId, status: result.status, attempt }, 'standard call did not produce output');
+          // `attempt` is the job's attempt in the bound logger: this one is the call's.
+          env.ctx.log.warn(
+            { customId: item.customId, status: result.status, callAttempt: attempt, ...outcomeDetail(result) },
+            'standard call did not produce output',
+          );
         }
       } catch (err) {
         if (err instanceof BudgetExceededError) {
           summary.budgetExceeded = true;
         } else {
           env.ctx.log.warn(
-            { customId: item.customId, attempt, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
+            { customId: item.customId, callAttempt: attempt, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
             'standard call failed',
           );
         }
@@ -224,6 +229,20 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
     if (input.aiJobId) await applyProgress(env.ctx.db, input.aiJobId, { items_total: total, items_done: finished });
   });
   return summary;
+}
+
+/** Why a call produced no output, for the warning log: the validation issues, truncation reason or refusal category. */
+function outcomeDetail(result: CallResult<unknown>): Record<string, unknown> {
+  switch (result.status) {
+    case 'invalid_output':
+      return { issues: result.issues };
+    case 'truncated':
+      return { reason: result.reason };
+    case 'refused':
+      return { refusalCategory: result.refusalCategory };
+    default:
+      return {};
+  }
 }
 
 /** Builds a PlanItem and the TaskCall for one topic kind. */
@@ -326,12 +345,12 @@ async function rerunStandard(env: PipelineEnv, item: PlanItem): Promise<CallResu
   if (item.kind === 'transcription') {
     const built = getTask('ingest.transcribePages').build({ slice: toPdfSlices(refs)[0]!, contentLanguage: item.language });
     const prepared = prepareCall('ingest.transcribePages', built, item.budget, refs);
-    return callClaude(env.ctx.ai, prepared.call);
+    return callClaude(env.ctx.ai, withShortCache(prepared.call));
   }
   const bundle = await loadTopicBundle(env.ctx.db, item.topicId as string);
   if (!bundle) throw new Error(`topic ${item.topicId} disappeared before rerun`);
   const built = await buildKindCall(env, bundle, item.kind, refs, item.budget, item.language);
-  return callClaude(env.ctx.ai, built.call);
+  return callClaude(env.ctx.ai, withShortCache(built.call));
 }
 
 export interface PollOutcomeSummary {
@@ -402,7 +421,7 @@ export async function pollWave(env: PipelineEnv, plan: WavePlan): Promise<PollOu
         if (rerun.status === 'ok') {
           handled = await writeOutcome(env, item, rerun.data, rerun.text, rerun.citations);
         } else {
-          env.ctx.log.warn({ customId: item.customId, status: rerun.status }, 'standard rerun did not produce output');
+          env.ctx.log.warn({ customId: item.customId, status: rerun.status, ...outcomeDetail(rerun) }, 'standard rerun did not produce output');
         }
       } catch (err) {
         if (err instanceof BudgetExceededError) {

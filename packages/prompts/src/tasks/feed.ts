@@ -13,7 +13,7 @@ const FEED_RULES = [
   '- quick_question: respondível em 20 segundos. 3 ou 4 alternativas (A, B, C, D) ou verdadeiro e falso como A (Verdadeiro) e B (Falso). rationale de cada alternativa com até 140 caracteres. correct é o id da resposta certa. Mesmas regras de distratores de uma prova: plausíveis, sem "todas as anteriores".',
   '- diagram: figure_page é uma das páginas com figura da lista. caption até 160 caracteres. question é opcional ("O que é isso?").',
   '- did_you_know: até 240 caracteres, ligado a um conceito do material. Se trouxer fato fora do material, external_knowledge = true. Nada sensacional nem inadequado para menores.',
-  '- Todo item traz concept_key (da lista) e source_pages (páginas originais). Não repita títulos já existentes.',
+  '- Todo item traz title (até 80 caracteres), body não vazio (até 280; numa quick_question, uma frase de contexto ou de dica), concept_key (da lista) e source_pages (páginas originais). Não repita títulos já existentes.',
   '- Não aponte páginas que não estejam nos blocos enviados.',
 ].join('\n');
 
@@ -46,7 +46,7 @@ function feedMessages(input: FeedInput, ttl: CacheTtl) {
 
 export const feedGenerate = defineTask<FeedInput, ReturnType<typeof FeedItems.parse>>({
   id: 'feed.generate',
-  version: 1,
+  version: 2,
   features: ['FED-01'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -60,7 +60,7 @@ export const feedGenerate = defineTask<FeedInput, ReturnType<typeof FeedItems.pa
 
 export const feedTopUp = defineTask<FeedInput, ReturnType<typeof FeedItems.parse>>({
   id: 'feed.topUp',
-  version: 1,
+  version: 2,
   features: ['FED-01.18'],
   effort: 'medium',
   maxTokensClass: 'L',

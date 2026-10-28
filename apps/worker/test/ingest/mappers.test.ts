@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardFrontKey, clozeIndexes, mapCard, mapGlossaryTerm, mapQuestion, toSourcePages, type LabelMap, type QuestionDraft } from '../../src/ingest/mappers.ts';
+import { cardFrontKey, clozeAnswer, clozeIndexes, mapCard, mapGlossaryTerm, mapQuestion, toSourcePages, type LabelMap, type QuestionDraft } from '../../src/ingest/mappers.ts';
 
 const DOC = '0190f3a2-7b1c-7d3e-8f00-00000000d0c1';
 const CONCEPT_C1 = '0190f3a2-7b1c-7d3e-8f00-0000000000c1';
@@ -67,9 +67,11 @@ describe('mapQuestion (spec 05 §8.1)', () => {
     expect(mapped.value.source_pages).toEqual([{ document_id: DOC, page_start: 1, page_end: 2 }]);
   });
 
-  it('requires exactly five multiple-choice options', () => {
+  it('accepts four or five multiple-choice options (spec 05 PRA-01.1)', () => {
     const four = { ...base, payload: { options: options.slice(0, 4), correct: 'A' } };
-    expect(mapQuestion(four, { labels, conceptIdByKey: concepts })).toEqual({ ok: false, reason: 'mcq_options_not_five' });
+    expect(mapQuestion(four, { labels, conceptIdByKey: concepts }).ok).toBe(true);
+    const three = { ...base, payload: { options: options.slice(0, 3), correct: 'A' } };
+    expect(mapQuestion(three, { labels, conceptIdByKey: concepts })).toEqual({ ok: false, reason: 'mcq_options_count' });
   });
 
   it('drops questions whose concepts are not in the topic', () => {
@@ -114,6 +116,12 @@ describe('mapCard (spec 04 §5.1)', () => {
     expect(mapped.value.map((r) => r.cloze_index)).toEqual([1, 2]);
     expect(mapped.value.every((r) => r.sibling_key === 1)).toBe(true);
     expect(mapped.value[0]?.front).toBe('Produz {{c1::ATP}} na {{c2::respiração}}');
+    expect(mapped.value.map((r) => r.back)).toEqual(['ATP', 'respiração']);
+  });
+
+  it('reads each deletion answer without its hint', () => {
+    expect(clozeAnswer('{{c1::Brasília::capital}} fica no {{c2::DF}}', 1)).toBe('Brasília');
+    expect(clozeAnswer('{{c1::Brasília::capital}} fica no {{c2::DF}}', 2)).toBe('DF');
   });
 
   it('rejects a cloze without a deletion', () => {

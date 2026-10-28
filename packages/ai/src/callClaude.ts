@@ -237,8 +237,10 @@ async function attemptLoop<T>(
       const parsed = parseStructured(extracted.text, task);
       if (parsed.ok) return { status: "ok", data: parsed.data, ...meta() };
       if (!validationRetried) {
-        // One retry with the same request and no prompt change (architecture §5).
+        // One retry. The model gets its own answer back with the issues, so it fixes them instead of
+        // sampling the same mistake again; the prefix is unchanged, so the retry reads the prompt cache.
         validationRetried = true;
+        messages = repairMessages(messages, extracted.text, parsed.issues);
         hooks?.onReset();
         continue;
       }
@@ -247,6 +249,31 @@ async function attemptLoop<T>(
 
     return { status: "ok", data: extracted.text as T, ...meta() };
   }
+}
+
+/**
+ * The request for a validation retry: the invalid answer as an assistant turn, then the issues as a user turn.
+ * Without any text to show back (an empty answer), the original request is sent again.
+ */
+export function repairMessages(
+  messages: readonly BetaMessageParam[],
+  invalidText: string,
+  issues: string,
+): readonly BetaMessageParam[] {
+  if (invalidText.trim() === "") return messages;
+  return [
+    ...messages,
+    { role: "assistant", content: [{ type: "text", text: invalidText }] },
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: `Sua resposta não passou na validação: ${issues}. Corrija esses pontos e retorne de novo o objeto completo, no mesmo formato. Mantenha tudo o que já estava certo.`,
+        },
+      ],
+    },
+  ];
 }
 
 async function sendOnce(

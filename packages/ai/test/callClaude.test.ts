@@ -28,7 +28,7 @@ describe("structured output: Zod validation with one retry", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("retries once with the same request when the output is off-schema, then succeeds", async () => {
+  it("retries once with the invalid answer and its issues when the output is off-schema, then succeeds", async () => {
     const { client, calls } = fakeClient((_p, n) =>
       n === 1 ? message({ text: '{"cards": "nope"}' }) : message({ text: GOOD_CARDS }),
     );
@@ -36,6 +36,19 @@ describe("structured output: Zod validation with one retry", () => {
     expect(result.status).toBe("ok");
     expect(result.attempts).toBe(2);
     expect(calls).toHaveLength(2);
+    const [first, second] = calls as BetaCreateParams[];
+    expect(second!.system).toEqual(first!.system);
+    expect(second!.messages.slice(0, first!.messages.length)).toEqual(first!.messages);
+    const [assistant, user] = second!.messages.slice(first!.messages.length);
+    expect(assistant).toEqual({ role: "assistant", content: [{ type: "text", text: '{"cards": "nope"}' }] });
+    expect(user?.role).toBe("user");
+    expect(JSON.stringify(user?.content)).toMatch(/cards/);
+  });
+
+  it("sends the same request again when the invalid answer has no text", async () => {
+    const { client, calls } = fakeClient((_p, n) => (n === 1 ? message({ text: "" }) : message({ text: GOOD_CARDS })));
+    const result = await callClaude(deps(client), structuredCall());
+    expect(result.status).toBe("ok");
     expect(calls[0]).toEqual(calls[1]);
   });
 

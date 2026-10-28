@@ -7,6 +7,7 @@ import {
   mistakeEntryAction,
   newRetrySchedule,
   nextRetry,
+  storedRemediationCard,
   suggestMistakeCause,
   type MistakeCause,
   type QuestionType,
@@ -69,10 +70,12 @@ export async function recordMistake(db: SupabaseClient, newId: () => string, inp
   const today = localDateOf(input.now, DEFAULT_TIME_ZONE);
   const schedule = newRetrySchedule(today);
 
-  // PRA-02: the remediation card is built from the question's own explanation (no AI call).
+  // PRA-02: the card written with the question (no AI call); questions without one fall back to the stem and
+  // the explanation.
   const cardId = newId();
-  const front = input.question.stem.slice(0, 200);
-  const back = (input.question.explanation ?? 'Revise esse conceito no material.').slice(0, 300);
+  const stored = storedRemediationCard(input.question.payload);
+  const front = stored?.front ?? input.question.stem.slice(0, 200);
+  const back = stored?.back ?? (input.question.explanation ?? 'Revise esse conceito no material.').slice(0, 300);
   const card = await db.from('cards').insert({
     id: cardId,
     subject_id: input.question.subject_id,

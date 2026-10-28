@@ -89,7 +89,9 @@ export async function verifyReference(ctx: JobContext, userId: string, jobId: st
     return { ...base, status: v.status, source_url: v.source_url, source_name: v.source_name, note: v.note };
   } catch (err) {
     if (err instanceof BudgetExceededError) return { ...base, status: 'unverified', note: 'Verificação indisponível agora.' };
-    throw err;
+    // A reference that cannot be checked stays unverified: throwing would retry the job and pay for the grade again.
+    ctx.log.warn({ err: err instanceof Error ? err.name : 'unknown' }, 'essay.grade: reference check failed');
+    return { ...base, status: 'unverified', note: 'Não consegui verificar agora.' };
   }
 }
 

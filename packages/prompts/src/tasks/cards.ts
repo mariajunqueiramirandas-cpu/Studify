@@ -19,7 +19,7 @@ const CARD_RULES = [
   '- Pergunta específica e sem ambiguidade ("Qual organela produz ATP?", não "Fale sobre a mitocôndria"). Nada de perguntas de sim ou não.',
   '- Se um termo puder significar coisas diferentes em matérias distintas, use um prefixo de contexto ("Em Química: …").',
   '- Listas com mais de 3 itens viram vários cartões.',
-  '- type cloze: cloze_text usa {{c1::termo}}. A lacuna é um termo-chave, número ou nome, nunca uma palavra trivial; a frase restante precisa determinar a resposta. No máximo 3 lacunas por frase; com várias lacunas, escreva um cartão por lacuna. front é a frase sem marcações; back é o termo oculto.',
+  '- type cloze: cloze_text usa {{c1::termo}}. A lacuna é um termo-chave, número ou nome, nunca uma palavra trivial; a frase restante precisa determinar a resposta. No máximo 3 lacunas por frase (c1, c2, c3); uma frase com várias lacunas é UM cartão com todas as marcações no cloze_text (o app cria um cartão por lacuna). front é a frase sem marcações; back é o termo da c1.',
   '- type reverse: só para termo e definição ou vocabulário, quando as duas direções fazem sentido.',
   '- type basic: front é a pergunta, back é a resposta. cloze_text é null.',
   '- Varie os tipos de conhecimento: definições, causa e efeito, comparações, etapas de um processo, exemplos, fórmulas (pergunte sobre o significado ou o uso, não só sobre os símbolos).',
@@ -53,7 +53,7 @@ function buildCards(input: CardsInput, ttl: CacheTtl) {
 
 export const cardsGenerate = defineTask<CardsInput, ReturnType<typeof TopicCards.parse>>({
   id: 'cards.generate',
-  version: 1,
+  version: 2,
   features: ['MEM-01.1'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -67,7 +67,7 @@ export const cardsGenerate = defineTask<CardsInput, ReturnType<typeof TopicCards
 
 export const cardsMore = defineTask<CardsInput, ReturnType<typeof TopicCards.parse>>({
   id: 'cards.more',
-  version: 1,
+  version: 2,
   features: ['MEM-01.6'],
   effort: 'medium',
   maxTokensClass: 'M',

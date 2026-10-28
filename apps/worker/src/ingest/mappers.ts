@@ -93,7 +93,7 @@ export type MapResult<T> = { ok: true; value: T } | { ok: false; reason: string 
 /**
  * Maps one generated question to a questions row. The payload follows spec 05 §8.1 exactly, with
  * one addition: `remediation_card` (PRA-02.3) is kept inside the payload, since the table has no
- * column for it. Multiple-choice items must have exactly five options (A–E), as the spec requires.
+ * column for it. Multiple-choice items have 5 options (A–E) by default and 4 when the source uses 4 (spec 05 PRA-01.1).
  */
 export function mapQuestion(
   draft: QuestionDraft,
@@ -131,7 +131,7 @@ function toPayload(draft: QuestionDraft, conceptIdByKey: ReadonlyMap<string, str
   switch (draft.type) {
     case 'mcq_single': {
       const options = (p.options as Array<Record<string, any>>) ?? [];
-      if (options.length !== 5) return { ok: false, reason: 'mcq_options_not_five' };
+      if (options.length < 4 || options.length > 5) return { ok: false, reason: 'mcq_options_count' };
       return {
         ok: true,
         value: {
@@ -149,7 +149,7 @@ function toPayload(draft: QuestionDraft, conceptIdByKey: ReadonlyMap<string, str
     }
     case 'multi_select': {
       const options = (p.options as Array<Record<string, any>>) ?? [];
-      if (options.length !== 5) return { ok: false, reason: 'mcq_options_not_five' };
+      if (options.length < 4 || options.length > 5) return { ok: false, reason: 'mcq_options_count' };
       return {
         ok: true,
         value: {
@@ -244,6 +244,14 @@ export function clozeIndexes(clozeText: string): number[] {
   return [...found].sort((a, b) => a - b);
 }
 
+/** The hidden text of deletion cN (several cN deletions joined), without the optional ::hint. */
+export function clozeAnswer(clozeText: string, n: number): string {
+  const answers = [...clozeText.matchAll(/\{\{c(\d+)::([^}]+?)(?:::([^}]+))?\}\}/g)]
+    .filter((m) => Number(m[1]) === n)
+    .map((m) => (m[2] ?? '').trim());
+  return answers.join(' … ');
+}
+
 /**
  * Maps one drafted card to rows. A cloze sentence with several deletions produces one sibling card per
  * cN (spec 04 §5.1). Returns an empty list when the card cannot be placed.
@@ -264,7 +272,8 @@ export function mapCard(draft: CardDraftInput, ctx: { labels: LabelMap; conceptI
         type: 'cloze' as const,
         // Spec 04 §5: the source text with {{cN::…}} markers is the front; back is the hidden answer.
         front: draft.cloze_text as string,
-        back: draft.back,
+        // Each sibling hides a different term, so its back is that term, not the one the model wrote for c1.
+        back: indexes.length > 1 ? clozeAnswer(draft.cloze_text as string, n) || draft.back : draft.back,
         concept_id: conceptId,
         source_pages: sources,
         cloze_index: n,

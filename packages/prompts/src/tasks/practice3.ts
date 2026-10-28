@@ -85,17 +85,17 @@ export interface AcheOErroInput {
 
 const ACHE_RULES = [
   'Tarefa: escreva 5 itens de "Ache o Erro" do tópico.',
-  '- Cada item é uma afirmação, um parágrafo curto ou uma resolução passo a passo, dividido em segmentos S1, S2… (frases ou passos).',
+  '- Cada item é uma afirmação, um parágrafo curto ou uma resolução passo a passo, dividido em 3 a 8 segmentos S1, S2, S3… em ordem (frases, trechos ou passos; até 400 caracteres cada). Uma afirmação curta também é dividida em pelo menos 3 trechos.',
   '- Exatamente um segmento tem um erro plantado, plausível e baseado num engano comum do material. Um item (e só um) pode não ter erro: error_segment_id, error_type e corrected_text ficam null.',
   `- error_type: ${FIND_ERROR_TYPE_KEYS.join(', ')}.`,
-  '- explanation: por que o segmento está errado (ou por que não há erro), em até 3 frases. corrected_text: o segmento corrigido.',
+  '- explanation: por que o segmento está errado (ou por que não há erro), em até 3 frases. corrected_text: o segmento corrigido. concept_keys: de 1 a 3 chaves.',
   '- Os segmentos certos são fiéis ao material. source_pages obrigatório.',
   '- Varie os tipos de erro e não repita afirmações existentes.',
 ].join('\n');
 
 export const acheOErroGenerate = defineTask<AcheOErroInput, ReturnType<typeof AcheOErroItems.parse>>({
   id: 'acheOErro.generate',
-  version: 1,
+  version: 2,
   features: ['PRA-06.1', 'PRA-06.2', 'PRA-06.5'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -135,13 +135,14 @@ const PROBLEM_RULES = [
   '- problems: a quantidade pedida. Cada problema tem statement, given (variáveis e valores numéricos usados), final_answer, answer_format (numeric, expression ou choice), unit, tolerance, solution_steps, 3 dicas e source_pages.',
   '- hints: 1 = qual conceito ou fórmula se aplica; 2 = como montar; 3 = o próximo passo. Nenhuma dica dá a resposta.',
   '- check_expression: uma expressão (sintaxe de calculadora: + - * / ^, sqrt, sin, cos, log, ln) que, com os valores de given, calcula final_answer. Em answer_format expression, check_expression é uma forma equivalente de final_answer. Null só em choice.',
+  '- Nomes em given: letras, dígitos e _ (v0, v_0, massa); use em check_expression exatamente esses nomes. Funções trigonométricas usam radianos: para um ângulo em graus, escreva sin(30*pi/180).',
   '- Confira as contas com cuidado: o app descarta problemas cuja check_expression não bate com final_answer.',
   '- Use números com ponto decimal em given, final_answer e tolerance.',
 ].join('\n');
 
 export const problemsGenerate = defineTask<ProblemsGenerateInput, ReturnType<typeof ProblemSet.parse>>({
   id: 'problems.generate',
-  version: 1,
+  version: 2,
   features: ['PRA-08.1', 'PRA-08.2', 'PRA-08.6'],
   effort: 'high',
   maxTokensClass: 'L',

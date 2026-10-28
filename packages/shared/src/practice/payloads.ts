@@ -268,6 +268,18 @@ export function parseQuestionPayload<T extends QuestionType>(type: T, raw: unkno
   return (QUESTION_PAYLOAD_SCHEMAS[type] as z.ZodType).parse(raw) as QuestionPayloadByType[T];
 }
 
+/**
+ * The remediation card a generated question carries in its payload (PRA-02.3: written with the question,
+ * front ≤ 200 and back ≤ 300 characters), or null when the question has none.
+ */
+export function storedRemediationCard(payload: unknown): { front: string; back: string } | null {
+  const card = (payload as { remediation_card?: unknown } | null)?.remediation_card as { front?: unknown; back?: unknown } | undefined;
+  if (!card || typeof card.front !== 'string' || typeof card.back !== 'string') return null;
+  const front = card.front.trim();
+  const back = card.back.trim();
+  return front && back ? { front: front.slice(0, 200), back: back.slice(0, 300) } : null;
+}
+
 // ---------------------------------------------------------------- responses (attempt_answers.response)
 
 export const McqSingleResponseSchema = z.strictObject({ choice: Id });

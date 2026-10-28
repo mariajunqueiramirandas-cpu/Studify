@@ -347,7 +347,7 @@ The Citations API and structured outputs (`output_config.format`) **cannot be co
 - Schemas live in `packages/shared/schemas/ai/*.ts` as Zod; the JSON schema sent to the API is generated from the Zod schema. `additionalProperties: false` everywhere.
 - Unsupported JSON-schema constraints (complex array constraints, etc.) are stripped by the SDK helper and enforced by our own Zod pass. **Zod validation always runs**, even though the API constrains the output: refusals and `max_tokens` stops can still return off-schema text.
 - New schemas compile on first use (one-time latency, cached ~24 h by the API). Pre-warm new schema versions with a staging call after deploy so the first student doesn't pay the latency.
-- Validation failure → retry once with the same request (no prompt change); second failure → item/job marked `failed` with `error_code = 'ai_invalid_output'`; the user sees the spec's fallback (e.g. manual topic picker for GOL-03).
+- Validation failure → retry once with the invalid answer as an assistant turn and the validation issues as a user turn (same cached prefix), so the model repairs the output instead of sampling the same mistake; an empty answer is retried with the same request. Second failure → item/job marked `failed` with `error_code = 'ai_invalid_output'`; the user sees the spec's fallback (e.g. manual topic picker for GOL-03).
 - Field order matters for streamed structured outputs: put the field the app renders first at the top of the schema (`lucas_reply` in `S:LucasTurn`).
 
 ### 5.2 Citations API

@@ -36,11 +36,11 @@ export interface TaskConfig<I, O> {
   version: number;
   features: readonly string[];
   /**
-   * Per-task effort hint, documentation only. Since the owner decision of 2026-10-27 the AI wrapper
-   * sends effort "high" for every task (@studify/ai effortFor, ai-pipeline §2.2); this value is not sent.
+   * Per-task effort. The AI wrapper sends it capped at "medium" (owner decision of 2026-10-27, @studify/ai
+   * effortFor and MAX_EFFORT), so "high" here runs at "medium" unless EFFORT_OVERRIDES lists the task.
    */
   effort: Effort;
-  /** Optional per-input effort hint (e.g. `passo_a_passo` runs at medium, other styles at low). Not sent. */
+  /** Optional per-input effort (e.g. `passo_a_passo` runs at medium, other styles at low), same cap. */
   effortFor?: (input: I) => Effort;
   maxTokensClass: MaxTokensClass;
   runs: RunMode;

@@ -195,6 +195,9 @@ export async function handleSrsOptimize(ctx: JobContext, data: Record<string, un
  * in-scope topics with mastery < 0.5 (or never studied) that have no deep note yet. The generation goes
  * through ingest.topic_content, which creates the Message Batch.
  */
+/** Days a failed deep note waits before the prefetch tries its topic again. */
+const FAILED_DEEP_RETRY_DAYS = 7;
+
 export async function handleNotesPrefetch(ctx: JobContext): Promise<{ users: number; subjects: number; nodes: number }> {
   const now = ctx.now();
   const today = localDateOf(now, 'America/Sao_Paulo');
@@ -226,6 +229,12 @@ export async function handleNotesPrefetch(ctx: JobContext): Promise<{ users: num
     for (const part of chunk([...candidates], IN_CHUNK)) {
       for (const row of unwrapRows<{ node_id: string }>(
         await ctx.supabase.from('notes').select('node_id').in('node_id', part).eq('depth', 'deep').in('status', ['pending', 'generating', 'ready']).is('deleted_at', null),
+        'notes',
+      )) deepDone.add(row.node_id);
+      // A topic whose deep note failed recently is not retried every morning (it would fail the same way).
+      for (const row of unwrapRows<{ node_id: string }>(
+        await ctx.supabase.from('notes').select('node_id').in('node_id', part).eq('depth', 'deep').eq('status', 'failed')
+          .gte('updated_at', new Date(now.getTime() - FAILED_DEEP_RETRY_DAYS * 86_400_000).toISOString()).is('deleted_at', null),
         'notes',
       )) deepDone.add(row.node_id);
     }

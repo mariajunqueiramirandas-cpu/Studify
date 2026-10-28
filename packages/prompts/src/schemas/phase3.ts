@@ -170,19 +170,11 @@ export const GeneratedProblem = z.strictObject({
   source_pages: SourcePages,
 });
 
-export const ProblemSet = z
-  .strictObject({
-    worked_examples: z.array(WorkedExample).max(3),
-    problems: z.array(GeneratedProblem).min(3).max(10),
-  })
-  .superRefine((v, ctx) => {
-    for (let i = 1; i < v.problems.length; i++) {
-      if (v.problems[i]!.difficulty < v.problems[i - 1]!.difficulty) {
-        ctx.addIssue({ code: 'custom', message: 'problemas em ordem de dificuldade', path: ['problems'] });
-        break;
-      }
-    }
-  });
+// No ordering rule here: writeProblems sorts by difficulty, so an out-of-order set is still usable.
+export const ProblemSet = z.strictObject({
+  worked_examples: z.array(WorkedExample).max(3),
+  problems: z.array(GeneratedProblem).min(3).max(10),
+});
 
 export const FirstWrongStep = z.strictObject({
   student_steps: z.array(z.string().min(1).max(400)).max(20),

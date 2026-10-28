@@ -182,7 +182,7 @@ const PHASE3_CASES: SchemaCase[] = [
   { name: 'AcheOErroItems', schema: S.AcheOErroItems, valid: { items: [acheItem, acheItem, acheNoError] }, invalid: { items: [acheItem, acheNoError, acheNoError] } },
   { name: 'WorkedExample', schema: S.WorkedExample, valid: worked, invalid: { ...worked, steps: ['só um'] } },
   { name: 'GeneratedProblem', schema: S.GeneratedProblem, valid: problemItem, invalid: { ...problemItem, given: [{ name: '1x', value: '2' }] } },
-  { name: 'ProblemSet', schema: S.ProblemSet, valid: { worked_examples: [worked], problems: [problemItem, problemItem, { ...problemItem, difficulty: 3 }] }, invalid: { worked_examples: [], problems: [{ ...problemItem, difficulty: 3 }, problemItem, problemItem] } },
+  { name: 'ProblemSet', schema: S.ProblemSet, valid: { worked_examples: [worked], problems: [problemItem, problemItem, { ...problemItem, difficulty: 3 }] }, invalid: { worked_examples: [], problems: [problemItem, problemItem] } },
   { name: 'FirstWrongStep', schema: S.FirstWrongStep, valid: { student_steps: ['F = m/a'], first_wrong_step_index: 0, what_went_wrong: 'Dividiu em vez de multiplicar.', nudge: 'Releia a segunda lei.' }, invalid: { student_steps: [], first_wrong_step_index: -1, what_went_wrong: 'x', nudge: 'y' } },
   { name: 'PodcastScriptSchema', schema: S.PodcastScriptSchema, valid: podcastScriptValid, invalid: { ...podcastScriptValid, segments: [podcastSegment('seg1', 'hook'), podcastSegment('seg1', 'topic'), podcastSegment('seg3', 'outro')] } },
   { name: 'LucasPlanSchema', schema: S.LucasPlanSchema, valid: lucasPlanValid, invalid: { ...lucasPlanValid, naive_questions: ['só uma'] } },

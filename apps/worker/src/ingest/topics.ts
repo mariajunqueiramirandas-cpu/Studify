@@ -3,7 +3,7 @@
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
 import { cardTargetCount, decodeQuestion, getTask, topicQuotas, type QuestionDraft as ModelQuestionDraft } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
-import { checkProblemConsistency, uuidV7 } from '@studify/shared';
+import { checkProblemConsistency, parseQuestionPayload, uuidV7, type QuestionType } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
 import type pg from 'pg';
 import { tableExists, withTransaction, type Sql } from '../framework/db.ts';
@@ -234,7 +234,7 @@ export async function buildKindCall(
     case 'glossary':
       built = getTask(taskId).build({
         topicTitle: bundle.title,
-        keyTerms: bundle.concepts.flatMap((c) => c.keyTerms.map((term) => ({ term, conceptKey: c.key }))),
+        keyTerms: glossaryTerms(bundle),
         slices,
         contentLanguage,
         languageSubject,
@@ -289,6 +289,24 @@ export async function buildKindCall(
   return { kind, taskId, call: prepared.call, refs: [...refs], promptVersion: built.promptVersion };
 }
 
+/** GlossaryTerms holds 40 terms: the listed ones stay well under it, so the model has room for central extras. */
+const GLOSSARY_INPUT_TERMS = 30;
+
+/** Key terms of the topic's concepts, first occurrence of each normalized term only, capped. */
+function glossaryTerms(bundle: TopicBundle): Array<{ term: string; conceptKey: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ term: string; conceptKey: string }> = [];
+  for (const concept of bundle.concepts) {
+    for (const term of concept.keyTerms) {
+      const key = normalizeTerm(term);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ term, conceptKey: concept.key });
+    }
+  }
+  return out.slice(0, GLOSSARY_INPUT_TERMS);
+}
+
 async function existingItems(sql: Sql, bundle: TopicBundle, kind: TopicKind): Promise<string[]> {
   if (kind === 'cards') {
     const { rows } = await sql.query<{ front: string }>(
@@ -322,7 +340,14 @@ async function existingItems(sql: Sql, bundle: TopicBundle, kind: TopicKind): Pr
     return rows.map((r) => r.stem);
   }
   if (kind === 'feed') {
-    return [];
+    const { rows } = await sql.query<{ title: string }>(
+      `select content->>'title' as title from public.feed_items
+        where node_id = $1 and deleted_at is null and status = 'active' and personal_for_user_id is null
+          and content->>'title' is not null
+        limit 100`,
+      [bundle.topicId],
+    );
+    return rows.map((r) => r.title);
   }
   return [];
 }
@@ -668,6 +693,15 @@ export async function writeQuestions(
         continue;
       }
       const row = mapped.value;
+      try {
+        // The contract grading reads at answer time (somatória values, absolute alternatives…): a row it
+        // rejects would only fail when a student answers it.
+        parseQuestionPayload(row.type as QuestionType, row.payload);
+      } catch {
+        dropped++;
+        reasons.payload_contract = (reasons.payload_contract ?? 0) + 1;
+        continue;
+      }
       await client.query(
         `insert into public.questions
            (subject_id, node_id, concept_ids, type, stem, stimulus, payload, explanation, bloom_level, difficulty,
