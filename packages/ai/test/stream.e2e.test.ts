@@ -88,19 +88,15 @@ describe("streaming through the real SDK", () => {
     expect(result).toMatchObject({ status: "refused", refusalCategory: "bio" });
   });
 
-  it("emits reset before a validation retry so the consumer drops the first attempt", async () => {
-    mock.enqueue({ kind: "message", message: { text: '{"cards": "nope"}' } });
-    mock.setHandler(() => ({ kind: "message", message: { text: GOOD_CARDS } }));
+  it("ends with invalid_output after one streamed request when the output is off-schema (no retry)", async () => {
+    mock.setHandler(() => ({ kind: "message", message: { text: '{"cards": "nope"}' } }));
 
     const handle = streamClaude(deps(sdk), structuredCall({ task: cardsTask }));
     const events = await drain(handle.events);
-    const types = events.map((e) => e.type);
-    const resetAt = types.indexOf("reset");
-    expect(resetAt).toBeGreaterThan(0);
-    expect(types.slice(resetAt + 1)).toContain("text");
-    const result = await handle.result;
-    expect(result.status).toBe("ok");
-    expect(mock.requests).toHaveLength(2);
+    expect(events.map((e) => e.type)).not.toContain("reset");
+    expect(events.at(-1)).toEqual({ type: "end", status: "invalid_output" });
+    expect((await handle.result).status).toBe("invalid_output");
+    expect(mock.requests).toHaveLength(1);
   });
 
   it("streams long-output tasks (class L) automatically, even through callClaude", async () => {

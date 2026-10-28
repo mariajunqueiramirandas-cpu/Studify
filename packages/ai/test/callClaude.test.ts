@@ -18,48 +18,51 @@ const GOOD_CARDS = JSON.stringify({
   cards: [{ front: "O que é mitocôndria?", back: "Organela produtora de ATP.", source_pages: [2] }],
 });
 
-describe("structured output: Zod validation with one retry", () => {
+describe("structured output: one request, Zod validation and item salvage", () => {
   it("returns the parsed data on the first valid response", async () => {
     const { client, calls } = fakeClient(() => message({ text: GOOD_CARDS, stop_reason: "end_turn" }));
     const result = await callClaude(deps(client), structuredCall());
     expect(result.status).toBe("ok");
     if (result.status !== "ok") throw new Error("unreachable");
     expect(result.data.cards[0]?.front).toBe("O que é mitocôndria?");
+    expect(result.salvage).toBeUndefined();
     expect(calls).toHaveLength(1);
   });
 
-  it("retries once with the invalid answer and its issues when the output is off-schema, then succeeds", async () => {
-    const { client, calls } = fakeClient((_p, n) =>
-      n === 1 ? message({ text: '{"cards": "nope"}' }) : message({ text: GOOD_CARDS }),
-    );
+  it("never sends a second request when the output is off-schema", async () => {
+    const { client, calls } = fakeClient(() => message({ text: '{"cards": "nope"}' }));
     const result = await callClaude(deps(client), structuredCall());
-    expect(result.status).toBe("ok");
-    expect(result.attempts).toBe(2);
-    expect(calls).toHaveLength(2);
-    const [first, second] = calls as BetaCreateParams[];
-    expect(second!.system).toEqual(first!.system);
-    expect(second!.messages.slice(0, first!.messages.length)).toEqual(first!.messages);
-    const [assistant, user] = second!.messages.slice(first!.messages.length);
-    expect(assistant).toEqual({ role: "assistant", content: [{ type: "text", text: '{"cards": "nope"}' }] });
-    expect(user?.role).toBe("user");
-    expect(JSON.stringify(user?.content)).toMatch(/cards/);
+    expect(result.status).toBe("invalid_output");
+    expect(calls).toHaveLength(1);
+    expect(result.attempts).toBe(1);
   });
 
-  it("sends the same request again when the invalid answer has no text", async () => {
-    const { client, calls } = fakeClient((_p, n) => (n === 1 ? message({ text: "" }) : message({ text: GOOD_CARDS })));
-    const result = await callClaude(deps(client), structuredCall());
-    expect(result.status).toBe("ok");
-    expect(calls[0]).toEqual(calls[1]);
-  });
-
-  it("retries once, then fails with invalid_output (no third request)", async () => {
+  it("fails with invalid_output on non-JSON, still with one request", async () => {
     const { client, calls } = fakeClient(() => message({ text: "isto não é JSON" }));
     const result = await callClaude(deps(client), structuredCall());
     expect(result.status).toBe("invalid_output");
     if (result.status !== "invalid_output") throw new Error("unreachable");
     expect(result.issues).toMatch(/not valid JSON/);
-    expect(calls).toHaveLength(2);
-    expect(result.attempts).toBe(2);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("drops the list items that break the schema and keeps the rest (no retry)", async () => {
+    const good = { front: "O que é mitocôndria?", back: "Organela produtora de ATP.", source_pages: [2] };
+    const bad = { front: "", back: "sem frente", source_pages: [2] };
+    const { client, calls } = fakeClient(() => message({ text: JSON.stringify({ cards: [good, bad, good] }) }));
+    const result = await callClaude(deps(client), structuredCall());
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("unreachable");
+    expect(result.data.cards).toHaveLength(2);
+    expect(result.salvage).toMatchObject({ dropped: 1 });
+    expect(result.salvage?.issues).toMatch(/cards\.1\.front/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("does not salvage when an issue is outside the list items", async () => {
+    const { client } = fakeClient(() => message({ text: JSON.stringify({ cards: [], extra: 1 }) }));
+    const result = await callClaude(deps(client), structuredCall());
+    expect(result.status).toBe("invalid_output");
   });
 
   it("runs the task's postValidate after Zod, and treats its message as invalid output", async () => {
@@ -105,22 +108,18 @@ describe("stop_reason handling (ai-pipeline §2.4)", () => {
     expect(deps0.usage.rows[0]).toMatchObject({ stop_reason: "refusal", refusal_category: "cyber", fallback_used: false, model_requested: "claude-haiku-5-5" });
   });
 
-  it("retries a truncated structured output once with the next max_tokens class", async () => {
-    const { client, calls } = fakeClient((_p, n) =>
-      n === 1 ? message({ text: '{"cards": [', stop_reason: "max_tokens" }) : message({ text: GOOD_CARDS }),
-    );
-    const result = await callClaude(deps(client), structuredCall());
-    expect(result.status).toBe("ok");
-    // cards.generate starts at class S (8,000); the retry uses class M (16,000)
-    expect((calls[0] as BetaCreateParams).max_tokens).toBe(8_000);
-    expect((calls[1] as BetaCreateParams).max_tokens).toBe(16_000);
+  it("sends structured output with the next max_tokens class up front, so it is not cut off", async () => {
+    const { client, calls } = fakeClient(() => message({ text: GOOD_CARDS }));
+    await callClaude(deps(client), structuredCall());
+    // cards.generate declares class S (8,000); the request carries class M (16,000)
+    expect((calls[0] as BetaCreateParams).max_tokens).toBe(16_000);
   });
 
-  it("reports truncated when a structured output is still cut off after the retry", async () => {
+  it("reports a cut-off structured output as truncated without a second request", async () => {
     const { client, calls } = fakeClient(() => message({ text: '{"cards": [', stop_reason: "max_tokens" }));
     const result = await callClaude(deps(client), structuredCall());
     expect(result.status).toBe("truncated");
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
   });
 
   it("keeps prose that hit max_tokens and does not retry it", async () => {
@@ -227,21 +226,16 @@ describe("budget gate (ai-pipeline §9.1)", () => {
     expect(budget.settled).toHaveLength(0);
   });
 
-  it("settles the reservation with the actual cost, and writes one usage row per request", async () => {
-    const { client } = fakeClient((_p, n) =>
-      n === 1 ? message({ text: "{}" }) : message({ text: GOOD_CARDS, usage: { input_tokens: 1_000, output_tokens: 1_000 } }),
-    );
+  it("settles the reservation with the actual cost, and writes one usage row for the request", async () => {
+    const { client } = fakeClient(() => message({ text: GOOD_CARDS, usage: { input_tokens: 1_000, output_tokens: 1_000 } }));
     const d = deps(client);
     const result = await callClaude(d, structuredCall());
     expect(result.status).toBe("ok");
-    expect(d.usage.rows.map((r) => r.attempt)).toEqual([1, 2]);
-    expect(d.usage.rows[1]).toMatchObject({ task_id: "cards.generate", prompt_version: "cards.generate@v3", mode: "sync", feature: "MEM-01" });
+    expect(d.usage.rows.map((r) => r.attempt)).toEqual([1]);
+    expect(d.usage.rows[0]).toMatchObject({ task_id: "cards.generate", prompt_version: "cards.generate@v3", mode: "sync", feature: "MEM-01" });
     expect(d.budget.settled).toHaveLength(1);
-    // Haiku 5.5 standard card, prompt <= 100,000 tokens:
-    // response 1 (default usage 100 in, 50 out): 100 x $0.10 + 50 x $0.50 = $0.000035 = 35 micro-USD
-    // response 2 (1,000 in, 1,000 out): 1,000 x $0.10 + 1,000 x $0.50 = $0.0006 = 600 micro-USD
-    // both are billed and settled together: 635
-    expect(d.budget.settled[0]?.micro).toBe(635);
+    // Haiku 5.5 standard card, prompt <= 100,000 tokens: 1,000 x $0.10 + 1,000 x $0.50 = $0.0006 = 600 micro-USD
+    expect(d.budget.settled[0]?.micro).toBe(600);
   });
 
   it("releases the reservation with 0 when the request fails before any response", async () => {

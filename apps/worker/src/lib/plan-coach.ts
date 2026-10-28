@@ -353,6 +353,7 @@ export async function coachFor(
       schema: PlanCoach as unknown as z.ZodType<CoachOut>,
       input: built.input,
       scope: { userId: planCtx.userId, feature: 'GOL-04.10' },
+      choices: { topic: [...built.topicByKey.keys()], exam: [...built.examByKey.keys()] },
     });
   } catch (err) {
     if (!(err instanceof BudgetExceededError)) ctx.log.warn({ err: err instanceof Error ? err.name : 'unknown' }, 'plan.coach: call failed');

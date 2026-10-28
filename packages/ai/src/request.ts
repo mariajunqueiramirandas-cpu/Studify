@@ -18,6 +18,8 @@ import type {
   BetaCreateParams,
   BetaMessageParam,
   BetaTextBlockParam,
+  ChoiceKind,
+  Choices,
   MaxTokensClass,
   SourceMap,
   SystemBlock,
@@ -27,6 +29,20 @@ import type {
 
 /** Sampling and thinking params are rejected by the API on the default model (ai-pipeline §2.2). */
 const FORBIDDEN_PARAMS = ["temperature", "top_p", "top_k", "thinking", "stop_sequences"] as const;
+
+/**
+ * Choices from the pages a prompt sent (document label → original pages): the labels, and every page sent. A page
+ * of one document cited under another label still passes the enum; the page checks after the call catch that.
+ */
+export function choicesFromPages(pagesByLabel: Readonly<Record<string, readonly number[]>> | undefined): Choices {
+  const labels = Object.keys(pagesByLabel ?? {});
+  if (labels.length === 0) return {};
+  const pages = [...new Set(labels.flatMap((l) => pagesByLabel![l] ?? []))];
+  return pages.length > 0 ? { doc: labels, page: pages } : { doc: labels };
+}
+
+/** Schema marker (packages/prompts common.ts) for values limited to what the prompt showed; see TaskCall.choices. */
+const CHOICE_KEYWORD = "x-choice";
 
 /** Keywords the API does not enforce for structured outputs. Zod still enforces them (§5.1). */
 const UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
@@ -43,24 +59,72 @@ const UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
   "$schema",
 ]);
 
-/** Zod schema to the JSON schema sent as output_config.format, with additionalProperties: false. */
-export function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
+/**
+ * Zod schema to the JSON schema sent as output_config.format, with additionalProperties: false. The API rejects or
+ * ignores length, count and range keywords, so each one is removed and restated in the node's description: the model
+ * reads the limit there and writes within it on the first attempt, instead of failing Zod after the fact.
+ */
+export function toJsonSchema(schema: z.ZodType, choices: Choices = {}): Record<string, unknown> {
   const raw = z.toJSONSchema(schema, { target: "draft-7", io: "output" }) as Record<string, unknown>;
-  return stripSchema(raw) as Record<string, unknown>;
+  return stripSchema(raw, choices) as Record<string, unknown>;
 }
 
-function stripSchema(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(stripSchema);
+function stripSchema(node: unknown, choices: Choices): unknown {
+  if (Array.isArray(node)) return node.map((child) => stripSchema(child, choices));
   if (!node || typeof node !== "object") return node;
+  const source = node as Record<string, unknown>;
+  // A value that must be one the prompt showed: an enum of this call's values (decoding allows nothing else).
+  const kind = source[CHOICE_KEYWORD] as ChoiceKind | undefined;
+  const allowed = kind ? choices[kind] : undefined;
+  if (allowed && allowed.length > 0) {
+    const values = [...new Set(allowed)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    return { type: source.type, enum: values, ...(typeof source.description === "string" ? { description: source.description } : {}) };
+  }
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-    if (UNSUPPORTED_SCHEMA_KEYWORDS.has(key)) continue;
-    out[key] = stripSchema(value);
+  for (const [key, value] of Object.entries(source)) {
+    if (UNSUPPORTED_SCHEMA_KEYWORDS.has(key) || key === CHOICE_KEYWORD) continue;
+    out[key] = stripSchema(value, choices);
+  }
+  const limits = describeLimits(source);
+  if (limits) {
+    out.description = typeof out.description === "string" && out.description ? `${out.description} (${limits})` : limits;
   }
   if (out.type === "object" && out.additionalProperties === undefined) {
     out.additionalProperties = false;
   }
   return out;
+}
+
+/** A usable bound: Zod's safe-integer bounds on every int say nothing, so they are left out. */
+const num = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER ? value : null;
+
+function range(min: number | null, max: number | null, unit: string): string | null {
+  if (min !== null && max !== null) return min === max ? `exatamente ${min} ${unit}` : `de ${min} a ${max} ${unit}`;
+  if (max !== null) return `até ${max} ${unit}`;
+  if (min !== null && min > 1) return `pelo menos ${min} ${unit}`;
+  return null;
+}
+
+/** The removed keywords of one node, as the text the model reads ("até 300 caracteres", "de 3 a 8 itens"…). */
+export function describeLimits(node: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  // A string's min of 1 only says "not empty", which every field is.
+  const minLength = num(node.minLength);
+  const text = range(minLength !== null && minLength > 1 ? minLength : null, num(node.maxLength), "caracteres");
+  if (text) parts.push(text);
+  const items = range(num(node.minItems), num(node.maxItems), "itens");
+  if (items) parts.push(items);
+  if (node.uniqueItems === true) parts.push("sem itens repetidos");
+  const lo = num(node.minimum) ?? num(node.exclusiveMinimum);
+  const hi = num(node.maximum) ?? num(node.exclusiveMaximum);
+  const loText = num(node.minimum) !== null ? `>= ${lo}` : lo !== null ? `> ${lo}` : null;
+  const hiText = num(node.maximum) !== null ? `<= ${hi}` : hi !== null ? `< ${hi}` : null;
+  if (loText && hiText) parts.push(`valor ${loText} e ${hiText}`);
+  else if (loText) parts.push(`valor ${loText}`);
+  else if (hiText) parts.push(`valor ${hiText}`);
+  if (num(node.multipleOf) !== null) parts.push(`múltiplo de ${node.multipleOf}`);
+  return parts.length ? parts.join("; ") : null;
 }
 
 export function buildSystem(system: readonly SystemBlock[]): BetaTextBlockParam[] {
@@ -87,7 +151,7 @@ export function buildParams<T>(call: TaskCall<T>, opts: BuildParamsOptions): Bet
   const { task } = call;
   const format =
     task.output.mode === "structured"
-      ? { type: "json_schema" as const, schema: toJsonSchema(task.output.schema) }
+      ? { type: "json_schema" as const, schema: toJsonSchema(task.output.schema, call.choices) }
       : undefined;
   const model = modelFor(task.id);
   const params: BetaCreateParams = {

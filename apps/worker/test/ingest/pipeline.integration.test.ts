@@ -508,12 +508,12 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     expect(generating.rows.map((r) => r.status)).toEqual(['generating']);
   }, 180_000);
 
-  it('re-runs a refused batch item on the standard API and still writes its output', async () => {
+  it('does not pay twice for a refused batch item: the item fails and the rest of the material is written', async () => {
     const store = new FakeObjectStore();
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
-    // The Organelas glossary is refused inside the Batch (stop_reason refusal). The standard-API retry is not
-    // a batch item (no custom_id), so it gets the normal answer.
+    // The Organelas glossary is refused inside the Batch (stop_reason refusal): a billed outcome, so it is not
+    // re-run on the standard API (one paid attempt per item).
     mock.setHandler((req) => {
       if (req.customId && req.bodyText.includes('escreva o glossário do tópico') && !req.bodyText.includes('bicamada')) {
         return { kind: 'message', message: { stop_reason: 'refusal', refusal_category: 'bio', content: [] } };
@@ -528,12 +528,12 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       expect(backend.failedJobs).toEqual([]);
 
       const glossary = await pool.query<{ term: string }>(`select term from public.glossary_terms where subject_id = $1 order by term`, [subjectId]);
-      expect(glossary.rows.map((r) => r.term)).toEqual(['ATP', 'Bicamada lipídica']);
+      expect(glossary.rows.map((r) => r.term)).toEqual(['Bicamada lipídica']);
       const rerun = await pool.query<{ n: string }>(
         `select count(*)::text as n from public.ai_usage where subject_id = $1 and task = 'glossary.define' and batch = false`,
         [subjectId],
       );
-      expect(Number(rerun.rows[0]?.n)).toBe(1);
+      expect(Number(rerun.rows[0]?.n)).toBe(0);
       const doc = await pool.query<{ status: string }>(`select status from public.documents where id = $1`, [docId]);
       expect(doc.rows[0]?.status).toBe('ready');
     } finally {

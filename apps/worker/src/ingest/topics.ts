@@ -285,7 +285,9 @@ export async function buildKindCall(
       });
       break;
   }
-  const prepared = prepareCall(taskId, built, budget, refs);
+  // Every kind but `concepts` (which creates the keys) must use the topic's concept keys: sent as an enum.
+  const conceptKeys = kind === 'concepts' ? [] : bundle.concepts.map((c) => c.key);
+  const prepared = prepareCall(taskId, built, budget, refs, conceptKeys.length ? { concept: conceptKeys } : {});
   return { kind, taskId, call: prepared.call, refs: [...refs], promptVersion: built.promptVersion };
 }
 

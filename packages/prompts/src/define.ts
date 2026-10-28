@@ -73,8 +73,19 @@ export interface TaskDef<I, O> {
 
 const MAX_BREAKPOINTS = 4;
 
+/** The `x-choice` schema marker is ours (see schemas/common.ts), never sent to the API in tool schemas. */
+function withoutChoiceMarks(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutChoiceMarks);
+  if (!node || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key !== 'x-choice') out[key] = withoutChoiceMarks(value);
+  }
+  return out;
+}
+
 function toJsonSchema(schema: z.ZodType): JsonSchema {
-  return z.toJSONSchema(schema) as JsonSchema;
+  return withoutChoiceMarks(z.toJSONSchema(schema)) as JsonSchema;
 }
 
 /** Document blocks carry `citations` on every block in citations mode, on none otherwise (all-or-none). */

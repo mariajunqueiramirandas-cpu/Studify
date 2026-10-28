@@ -245,7 +245,15 @@ export interface TaskCall<T = unknown> {
   sources?: SourceMap;
   /** Optional overrides for the budget estimate (e.g. known slice token counts). */
   estimate?: { inputTokens?: number; outputTokens?: number };
+  /**
+   * The only values the output may use for each `x-choice` kind of the schema (concept keys shown, document labels
+   * and pages sent…). They are sent as JSON-schema enums, so constrained decoding rules everything else out.
+   */
+  choices?: Choices;
 }
+
+export type ChoiceKind = "concept" | "node" | "doc" | "page" | "topic" | "exam";
+export type Choices = Partial<Record<ChoiceKind, ReadonlyArray<string | number>>>;
 
 export interface ClaudeDeps {
   client: AnthropicLike;
@@ -302,7 +310,8 @@ export interface CallMeta {
 }
 
 export type CallResult<T> =
-  | (CallMeta & { status: "ok"; data: T })
+  /** `salvage`: list items dropped because they broke the schema on their own; the rest of the output is `data`. */
+  | (CallMeta & { status: "ok"; data: T; salvage?: { dropped: number; issues: string } })
   | (CallMeta & { status: "refused"; refusalCategory: string | null })
   | (CallMeta & { status: "truncated"; reason: "max_tokens" | "context_window" | "pause_turn_limit" })
   | (CallMeta & { status: "invalid_output"; issues: string });

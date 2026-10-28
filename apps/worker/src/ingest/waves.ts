@@ -173,7 +173,7 @@ export { STANDARD_WAVE_CONCURRENCY };
 
 /**
  * Runs a wave now on the standard API (AI_USE_BATCH off): every item is called, written by the same writers as a
- * collected batch, and tried twice like a batch item and its standard rerun. Progress counts topics (the unit the
+ * collected batch, with one paid call per item. Progress counts topics (the unit the
  * student sees, "12 de 20 tópicos"): a topic is done when all of its items are; waves without topics count items.
  */
 export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<PollOutcomeSummary> {
@@ -188,31 +188,27 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
     await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
   }
   await mapLimit(input.items, env.ctx.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
+    // One paid call per item: no second attempt (transient API errors are already retried, unbilled, by the SDK).
     let handled = false;
-    for (let attempt = 1; attempt <= 2 && !handled && !summary.budgetExceeded; attempt++) {
+    if (!summary.budgetExceeded) {
       try {
         const result = await callClaude(env.ctx.ai, withShortCache(call));
         if (result.status === 'ok') {
+          if (result.salvage) env.ctx.log.info({ customId: item.customId, ...result.salvage }, 'standard call: items dropped');
           try {
             handled = await writeOutcome(env, item, result.data, result.text, result.citations);
           } catch (err) {
-            // The output is paid for; calling again would not fix a write problem.
             env.ctx.log.warn({ customId: item.customId, err: err instanceof Error ? err.message : 'unknown' }, 'standard output not written');
-            break;
           }
         } else {
-          // `attempt` is the job's attempt in the bound logger: this one is the call's.
-          env.ctx.log.warn(
-            { customId: item.customId, status: result.status, callAttempt: attempt, ...outcomeDetail(result) },
-            'standard call did not produce output',
-          );
+          env.ctx.log.warn({ customId: item.customId, status: result.status, ...outcomeDetail(result) }, 'standard call did not produce output');
         }
       } catch (err) {
         if (err instanceof BudgetExceededError) {
           summary.budgetExceeded = true;
         } else {
           env.ctx.log.warn(
-            { customId: item.customId, callAttempt: attempt, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
+            { customId: item.customId, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
             'standard call failed',
           );
         }
@@ -337,8 +333,8 @@ export async function transcriptionItem(
 
 /**
  * Rebuilds the standard-API call for an item that failed in the batch. Same prompt, same slices. Batch
- * requests never carry fallbacks (ai-pipeline §7.4); the standard re-run is the second attempt for refused
- * items, and Haiku 5.5 has no server-side refusal fallback.
+ * requests never carry fallbacks (ai-pipeline §7.4). Only for items the batch did not bill (errored, canceled,
+ * expired, missing): a billed outcome is never paid for twice.
  */
 async function rerunStandard(env: PipelineEnv, item: PlanItem): Promise<CallResult<unknown>> {
   const refs = await refsFromBlocks(env, item.blocks, item.kind === 'transcription' ? 'transcription' : 'topic');
@@ -414,8 +410,11 @@ export async function pollWave(env: PipelineEnv, plan: WavePlan): Promise<PollOu
       } catch (err) {
         env.ctx.log.warn({ customId: item.customId, err: err instanceof Error ? err.message : 'unknown' }, 'batch output not written');
       }
+    } else if (outcome.status === 'refused' || outcome.status === 'truncated' || outcome.status === 'invalid_output') {
+      // Billed outcomes are not paid for twice: the item fails (one paid attempt per item).
+      env.ctx.log.warn({ customId: item.customId, status: outcome.status, ...('issues' in outcome ? { issues: outcome.issues } : {}) }, 'batch item did not produce output');
     } else {
-      // Refused, truncated, invalid, errored (retryable), canceled, expired or missing: one standard-API retry.
+      // Errored, canceled, expired or missing: the batch produced nothing billable, so the standard API runs it once.
       try {
         const rerun = await rerunStandard(env, item);
         if (rerun.status === 'ok') {

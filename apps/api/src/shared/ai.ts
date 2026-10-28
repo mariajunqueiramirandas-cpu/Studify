@@ -2,8 +2,8 @@
 // turn a CallResult into the API result. The prompts package owns the text; the ai package owns the
 // budget gate, stop_reason handling, validation, citation mapping and usage rows (ai-pipeline §2.5).
 import type { ZodType } from 'zod';
-import { callClaude, streamClaude } from '@studify/ai';
-import type { BudgetContext, CallResult, ClaudeDeps, DocumentSlice, MappedCitation, StreamEvent, TaskCall, TaskDef as AiTaskDef } from '@studify/ai';
+import { callClaude, choicesFromPages, streamClaude } from '@studify/ai';
+import type { BudgetContext, CallResult, Choices, ClaudeDeps, DocumentSlice, MappedCitation, StreamEvent, TaskCall, TaskDef as AiTaskDef } from '@studify/ai';
 import { ApiFailure } from '@studify/shared';
 import {
   checkPageRefs,
@@ -131,6 +131,8 @@ export interface PromptCall<T> {
   /** Pages sent as text rather than document blocks (doc label → pages) that the output may also cite. */
   textPages?: Record<string, number[]>;
   messages?: PromptMessage[];
+  /** Keys the output may use beyond labels and pages (e.g. the topic's concept keys). */
+  choices?: Choices;
 }
 
 /** Converts a built prompt into the TaskCall the ai wrapper consumes. */
@@ -166,6 +168,8 @@ export function toTaskCall<T>(p: PromptCall<T>): TaskCall<T> {
     task,
     ctx: p.ctx,
     system,
+    // Labels and pages the output may cite, as schema enums: an invented page cannot be written.
+    choices: { ...choicesFromPages(pages), ...(p.choices ?? {}) },
     messages: (p.messages ?? built.messages) as unknown as TaskCall<T>['messages'],
     ...(built.tools ? { tools: built.tools as unknown as TaskCall<T>['tools'] } : {}),
     sources,

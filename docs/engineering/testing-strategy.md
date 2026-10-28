@@ -98,7 +98,7 @@ Tooling: **Vitest** for TypeScript unit/integration tests (Node and shared packa
 
 - pg-boss with local Postgres. Jobs are tested end-to-end with the mock Claude server returning **recorded real responses**, captured once from a staging run and stored in `apps/worker/test/fixtures/claude/`.
 - Ingestion job on each golden PDF (§6.1): pages counted, text and spans extracted, slices created, knowledge map written, items written, `ai_jobs.progress` reaches 100, `ai_usage` rows recorded.
-- **Failure handling**: a malformed PDF fails with a user-visible reason. An encrypted PDF is rejected. A model output failing Zod triggers one retry, then the item is marked failed. A worker crash mid-job resumes idempotently (no duplicate nodes or items, enforced by deterministic keys).
+- **Failure handling**: a malformed PDF fails with a user-visible reason. An encrypted PDF is rejected. A model output failing Zod is never re-asked: its invalid list items are dropped, otherwise the item is marked failed. A worker crash mid-job resumes idempotently (no duplicate nodes or items, enforced by deterministic keys).
 - **Batch API path**: mock batch lifecycle (`in_progress` → `ended`), results arriving in arbitrary order keyed by `custom_id`, partial failures.
 
 ### 5.3 Offline sync (PLT-07, ADR 0007)
@@ -142,7 +142,7 @@ Fixtures must be **free to use**. Use material created by the owner, public-doma
 | Metric | Definition | Gate |
 |---|---|---|
 | **Schema validity** | % of outputs passing Zod on first try (before retry) | ≥ 98% |
-| **Final failure rate** | % of items still invalid after one retry | ≤ 0.5% |
+| **First-attempt failure rate** | % of calls invalid on their only attempt (no retry, ai-pipeline R13) | ≤ 0.5% |
 | **Citation accuracy** | % of sampled citations whose cited page **actually supports the claim**. Judged by LLM-judge, with humans spot-checking 20% | ≥ 95% |
 | **Citation coverage** | % of generated items with ≥ 1 valid `source_pages` entry within the topic's page range | 100% |
 | **Knowledge-map quality** | Human rubric (1–5): topic granularity, ordering, nothing important missing, no invented topics | mean ≥ 4.0 |

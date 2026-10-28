@@ -8,6 +8,7 @@ import { AiRetryLaterError, BudgetExceededError, classifyError } from "./errors.
 import { buildParams, assertRequestShape, estimateMicroUsd } from "./request.ts";
 import { extractContent, mapSpanCitations, parseStructured } from "./interpret.ts";
 import { buildUsageRow, summarizeMessage } from "./usage.ts";
+import { requestMaxTokensClass } from "./models.ts";
 import type {
   BetaCreateParams,
   BetaMessageBatchIndividualResponse,
@@ -47,7 +48,7 @@ export interface BatchStatus {
 }
 
 export type BatchItemOutcome<T = unknown> =
-  | { customId: string; status: "ok"; source: "batch" | "standard"; data: T; text: string; citations: MappedCitation[] }
+  | { customId: string; status: "ok"; source: "batch" | "standard"; data: T; text: string; citations: MappedCitation[]; salvage?: { dropped: number; issues: string } }
   | { customId: string; status: "refused"; source: "batch" | "standard"; refusalCategory: string | null }
   /** max_tokens on a batch item: resubmit in the next wave with class XL (§7.3). */
   | { customId: string; status: "truncated"; source: "batch" | "standard"; reason: string }
@@ -69,7 +70,7 @@ export function buildBatchRequest(item: BatchItem): { custom_id: string; params:
   assertCustomId(item.customId);
   const params = buildParams(item.call, {
     batch: true,
-    maxTokensClass: item.call.task.maxTokensClass,
+    maxTokensClass: requestMaxTokensClass(item.call.task),
     messages: item.call.messages,
   });
   assertRequestShape(params, { batch: true });
@@ -262,7 +263,7 @@ async function collectOne(
       if (call.task.output.mode === "structured") {
         const parsed = parseStructured(extracted.text, call.task);
         if (!parsed.ok) return { customId, status: "invalid_output", source: "batch", issues: parsed.issues };
-        return { customId, status: "ok", source: "batch", data: parsed.data, text: extracted.text, citations };
+        return { customId, status: "ok", source: "batch", data: parsed.data, text: extracted.text, citations, ...(parsed.salvage ? { salvage: parsed.salvage } : {}) };
       }
       return { customId, status: "ok", source: "batch", data: extracted.text, text: extracted.text, citations };
     }

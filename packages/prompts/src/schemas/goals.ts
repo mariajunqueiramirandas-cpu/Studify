@@ -27,8 +27,8 @@ export const Cheatsheet = z.strictObject({
 // GOL-04.10 — plan.coach: strategy, topic priorities and next steps until the tests
 // ---------------------------------------------------------------------------
 
-const ExamKey = z.string().regex(/^E\d{1,2}$/, 'chave de prova E1, E2…');
-const TopicKey = z.string().regex(/^T\d{1,3}$/, 'chave de tópico T1, T2…');
+const ExamKey = z.string().regex(/^E\d{1,2}$/, 'chave de prova E1, E2…').meta({ 'x-choice': 'exam' });
+const TopicKey = z.string().regex(/^T\d{1,3}$/, 'chave de tópico T1, T2…').meta({ 'x-choice': 'topic' });
 
 /** plan.coach output. Priorities become planner topic weights; the texts are shown on Hoje and on plan items. */
 export const PlanCoach = z.strictObject({

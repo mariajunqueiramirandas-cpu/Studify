@@ -1,7 +1,7 @@
 // Adapter from a @studify/prompts TaskDef (plus its Zod output schema) to the @studify/ai TaskCall
 // that callClaude() takes. The prompt builders stay the source of truth for system text, messages
 // and document labels; this file only reshapes them and keeps the document map for post-checks.
-import { callClaude, type BudgetContext, type CallResult, type ClaudeDeps, type DocumentSlice, type SystemBlock, type TaskCall } from '@studify/ai';
+import { callClaude, choicesFromPages, type BudgetContext, type CallResult, type Choices, type ClaudeDeps, type DocumentSlice, type SystemBlock, type TaskCall } from '@studify/ai';
 import type { BuiltPrompt, DocumentMap, TaskDef as PromptTaskDef } from '@studify/prompts';
 import type { z } from 'zod';
 
@@ -22,6 +22,8 @@ export interface PromptRun<I, O> {
   schema: z.ZodType<O>;
   input: I;
   scope: AiScope;
+  /** Keys the output may use beyond the labels and pages sent (sent as schema enums). */
+  choices?: Choices;
 }
 
 export interface PromptOutcome<O> {
@@ -91,6 +93,7 @@ export async function runPrompt<I, O>(deps: ClaudeDeps, run: PromptRun<I, O>): P
     // The builders already put document and image blocks first (ai-pipeline §2.2).
     messages: built.messages as unknown as TaskCall<O>['messages'],
     sources: sourcesOf(built.documents),
+    choices: { ...choicesFromPages(built.documents?.allowedPages), ...(run.choices ?? {}) },
   };
   const result = await callClaude(deps, withShortCache(call));
   return { result, documents: built.documents ?? null };
