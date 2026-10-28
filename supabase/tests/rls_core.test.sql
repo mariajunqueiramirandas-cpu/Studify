@@ -576,5 +576,27 @@ select test_helpers.check_err('handle_report refuses unsupported actions yet (re
 select test_helpers.check_rows('carol soft-deletes the Turma document (tombstone)', 'authenticated', pg_temp.u('carol'),
   $$update public.documents set deleted_at = now() where id = 'd1000000-0000-4000-8000-000000000001'$$, 1);
 
+-- =====================================================================
+-- 15. Last: deleting the Turma (SOC-01.15). Turma A is not used after this point.
+-- =====================================================================
+select test_helpers.check_err('bob cannot delete the Turma (not the owner)', 'authenticated', pg_temp.u('bob'),
+  $$select public.delete_class_group('77777777-7777-4777-8777-777777777777')$$);
+select test_helpers.check_err('carol (moderator) cannot delete the Turma', 'authenticated', pg_temp.u('carol'),
+  $$select public.delete_class_group('77777777-7777-4777-8777-777777777777')$$);
+select test_helpers.check_err('anon cannot delete a Turma', 'anon', null,
+  $$select public.delete_class_group('77777777-7777-4777-8777-777777777777')$$);
+select test_helpers.check_ok('erin (owner) deletes Turma A', 'authenticated', pg_temp.u('erin'),
+  $$select public.delete_class_group('77777777-7777-4777-8777-777777777777')$$);
+select isnt((select deleted_at from public.class_groups where id = '77777777-7777-4777-8777-777777777777'), null,
+  'the Turma is soft-deleted');
+select is((select count(*)::int from public.class_group_members where class_group_id = '77777777-7777-4777-8777-777777777777' and status in ('active', 'pending')),
+  0, 'every membership of the deleted Turma has ended');
+select is((select count(*)::int from public.invites where class_group_id = '77777777-7777-4777-8777-777777777777' and revoked_at is null),
+  0, 'the Turma invite links are revoked');
+select test_helpers.check_rows('bob no longer reads the deleted Turma', 'authenticated', pg_temp.u('bob'),
+  $$select id from public.class_groups where id = '77777777-7777-4777-8777-777777777777'$$, 0);
+select test_helpers.check_err('deleting the same Turma twice is refused (not the owner any more)', 'authenticated', pg_temp.u('erin'),
+  $$select public.delete_class_group('77777777-7777-4777-8777-777777777777')$$);
+
 select * from finish();
 rollback;

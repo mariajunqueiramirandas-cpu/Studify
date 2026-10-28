@@ -81,6 +81,10 @@ export const RPC_SCHEMAS = {
     args: z.object({ class_group_id: UuidSchema }),
     result: nullResult,
   },
+  delete_class_group: {
+    args: z.object({ class_group_id: UuidSchema }),
+    result: nullResult,
+  },
   create_shared_subject: {
     args: z.object({
       class_group_id: UuidSchema,

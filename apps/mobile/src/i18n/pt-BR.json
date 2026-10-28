@@ -923,6 +923,7 @@
     "remove_member": "Remover da turma",
     "block": "Bloquear",
     "delete": "Apagar turma",
+    "delete_warning": "Todo mundo sai da turma e as matérias compartilhadas somem pra eles. Não dá pra desfazer.",
     "delete_confirm": "Digite o nome da turma pra confirmar:",
     "empty": "Você ainda não está em nenhuma turma.",
     "full": "Essa turma está cheia (60 pessoas).",

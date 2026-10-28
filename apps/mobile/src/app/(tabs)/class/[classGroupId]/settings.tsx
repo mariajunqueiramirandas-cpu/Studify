@@ -1,16 +1,18 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Button, Card, RadioList, Screen, Section, SwitchRow, TextField, useOverlay } from '../../../../components';
 import { useSession } from '../../../../features/auth/session';
-import { leaveClassGroup, updateClassGroup, updateMyMembership, useClassGroup, type ClassGroup } from '../../../../features/class/api';
+import { deleteClassGroup, leaveClassGroup, updateClassGroup, updateMyMembership, useClassGroup, type ClassGroup } from '../../../../features/class/api';
 import { options, t } from '../../../../i18n';
 
-/** S-TUR-08 Configurações da turma: join policy, hosting, nickname, opt-ins, leave (SOC-01). */
+/** S-TUR-08 Configurações da turma: join policy, hosting, nickname, opt-ins, leave (SOC-01), delete (SOC-01.15). */
 export default function ClassSettings() {
   const { classGroupId } = useLocalSearchParams<{ classGroupId: string }>();
   const { userId } = useSession();
   const cg = useClassGroup(classGroupId);
   const overlay = useOverlay();
+  const qc = useQueryClient();
   const g = cg.data?.group;
   const me = cg.data?.me;
   const [nickname, setNickname] = useState('');
@@ -69,6 +71,31 @@ export default function ClassSettings() {
           }}
         />
       </Card>
+      {cg.data?.me?.role === 'owner' && g ? (
+        <Card>
+          <Button
+            variant="destructive"
+            label={t('class.delete')}
+            onPress={async () => {
+              const confirmed = await overlay.confirm({
+                title: t('class.delete'),
+                message: `${t('class.delete_warning')} ${t('class.delete_confirm')}`,
+                destructive: true,
+                confirmLabel: t('class.delete'),
+                typedConfirmation: g.name,
+              });
+              if (!confirmed) return;
+              try {
+                await deleteClassGroup(classGroupId);
+                void qc.invalidateQueries({ queryKey: ['classGroups'] });
+                router.replace('/class');
+              } catch {
+                overlay.snack(t('error.permission'));
+              }
+            }}
+          />
+        </Card>
+      ) : null}
     </Screen>
   );
 }
