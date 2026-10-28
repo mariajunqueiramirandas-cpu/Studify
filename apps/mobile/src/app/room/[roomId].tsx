@@ -9,6 +9,7 @@ import { formatClock } from '../../features/common/format';
 import { roomControl, useRoom, useRoomChannel } from '../../features/rooms/api';
 import { t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 /**
  * S-SOC-05 room (SOC-05.2–05.6): shared timer driven by the host and stamped with server time, presence with a
@@ -45,7 +46,7 @@ export default function Room() {
         if (res.goal) channel.setGoal({ progress: res.goal.progress, target: res.goal.target });
         if (res.status === 'closed') setClosed(true);
       })
-      .catch((e: { code?: string }) => overlay.snack(e.code === 'class_full' ? t('rooms.full') : t('error.generic')));
+      .catch((e: unknown) => overlay.snack((e as { code?: string }).code === 'class_full' ? t('rooms.full') : messageFor(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -59,8 +60,8 @@ export default function Room() {
       const res = await roomControl({ action, room_id: roomId });
       setTimer(res.timer_state as unknown as RoomTimerState);
       if (action === 'close') router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
 

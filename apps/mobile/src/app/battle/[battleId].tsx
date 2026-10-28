@@ -10,6 +10,7 @@ import type { QuestionResponse, QuestionRow } from '../../features/practice/type
 import { t } from '../../i18n';
 import { battleJoinLink } from '../../features/common/links';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 interface BattleState {
   status: BattleStatus;
@@ -48,7 +49,7 @@ export default function BattleScreen() {
   useEffect(() => {
     if (!isHost && !joined.current && pinParam) {
       joined.current = true;
-      void battleJoin(pinParam).catch(() => overlay.snack(t('error.generic')));
+      void battleJoin(pinParam).catch((e: unknown) => overlay.snack(messageFor(e)));
     }
     const channel = supabase.channel(`battle:${battleId}`, { config: { private: true, presence: { key: userId ?? 'anon' } } });
     channel
@@ -81,8 +82,8 @@ export default function BattleScreen() {
   const control = async (action: 'start' | 'next' | 'end') => {
     try {
       await battleControl({ action, battle_id: battleId });
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
 

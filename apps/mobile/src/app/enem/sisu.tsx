@@ -9,6 +9,7 @@ import { areaName } from '../../features/enem/components';
 import { recomputePlan } from '../../features/goals/api';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 const KEYS = ['LC', 'CH', 'CN', 'MT', 'RED'] as const;
 const DEFAULT_WEIGHTS: SisuScores = { LC: 1, CH: 1, CN: 1, MT: 1, RED: 1 };
@@ -41,8 +42,8 @@ export default function MetaSisu() {
             await targets.refetch();
             void recomputePlan('manual_edit', goal.id).catch(() => undefined);
             setEditing(null);
-          } catch {
-            overlay.snack(t('error.generic'));
+          } catch (e) {
+            overlay.snack(messageFor(e));
           }
         }}
       />

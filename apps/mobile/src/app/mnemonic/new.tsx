@@ -8,6 +8,7 @@ import { saveMnemonic, suggestMnemonics, useCardText, usePalaces } from '../../f
 import { useDb } from '../../db/DatabaseProvider';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 const TYPES: Array<MnemonicType | 'any'> = ['any', 'acronym', 'phrase', 'rhyme', 'story', 'palace', 'keyword'];
 
@@ -63,8 +64,8 @@ export default function MnemonicStudio() {
       await saveMnemonic(db, userId, { cardId: params.cardId, nodeId: params.cardId ? undefined : params.nodeId }, { ...chosen, content: { ...chosen.content, text: text.trim() || chosen.content.text } }, palaceId);
       overlay.snack(t('mnemonic.saved'));
       router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(null);
     }

@@ -6,6 +6,7 @@ import { toLocalDate, weekdayDate } from '../../../features/common/format';
 import { recomputePlan, saveAvailabilityException, saveStudyPreferences, useAvailabilityExceptions, useInvalidateGoal, useStudyPreferences } from '../../../features/goals/api';
 import { TimeEditor, type WeekMinutes } from '../../../features/goals/TimeEditor';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-OBJ-08 Seu tempo: minutes per weekday + exceptions (GOL-04.3). */
 export default function TimeScreen() {
@@ -39,8 +40,8 @@ export default function TimeScreen() {
                 await recomputePlan('availability_changed', goalId).catch(() => undefined);
                 invalidate(goalId);
                 router.back();
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               } finally {
                 setBusy(false);
               }
@@ -62,7 +63,7 @@ export default function TimeScreen() {
               variant="tonal"
               label={t('time.add_exception')}
               onPress={async () => {
-                await saveAvailabilityException(userId!, toLocalDate(day), mins).catch(() => overlay.snack(t('error.generic')));
+                await saveAvailabilityException(userId!, toLocalDate(day), mins).catch((e: unknown) => overlay.snack(messageFor(e)));
                 setDay(null);
                 void exceptions.refetch();
               }}

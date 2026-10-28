@@ -7,6 +7,7 @@ import { useSession } from '../../../features/auth/session';
 import { useCapi } from '../../../features/motivation/capi';
 import { t } from '../../../i18n';
 import { space } from '../../../theme';
+import { messageFor } from '../../../api/messages';
 
 /** S-PERF-01 Perfil. */
 export default function Profile() {
@@ -53,8 +54,8 @@ export default function Profile() {
             if (sync.pending > 0 && !(await overlay.confirm({ title: 'Você tem revisões que ainda não foram salvas na nuvem. Quer esperar a internet voltar?', confirmLabel: t('profile.sign_out'), cancelLabel: 'Esperar' }))) return;
             try {
               await signOut('local');
-            } catch {
-              overlay.snack(t('error.generic'));
+            } catch (e) {
+              overlay.snack(messageFor(e));
             }
           }}
         />

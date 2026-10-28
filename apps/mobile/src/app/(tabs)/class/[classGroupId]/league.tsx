@@ -6,6 +6,7 @@ import { useLeagueBoard, useMyLeagueWeeks } from '../../../../features/class/tur
 import { weekdayDate } from '../../../../features/common/format';
 import { t } from '../../../../i18n';
 import { useTheme } from '../../../../theme';
+import { messageFor } from '../../../../api/messages';
 
 const BADGE_ICON: Record<string, string> = { podium_1: '🥇', podium_2: '🥈', podium_3: '🥉', consistent_week: '🌱' };
 
@@ -32,7 +33,7 @@ export default function League() {
         onChange={(v) =>
           void updateMyMembership(classGroupId, userId!, { league_opt_in: v })
             .then(() => cg.refetch())
-            .catch(() => overlay.snack(t('error.generic')))
+            .catch((e: unknown) => overlay.snack(messageFor(e)))
         }
       />
       {!optedIn ? <Banner kind="neutral" message={t('league.off')} /> : null}

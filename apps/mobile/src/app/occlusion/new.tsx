@@ -9,6 +9,7 @@ import { createOcclusionCards, prepareOcclusionImage, type OcclusionSource } fro
 import { useSubject } from '../../features/subjects/api';
 import { options, t } from '../../i18n';
 import { space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 const STEP = 0.02;
 
@@ -117,8 +118,8 @@ export default function NewOcclusion() {
       const n = await createOcclusionCards(userId, { subjectId: params.subjectId, nodeId: params.nodeId, image, masks: masks.map((m) => ({ ...m, label: m.label.trim() })), mode, personal: !sharedSubject || !share });
       overlay.snack(t('occlusion.saved', { n }));
       router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setSaving(false);
     }

@@ -8,6 +8,7 @@ import { saveGradeComponent, useGoal, useGoalExams, useGradingData, type GradeCo
 import { useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
 import { space } from '../../../theme';
+import { messageFor } from '../../../api/messages';
 
 /** S-OBJ-13 Quanto preciso tirar? — components, grades, required grade per test (GOL-06). */
 export default function Grades() {
@@ -68,7 +69,7 @@ export default function Grades() {
   })();
 
   const update = async (c: GradeComponentRow, patch: Partial<GradeComponentRow>) => {
-    await saveGradeComponent({ ...c, ...patch }).catch(() => overlay.snack(t('error.generic')));
+    await saveGradeComponent({ ...c, ...patch }).catch((e: unknown) => overlay.snack(messageFor(e)));
     void data.refetch();
   };
 

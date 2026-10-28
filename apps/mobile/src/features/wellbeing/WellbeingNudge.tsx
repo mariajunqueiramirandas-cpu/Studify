@@ -4,6 +4,7 @@ import { Banner, Button, Row, useOverlay } from '../../components';
 import { t } from '../../i18n';
 import { useBurnoutNudge, type GuardOptions } from './guard';
 import { HelpCard } from './HelpCard';
+import { messageFor } from '../../api/messages';
 
 export function WellbeingNudge(props: GuardOptions) {
   const overlay = useOverlay();
@@ -30,7 +31,7 @@ export function WellbeingNudge(props: GuardOptions) {
             onPress={() =>
               void rebalance().then(
                 () => overlay.snack(t('burnout.rebalanced')),
-                () => overlay.snack(t('error.generic')),
+                (e: unknown) => overlay.snack(messageFor(e)),
               )
             }
           />

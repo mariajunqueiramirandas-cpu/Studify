@@ -11,6 +11,7 @@ import type { GradeResult, QuestionResponse, QuestionRow } from '../../../../fea
 import { options, t } from '../../../../i18n';
 import { space } from '../../../../theme';
 import { CapiCheer } from '../../../../features/motivation/CapiCheer';
+import { messageFor } from '../../../../api/messages';
 
 /** S-PRA-07 Resultado + S-PRA-08 Correção (PRA-03, PRA-01.6). */
 export default function Result() {
@@ -102,8 +103,8 @@ export default function Result() {
                 try {
                   const s = await shareQuiz(quizId);
                   await Share.share({ message: `${t('share.quiz_card', { k: correct, n: total, subject: '' }).replace(' em  —', ' —')} ${s.url}` });
-                } catch {
-                  overlay.snack(t('error.generic'));
+                } catch (e) {
+                  overlay.snack(messageFor(e));
                 }
               }}
             />

@@ -8,6 +8,7 @@ import { OutlineTree } from '../../../../features/subjects/OutlineTree';
 import { editOutline, setNodeExcluded, undoOutlineEvent, useCanEditSubject, useInvalidateOutline, useOutline, type OutlineNode, type OutlineOp } from '../../../../features/subjects/outline';
 import { t } from '../../../../i18n';
 import { space } from '../../../../theme';
+import { messageFor } from '../../../../api/messages';
 
 /** Pages where a topic can be cut: every page after the first one it covers. */
 function splitPages(n: OutlineNode): number[] {
@@ -50,8 +51,8 @@ export default function OutlineEdit() {
       overlay.undo(t(doneKey), () => {
         if (eventId) void undoOutlineEvent(eventId).then(invalidate);
       });
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

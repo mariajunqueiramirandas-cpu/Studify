@@ -5,6 +5,7 @@ import { useSession } from '../../../features/auth/session';
 import { callFunction } from '../../../api/functions';
 import { useOverlay } from '../../../components';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -24,8 +25,8 @@ export default function GuardianStep() {
       await callFunction('guardian-link', { guardian_email: email.trim() });
       overlay.snack(t('onb.guardian.sent'));
       router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
   return (

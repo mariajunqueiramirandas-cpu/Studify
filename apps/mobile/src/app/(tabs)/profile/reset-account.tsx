@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { supabase } from '../../../api/supabase';
-import { ApiError } from '../../../api/functions';
 import { ActionBar, Banner, Button, Screen, Text, TextField, useOverlay } from '../../../components';
 import { useSession } from '../../../features/auth/session';
 import { resetAccount } from '../../../features/profile/api';
 import { wipeLocalDataAndRestart } from '../../../features/profile/reset';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** Recomeçar do zero: explain → re-auth code → typed ZERAR → everything wiped, login kept, onboarding again. */
 export default function ResetAccount() {
@@ -43,7 +43,7 @@ export default function ResetAccount() {
                   await resetAccount(code);
                 } catch (e) {
                   // The server explains what blocked it (wrong code, Turma owner); nothing was erased.
-                  overlay.snack(e instanceof ApiError ? e.message : t('error.generic'));
+                  overlay.snack(messageFor(e));
                   setBusy(false);
                   return;
                 }

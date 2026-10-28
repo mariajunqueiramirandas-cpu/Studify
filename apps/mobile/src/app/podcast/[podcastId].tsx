@@ -14,6 +14,7 @@ import { episodeSources, flattenTimeline, lineAt, thinkCountdown } from '../../f
 import { useSubject } from '../../features/subjects/api';
 import { t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 /**
  * S-INT-02 Player (INT-01.7–01.12): plays the episode (cloud voices, or the device voice when the episode has no
@@ -83,8 +84,8 @@ export default function PodcastPlayer() {
                   await downloadEpisode(e);
                   setDownloaded(true);
                   overlay.snack(t('podcast.downloaded'));
-                } catch {
-                  overlay.snack(t('error.generic'));
+                } catch (e) {
+                  overlay.snack(messageFor(e));
                 } finally {
                   setDownloading(false);
                 }

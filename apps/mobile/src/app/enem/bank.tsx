@@ -7,6 +7,7 @@ import { AREAS, startBankPractice, useAnswered, useBankItems, useEditions, useEn
 import { areaName } from '../../features/enem/components';
 import { bookletPosition } from '../../features/enem/format';
 import { t } from '../../i18n';
+import { messageFor } from '../../api/messages';
 
 const BANDS = ['facil', 'media', 'dificil', 'muito_dificil'] as const;
 const PRACTICE_MAX = 30;
@@ -41,8 +42,8 @@ export default function EnemBank() {
       const ids = visible.filter((i) => !i.annulled).slice(0, PRACTICE_MAX).map((i) => i.question_id);
       const quizId = await startBankPractice(userId, ids, timed, params.title ? `ENEM — ${params.title}` : `ENEM — ${areaName(area)}`);
       router.push({ pathname: '/quiz/[quizId]', params: { quizId } });
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

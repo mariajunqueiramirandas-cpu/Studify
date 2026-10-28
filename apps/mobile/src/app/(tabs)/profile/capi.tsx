@@ -6,6 +6,7 @@ import { useCapi } from '../../../features/motivation/capi';
 import { updateSettings } from '../../../features/profile/api';
 import { t } from '../../../i18n';
 import { space } from '../../../theme';
+import { messageFor } from '../../../api/messages';
 
 const SLOTS: CapiSlot[] = ['hat', 'glasses', 'scarf'];
 
@@ -19,8 +20,8 @@ export default function CapiSettings() {
     try {
       await updateSettings({ mascot: { visible: capi.visible, accessories: capi.requested, ...patch } });
       await refreshProfile();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
 

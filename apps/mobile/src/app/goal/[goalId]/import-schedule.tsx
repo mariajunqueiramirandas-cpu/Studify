@@ -12,6 +12,7 @@ import { useInvalidateGoal } from '../../../features/goals/api';
 import { startScheduleImport, useScheduleImport } from '../../../features/prova/api';
 import { useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-OBJ-16 Importar calendário de provas (ING-07): photo → extracted tests (draft) → confirm. */
 export default function ImportSchedule() {
@@ -60,8 +61,8 @@ export default function ImportSchedule() {
                   await rpc('apply_schedule_import', { schedule_import_id: importId, goal_id: goalId });
                   invalidate(goalId);
                   router.replace(`/goal/${goalId}/exams`);
-                } catch {
-                  overlay.snack(t('error.generic'));
+                } catch (e) {
+                  overlay.snack(messageFor(e));
                 } finally {
                   setBusy(false);
                 }

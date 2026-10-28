@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { BottomSheet, Button, Card, Chip, ChipGroup, EmptyState, ListItem, Screen, SegmentedControl, SkeletonList, SwitchRow, Text, TextField, useOnline, useOverlay } from '../../../../components';
 import { roomControl, useOpenRooms } from '../../../../features/rooms/api';
 import { options, t } from '../../../../i18n';
+import { messageFor } from '../../../../api/messages';
 
 type Preset = '25' | '50';
 
@@ -28,8 +29,8 @@ export default function Rooms() {
       const res = await roomControl({ action: 'create', class_group_id: classGroupId, name: name.trim(), timer_config: { ...timer }, ...(goalOn ? { group_goal: { kind: goalKind, target: goalKind === 'cards' ? 200 : 50 } } : {}) });
       setSheet(false);
       router.push({ pathname: '/room/[roomId]', params: { roomId: res.room_id } });
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }
@@ -40,7 +41,7 @@ export default function Rooms() {
       await roomControl({ action: 'join', room_id: roomId });
       router.push({ pathname: '/room/[roomId]', params: { roomId } });
     } catch (e) {
-      overlay.snack((e as { code?: string }).code === 'class_full' ? t('rooms.full') : t('error.generic'));
+      overlay.snack((e as { code?: string }).code === 'class_full' ? t('rooms.full') : messageFor(e));
     }
   };
 

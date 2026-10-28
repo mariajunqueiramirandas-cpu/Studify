@@ -2,6 +2,7 @@ import { NumberStepper, Screen, Section, Text, useOverlay } from '../../../compo
 import { useSession } from '../../../features/auth/session';
 import { updateSettings } from '../../../features/profile/api';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 interface MemorySettings {
   desired_retention?: number;
@@ -14,7 +15,7 @@ export default function MemorySettingsScreen() {
   const { profile, refreshProfile } = useSession();
   const overlay = useOverlay();
   const memory = ((profile?.settings as { memory?: MemorySettings } | undefined)?.memory ?? {}) as MemorySettings;
-  const save = (patch: MemorySettings) => void updateSettings({ memory: { ...memory, ...patch } }).then(refreshProfile).catch(() => overlay.snack(t('error.generic')));
+  const save = (patch: MemorySettings) => void updateSettings({ memory: { ...memory, ...patch } }).then(refreshProfile).catch((e: unknown) => overlay.snack(messageFor(e)));
   return (
     <Screen title={t('memory.title')}>
       <Section>

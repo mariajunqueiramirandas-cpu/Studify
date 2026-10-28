@@ -17,6 +17,7 @@ import { cheer, thud } from '../lib/haptics';
 import { space } from '../theme';
 import { ReadAloudButton } from '../features/voice/VoiceButtons';
 import { WellbeingNudge } from '../features/wellbeing/WellbeingNudge';
+import { messageFor } from '../api/messages';
 
 const LEECH_LAPSES = 6;
 
@@ -67,8 +68,8 @@ export default function Review() {
       overlay.undo(`${options('review.rating.again').length ? '' : ''}${[t('review.rating.again'), t('review.rating.hard'), t('review.rating.good'), t('review.rating.easy')][rating - 1]}`, () => void store.undo(db));
       // MEM-02.12 leech prompt on the lapse that marks it.
       if (rating === 1 && card.isLeech) setLeech(card);
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
 

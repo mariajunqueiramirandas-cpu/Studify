@@ -8,6 +8,7 @@ import { createQuiz } from '../../../features/practice/api';
 import { useOutline } from '../../../features/subjects/outline';
 import { options, t } from '../../../i18n';
 import { space } from '../../../theme';
+import { messageFor } from '../../../api/messages';
 
 type Group = 'focus' | 'basic' | 'out';
 const GROUPS: Group[] = ['focus', 'basic', 'out'];
@@ -49,8 +50,8 @@ export default function Desperate() {
       invalidate(goalId);
       await mode.refetch();
       if (res.diagnostic_quiz_id) router.push({ pathname: '/quiz/[quizId]', params: { quizId: res.diagnostic_quiz_id } });
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }
@@ -77,8 +78,8 @@ export default function Desperate() {
       setCoverage(res.coverage);
       void mode.refetch();
       invalidate(goalId);
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
 

@@ -6,6 +6,7 @@ import { generateTheme, saveRepertorio, startBankPractice, useDigestItems } from
 import { areaName } from '../../../features/enem/components';
 import { t } from '../../../i18n';
 import { space } from '../../../theme';
+import { messageFor } from '../../../api/messages';
 
 /** S-ENEM Atualidades item list (ENM-09.2, 09.5): summary, why it matters, repertório, sources, practice. */
 export default function DigestScreen() {
@@ -40,7 +41,7 @@ export default function DigestScreen() {
                 onPress={() =>
                   void saveRepertorio(userId!, { kind: 'data', text: r.text, sourceUrl: r.source_url, sourceName: it.sources.find((s) => s.url === r.source_url)?.name ?? null, atualidadesItemId: it.id, tags: it.redacao_axes })
                     .then(() => overlay.snack(t('atual.saved')))
-                    .catch(() => overlay.snack(t('error.generic')))
+                    .catch((e: unknown) => overlay.snack(messageFor(e)))
                 }
               />
             </View>
@@ -63,7 +64,7 @@ export default function DigestScreen() {
               onPress={() =>
                 void generateTheme({ source: 'atualidades', atualidades_item_id: it.id })
                   .then((r) => router.push({ pathname: '/enem/essay/new', params: { themeId: r.theme_id } }))
-                  .catch((e: { message?: string }) => overlay.snack(e.message ?? t('error.generic')))
+                  .catch((e: unknown) => overlay.snack(messageFor(e)))
               }
             />
           </View>

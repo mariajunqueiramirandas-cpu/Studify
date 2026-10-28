@@ -10,6 +10,7 @@ import { TimeEditor, type WeekMinutes } from '../../features/goals/TimeEditor';
 import { useCreateSubject, useSubjects } from '../../features/subjects/api';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 type Step = 'mode' | 'name' | 'subjects' | 'exams' | 'scope' | 'time' | 'grades';
 const ORDER: Step[] = ['name', 'subjects', 'exams', 'scope', 'time', 'grades'];
@@ -76,8 +77,8 @@ export default function NewGoal() {
                 const id = goalId ?? (await createGoal(userId!, { name, start_date: toLocalDate(start!), end_date: toLocalDate(end!), term_index: Math.min(4, Math.floor(start!.getMonth() / 3) + 1) }));
                 setGoalId(id);
                 next();
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               } finally {
                 setBusy(false);
               }

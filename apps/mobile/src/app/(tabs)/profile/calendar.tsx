@@ -6,6 +6,7 @@ import { calendarSettings, disableCalendarSync, enableCalendarSync, listDeviceCa
 import { timeHM, relativeDay } from '../../../features/common/format';
 import { usePerformanceWindows } from '../../../features/energy/api';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** Perfil → Agenda (GOL-09): opt-in device calendar sync. Event titles never leave the phone. */
 export default function CalendarSettings() {
@@ -35,8 +36,8 @@ export default function CalendarSettings() {
       const r = await runCalendarSync(db, userId, windows.data?.best ?? []);
       setSettings(calendarSettings());
       if (r) overlay.snack(t('calendar.synced', { n: r.placed }));
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

@@ -35,6 +35,7 @@ import { queryClient } from '../../api/queryClient';
 import { cheer, thud } from '../../lib/haptics';
 import { t } from '../../i18n';
 import { radius, shade, space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const since = (from: number) => Math.min(3_600_000, Math.max(0, Date.now() - from));
@@ -94,7 +95,7 @@ export default function TrailScreen() {
     setState(s);
   }, []);
 
-  const fail = (err: unknown) => setError(isApiError(err) ? err.message : t('error.generic'));
+  const fail = (err: unknown) => setError(messageFor(err));
 
   /** Shows `s`, first waiting for its content when the next step is still being written. */
   const land = useCallback(

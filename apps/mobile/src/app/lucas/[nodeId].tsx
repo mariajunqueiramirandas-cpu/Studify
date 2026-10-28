@@ -14,6 +14,7 @@ import { appendTranscript } from '../../features/voice/speech-text';
 import { readAloud, stopReading } from '../../features/voice/voice';
 import { options, t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 interface Msg {
   id: string;
@@ -64,7 +65,7 @@ export default function TeachLucas() {
       if (res.resumed) overlay.snack(t('lucas.resumed'));
     } catch (e) {
       const code = (e as { code?: string }).code;
-      overlay.snack(code === 'budget_exhausted' ? t('budget.user_daily') : t('error.generation'));
+      overlay.snack(code === 'budget_exhausted' ? t('budget.user_daily') : messageFor(e, t('error.generation')));
     } finally {
       setBusy(false);
     }
@@ -98,7 +99,7 @@ export default function TeachLucas() {
     h.done.catch((e: { code?: string }) => {
       setThinking(false);
       setMessages((all) => all.filter((m) => m.id !== lucasId));
-      if (e.code !== 'cancelled') overlay.snack(e.code === 'budget_exhausted' ? t('budget.user_daily') : t('error.generation'));
+      if (e.code !== 'cancelled') overlay.snack(e.code === 'budget_exhausted' ? t('budget.user_daily') : messageFor(e, t('error.generation')));
     });
   };
 
@@ -107,8 +108,8 @@ export default function TeachLucas() {
     setBusy(true);
     try {
       setResult(await finishLesson(session.id));
-    } catch {
-      overlay.snack(t('error.generation'));
+    } catch (e) {
+      overlay.snack(messageFor(e, t('error.generation')));
     } finally {
       setBusy(false);
     }

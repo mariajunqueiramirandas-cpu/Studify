@@ -10,6 +10,7 @@ import { useSubjects } from '../../../../features/subjects/api';
 import { useMastery, useOutline } from '../../../../features/subjects/outline';
 import { masteryLabel } from '../../../../theme';
 import { t } from '../../../../i18n';
+import { messageFor } from '../../../../api/messages';
 
 /** S-OBJ-11 {Prova}: scope, mastery, readiness, predicted grade, actions (GOL-08.2, GOL-11). */
 export default function ExamDetail() {
@@ -127,8 +128,8 @@ export default function ExamDetail() {
                 await logExamGrade(examId, Number(grade.replace(',', '.')), e.grade_max ?? 10);
                 setGradeSheet(false);
                 router.push(`/goal/${goalId}/grades`);
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               }
             }}
           />

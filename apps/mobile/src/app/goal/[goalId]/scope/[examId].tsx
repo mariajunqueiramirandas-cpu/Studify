@@ -12,6 +12,7 @@ import { confirmScope, recomputePlan, resolveScope, useExam, useInvalidateGoal, 
 import { useOutline } from '../../../../features/subjects/outline';
 import { t } from '../../../../i18n';
 import { space, useTheme } from '../../../../theme';
+import { messageFor } from '../../../../api/messages';
 
 type Mode = 'input' | 'pick' | 'review';
 
@@ -83,8 +84,8 @@ export default function ScopeScreen() {
       invalidate(goalId);
       overlay.snack(t('scope.saved'));
       router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

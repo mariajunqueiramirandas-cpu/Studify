@@ -6,6 +6,7 @@ import { useSession } from '../../../../../features/auth/session';
 import { reviewContribution, saveContribution, submitContribution, useMyContribution } from '../../../../../features/class/turma5';
 import { t } from '../../../../../i18n';
 import { radius, space, useTheme } from '../../../../../theme';
+import { messageFor } from '../../../../../api/messages';
 
 const MIN_CHARS = 80;
 
@@ -49,7 +50,7 @@ export default function WriteContribution() {
       await mine.refetch();
       if (step === 'save') overlay.snack(t('divide.saved'));
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(null);
     }

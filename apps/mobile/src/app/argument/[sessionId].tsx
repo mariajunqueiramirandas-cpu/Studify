@@ -6,6 +6,7 @@ import { AiBadge, AppBar, Button, Card, Chip, ChipGroup, ErrorState, RichContent
 import { finishArgument, sendArgument, useArgumentSession, useEnemEssay, type ArgumentSessionRow } from '../../features/enem/api';
 import { t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 const CRITERIA = ['tese', 'fundamentacao', 'repertorio', 'coerencia', 'refutacao', 'falacias'] as const;
 
@@ -46,7 +47,7 @@ export default function ArgumentSession() {
       onError: (e) => {
         setPending(null);
         setInput(text);
-        overlay.snack(e.message ?? t('error.generic'));
+        overlay.snack(messageFor(e));
       },
     });
   };
@@ -57,7 +58,7 @@ export default function ArgumentSession() {
       await finishArgument(s.id, s.goal_mode === 'enem');
       await session.refetch();
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setFinishing(false);
     }

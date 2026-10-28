@@ -8,6 +8,7 @@ import { deletePalace, savePalace, usePalaces } from '../../features/mnemonics/a
 import { useDb } from '../../db/DatabaseProvider';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 /** MEM-06.5 Palácios da memória: a place the student knows, as an ordered list of up to 20 loci, reused later. */
 export default function Palaces() {
@@ -47,7 +48,7 @@ export default function Palaces() {
           onPress={() =>
             void savePalace(db, userId!, { id: editing.id, name: editing.name.trim(), loci: editing.loci })
               .then(() => setEditing(null))
-              .catch(() => overlay.snack(t('error.generic')))
+              .catch((e: unknown) => overlay.snack(messageFor(e)))
           }
         />
       </Screen>
@@ -64,7 +65,7 @@ export default function Palaces() {
             <Text variant="heading" style={{ flex: 1 }}>
               {p.name}
             </Text>
-            <IconButton icon="trash-outline" label={t('global.remove')} onPress={() => void deletePalace(db, p.id).catch(() => overlay.snack(t('error.generic')))} />
+            <IconButton icon="trash-outline" label={t('global.remove')} onPress={() => void deletePalace(db, p.id).catch((e: unknown) => overlay.snack(messageFor(e)))} />
           </Row>
           <Text variant="bodySmall" tone="secondary">
             {p.loci.join(' → ')}
