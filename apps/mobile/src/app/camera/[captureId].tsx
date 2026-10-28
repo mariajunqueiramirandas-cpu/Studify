@@ -7,6 +7,7 @@ import { AddToSubjectPanel, ExplainPanel, SolvePanel, TranscriptionReview } from
 import { appendToContribution } from '../../features/class/turma5';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 const MODEL_ISSUES = ['blur', 'glare', 'partial', 'dark', 'handwriting', 'multiple_questions'] as const;
 
@@ -129,7 +130,7 @@ function ContributionFromPhoto({ text, contributionId }: { text: string; contrib
         onPress={() =>
           void appendToContribution(contributionId, value.trim())
             .then(() => router.back())
-            .catch(() => overlay.snack(t('error.generic')))
+            .catch((e: unknown) => overlay.snack(messageFor(e)))
         }
       />
     </View>

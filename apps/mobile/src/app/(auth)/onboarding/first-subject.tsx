@@ -5,6 +5,7 @@ import { useOnboarding } from '../../../features/auth/onboarding';
 import { useCreateSubject } from '../../../features/subjects/api';
 import { SubjectForm, type SubjectDraft } from '../../../features/subjects/SubjectForm';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-AUTH-08 Sua primeira matéria → upload (UF-01 step 9, target < 2 min to first session). */
 export default function FirstSubject() {
@@ -32,8 +33,8 @@ export default function FirstSubject() {
                 finish();
                 router.replace('/today');
                 router.push(`/subjects/${id}/upload`);
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               }
             }}
           />

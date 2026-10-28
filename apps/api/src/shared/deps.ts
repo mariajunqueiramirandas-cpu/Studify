@@ -14,13 +14,26 @@ export interface EnqueueOptions {
   retryLimit?: number;
 }
 
+/**
+ * One deferred call (ADR 0009): a handler that calls Claude outside a stream runs as a job on the API's
+ * `api.interactive` queue, detached from the request. `raw` is the request body; the job re-validates it.
+ */
+export interface DeferredJob {
+  fn: string;
+  user_id: string;
+  /** Idempotency-Key of the call: the job stores its response there, and the app polls it with this key. */
+  key: string;
+  raw: string;
+  request_id: string;
+}
+
 export interface AiDeps {
   client: AnthropicLike;
   budget: BudgetStore;
   usage: UsageSink;
   /** Per attempt. Edge default 120 s. */
   timeoutMs?: number;
-  /** SDK retries. Default 2. */
+  /** SDK retries. Default 1 (ADR 0009: further retries belong to the job queue). */
   maxRetries?: number;
 }
 
@@ -40,6 +53,11 @@ export interface Deps {
   verifyEmailCode(email: string, code: string): Promise<boolean>;
   ai: AiDeps;
   enqueue: Enqueue;
+  /**
+   * Sends a deferred call to the interactive queue (ADR 0009). Unset (tests, local tools): deferred handlers run
+   * inline in the request, as before.
+   */
+  defer?: (job: DeferredJob) => Promise<void>;
   now(): Date;
   newId(): string;
   /** SSE heartbeat interval. 15 s in production; 0 in tests. */
@@ -56,7 +74,7 @@ export function claudeDepsFor(deps: Deps): ClaudeDeps {
     budget: deps.ai.budget,
     usage: deps.ai.usage,
     timeoutMs: deps.ai.timeoutMs ?? 120_000,
-    maxRetries: deps.ai.maxRetries ?? 2,
+    maxRetries: deps.ai.maxRetries ?? 1,
     clock: () => deps.now().getTime(),
   };
 }

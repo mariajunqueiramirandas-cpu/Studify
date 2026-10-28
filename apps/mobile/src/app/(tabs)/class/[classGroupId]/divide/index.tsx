@@ -5,6 +5,7 @@ import { useSession } from '../../../../../features/auth/session';
 import { useClassSubjects } from '../../../../../features/class/api';
 import { createDividePlan, useDividePlans, useSubjectTopics } from '../../../../../features/class/turma5';
 import { t } from '../../../../../i18n';
+import { messageFor } from '../../../../../api/messages';
 
 /** SOC-06.1 Dividir e conquistar: the Turma's divisões and a new one for a subject's topics. */
 export default function DivideList() {
@@ -34,7 +35,7 @@ export default function DivideList() {
               onPress={() =>
                 void createDividePlan(userId!, { classGroupId, subjectId: subjectId!, title: title.trim(), nodeIds: [...picked], maxClaims })
                   .then((id) => (setCreating(false), void plans.refetch(), router.push({ pathname: '/class/[classGroupId]/divide/[planId]', params: { classGroupId, planId: id } })))
-                  .catch(() => overlay.snack(t('error.generic')))
+                  .catch((e: unknown) => overlay.snack(messageFor(e)))
               }
             />
           </ActionBar>

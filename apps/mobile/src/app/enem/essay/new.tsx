@@ -9,6 +9,7 @@ import { editorLines } from '../../../features/enem/format';
 import { getKv } from '../../../lib/kv';
 import { t } from '../../../i18n';
 import { radius, space, useTheme } from '../../../theme';
+import { messageFor } from '../../../api/messages';
 
 const DRAFT_KEY = 'enem.essay.draft';
 
@@ -47,7 +48,7 @@ export default function NewEnemEssay() {
       setThemeId(res.theme_id);
       setPicker(false);
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }
@@ -63,7 +64,7 @@ export default function NewEnemEssay() {
       getKv().remove(DRAFT_KEY);
       router.replace({ pathname: '/enem/essay/[essayId]', params: { essayId: id } });
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

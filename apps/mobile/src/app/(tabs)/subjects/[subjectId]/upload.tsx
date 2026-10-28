@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { ActionBar, Banner, Button, Card, Chip, ChipGroup, ProgressBar, Row, Screen, Text, TextField, useOnline, useOverlay } from '../../../../components';
-import { ApiError } from '../../../../api/functions';
 import { useSession } from '../../../../features/auth/session';
 import { formatBytes } from '../../../../features/common/format';
 import { askNotificationsAfterUpload } from '../../../../features/profile/permissions';
@@ -11,6 +10,7 @@ import { UPLOAD_KINDS, uploadMaterial, useDocuments, useSubjectJobs, type Docume
 import { useSharedFile, type SharedFile } from '../../../../features/subjects/share';
 import { options, t } from '../../../../i18n';
 import { space } from '../../../../theme';
+import { messageFor } from '../../../../api/messages';
 
 const ERROR_KEYS: Record<string, string> = {
   too_large: 'ingest.too_large',
@@ -78,7 +78,7 @@ export default function Upload() {
       setPct(null);
       const key = ERROR_KEYS[(e as { code?: string }).code ?? ''];
       // The server's envelope message says what went wrong; the generic copy is the last resort.
-      setError({ message: key ? t(key) : e instanceof ApiError ? e.message : t('error.generic') });
+      setError({ message: key ? t(key) : messageFor(e) });
     }
   };
 

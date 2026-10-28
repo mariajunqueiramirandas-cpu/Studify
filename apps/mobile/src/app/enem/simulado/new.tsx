@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActionBar, Banner, Button, Chip, ChipGroup, RadioList, Screen, SegmentedControl, Text, useOnline, useOverlay } from '../../../components';
 import { AREAS, createSimulado, useEditions, useEnemGoal } from '../../../features/enem/api';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 type Mode = EnemSimuladoCreateReq['mode'];
 type Source = EnemSimuladoCreateReq['source'];
@@ -44,7 +45,7 @@ export default function NewSimulado() {
       }
       router.replace({ pathname: '/quiz/[quizId]', params: { quizId: res.quiz_id, attemptId: res.attempt_id } });
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

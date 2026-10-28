@@ -4,6 +4,7 @@ import { ActionBar, Button, Screen, useOverlay } from '../../../components';
 import { useCreateSubject, useSubjects } from '../../../features/subjects/api';
 import { SubjectForm, type SubjectDraft } from '../../../features/subjects/SubjectForm';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-MAT-02 Nova matéria (PLT-03). */
 export default function NewSubject() {
@@ -21,8 +22,8 @@ export default function NewSubject() {
       const id = await create.mutateAsync(draft);
       if (then === 'upload') router.replace({ pathname: '/subjects/[subjectId]/upload', params: { subjectId: id, shared: '1' } });
       else router.replace(`/subjects/${id}`);
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     }
   };
 

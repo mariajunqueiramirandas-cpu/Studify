@@ -158,35 +158,38 @@ async function explain(ctx: FnContext<CaptureActReq>, capture: CaptureRow, focus
   });
 }
 
-async function solveFull(ctx: FnContext<CaptureActReq>, capture: CaptureRow, solver: Solver): Promise<Response> {
+/**
+ * The full solution, streamed. The stream opens first (ADR 0009): when the student asks for the solution before any
+ * hint, the ladder (a plain Claude call) is built inside it, where the heartbeat keeps the connection alive.
+ */
+async function solveFull(ctx: FnContext<CaptureActReq>, capture: CaptureRow, questionIndex: number): Promise<Response> {
   const { deps } = ctx;
   const userId = ctx.user.userId;
-  const subject = await captureSubject(deps, userId, capture);
-  const stored = capture.result as { solution_md?: string } | null;
-  solver.solution_viewed = true;
-  solver.revealed = solver.ladder.hints.length;
-  const final = { answer: solver.ladder.final_answer, why_others_wrong: solver.ladder.why_others_wrong, uncertain_step: solver.ladder.uncertain_step };
-  if (stored?.solution_md) {
-    return ctx.sse(async (writer) => {
-      writer.send('meta', { request_id: ctx.requestId, capture_id: capture.id });
-      writer.send('delta', { text: stored.solution_md as string });
-      writer.send('done', { stop_reason: 'end_turn', usage_pct_today: await ctx.usagePct(), result: { capture_id: capture.id, final } });
-    });
-  }
-  const slices = await matchedSlices(deps, capture.node_id);
-  const built = getTask('camera.solveFull').build({
-    images: await captureImages(deps.db, capture.image_paths, 2),
-    questionText: solver.question_text,
-    slices,
-    quantitative: solver.quantitative,
-    matchedLabel: capture.match?.label ?? null,
-    finalAnswer: solver.ladder.final_answer,
-    contentLanguage: subject?.content_language ?? 'pt-BR',
-    languageSubject: subject?.is_language_subject ?? false,
-  });
-  const session = await openStream(claudeDepsFor(deps), toTaskCall({ built, taskId: 'camera.solveFull', ctx: budgetCtxFor(subject, userId, 'CAM-02', 'user', { nodeId: capture.node_id }) }));
   return ctx.sse(async (writer) => {
     writer.send('meta', { request_id: ctx.requestId, capture_id: capture.id });
+    const solver = await ensureSolver(deps, userId, capture, questionIndex);
+    const subject = await captureSubject(deps, userId, capture);
+    const stored = capture.result as { solution_md?: string } | null;
+    solver.solution_viewed = true;
+    solver.revealed = solver.ladder.hints.length;
+    const final = { answer: solver.ladder.final_answer, why_others_wrong: solver.ladder.why_others_wrong, uncertain_step: solver.ladder.uncertain_step };
+    if (stored?.solution_md) {
+      writer.send('delta', { text: stored.solution_md });
+      writer.send('done', { stop_reason: 'end_turn', usage_pct_today: await ctx.usagePct(), result: { capture_id: capture.id, final } });
+      return;
+    }
+    const slices = await matchedSlices(deps, capture.node_id);
+    const built = getTask('camera.solveFull').build({
+      images: await captureImages(deps.db, capture.image_paths, 2),
+      questionText: solver.question_text,
+      slices,
+      quantitative: solver.quantitative,
+      matchedLabel: capture.match?.label ?? null,
+      finalAnswer: solver.ladder.final_answer,
+      contentLanguage: subject?.content_language ?? 'pt-BR',
+      languageSubject: subject?.is_language_subject ?? false,
+    });
+    const session = await openStream(claudeDepsFor(deps), toTaskCall({ built, taskId: 'camera.solveFull', ctx: budgetCtxFor(subject, userId, 'CAM-02', 'user', { nodeId: capture.node_id }) }));
     const { result } = await pumpStream(writer, session);
     const citations = result.status === 'ok' ? citationsForStorage(result.citations) : [];
     await saveSolver(deps, capture.id, solver, {
@@ -404,6 +407,9 @@ async function toEssay(ctx: FnContext<CaptureActReq>, capture: CaptureRow, input
 
 export const handler = defineFunction<CaptureActReq>({
   name: 'capture-act',
+  // ADR 0009: `solve` builds the hint ladder with a plain Claude call, so it runs as a job. `explain` and the
+  // `solution` reveal stream instead.
+  deferred: (input) => input.intent === 'solve' && input.reveal !== 'solution',
   mutating: true,
   aiCall: true,
   input: CaptureActReqSchema,
@@ -418,8 +424,8 @@ export const handler = defineFunction<CaptureActReq>({
       case 'explain':
         return explain(ctx, capture, input.focus_text ?? null);
       case 'solve': {
+        if (input.reveal === 'solution') return solveFull(ctx, capture, input.question_index ?? 0);
         const solver = await ensureSolver(deps, userId, capture, input.question_index ?? 0);
-        if (input.reveal === 'solution') return solveFull(ctx, capture, solver);
         const total = solver.ladder.hints.length;
         solver.revealed = input.reveal === 'hint' ? Math.max(1, solver.revealed) : Math.min(total, solver.revealed + 1);
         const body = solveResponse(solver);

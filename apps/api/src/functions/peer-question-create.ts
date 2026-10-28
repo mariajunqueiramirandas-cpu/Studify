@@ -29,6 +29,8 @@ export function duplicateQuery(stem: string): string {
 
 export const handler = defineFunction<PeerQuestionCreateReq>({
   name: 'peer-question-create',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: PeerQuestionCreateReqSchema,

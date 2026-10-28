@@ -7,6 +7,7 @@ import { loadOwnArgument, runArgumentRound, runThesisStep } from '../shared-p4/a
 
 export const handler = defineFunction<ArgumentTurnReq>({
   name: 'argument-turn',
+  claudeInsideStream: true,
   mutating: true,
   aiCall: true,
   input: ArgumentTurnReqSchema,
@@ -16,18 +17,20 @@ export const handler = defineFunction<ArgumentTurnReq>({
     if (!session) throw new ApiFailure('not_found');
     if (session.status !== 'active') throw new ApiFailure('invalid_request', { message: 'Esse treino já terminou.' });
 
+    // The stream opens before each call (ADR 0009): the heartbeat keeps the connection alive while Claude answers,
+    // and budget or AI errors arrive as the stream's `error` event.
     if (!session.thesis) {
-      const outcome = await runThesisStep(deps, session, input.message.trim());
       return ctx.sse(async (writer) => {
         writer.send('meta', { request_id: ctx.requestId, session_id: session.id });
+        const outcome = await runThesisStep(deps, session, input.message.trim());
         writer.send('delta', { text: outcome.feedback.feedback });
         writer.send('done', { stop_reason: 'end_turn', usage_pct_today: await ctx.usagePct(), result: { stage: 'thesis', thesis_feedback: outcome.feedback } satisfies ArgumentTurnResult });
       });
     }
 
-    const outcome = await runArgumentRound(deps, session, input.message, ctx.now);
     return ctx.sse(async (writer) => {
       writer.send('meta', { request_id: ctx.requestId, session_id: session.id });
+      const outcome = await runArgumentRound(deps, session, input.message, ctx.now);
       writer.send('delta', { text: outcome.reply });
       for (const c of outcome.citations) writer.send('citation', c);
       writer.send('done', {

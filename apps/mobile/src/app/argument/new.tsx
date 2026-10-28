@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActionBar, Banner, Button, Card, Chip, ChipGroup, RadioList, Screen, Section, Text, TextField, useOnline, useOverlay } from '../../components';
 import { startArgument, suggestArgumentThemes, usePredictedThemes } from '../../features/enem/api';
 import { t } from '../../i18n';
+import { messageFor } from '../../api/messages';
 
 type Picked = { theme: string; themeId?: string; nodeId?: string; source: ArgumentStartReq['theme_source'] };
 
@@ -29,7 +30,7 @@ export default function NewArgument() {
     try {
       setSuggested((await suggestArgumentThemes(params.subjectId)).themes);
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(null);
     }
@@ -50,7 +51,7 @@ export default function NewArgument() {
       });
       router.replace({ pathname: '/argument/[sessionId]', params: { sessionId: res.session_id, opening: res.opening } });
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(null);
     }

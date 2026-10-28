@@ -5,10 +5,13 @@
 import { ApiFailure, TrailOpenReqSchema, type TrailOpenReq } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { requireSubject } from '../shared/access.ts';
-import { advanceIfPassed, buildState, loadOutline, loadSteps, outlineHashOf, planChapters, replan, type TrailRow } from '../shared/trail.ts';
+import { advanceIfPassed, buildState, loadOutline, loadSteps, outlineHashOf, type TrailRow } from '../shared/trail.ts';
+import { planChapters, replan } from '../shared/trail-generate.ts';
 
 export const handler = defineFunction<TrailOpenReq>({
   name: 'trail-open',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: TrailOpenReqSchema,

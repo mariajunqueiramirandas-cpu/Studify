@@ -34,6 +34,8 @@ export function outlineDraft(o: EssayOutline): string {
 
 export const handler = defineFunction<ArgumentFinishReq>({
   name: 'argument-finish',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: ArgumentFinishReqSchema,

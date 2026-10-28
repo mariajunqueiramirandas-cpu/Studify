@@ -9,6 +9,7 @@ import { useOutline } from '../../../../features/subjects/outline';
 import { ingestionJob, ingestionView, isJobActive } from '../../../../features/subjects/ProcessingCard';
 import { t } from '../../../../i18n';
 import { space, useTheme } from '../../../../theme';
+import { messageFor } from '../../../../api/messages';
 
 
 /** S-MAT-05 Processamento — per-stage progress and errors (ING-03.8). */
@@ -78,8 +79,8 @@ export default function Processing() {
                               await retryIngestion(d.id);
                               void jobs.refetch();
                               void docs.refetch();
-                            } catch {
-                              overlay.snack(t('error.generic'));
+                            } catch (e) {
+                              overlay.snack(messageFor(e));
                             }
                           },
                         }

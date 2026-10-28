@@ -7,6 +7,7 @@ import { Button, Card, PageChips, Pill, Row, SwitchRow, Text, useOverlay } from 
 import { t } from '../../i18n';
 import { space, useTheme } from '../../theme';
 import { useFindings, useMyFindingVotes, voteFinding, type FindingRow } from './api';
+import { messageFor } from '../../api/messages';
 
 export function FindingsList({ documentId, nodeId, subjectId, onRedo }: { documentId?: string; nodeId?: string; subjectId: string; onRedo?: () => void }) {
   const findings = useFindings({ documentId, nodeId });
@@ -24,7 +25,7 @@ export function FindingsList({ documentId, nodeId, subjectId, onRedo }: { docume
     void voteFinding(f.id, v)
       .then(() => Promise.all([findings.refetch(), votes.refetch()]))
       .then(() => overlay.snack(v === 'is_error' ? t('findings.confirmed_snack') : t('findings.dismissed_snack')))
-      .catch(() => overlay.snack(t('error.generic')));
+      .catch((e: unknown) => overlay.snack(messageFor(e)));
 
   return (
     <View style={{ gap: space.sm }}>

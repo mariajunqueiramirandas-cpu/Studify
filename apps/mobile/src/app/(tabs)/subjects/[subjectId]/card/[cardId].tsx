@@ -8,6 +8,7 @@ import { useOutline } from '../../../../../features/subjects/outline';
 import { FlagSheet } from '../../../../../features/trust/FlagSheet';
 import { options, t } from '../../../../../i18n';
 import { space } from '../../../../../theme';
+import { messageFor } from '../../../../../api/messages';
 
 type CardType = 'basic' | 'cloze' | 'reverse';
 const TYPES: CardType[] = ['basic', 'cloze', 'reverse'];
@@ -55,8 +56,8 @@ export default function CardEditor() {
       }
       void cards.refetch();
       router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

@@ -44,6 +44,8 @@ function promptOf(out: ThemeOut, allowedUrls: ReadonlySet<string>): EssayThemePr
 
 export const handler = defineFunction<EssayThemeGenerateReq>({
   name: 'essay-theme-generate',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: EssayThemeGenerateReqSchema,

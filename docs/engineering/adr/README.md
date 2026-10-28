@@ -12,6 +12,7 @@ Each ADR records one significant decision: its context, the decision, the altern
 | [0006](0006-retrieval-without-embeddings.md) | Retrieval without embeddings (knowledge-map routing + Postgres FTS) | Accepted | 2026-10-26 |
 | [0007](0007-offline-first-append-only-reviews.md) | Offline-first with append-only review logs | Accepted | 2026-10-26 |
 | [0008](0008-vps-bun-hono-api.md) | API server on a VPS with Bun and Hono (Supabase Edge Functions retired) | Accepted | 2026-10-27 |
+| [0009](0009-no-request-waits-on-claude.md) | No request waits on Claude: AI work runs as a job or inside a stream | Accepted | 2026-10-28 |
 
 ## Template
 

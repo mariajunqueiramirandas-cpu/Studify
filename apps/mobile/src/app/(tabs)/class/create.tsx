@@ -4,6 +4,7 @@ import { ActionBar, Banner, Button, Chip, ChipGroup, Screen, TextField, useOverl
 import { isMinor, useSession } from '../../../features/auth/session';
 import { createClassGroup } from '../../../features/class/api';
 import { options, t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-TUR-02 Criar turma (SOC-01.1). Caller becomes the owner; first invite valid 7 days. */
 export default function CreateClass() {
@@ -29,8 +30,8 @@ export default function CreateClass() {
               try {
                 const res = await createClassGroup(name.trim(), school.trim(), year ?? undefined);
                 router.replace({ pathname: '/class/[classGroupId]/invite', params: { classGroupId: res.class_group_id } });
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               } finally {
                 setBusy(false);
               }

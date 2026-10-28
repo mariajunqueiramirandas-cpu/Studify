@@ -4,6 +4,7 @@ import { useSession } from '../auth/session';
 import { useSubject } from '../subjects/api';
 import { t } from '../../i18n';
 import { createUserCard, type GlossaryTerm } from './api';
+import { messageFor } from '../../api/messages';
 
 /** S-MAT-13 {Termo}: definition, 📄, "Criar cartão". */
 export function TermSheet({ term, visible, onClose, subjectId, nodeId }: { term: GlossaryTerm | null; visible: boolean; onClose: () => void; subjectId: string; nodeId?: string }) {
@@ -32,8 +33,8 @@ export function TermSheet({ term, visible, onClose, subjectId, nodeId }: { term:
                 await createUserCard(userId!, { subjectId, nodeId: term.node_id ?? nodeId!, type: 'basic', front: term.term, back: term.definition, sourcePages: term.source_pages, shared: !!subject.data?.owner_class_group_id });
                 setCreated(true);
                 overlay.snack(t('cards.saved'));
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               }
             }}
           />

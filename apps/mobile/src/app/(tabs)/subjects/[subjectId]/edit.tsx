@@ -4,6 +4,7 @@ import { ActionBar, Button, Screen, SkeletonList, useOverlay } from '../../../..
 import { colorKeyFromHex, useSubject, useUpdateSubject } from '../../../../features/subjects/api';
 import { SubjectForm, type SubjectDraft } from '../../../../features/subjects/SubjectForm';
 import { t } from '../../../../i18n';
+import { messageFor } from '../../../../api/messages';
 
 /** S-MAT-02 Editar matéria. */
 export default function EditSubject() {
@@ -31,8 +32,8 @@ export default function EditSubject() {
               try {
                 await update.mutateAsync(draft);
                 router.back();
-              } catch {
-                overlay.snack(t('error.generic'));
+              } catch (e) {
+                overlay.snack(messageFor(e));
               }
             }}
           />

@@ -28,6 +28,8 @@ export function listItemsOf(text: string): string[] {
 
 export const handler = defineFunction<MnemonicSuggestReq>({
   name: 'mnemonic-suggest',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: false,
   aiCall: true,
   input: MnemonicSuggestReqSchema,

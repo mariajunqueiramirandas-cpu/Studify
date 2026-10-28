@@ -5,6 +5,7 @@ import { useClassGroup } from '../../../../../features/class/api';
 import { cancelDividePlan, claimTopic, mergeDividePlan, useDividePlan, useDivideProgress, useSubjectTopics } from '../../../../../features/class/turma5';
 import { t } from '../../../../../i18n';
 import { useTheme } from '../../../../../theme';
+import { messageFor } from '../../../../../api/messages';
 
 /** SOC-06.1–06.4: claim topics (max per member), write your summaries, and close the divisão into the Resumo da turma. */
 export default function DividePlanScreen() {
@@ -26,7 +27,7 @@ export default function DividePlanScreen() {
   const mine = Object.values(p.assignments).filter((u) => u === userId).length;
   const canClose = p.created_by === userId || !!cg.data?.isMod;
   const refresh = () => Promise.all([plan.refetch(), progress.refetch()]);
-  const act = (fn: () => Promise<unknown>) => void fn().then(refresh).catch((e: { message?: string }) => overlay.snack(e.message ?? t('error.generic')));
+  const act = (fn: () => Promise<unknown>) => void fn().then(refresh).catch((e: unknown) => overlay.snack(messageFor(e)));
 
   return (
     <Screen

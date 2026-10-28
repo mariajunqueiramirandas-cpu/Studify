@@ -6,6 +6,7 @@ import { updateSettings } from '../../../features/profile/api';
 import { HelpCard } from '../../../features/wellbeing/HelpCard';
 import { WeeklyCheckin } from '../../../features/wellbeing/WeeklyCheckin';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-PERF-10 Bem-estar (WEL-03): nudges toggle, weekly check-in, quiet hours and the help card (always here). */
 export default function Wellbeing() {
@@ -20,7 +21,7 @@ export default function Wellbeing() {
   const save = (patch: Record<string, unknown>) =>
     void updateSettings(patch)
       .then(refreshProfile)
-      .catch(() => overlay.snack(t('error.generic')));
+      .catch((e: unknown) => overlay.snack(messageFor(e)));
 
   return (
     <Screen title={t('wellbeing.title')}>

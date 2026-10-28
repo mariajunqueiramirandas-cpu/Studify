@@ -7,6 +7,7 @@ import { useClassGroup, useClassSubjects, useMembers } from '../../../../../feat
 import { reviewPeerQuestion, usePeerQuestions, votePeerQuestion, type PeerQuestion } from '../../../../../features/class/turma5';
 import { t } from '../../../../../i18n';
 import { space } from '../../../../../theme';
+import { messageFor } from '../../../../../api/messages';
 
 type Tab = 'vote' | 'approved' | 'mine';
 
@@ -34,7 +35,7 @@ export default function PeerQuestions() {
   const all = questions.data?.list ?? [];
   const voted = questions.data?.voted ?? new Set<string>();
   const list = all.filter((q) => (tab === 'vote' ? q.review_status === 'pending' && q.author_id !== userId : tab === 'approved' ? q.review_status === 'approved' : q.author_id === userId));
-  const act = (fn: () => Promise<string>, done: string) => void fn().then((s) => (overlay.snack(s === 'approved' ? t('peer.approved_now') : done), questions.refetch())).catch((e: { message?: string }) => overlay.snack(e.message ?? t('error.generic')));
+  const act = (fn: () => Promise<string>, done: string) => void fn().then((s) => (overlay.snack(s === 'approved' ? t('peer.approved_now') : done), questions.refetch())).catch((e: unknown) => overlay.snack(messageFor(e)));
 
   return (
     <Screen

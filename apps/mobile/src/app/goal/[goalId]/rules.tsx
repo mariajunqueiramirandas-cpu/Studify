@@ -5,6 +5,7 @@ import { ActionBar, Button, NumberStepper, RadioList, Screen, Section, Segmented
 import { useSession } from '../../../features/auth/session';
 import { recomputePlan, saveGradingRule, useGoal, useGradingData } from '../../../features/goals/api';
 import { options, t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-OBJ-14 Regras da escola: presets + "Personalizar" (GOL-06.1). */
 export default function Rules() {
@@ -37,8 +38,8 @@ export default function Rules() {
       overlay.snack(t('rules.saved'));
       if (then === 'plan') router.replace({ pathname: '/goal/[goalId]/plan', params: { goalId, ready: '1' } });
       else router.back();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

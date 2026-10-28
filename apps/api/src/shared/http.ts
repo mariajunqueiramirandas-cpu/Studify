@@ -1,21 +1,24 @@
 // The request pipeline shared by every Edge Function (api.md §2): CORS, client version gate (426),
 // authentication (401), body validation (400), Idempotency-Key replay (api §2.4), streaming (SSE, §2.6),
 // the x-ai-usage-today header (PLT-04.2) and error mapping (§2.2). Handlers only implement `run`.
+// Deferred calls (ADR 0009): a handler that calls Claude outside a stream runs as a job, and the request answers
+// `202` with `x-operation-status: running` at once. The app repeats the request with the same Idempotency-Key until
+// it gets the stored response, so no request waits on Claude and a dropped connection loses nothing.
 import type { ZodError, ZodType } from 'zod';
 import { ApiFailure, IdempotencyKeySchema, SYNC_SCHEMA_VERSION, apiError } from '@studify/shared';
 import { authenticate, type AuthUser } from './auth.ts';
 import { usagePctToday } from './budget.ts';
-import type { Deps } from './deps.ts';
+import type { DeferredJob, Deps } from './deps.ts';
 import { mapError } from './errors.ts';
-import { beginIdempotent, hashBody, type IdempotencyHandle, type StoredResponse } from './idempotency.ts';
+import { beginIdempotent, hashBody, idempotencyHandle, type IdempotencyHandle, type StoredResponse } from './idempotency.ts';
 import { openSse, replaySse, type SseWriter } from './sse.ts';
 
 export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'authorization, apikey, content-type, idempotency-key, x-studify-version, x-studify-schema, x-device-id, x-client-info',
-  'Access-Control-Expose-Headers': 'x-ai-usage-today, x-request-id',
+    'authorization, apikey, content-type, idempotency-key, x-studify-version, x-studify-schema, x-studify-operations, x-device-id, x-client-info',
+  'Access-Control-Expose-Headers': 'x-ai-usage-today, x-request-id, x-operation-status, retry-after',
   'Access-Control-Max-Age': '600',
 };
 
@@ -46,12 +49,58 @@ export interface FnSpec<I> {
   aiCall?: boolean;
   /** JSON body schema. Omit for functions with no body. */
   input?: ZodType<I>;
+  /**
+   * ADR 0009: the handler calls Claude outside a stream, so it runs as a job and the request answers `202 running`.
+   * A function decides per input when some of its inputs stream (capture-act). Deferred calls always use an
+   * Idempotency-Key, mutating or not. Ignored when `deps.defer` is unset: the handler then runs inline.
+   */
+  deferred?: boolean | ((input: I) => boolean);
+  /**
+   * ADR 0009: the handler makes its plain Claude calls inside its SSE producer, after the stream opened, so the
+   * heartbeat keeps the connection alive while it waits. Declares that to the no-sync-Claude check.
+   */
+  claudeInsideStream?: boolean;
   run(ctx: FnContext<I>): Promise<Response>;
+}
+
+/** Every defined function by name: the interactive queue looks deferred calls up here. */
+const SPECS = new Map<string, FnSpec<any>>();
+
+/** Header of a `202` that means "still running, ask again with the same key" (never a final answer). */
+export const OPERATION_STATUS_HEADER = 'x-operation-status';
+/**
+ * Sent by app builds that repeat a call until it settles (ADR 0009). Older builds take the first answer as final, so
+ * they keep the old contract: no deferral, no joining, and `409` for a repeat that is still running.
+ */
+export const CLIENT_OPERATIONS_HEADER = 'x-studify-operations';
+const RETRY_AFTER_SECONDS = 1;
+
+function followsOperations(req: Request): boolean {
+  return req.headers.get(CLIENT_OPERATIONS_HEADER) === '1';
 }
 
 /** Builds the `(req, deps) => Response` handler a function module exports. */
 export function defineFunction<I>(spec: FnSpec<I>): (req: Request, deps: Deps) => Promise<Response> {
+  SPECS.set(spec.name, spec);
   return (req, deps) => runFunction(req, deps, spec);
+}
+
+/** The names of the functions declared deferred (static or per input). */
+export function deferredFunctionNames(): string[] {
+  return [...SPECS.values()].filter((spec) => spec.deferred !== undefined && spec.deferred !== false).map((spec) => spec.name);
+}
+
+function isDeferred<I>(spec: FnSpec<I>, input: I): boolean {
+  return typeof spec.deferred === 'function' ? spec.deferred(input) : spec.deferred === true;
+}
+
+/** `202 running`: the call with `key` has not finished. The app waits `Retry-After` and repeats it with that key. */
+function runningResponse(key: string, requestId: string): Response {
+  return jsonResponse({ status: 'running', operation_key: key }, 202, {
+    'x-request-id': requestId,
+    [OPERATION_STATUS_HEADER]: 'running',
+    'Retry-After': String(RETRY_AFTER_SECONDS),
+  });
 }
 
 export function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -126,8 +175,11 @@ export async function runFunction<I>(req: Request, deps: Deps, spec: FnSpec<I>):
       input = json as I;
     }
 
-    if (spec.mutating) {
-      const key = req.headers.get('idempotency-key') ?? '';
+    const follows = followsOperations(req);
+    const deferred = follows && deps.defer !== undefined && isDeferred(spec, input);
+    let key = '';
+    if (spec.mutating || deferred) {
+      key = req.headers.get('idempotency-key') ?? '';
       if (!IdempotencyKeySchema.safeParse(key).success) {
         throw new ApiFailure('invalid_request', { message: 'Este pedido precisa de um Idempotency-Key (UUID v7).' });
       }
@@ -137,13 +189,29 @@ export async function runFunction<I>(req: Request, deps: Deps, spec: FnSpec<I>):
         key,
         requestHash: await hashBody(raw),
         now,
+        joinSameRequest: deferred,
       });
       if (outcome.kind === 'replay') return replayResponse(outcome.stored, requestId);
       if (outcome.kind === 'mismatch') throw new ApiFailure('idempotency_mismatch');
+      // ADR 0009: a repeat of a call that is still running is a status check, never a conflict.
       if (outcome.kind === 'in_flight') {
+        if (follows) return runningResponse(key, requestId);
         throw new ApiFailure('already_exists', { message: 'Esse pedido já está sendo feito. Espera um pouquinho.' });
       }
+      if (outcome.kind === 'joined') return runningResponse(outcome.key, requestId);
       handle = outcome.handle;
+    }
+
+    if (deferred && handle && deps.defer) {
+      try {
+        await deps.defer({ fn: spec.name, user_id: user.userId, key, raw, request_id: requestId });
+      } catch (err) {
+        // Not queued: release the key so the app's retry starts the call again.
+        await handle.abort();
+        handle = undefined;
+        throw err;
+      }
+      return runningResponse(key, requestId);
     }
 
     const ctx: FnContext<I> = {
@@ -193,4 +261,50 @@ export async function runFunction<I>(req: Request, deps: Deps, spec: FnSpec<I>):
     }
     return jsonResponse(mapped.body, mapped.status, { 'x-request-id': requestId });
   }
+}
+
+/**
+ * Runs one deferred call on the interactive queue (ADR 0009) and stores its response under the call's
+ * Idempotency-Key, where the app's next poll finds it. A server error is rethrown while the queue still has a
+ * retry, so a transient failure is retried; the last attempt stores it, like any other failure, so the app stops
+ * waiting and shows it. Each tap uses a new key, so a stored failure never blocks a new attempt.
+ */
+export async function runDeferred(job: DeferredJob, deps: Deps, opts: { finalAttempt: boolean }): Promise<StoredResponse> {
+  const handle = idempotencyHandle(deps.db, job.user_id, job.fn, job.key);
+  const spec = SPECS.get(job.fn);
+  let stored: StoredResponse;
+  try {
+    if (!spec) throw new Error(`deferred call to unknown function ${job.fn}`);
+    let json: unknown = {};
+    if (job.raw.trim().length > 0) json = JSON.parse(job.raw);
+    let input: unknown = json;
+    if (spec.input) {
+      const parsed = spec.input.safeParse(json);
+      if (!parsed.success) throw validationFailure(parsed.error);
+      input = parsed.data;
+    }
+    const ctx: FnContext<unknown> = {
+      // Handlers of deferred calls never read the request (only the user id); this one carries the body for symmetry.
+      req: new Request(`http://deferred.invalid/api/${job.fn}`, { method: 'POST', body: job.raw }),
+      deps,
+      user: { userId: job.user_id, email: null, jwt: '' },
+      input,
+      requestId: job.request_id,
+      now: deps.now(),
+      json: (body, status = 200, headers = {}) => jsonResponse(body, status, { 'x-request-id': job.request_id, ...headers }),
+      usagePct: () => usagePctToday(deps.db, job.user_id, deps.now()),
+      sse: () => {
+        throw new Error(`${job.fn}: a streaming input must not be deferred`);
+      },
+    };
+    const response = await spec.run(ctx);
+    stored = { status: response.status, contentType: response.headers.get('content-type') ?? 'application/json', body: await response.text() };
+  } catch (err) {
+    const mapped = mapError(err);
+    if (mapped.internal) console.error(`[${job.fn}] ${job.request_id} (deferred)`, mapped.internal);
+    if (mapped.status >= 500 && !opts.finalAttempt) throw err;
+    stored = { status: mapped.status, contentType: 'application/json', body: JSON.stringify(mapped.body) };
+  }
+  await handle.complete(stored);
+  return stored;
 }

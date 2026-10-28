@@ -7,6 +7,7 @@ import { recomputePlan, saveExam, useGoalExams, useInvalidateGoal } from '../../
 import { ExamSheet } from '../../../features/goals/ExamSheet';
 import { useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
+import { messageFor } from '../../../api/messages';
 
 /** S-OBJ-04 Quando são suas provas? (GOL-02). */
 export default function Exams() {
@@ -47,8 +48,8 @@ export default function Exams() {
             void exams.refetch();
             void recomputePlan('exam_changed', goalId).catch(() => undefined);
             invalidate(goalId);
-          } catch {
-            overlay.snack(t('error.generic'));
+          } catch (e) {
+            overlay.snack(messageFor(e));
           }
         }}
       />

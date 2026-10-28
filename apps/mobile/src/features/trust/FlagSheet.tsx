@@ -3,6 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import { callFunction } from '../../api/functions';
 import { BottomSheet, Button, RadioList, TextField, useOverlay } from '../../components';
 import { options, t } from '../../i18n';
+import { messageFor } from '../../api/messages';
 
 export type FlagItemType = 'note' | 'card' | 'question' | 'glossary_term' | 'knowledge_node' | 'feed_item' | 'explanation' | 'tutor_message' | 'document';
 
@@ -41,8 +42,8 @@ export function FlagSheet({ visible, onClose, itemType, itemId, shared, onFlagge
       setReason(null);
       setComment('');
       onClose();
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(false);
     }

@@ -11,6 +11,7 @@ import { RetroCardView, type RetroCardRef } from '../../features/retro/RetroCard
 import { useMarkRetroSeen, useRetrospective } from '../../features/retro/api';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 /** Retrospectiva story (MOT-04.2–.3): 6–8 swipeable 9:16 cards, each shareable as an image made on the phone. */
 export default function RetroStory() {
@@ -58,8 +59,8 @@ export default function RetroStory() {
     try {
       const uri = await captureRef(view, { format: 'png', quality: 1, result: 'tmpfile' });
       if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('retro.share') });
-    } catch {
-      overlay.snack(t('error.generic'));
+    } catch (e) {
+      overlay.snack(messageFor(e));
     } finally {
       setSharing(false);
     }

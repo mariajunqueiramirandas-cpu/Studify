@@ -7,6 +7,7 @@ import { useClassSubjects } from '../../../../../features/class/api';
 import { createPeerQuestion, useSubjectTopics } from '../../../../../features/class/turma5';
 import { t } from '../../../../../i18n';
 import { space } from '../../../../../theme';
+import { messageFor } from '../../../../../api/messages';
 
 type QType = 'mcq_single' | 'true_false' | 'short_answer';
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const;
@@ -52,7 +53,7 @@ export default function NewPeerQuestion() {
         router.back();
       }
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generic'));
+      overlay.snack(messageFor(e));
     } finally {
       setBusy(null);
     }

@@ -8,6 +8,7 @@ import { updateSettings } from '../../../features/profile/api';
 import { t } from '../../../i18n';
 import { requestNotificationPermission } from '../../../platform/notifications';
 import { richNotifier } from '../../../platform/rich-notify';
+import { messageFor } from '../../../api/messages';
 
 type Channel = 'reviews' | 'plan' | 'class' | 'processing';
 const CHANNELS: Channel[] = ['reviews', 'plan', 'class', 'processing'];
@@ -58,7 +59,7 @@ export default function NotificationSettings() {
       overlay.snack(t('notif.quiet_minor_note'));
       return;
     }
-    await saveStudyPreferences(userId!, { quiet_start: toHHMM(quietStart), quiet_end: toHHMM(quietEnd), vespera_time: toHHMM(vespera) }).catch(() => overlay.snack(t('error.generic')));
+    await saveStudyPreferences(userId!, { quiet_start: toHHMM(quietStart), quiet_end: toHHMM(quietEnd), vespera_time: toHHMM(vespera) }).catch((e: unknown) => overlay.snack(messageFor(e)));
     overlay.snack(t('global.done'));
   };
 
@@ -66,7 +67,7 @@ export default function NotificationSettings() {
     if (v) await requestNotificationPermission().catch(() => false);
     await updateSettings({ reminders_enabled: v })
       .then(refreshProfile)
-      .catch(() => overlay.snack(t('error.generic')));
+      .catch((e: unknown) => overlay.snack(messageFor(e)));
   };
 
   const status = !richNotifier.native ? t('notif.rich_plain') : !caps.enabled ? t('notif.disabled') : t('notif.rich_on');

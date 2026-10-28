@@ -5,6 +5,7 @@ import { Button, Card, Chip, ChipGroup, EmptyState, ErrorState, Row, Screen, Ske
 import { useSession } from '../../features/auth/session';
 import { deleteRepertorio, saveRepertorio, useRepertorio, type RepertorioItem } from '../../features/enem/api';
 import { t } from '../../i18n';
+import { messageFor } from '../../api/messages';
 
 const KINDS: RepertorioItem['kind'][] = ['data', 'quote', 'law', 'work', 'event'];
 
@@ -33,7 +34,7 @@ export default function Repertorio() {
           onPress={() =>
             void saveRepertorio(userId!, { kind, text: text.trim(), sourceUrl: /^https?:\/\//.test(source.trim()) ? source.trim() : null })
               .then(() => (setText(''), setSource(''), list.refetch()))
-              .catch(() => overlay.snack(t('error.generic')))
+              .catch((e: unknown) => overlay.snack(messageFor(e)))
           }
         />
       </Card>

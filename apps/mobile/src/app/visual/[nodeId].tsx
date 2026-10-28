@@ -7,6 +7,7 @@ import { generateVisual, VISUAL_KINDS, type VisualKind } from '../../features/vi
 import { VisualView } from '../../features/visuals/VisualView';
 import { t } from '../../i18n';
 import { space } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 /** S-LRN Visual viewer (LRN-05.2–05.4): "Ver em diagrama" — automatic type, or one the student picks. */
 export default function VisualScreen() {
@@ -19,7 +20,7 @@ export default function VisualScreen() {
     let alive = true;
     generateVisual(nodeId, kind ?? undefined)
       .then((res) => alive && setState({ loading: false, res, error: null }))
-      .catch((e: { message?: string }) => alive && setState({ loading: false, res: null, error: e.message ?? t('error.generation') }));
+      .catch((e: unknown) => alive && setState({ loading: false, res: null, error: messageFor(e, t('error.generation')) }));
     return () => {
       alive = false;
     };

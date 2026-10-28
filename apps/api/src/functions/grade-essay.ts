@@ -109,6 +109,8 @@ async function topicPages(deps: Deps, nodeId: string | null) {
 
 export const handler = defineFunction<{ essay_id: string }>({
   name: 'grade-essay',
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  deferred: true,
   mutating: true,
   aiCall: true,
   input: GradeEssayReqSchema,

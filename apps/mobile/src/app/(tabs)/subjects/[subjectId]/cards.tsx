@@ -5,6 +5,7 @@ import { useSession } from '../../../../features/auth/session';
 import { relativeDay } from '../../../../features/common/format';
 import { setCardFlag, useSubjectCards } from '../../../../features/learn/api';
 import { options, t } from '../../../../i18n';
+import { messageFor } from '../../../../api/messages';
 
 type Filter = 'all' | 'new' | 'due' | 'suspended' | 'hidden';
 const FILTERS: Filter[] = ['all', 'new', 'due', 'suspended', 'hidden'];
@@ -62,7 +63,7 @@ export default function CardBrowser() {
                 icon="refresh-outline"
                 label={t('cards.unsuspend')}
                 onPress={async () => {
-                  await setCardFlag(userId!, c.id, { suspended: false, hidden: false }).catch(() => overlay.snack(t('error.generic')));
+                  await setCardFlag(userId!, c.id, { suspended: false, hidden: false }).catch((e: unknown) => overlay.snack(messageFor(e)));
                   void cards.refetch();
                 }}
               />
