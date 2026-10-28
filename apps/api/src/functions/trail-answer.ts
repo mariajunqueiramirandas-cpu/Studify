@@ -18,8 +18,8 @@ export const handler = defineFunction<TrailAnswerReq>({
     const userId = ctx.user.userId;
     const [loaded, steps] = await Promise.all([loadTrail(db, userId, input.trail_id), loadSteps(db, input.trail_id)]);
     let trail = loaded;
-    const subject = await requireSubject(db, userId, trail.subject_id, 'read');
-    const outline = await loadOutline(db, userId, subject.id);
+    // The outline is read while the access check runs; it is only used once the check has passed.
+    const [, outline] = await Promise.all([requireSubject(db, userId, trail.subject_id, 'read'), loadOutline(db, userId, trail.subject_id)]);
     const row = steps.find((s) => s.id === input.step_id);
     if (!row) throw new ApiFailure('not_found');
     if (row.served_seq == null || row.status === 'discarded') throw new ApiFailure('invalid_request', { message: 'Esse passo não está na tela.' });
