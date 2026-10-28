@@ -2,11 +2,12 @@
 // still missing, so a retried or resumed job continues where it stopped and never repeats a finished stage:
 //   S0 preflight + text layer + spans  -> S1 outline (standard API)  -> S2 concepts (Batch)
 //   -> S3 prerequisites (standard) and S4 content (Batch: notes, glossary, cards, questions) -> ready.
+// With the Batch API off (the default), S2 and S4 run per topic instead of as two waves: see runTopicsNow.
 // Budget refusals park the document as waiting_budget and re-enqueue the same job for the next local midnight.
 import { BudgetExceededError } from '@studify/ai';
 import type { JobContext } from '../framework/types.ts';
 import { tableExists, type Sql } from '../framework/db.ts';
-import { applyProgress } from '../framework/progress.ts';
+import { applyProgress, type ProgressPatch } from '../framework/progress.ts';
 import { PermanentJobError } from '../framework/errors.ts';
 import { nextLocalMidnight, zonedToInstant } from '../framework/timeutil.ts';
 import { createEnv, type PipelineEnv } from './env.ts';
@@ -17,16 +18,20 @@ import { renderPages } from './pdf-render.ts';
 import { spansFile } from './pdf-spans.ts';
 import { writeOutline, runOutlineCalls } from './outline.ts';
 import { runPrerequisites } from './prereq.ts';
-import { topicItem, runWaveNow, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type SubmitInput, type WavePlan } from './waves.ts';
+import { topicItem, runItemNow, runWaveNow, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type SubmitInput, type WavePlan } from './waves.ts';
 import { loadTopicBundle, sourcesOf, topicSliceRefs, contentLanguageOf, isQuantitativeTopic, type TopicBundle } from './topics.ts';
 import { expandKinds, type TopicKind } from './custom-id.ts';
 import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
-import { mapLimit } from './concurrency.ts';
+import { mapLimit, priorityLimiter } from './concurrency.ts';
+import { STANDARD_WAVE_CONCURRENCY } from '../framework/concurrency-defaults.ts';
 import { uuidV7 } from '@studify/shared';
 
 /** Topics whose S4 requests are prepared at once (loads, existing-output checks, slices). */
 const PREPARE_CONCURRENCY = 6;
+
+/** What S4 writes for each topic of a new material (public kind names, see expandKinds). */
+const CONTENT_KINDS = ['notes', 'glossary', 'cards', 'questions', 'find_error', 'problems'];
 
 export const FAILURE_BODY: Readonly<Record<string, string>> = {
   password_protected: 'Esse PDF tem senha. Tira a senha e envia de novo.',
@@ -210,7 +215,8 @@ export async function runIngestDocument(ctx: JobContext, store: ObjectStore, pay
 
 /**
  * Runs a concepts, content or transcription wave. With AI_USE_BATCH it goes to the Message Batches API and batch.poll
- * continues the pipeline when it ends; otherwise the calls run now and the same continuation follows.
+ * continues the pipeline when it ends; otherwise the calls run now and the same continuation follows (only
+ * transcription comes here then: topics run through runTopicsNow).
  */
 async function runWave(stage: Stage, input: SubmitInput): Promise<void> {
   if (stage.ctx.useBatch) {
@@ -387,6 +393,10 @@ export async function runTopicContent(ctx: JobContext, store: ObjectStore, paylo
   const { sql } = stage;
   const genBatchId = uuidV7();
   try {
+    if (!ctx.useBatch) {
+      await runTopicsNow(stage, payload, genBatchId);
+      return;
+    }
     if (payload.stage === 'S2') {
       await runConcepts(stage, payload, genBatchId);
       return;
@@ -402,6 +412,106 @@ export async function runTopicContent(ctx: JobContext, store: ObjectStore, paylo
     }
     throw err;
   }
+}
+
+/**
+ * Standard API (AI_USE_BATCH off): each topic runs straight through, its concepts call (S2) and then its content
+ * calls (S4), and is marked ready as soon as its own calls end. The student opens the first topics while later ones
+ * are still generating, instead of waiting for every concept call and then every content call of the material. All
+ * calls share one limiter that serves earlier topics first, so topics become ready roughly in map order.
+ */
+async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatchId: string): Promise<void> {
+  const { env, ctx, sql } = stage;
+  const withConcepts = payload.stage === 'S2' ? await topicsWithConcepts(sql, payload.nodeIds, payload.documentId) : null;
+  const kinds = expandKinds(payload.stage === 'S2' ? CONTENT_KINDS : payload.kinds).filter((k) => k !== 'concepts');
+  const feedEnabled = await tableExists(sql, 'public.feed_items');
+  const docLanguage = payload.documentId ? (await loadDocument(sql, payload.documentId))?.language ?? null : null;
+  const size = ctx.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY;
+  const limit = priorityLimiter(size);
+  const total = payload.nodeIds.length;
+  let conceptsLeft = withConcepts ? total : 0;
+  let topicsDone = 0;
+  let budgetExceeded = false;
+
+  // Concurrent topics report through one chain, so an older count never lands after a newer one.
+  let progress: Promise<void> = Promise.resolve();
+  const report = (patch: ProgressPatch): Promise<void> => {
+    const jobId = payload.aiJobId;
+    if (!jobId) return progress;
+    progress = progress.then(() => applyProgress(sql, jobId, patch));
+    return progress;
+  };
+  const contentStage = () => report({ stage: 'S4', status: 'running', items_total: total, items_done: topicsDone });
+  await (withConcepts ? report({ stage: 'S2', status: 'running', items_total: total, items_done: 0 }) : contentStage());
+
+  const optsOf = (bundle: TopicBundle) => ({
+    jobId: payload.aiJobId,
+    userId: payload.userId,
+    documentId: payload.documentId,
+    genBatchId,
+    force: payload.force,
+    language: contentLanguageOf(bundle, docLanguage),
+  });
+  // One paid call; once the budget refuses a call, the calls still waiting are not started.
+  const run = (priority: number, built: Awaited<ReturnType<typeof topicItem>>) =>
+    limit(priority, async () => {
+      if (budgetExceeded) return 'skipped' as const;
+      const outcome = await runItemNow(env, built.item, built.call);
+      if (outcome === 'budget') budgetExceeded = true;
+      return outcome;
+    });
+
+  /** S2 for one topic, from the current upload's pages. Returns the bundle the content calls read. */
+  const concepts = async (bundle: TopicBundle, index: number): Promise<TopicBundle> => {
+    if (!withConcepts || withConcepts.has(bundle.topicId) || budgetExceeded) return bundle;
+    const spans = payload.documentId ? sourcesOf(bundle, payload.documentId) : bundle.sources;
+    if (spans.length === 0) return bundle;
+    const refs = await topicSliceRefs(env, spans);
+    await run(index, await topicItem(env, bundle, 'concepts', refs, { ...optsOf(bundle), force: false }));
+    // The content prompts read the concepts just written (card count, formulas, key terms).
+    return (await loadTopicBundle(sql, bundle.topicId)) ?? bundle;
+  };
+
+  /** Once every topic's concepts are written, the stages that read them all start and the bar moves to content. */
+  const conceptsDone = async (): Promise<void> => {
+    if (!withConcepts) return;
+    conceptsLeft -= 1;
+    if (conceptsLeft > 0) {
+      await report({ items_total: total, items_done: total - conceptsLeft });
+      return;
+    }
+    await enqueueAfterConcepts(ctx, payload);
+    await contentStage();
+  };
+
+  /** S4 for one topic: every wanted kind at once, then the topic's own status. */
+  const content = async (bundle: TopicBundle, index: number): Promise<void> => {
+    // After a budget refusal the topics not started keep their status for the resume.
+    if (budgetExceeded) return;
+    const present = payload.force ? new Set<TopicKind>() : await existingKinds(sql, bundle.topicId);
+    // PRA-08.1: problem sets only for quantitative topics.
+    const wanted = kinds.filter((k) => !present.has(k) && (k !== 'feed' || feedEnabled) && (k !== 'problems' || isQuantitativeTopic(bundle)));
+    if (wanted.length === 0) return;
+    const refs = await topicSliceRefs(env, bundle.sources);
+    if (refs.length === 0) return;
+    await setContentStatus(sql, [bundle.topicId], 'generating');
+    const built = await Promise.all(wanted.map((kind) => topicItem(env, bundle, kind, refs, optsOf(bundle))));
+    const outcomes = await Promise.all(built.map((b) => run(index, b)));
+    // A topic is ready when all of its items were written; one cut short by the budget waits for the resume.
+    const status = outcomes.every((o) => o === 'written') ? 'ready' : outcomes.some((o) => o === 'budget' || o === 'skipped') ? 'pending' : 'failed';
+    await setContentStatus(sql, [bundle.topicId], status);
+  };
+
+  await mapLimit(payload.nodeIds, size, async (topicId, index) => {
+    const loaded = await loadTopicBundle(sql, topicId);
+    const bundle = loaded ? await concepts(loaded, index) : null;
+    await conceptsDone();
+    if (bundle) await content(bundle, index);
+    topicsDone += 1;
+    if (conceptsLeft === 0) await report({ items_total: total, items_done: topicsDone });
+  });
+  await progress;
+  await settleDocument(stage, payload, budgetExceeded);
 }
 
 async function runConcepts(stage: Stage, payload: TopicContentPayload, genBatchId: string): Promise<void> {
@@ -455,6 +565,21 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
   if (payload.aiJobId) {
     await applyProgress(ctx.db, payload.aiJobId, { stage: 'S4', status: 'running', items_total: payload.nodeIds.length, items_done: 0 });
   }
+  await enqueueAfterConcepts(ctx, payload);
+  await ctx.enqueue('ingest.topic_content', {
+    stage: 'S4',
+    subject_id: payload.subjectId,
+    document_id: payload.documentId,
+    user_id: payload.userId,
+    node_ids: payload.nodeIds,
+    kinds: CONTENT_KINDS,
+    force: false,
+    ai_job_id: payload.aiJobId,
+  }, { singletonKey: `topic-content:S4:${payload.documentId ?? payload.nodeIds.join(',')}` });
+}
+
+/** S3 prerequisites and the material check, which read the written concepts of the whole material. */
+async function enqueueAfterConcepts(ctx: JobContext, payload: TopicContentPayload): Promise<void> {
   if (payload.documentId) {
     await ctx.enqueue('ingest.prerequisites', {
       subject_id: payload.subjectId,
@@ -467,16 +592,6 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
   if (payload.documentId) {
     await ctx.enqueue('ingest.material_check', { document_id: payload.documentId, user_id: payload.userId }, { singletonKey: `material-check:${payload.documentId}` });
   }
-  await ctx.enqueue('ingest.topic_content', {
-    stage: 'S4',
-    subject_id: payload.subjectId,
-    document_id: payload.documentId,
-    user_id: payload.userId,
-    node_ids: payload.nodeIds,
-    kinds: ['notes', 'glossary', 'cards', 'questions', 'find_error', 'problems'],
-    force: false,
-    ai_job_id: payload.aiJobId,
-  }, { singletonKey: `topic-content:S4:${payload.documentId ?? payload.nodeIds.join(',')}` });
 }
 
 /** Kinds that already have output for a topic (idempotency; ai-pipeline §10.3). */
@@ -624,6 +739,12 @@ async function finishTopics(
       items_done: okIds.length + failIds.length,
     });
   }
+  await settleDocument(stage, payload, budgetExceeded);
+}
+
+/** Parks the document when the budget ran out, or finalizes it once none of its topics is still generating. */
+async function settleDocument(stage: Stage, payload: TopicContentPayload, budgetExceeded: boolean): Promise<void> {
+  const { sql } = stage;
   if (budgetExceeded && payload.documentId) {
     const doc = await loadDocument(sql, payload.documentId);
     if (doc) await parkForBudget(stage, doc, { documentId: doc.id, mode: 'resume', userId: payload.userId, aiJobId: payload.aiJobId }, undefined);

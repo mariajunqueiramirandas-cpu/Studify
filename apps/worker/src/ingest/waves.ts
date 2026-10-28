@@ -191,31 +191,11 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
     await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
   }
   await mapLimit(input.items, env.ctx.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
-    // One paid call per item: no second attempt (transient API errors are already retried, unbilled, by the SDK).
     let handled = false;
     if (!summary.budgetExceeded) {
-      try {
-        const result = await callClaude(env.ctx.ai, withShortCache(call));
-        if (result.status === 'ok') {
-          if (result.salvage) env.ctx.log.info({ customId: item.customId, ...result.salvage }, 'standard call: items dropped');
-          try {
-            handled = await writeOutcome(env, item, result.data, result.text, result.citations);
-          } catch (err) {
-            env.ctx.log.warn({ customId: item.customId, err: err instanceof Error ? err.message : 'unknown' }, 'standard output not written');
-          }
-        } else {
-          env.ctx.log.warn({ customId: item.customId, status: result.status, ...outcomeDetail(result) }, 'standard call did not produce output');
-        }
-      } catch (err) {
-        if (err instanceof BudgetExceededError) {
-          summary.budgetExceeded = true;
-        } else {
-          env.ctx.log.warn(
-            { customId: item.customId, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
-            'standard call failed',
-          );
-        }
-      }
+      const outcome = await runItemNow(env, item, call);
+      if (outcome === 'budget') summary.budgetExceeded = true;
+      handled = outcome === 'written';
     }
     if (item.topicId) {
       if (handled) summary.topicsOk.add(item.topicId);
@@ -228,6 +208,36 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
     if (input.aiJobId) await applyProgress(env.ctx.db, input.aiJobId, { items_total: total, items_done: finished });
   });
   return summary;
+}
+
+export type ItemOutcome = 'written' | 'failed' | 'budget';
+
+/**
+ * One standard call for an item, written by the same writers as a collected batch. One paid call per item: no second
+ * attempt (transient API errors are already retried, unbilled, by the SDK). 'budget' when the budget refused it.
+ */
+export async function runItemNow(env: PipelineEnv, item: PlanItem, call: TaskCall<unknown>): Promise<ItemOutcome> {
+  try {
+    const result = await callClaude(env.ctx.ai, withShortCache(call));
+    if (result.status !== 'ok') {
+      env.ctx.log.warn({ customId: item.customId, status: result.status, ...outcomeDetail(result) }, 'standard call did not produce output');
+      return 'failed';
+    }
+    if (result.salvage) env.ctx.log.info({ customId: item.customId, ...result.salvage }, 'standard call: items dropped');
+    try {
+      return (await writeOutcome(env, item, result.data, result.text, result.citations)) ? 'written' : 'failed';
+    } catch (err) {
+      env.ctx.log.warn({ customId: item.customId, err: err instanceof Error ? err.message : 'unknown' }, 'standard output not written');
+      return 'failed';
+    }
+  } catch (err) {
+    if (err instanceof BudgetExceededError) return 'budget';
+    env.ctx.log.warn(
+      { customId: item.customId, err: err instanceof Error ? err.name : 'unknown', detail: err instanceof Error ? err.message : String(err) },
+      'standard call failed',
+    );
+    return 'failed';
+  }
 }
 
 /** Why a call produced no output, for the warning log: the validation issues, truncation reason or refusal category. */
