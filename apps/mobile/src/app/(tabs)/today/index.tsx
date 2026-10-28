@@ -180,8 +180,8 @@ export default function Today() {
         </ActionBar>
       }
     >
-      <View style={styles.hero}>
-        <View style={{ flex: 1, gap: space.md }}>
+      <View style={[styles.hero, { backgroundColor: colors.primarySoft }]}>
+        <View style={styles.heroText}>
           <Text variant="display" accessibilityRole="header">
             {greeting(profile?.display_name ?? '')}
           </Text>
@@ -201,8 +201,9 @@ export default function Today() {
           ) : null}
         </View>
         {capi.visible ? (
-          <Pressable onPress={() => router.push('/profile/capi')} accessibilityRole="button" accessibilityLabel={t('capi.title')} style={{ marginTop: -space.md }}>
-            <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={116} />
+          // Capi stands on the panel's bottom edge, clear of the app bar's buttons.
+          <Pressable onPress={() => router.push('/profile/capi')} accessibilityRole="button" accessibilityLabel={t('capi.title')} style={styles.capi}>
+            <Capi stage={capi.stage} mood={capi.mood} accessories={capi.accessories} size={132} />
           </Pressable>
         ) : null}
       </View>
@@ -348,7 +349,9 @@ function PlanRow({ item, first, color, onDone, onSkip }: { item: TodayItem; firs
 }
 
 const styles = StyleSheet.create({
-  hero: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, marginTop: -space.md },
+  hero: { flexDirection: 'row', alignItems: 'flex-end', borderRadius: radius.xl, overflow: 'hidden', minHeight: 156 },
+  heroText: { flex: 1, gap: space.md, paddingVertical: space.lg, paddingLeft: space.lg, alignSelf: 'center' },
+  capi: { marginBottom: -space.sm, marginRight: -space.xs },
   goal: { flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'flex-start' },
   bleed: { marginHorizontal: -(space.gutter) },
   exams: { paddingHorizontal: space.gutter, gap: space.sm },
