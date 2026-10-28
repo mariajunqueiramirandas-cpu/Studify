@@ -39,6 +39,7 @@ import { WellbeingNudge } from '../../../features/wellbeing/WellbeingNudge';
 import { useFocusStore } from '../../../stores/focus';
 import { colorKeyFromHex, useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
+import { cheer } from '../../../lib/haptics';
 import { radius, space, subjectColor, useTheme } from '../../../theme';
 
 /** S-HOJE-01 Hoje (GOL-05): plan, countdowns, ≤ 3 cards, "Começar sessão". */
@@ -297,12 +298,18 @@ function PlanRow({ item, first, color, onDone, onSkip }: { item: TodayItem; firs
     >
       <Pressable
         disabled={done}
-        onPress={onDone}
+        onPress={() => {
+          cheer();
+          onDone();
+        }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: item.status === 'done', disabled: done }}
         accessibilityLabel={`${t('today.item_done')}: ${item.title}`}
         hitSlop={8}
-        style={[styles.check, { borderColor: done ? colors.textSecondary : color, backgroundColor: item.status === 'done' ? colors.textSecondary : 'transparent' }]}
+        style={({ pressed }) => [
+          styles.check,
+          { borderColor: done ? colors.textSecondary : color, borderBottomWidth: pressed ? 2 : 4, marginTop: pressed ? 3 : 1, backgroundColor: item.status === 'done' ? colors.textSecondary : pressed ? `${color}33` : 'transparent' },
+        ]}
       >
         {item.status === 'done' ? <Ionicons name="checkmark" size={18} color={colors.surface1} /> : null}
         {item.status === 'skipped' ? <Ionicons name="remove" size={18} color={colors.textSecondary} /> : null}
@@ -349,5 +356,5 @@ const styles = StyleSheet.create({
   stack: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   sheet: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingVertical: space.md, paddingLeft: space.lg, paddingRight: space.sm },
-  check: { width: 26, height: 26, borderRadius: radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  check: { width: 28, height: 28, borderRadius: radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
 });

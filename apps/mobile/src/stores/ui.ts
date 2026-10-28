@@ -15,12 +15,15 @@ export interface UiState {
   extraTime: boolean;
   /** WEL-04.8 read-aloud speed, 0.75×–2×. */
   readAloudRate: number;
+  /** A light tick under the finger on buttons, answers and ratings. */
+  haptics: boolean;
   setTheme: (theme: ThemeMode) => void;
   setEasyReading: (value: boolean) => void;
   setHighContrast: (value: boolean) => void;
   setReduceMotion: (value: boolean) => void;
   setExtraTime: (value: boolean) => void;
   setReadAloudRate: (value: number) => void;
+  setHaptics: (value: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -32,12 +35,14 @@ export const useUiStore = create<UiState>()(
       reduceMotion: false,
       extraTime: false,
       readAloudRate: 1,
+      haptics: true,
       setTheme: (theme) => set({ theme }),
       setEasyReading: (easyReading) => set({ easyReading }),
       setHighContrast: (highContrast) => set({ highContrast }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       setExtraTime: (extraTime) => set({ extraTime }),
       setReadAloudRate: (readAloudRate) => set({ readAloudRate: Math.min(2, Math.max(0.75, readAloudRate)) }),
+      setHaptics: (haptics) => set({ haptics }),
     }),
     {
       name: 'studify.ui.v1',

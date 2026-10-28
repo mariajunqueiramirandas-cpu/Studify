@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { FONTS, radius, space, subjectColor, touch, useTheme } from '../theme';
+import { depth, FONTS, radius, shade, space, subjectColor, touch, useTheme } from '../theme';
 import type { IconName } from './Button';
+import { Tactile } from './Tactile';
 import { Text } from './Text';
 
 interface CardProps {
@@ -30,17 +31,24 @@ export function Card({ children, onPress, onLongPress, accent, style, accessibil
   const border = tone === 'soft' ? 'transparent' : c.border;
   const base = [styles.card, { backgroundColor: bg, borderColor: border, borderWidth: tone === 'outline' ? 1.5 : StyleSheet.hairlineWidth * 2 }, style];
   if (!onPress && !onLongPress) return <View style={base} testID={testID}>{content}</View>;
+  // Tappable cards stand on a ledge and sink when pressed, so you can tell them from the ones you only read.
+  const rim = tone === 'soft' ? shade(c.primarySoft, 0.08) : c.border;
   return (
-    <Pressable
+    <Tactile
       testID={testID}
-      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [...base, pressed && { backgroundColor: tone === 'soft' ? c.primarySoft : c.surface2 }]}
+      color={bg === 'transparent' ? c.bg : bg}
+      borderColor={rim}
+      ledge={shade(rim, 0.14)}
+      borderWidth={1.5}
+      depth={depth.sm}
+      style={[styles.card, style]}
+      pressedStyle={tone === 'soft' ? undefined : { backgroundColor: c.surface2 }}
     >
       {content}
-    </Pressable>
+    </Tactile>
   );
 }
 

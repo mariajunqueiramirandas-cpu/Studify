@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { radius, space, useTheme } from '../theme';
 import { Text } from './Text';
@@ -15,6 +15,32 @@ export function ProgressBar({ value, color, height = 8, label }: { value: number
       style={[styles.track, { height, backgroundColor: c.surface2, borderRadius: radius.xs }]}
     >
       <View style={{ width: `${pct * 100}%`, height, backgroundColor: color ?? c.primary, borderRadius: radius.xs }} />
+    </View>
+  );
+}
+
+/**
+ * The session bar (review, quiz): thick, rounded, and it glides forward after each answer, with a soft shine on
+ * top of the fill.
+ */
+export function SessionProgress({ value, color, label }: { value: number; color?: string; label?: string }) {
+  const { colors: c, reduceMotion } = useTheme();
+  const pct = Math.max(0, Math.min(1, value));
+  const [anim] = useState(() => new Animated.Value(pct));
+  useEffect(() => {
+    Animated.timing(anim, { toValue: pct, duration: reduceMotion ? 0 : 320, useNativeDriver: false }).start();
+  }, [pct, anim, reduceMotion]);
+  const fill = color ?? c.success;
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}
+      style={[styles.session, { backgroundColor: c.surface2 }]}
+    >
+      <Animated.View style={[styles.sessionFill, { backgroundColor: fill, width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}>
+        <View style={styles.shine} />
+      </Animated.View>
     </View>
   );
 }
@@ -94,6 +120,9 @@ export function Stat({ value, label }: { value: string; label: string }) {
 
 const styles = StyleSheet.create({
   track: { width: '100%', overflow: 'hidden' },
+  session: { flex: 1, height: 16, borderRadius: 8, overflow: 'hidden' },
+  sessionFill: { height: 16, borderRadius: 8, minWidth: 16, justifyContent: 'flex-start' },
+  shine: { height: 4, marginTop: 3, marginHorizontal: 7, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.35)' },
   stepper: { flexDirection: 'row', gap: space.xs, paddingVertical: space.sm },
   dot: { height: 5, borderRadius: radius.xs },
 });

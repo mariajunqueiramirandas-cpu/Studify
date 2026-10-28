@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { Button, Card, ListItem, Screen, Section, Text, type IconName } from '../../../components';
+import { StyleSheet, View } from 'react-native';
+import { Button, Card, ListItem, Screen, Section, Tactile, Text, type IconName } from '../../../components';
 import { useLive } from '../../../db/hooks';
 import { dueCount } from '../../../features/memory/local';
 import { useMistakes } from '../../../features/practice/api';
 import { t } from '../../../i18n';
-import { radius, space, useTheme } from '../../../theme';
+import { radius, shade, space, useTheme } from '../../../theme';
 
 /** S-PRA-01 Praticar hub: today's deck on top, the ways to practise below it. */
 export default function PracticeHub() {
@@ -46,8 +46,7 @@ function Deck({ due }: { due: number }) {
     <View style={styles.deck}>
       <View style={[styles.under, { backgroundColor: c.surface2, borderColor: c.border, transform: [{ rotate: '-3deg' }, { translateY: 8 }] }]} />
       <View style={[styles.under, { backgroundColor: c.surface1, borderColor: c.border, transform: [{ rotate: '1.5deg' }, { translateY: 4 }] }]} />
-      <View style={[styles.front, { backgroundColor: c.surface1, borderColor: c.border }]}>
-        <View style={[styles.rule, { backgroundColor: c.danger }]} />
+      <View style={[styles.front, { backgroundColor: c.surface1, borderColor: c.border, borderBottomColor: shade(c.border, 0.14) }]}>
         <Text variant="title">{due ? t('today.reviews_due', { n: due }) : t('review.all_done')}</Text>
         {due ? <Button label={t('review.start')} icon="flash-outline" onPress={() => router.push('/review')} /> : null}
       </View>
@@ -58,25 +57,28 @@ function Deck({ due }: { due: number }) {
 function Mode({ icon, title, hint, onPress }: { icon: IconName; title: string; hint?: string; onPress: () => void }) {
   const { colors: c } = useTheme();
   return (
-    <Pressable
+    <Tactile
       onPress={onPress}
-      accessibilityRole="button"
       accessibilityLabel={hint ? `${title}. ${hint}` : title}
-      style={({ pressed }) => [styles.mode, { backgroundColor: pressed ? c.surface2 : c.surface1, borderColor: c.border }]}
+      color={c.surface1}
+      borderColor={c.border}
+      ledge={shade(c.border, 0.14)}
+      borderWidth={2}
+      style={styles.mode}
+      pressedStyle={{ backgroundColor: c.surface2 }}
     >
       <Ionicons name={icon} size={26} color={c.primary} />
       <Text variant="label" numberOfLines={2}>
         {title}
       </Text>
-    </Pressable>
+    </Tactile>
   );
 }
 
 const styles = StyleSheet.create({
   deck: { marginBottom: space.md },
-  under: { position: 'absolute', left: 6, right: 6, top: 0, bottom: 0, borderRadius: radius.lg, borderWidth: 1 },
-  front: { borderRadius: radius.lg, borderWidth: 1, padding: space.xl, paddingTop: space.xl + space.sm, gap: space.lg },
-  rule: { position: 'absolute', top: space.lg, left: 0, right: 0, height: 1.5, opacity: 0.45 },
+  under: { position: 'absolute', left: 6, right: 6, top: 0, bottom: 0, borderRadius: radius.xl, borderWidth: 2 },
+  front: { borderRadius: radius.xl, borderWidth: 2, borderBottomWidth: 6, padding: space.xl, paddingTop: space.xl + space.sm, gap: space.lg },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: space.md },
-  mode: { width: '48.3%', minHeight: 104, borderRadius: radius.lg, borderWidth: 1, padding: space.lg, justifyContent: 'space-between', gap: space.sm },
+  mode: { width: '48.3%', minHeight: 108, padding: space.lg, justifyContent: 'space-between', gap: space.sm },
 });

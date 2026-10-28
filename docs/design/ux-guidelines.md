@@ -485,6 +485,7 @@ Twelve subject hues the student can choose from, each with a light-theme value (
 
 - **Tone:** cozy and calm, a study nook you can sit in for hours: a study buddy, not a school portal and not a game.
 - **No capsules.** Corners grow with the size of the thing (4 → 22 dp). Tappable choices are squared keys that ink in when chosen; statuses are inline text with an icon or a small diamond, never a pill.
+- **Tactile:** everything you press stands on a ledge a few dp tall (`Tactile`) and sinks onto it under the finger, with a light haptic tick (Acessibilidade → "Vibrar ao tocar" turns ticks off). Buttons, chips, answer options, rating keys, tappable cards and subject notebooks all share it; text you only read stays flat. Flashcards are chunky cards in the Duolingo spirit: a thick rim and ledge, a squish on press, a lagoon rim and a band repeating the question on the answer side; ratings are four coloured keys; sessions use a thick, gliding progress bar.
 - **Study objects look like study objects:** flashcards are index cards with a rule under the header, subjects are notebooks with a coloured binding, exam countdowns are calendar leaves, a subject colour on a card is a bookmark ribbon, the plan is a checklist.
 - **Mascot:** **Capi**, a capybara, drawn as illustrations per stage (filhote, jovem, adulta, sábia) and mood (comemorando, curiosa, focada, descansando, sonolenta), with unlockable accessories drawn on top from per-pose anchors (`apps/mobile/src/components/capi-anchors.ts`). Scenes for empty, first-run and offline moments. Capi never guilt-trips; hiding Capi also swaps the scenes for icons.
 - **Icons:** Ionicons outline at 24 dp, filled variant for the active tab.
@@ -496,7 +497,8 @@ Twelve subject hues the student can choose from, each with a light-theme value (
 |---|---|---|
 | Screen transitions | 200–250 ms | Platform default slide; immersive screens fade |
 | Card flip | 250 ms | Reduced motion: 150 ms crossfade |
-| Feedback reveal | 150 ms | Color + icon, no shake animations |
+| Feedback reveal | 150 ms | Color + icon, no shake animations; success buzz on a right answer or a Bom/Fácil rating, a soft thud on a miss |
+| Press | instant | Tactile controls sink onto their ledge; flashcards squish to 97 % and spring back (off with reduced motion) |
 | Celebrations | ≤ 1.5 s | Skippable; off after 22:00 and in Modo Véspera |
 | Progress updates | 200 ms ease-out | No pulsing for longer than 2 s |
 | Timer last 5 s | — | Color shift + haptic tick; no flashing (photosensitivity) |

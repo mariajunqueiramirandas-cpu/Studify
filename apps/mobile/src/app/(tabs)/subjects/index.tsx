@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { Button, Card, EmptyState, ErrorState, IconButton, Meta, Row, Screen, Section, SkeletonList, SubjectBadge, Text, type IconName } from '../../../components';
+import { StyleSheet, View } from 'react-native';
+import { Button, Card, EmptyState, ErrorState, IconButton, Meta, Row, Screen, Section, SkeletonList, SubjectBadge, Tactile, Text, type IconName } from '../../../components';
 import { colorKeyFromHex, useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
-import { radius, space, subjectColor, useTheme } from '../../../theme';
+import { depth, radius, space, subjectColor, useTheme } from '../../../theme';
 
 /** S-MAT-01 Matérias — a shelf of notebooks: personal + Turma subjects (badge), archived collapsed. */
 export default function SubjectsScreen() {
@@ -34,12 +34,14 @@ export default function SubjectsScreen() {
           {active.map((s) => {
             const tint = subjectColor(colorKeyFromHex(s.color), scheme);
             return (
-              <Pressable
+              <Tactile
                 key={s.id}
                 onPress={() => router.push(`/subjects/${s.id}`)}
-                accessibilityRole="button"
                 accessibilityLabel={s.name}
-                style={({ pressed }) => [styles.cover, { backgroundColor: `${tint}${scheme === 'dark' ? '2E' : '1F'}`, borderLeftColor: tint, opacity: pressed ? 0.8 : 1 }]}
+                color={`${tint}${scheme === 'dark' ? '2E' : '1F'}`}
+                ledge={tint}
+                depth={depth.md}
+                style={[styles.cover, { borderLeftColor: tint }]}
               >
                 <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Ionicons name={(s.icon ?? 'book-outline') as IconName} size={26} color={tint} />
@@ -51,7 +53,7 @@ export default function SubjectsScreen() {
                   </Text>
                   {s.owner_class_group_id ? <Meta icon="people-outline" text={t('subjects.class_badge')} /> : null}
                 </View>
-              </Pressable>
+              </Tactile>
             );
           })}
         </View>

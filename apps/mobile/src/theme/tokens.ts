@@ -102,6 +102,20 @@ export function getPalette(scheme: ColorScheme, contrast = false): Palette {
 
 // 8 dp scale with the 4 dp half step (ux §7.1).
 export const space = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
+/** Mixes a #RRGGBB colour towards black (amount > 0) or white (amount < 0); the ledge under tactile controls. */
+export function shade(hex: string, amount: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1]!, 16);
+  const target = amount > 0 ? 0 : 255;
+  const a = Math.min(1, Math.abs(amount));
+  const ch = (v: number) => Math.round(v + (target - v) * a).toString(16).padStart(2, '0');
+  return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
+}
+
+/** Depth of the ledge under pressable things; pressing sinks the face onto it. */
+export const depth = { sm: 3, md: 4, lg: 6 } as const;
+
 // Corners grow with the size of the thing: small controls are nearly square, sheets are soft. No capsules.
 export const radius = { xs: 4, sm: 6, md: 10, lg: 14, xl: 22, round: 999 } as const;
 export const touch = { min: 48, option: 56 } as const;

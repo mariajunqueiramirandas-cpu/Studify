@@ -3,6 +3,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View, type TextInputProps } from 'react-native';
 import { shortDate, timeHM, weekdayDate } from '../features/common/format';
+import { tap } from '../lib/haptics';
 import { radius, space, touch, useTheme } from '../theme';
 import { Text } from './Text';
 
@@ -69,7 +70,11 @@ export function SwitchRow({ label, hint, value, onChange, disabled }: { label: s
       accessibilityState={{ checked: value, disabled: !!disabled }}
       accessibilityLabel={label}
       accessibilityHint={hint}
-      onPress={() => !disabled && onChange(!value)}
+      onPress={() => {
+        if (disabled) return;
+        tap();
+        onChange(!value);
+      }}
       style={[styles.switchRow, disabled && { opacity: 0.5 }]}
     >
       <View style={{ flex: 1, gap: 2 }}>
@@ -82,7 +87,10 @@ export function SwitchRow({ label, hint, value, onChange, disabled }: { label: s
       </View>
       <Switch
         value={value}
-        onValueChange={onChange}
+        onValueChange={(v) => {
+          tap();
+          onChange(v);
+        }}
         disabled={disabled}
         trackColor={{ true: c.primary, false: c.border }}
         thumbColor={c.bg}
@@ -106,7 +114,10 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
               key={o.value}
               accessibilityRole="radio"
               accessibilityState={{ selected }}
-              onPress={() => onChange(o.value)}
+              onPress={() => {
+                if (!selected) tap();
+                onChange(o.value);
+              }}
               style={({ pressed }) => [styles.segmentItem, pressed && !selected && { opacity: 0.6 }]}
             >
               <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: selected ? c.textPrimary : c.textSecondary }} align="center" numberOfLines={2}>
@@ -133,7 +144,10 @@ export function RadioList<T extends string>({ options, value, onChange }: { opti
             accessibilityRole="radio"
             accessibilityState={{ selected }}
             accessibilityLabel={o.hint ? `${o.label}. ${o.hint}` : o.label}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              tap();
+              onChange(o.value);
+            }}
             style={[styles.radio, { borderColor: selected ? c.primary : c.border, backgroundColor: selected ? c.primarySoft : c.surface1 }]}
           >
             <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? c.primary : c.textSecondary} />

@@ -5,6 +5,7 @@ import { BottomTabBar, type BottomTabBarProps } from 'expo-router/tabs';
 import { MiniPlayer } from '../../features/podcast/MiniPlayer';
 import type { ComponentProps } from 'react';
 import { t } from '../../i18n';
+import { tap } from '../../lib/haptics';
 import { useTheme } from '../../theme';
 import { usePendingRequestsBadge } from '../../features/class/api';
 
@@ -37,6 +38,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={renderTabBar}
+      screenListeners={{ tabPress: tap }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,

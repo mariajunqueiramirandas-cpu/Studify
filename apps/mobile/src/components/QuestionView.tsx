@@ -3,8 +3,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { t } from '../i18n';
 import type { Option, QuestionResponse, QuestionRow } from '../features/practice/types';
-import { radius, space, touch, useTheme } from '../theme';
+import { depth, radius, shade, space, touch, useTheme } from '../theme';
 import { IconButton } from './Button';
+import { Tactile } from './Tactile';
 import { FindErrorQuestion, ProblemQuestion } from './QuestionTypes3';
 import { RichContent } from './MarkdownView';
 import { Text } from './Text';
@@ -161,14 +162,19 @@ export function Options({ options, selected, correct, onSelect, disabled, multi,
         const icon = isCorrect ? 'checkmark-circle' : isWrongPick ? 'close-circle' : null;
         const share = distribution && total > 0 ? (distribution[o.id] ?? 0) / total : null;
         return (
-          <Pressable
+          <Tactile
             key={o.id}
             disabled={disabled}
             onPress={() => onSelect(o.id)}
             accessibilityRole={multi ? 'checkbox' : 'radio'}
             accessibilityState={{ selected: isSel, checked: multi ? isSel : undefined, disabled: !!disabled }}
             accessibilityLabel={`${letters ? `${o.id}. ` : ''}${o.text}${isCorrect ? `. ${t('quiz.correct_answer')}` : ''}`}
-            style={[styles.option, { borderColor: border, backgroundColor: bg }]}
+            color={bg}
+            borderColor={border}
+            ledge={shade(border, isSel || isCorrect || isWrongPick ? 0.18 : 0.12)}
+            borderWidth={2}
+            depth={depth.md}
+            style={styles.option}
           >
             {share != null ? <View style={[styles.distBar, { width: `${share * 100}%`, backgroundColor: `${c.primary}22` }]} /> : null}
             {letters ? (
@@ -189,7 +195,7 @@ export function Options({ options, selected, correct, onSelect, disabled, multi,
               </Text>
             ) : null}
             {icon ? <Ionicons name={icon} size={24} color={border} /> : null}
-          </Pressable>
+          </Tactile>
         );
       })}
     </View>
@@ -386,7 +392,7 @@ function ShortAnswer({ response, onChange, disabled, long }: { response: Questio
 }
 
 const styles = StyleSheet.create({
-  option: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option, borderWidth: 1.5, borderRadius: radius.md, padding: space.md, overflow: 'hidden' },
+  option: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch.option + 4, padding: space.md, overflow: 'hidden' },
   letter: { width: 32, height: 32, borderRadius: radius.sm, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   input: { borderWidth: 1.5, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm, minHeight: touch.min },
   matchChip: { borderWidth: 1.5, borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm, minHeight: 40, justifyContent: 'center' },

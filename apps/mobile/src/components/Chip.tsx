@@ -3,8 +3,9 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { t } from '../i18n';
 import { countdown, pageLabel, parseDate, daysBetween } from '../features/common/format';
-import { FONTS, radius, space, useTheme } from '../theme';
+import { depth, FONTS, radius, shade, space, useTheme } from '../theme';
 import type { IconName } from './Button';
+import { Tactile } from './Tactile';
 import { Text } from './Text';
 
 interface ChipProps {
@@ -26,30 +27,31 @@ export function Chip({ label, selected, onPress, icon, disabled, accessibilityLa
   const { colors: c } = useTheme();
   const toneColor = { default: c.textPrimary, success: c.success, warning: c.warning, danger: c.danger, info: c.info }[tone];
   if (!onPress && !selected) return <Meta icon={icon} text={label} color={tone === 'default' ? c.textSecondary : toneColor} accessibilityLabel={accessibilityLabel} />;
-  const ink = tone === 'default' ? c.textPrimary : toneColor;
-  const fg = selected ? c.bg : c.textPrimary;
+  // Chosen keys turn the tone's colour: tinted face, coloured rim and ledge (default tone = primary).
+  const ink = tone === 'default' ? c.primary : toneColor;
+  const soft = { default: c.primarySoft, success: c.successSoft, warning: c.warningSoft, danger: c.dangerSoft, info: c.infoSoft }[tone];
+  const fg = selected ? ink : c.textPrimary;
   return (
-    <Pressable
+    <Tactile
       testID={testID}
       accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityState={{ selected: !!selected, disabled: !!disabled }}
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={disabled ? undefined : onPress}
       hitSlop={4}
-      style={({ pressed }) => [
-        styles.chip,
-        {
-          backgroundColor: selected ? ink : pressed ? c.surface2 : c.surface1,
-          borderColor: selected ? ink : c.border,
-          opacity: disabled ? 0.45 : 1,
-        },
-      ]}
+      color={selected ? soft : c.surface1}
+      borderColor={selected ? ink : c.border}
+      ledge={selected ? shade(ink, 0.15) : shade(c.border, 0.12)}
+      borderWidth={2}
+      radius={radius.md}
+      depth={depth.sm}
+      style={[styles.chip, disabled && { opacity: 0.45 }]}
     >
       {selected ? <Ionicons name="checkmark" size={16} color={fg} /> : icon ? <Ionicons name={icon} size={16} color={c.textSecondary} /> : null}
-      <Text variant="label" style={{ color: fg }} numberOfLines={1}>
+      <Text variant="label" weight={selected ? 'bold' : undefined} style={{ color: fg }} numberOfLines={1}>
         {label}
       </Text>
-    </Pressable>
+    </Tactile>
   );
 }
 
@@ -179,15 +181,7 @@ export function AiBadge({ general }: { general?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    minHeight: 40,
-    paddingHorizontal: space.md,
-    borderRadius: radius.sm,
-    borderWidth: 1.5,
-  },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 44, paddingHorizontal: space.md },
   group: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   metaDot: { width: 6, height: 6, borderRadius: 1.5, transform: [{ rotate: '45deg' }] },

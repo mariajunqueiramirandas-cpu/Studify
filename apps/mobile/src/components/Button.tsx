@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { radius, space, touch, useTheme } from '../theme';
+import { tap } from '../lib/haptics';
+import { depth, radius, shade, space, touch, useTheme } from '../theme';
+import { Tactile } from './Tactile';
 import { Text } from './Text';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -45,48 +47,64 @@ export function Button({
   testID,
 }: ButtonProps) {
   const { colors: c } = useTheme();
-  // One loud button per screen (primary); the rest stay quiet: an inked outline, a tinted fill or plain text.
-  const palette: Record<Variant, { bg: string; fg: string; border?: string }> = {
-    primary: { bg: c.primary, fg: c.onPrimary },
-    secondary: { bg: c.surface1, fg: c.textPrimary, border: c.border },
-    tonal: { bg: c.primarySoft, fg: c.primary },
-    text: { bg: 'transparent', fg: c.primary },
-    destructive: { bg: c.danger, fg: c.onPrimary },
+  // One loud button per screen (primary); the rest stay quieter: a raised paper key, a tinted key or plain text.
+  const palette: Record<Variant, { bg: string; fg: string; ledge: string; border?: string }> = {
+    primary: { bg: c.primary, fg: c.onPrimary, ledge: shade(c.primary, 0.32) },
+    secondary: { bg: c.surface1, fg: c.textPrimary, ledge: shade(c.border, 0.12), border: c.border },
+    tonal: { bg: c.primarySoft, fg: c.primary, ledge: shade(c.primarySoft, 0.14) },
+    text: { bg: 'transparent', fg: c.primary, ledge: 'transparent' },
+    destructive: { bg: c.danger, fg: c.onPrimary, ledge: shade(c.danger, 0.32) },
   };
   const p = palette[variant];
   const inactive = disabled || loading;
   const tone = variant === 'primary' || variant === 'destructive' ? 'onPrimary' : 'accent';
+  const press = inactive ? (disabled ? onDisabledPress : undefined) : onPress;
+  const a11y = {
+    testID,
+    accessibilityLabel: accessibilityLabel ?? label,
+    accessibilityHint: disabled && disabledReason ? disabledReason : accessibilityHint,
+    accessibilityState: { disabled: !!inactive, busy: !!loading },
+  };
+  const content = loading ? (
+    <ActivityIndicator color={p.fg} />
+  ) : (
+    <View style={styles.row}>
+      {icon ? <Ionicons name={icon} size={20} color={p.fg} /> : null}
+      <Text variant="label" tone={tone} weight={variant === 'text' ? undefined : 'bold'} style={{ color: p.fg }} numberOfLines={2} align="center">
+        {label}
+      </Text>
+      {iconRight ? <Ionicons name={iconRight} size={20} color={p.fg} /> : null}
+    </View>
+  );
 
+  if (variant === 'text') {
+    return (
+      <Pressable
+        {...a11y}
+        accessibilityRole="button"
+        onPress={press}
+        onPressIn={press ? tap : undefined}
+        style={({ pressed }) => [styles.base, compact && styles.compact, fullWidth && styles.full, styles.textVariant, { opacity: disabled ? 0.45 : pressed ? 0.6 : 1 }, style]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
   return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityHint={disabled && disabledReason ? disabledReason : accessibilityHint}
-      accessibilityState={{ disabled: !!inactive, busy: !!loading }}
-      onPress={inactive ? (disabled ? onDisabledPress : undefined) : onPress}
-      style={({ pressed }) => [
-        styles.base,
-        compact && styles.compact,
-        fullWidth && styles.full,
-        { backgroundColor: p.bg, borderColor: p.border ?? 'transparent', opacity: disabled ? 0.45 : 1 },
-        pressed && !inactive && { transform: [{ scale: 0.98 }], opacity: 0.9 },
-        variant === 'text' && styles.textVariant,
-        style,
-      ]}
+    <Tactile
+      {...a11y}
+      onPress={press}
+      color={p.bg}
+      ledge={p.ledge}
+      borderColor={p.border}
+      borderWidth={p.border ? 2 : 0}
+      radius={compact ? radius.md : radius.lg}
+      depth={compact ? depth.sm : depth.md}
+      haptic={!!press}
+      style={[styles.base, compact && styles.compact, fullWidth && styles.full, disabled && { opacity: 0.45 }, style]}
     >
-      {loading ? (
-        <ActivityIndicator color={p.fg} />
-      ) : (
-        <View style={styles.row}>
-          {icon ? <Ionicons name={icon} size={20} color={p.fg} /> : null}
-          <Text variant="label" tone={tone} weight={variant === 'primary' || variant === 'destructive' ? 'bold' : undefined} style={{ color: p.fg }} numberOfLines={2} align="center">
-            {label}
-          </Text>
-          {iconRight ? <Ionicons name={iconRight} size={20} color={p.fg} /> : null}
-        </View>
-      )}
-    </Pressable>
+      {content}
+    </Tactile>
   );
 }
 
@@ -112,10 +130,12 @@ export function IconButton({ icon, label, onPress, color, size = 24, disabled, f
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={4}
       onPress={disabled ? undefined : onPress}
+      onPressIn={disabled || !onPress ? undefined : tap}
       style={({ pressed }) => [
         styles.icon,
         filled && { backgroundColor: c.surface2 },
-        { opacity: disabled ? 0.4 : pressed ? 0.6 : 1 },
+        pressed && !disabled && { backgroundColor: c.surface2, transform: [{ scale: 0.9 }] },
+        { opacity: disabled ? 0.4 : 1 },
       ]}
     >
       <Ionicons name={icon} size={size} color={color ?? c.textPrimary} />
@@ -131,15 +151,13 @@ export function ActionBar({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 52,
+    minHeight: 54,
     paddingHorizontal: space.xl,
     paddingVertical: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compact: { minHeight: 42, paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: radius.sm },
+  compact: { minHeight: 44, paddingHorizontal: space.lg, paddingVertical: space.sm },
   full: { alignSelf: 'stretch' },
   textVariant: { paddingHorizontal: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

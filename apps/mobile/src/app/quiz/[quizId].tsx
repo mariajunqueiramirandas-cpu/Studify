@@ -13,6 +13,7 @@ import {
   IconButton,
   ListItem,
   ProgressBar,
+  SessionProgress,
   QuestionView,
   Row,
   Screen,
@@ -213,7 +214,7 @@ export default function QuizRunner() {
             {isBoss ? (
               <ProgressBar value={bossHealth(bossCorrect, questions.length)} label={t('map.boss_health')} />
             ) : (
-              <ProgressBar value={(runner.index + (result ? 1 : 0)) / questions.length} />
+              <SessionProgress value={(runner.index + (result ? 1 : 0)) / questions.length} />
             )}
           </View>
           {remaining !== null ? (

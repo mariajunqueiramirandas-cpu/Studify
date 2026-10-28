@@ -298,6 +298,7 @@
       "exam": "Reforço pra prova · {subject} em {n} dias",
       "new": "Novo"
     },
+    "tap_to_flip": "Toque no cartão pra virar",
     "front": "Frente",
     "back": "Verso",
     "done": "Sessão concluída! 🎉 Você revisou {n} cartões em {min} min.",
@@ -1176,6 +1177,8 @@
   },
   "a11y": {
     "title": "Acessibilidade",
+    "haptics": "Vibrar ao tocar",
+    "haptics_hint": "Um toque leve no celular quando você aperta botões e responde",
     "font_size": "Tamanho da letra",
     "font_size_hint": "Usa o tamanho de letra do Android. Ajuste nas configurações do celular.",
     "easy_reading": "Leitura facilitada",

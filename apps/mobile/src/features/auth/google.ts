@@ -38,6 +38,9 @@ export async function signInWithGoogle(): Promise<void> {
     configured = true;
   }
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  // Google reuses the last account silently; forgetting it first makes Android show the account picker every time,
+  // so a student can switch accounts (or add one) instead of landing in the previous one.
+  if (GoogleSignin.hasPreviousSignIn()) await GoogleSignin.signOut().catch(() => null);
   const res = await GoogleSignin.signIn();
   if (!isSuccessResponse(res) || !res.data.idToken) return;
   const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: res.data.idToken });
