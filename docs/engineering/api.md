@@ -379,7 +379,7 @@ type ScopeResolveRes = {
 ```
 Target < 15 s p50 (spec 07 §7). Photos are transcribed in the same call. The student confirms with RPC `confirm_exam_scope`.
 
-#### `plan-recompute` — GOL-04, GOL-05, ENM-07 · no AI · `POST`
+#### `plan-recompute` — GOL-04, GOL-05, ENM-07 · no AI in the request (the worker job runs `plan.coach`, GOL-04.10) · `POST`
 ```ts
 type PlanRecomputeReq = { trigger: PlanTrigger; goal_id?: string; local_date?: string };
 type PlanRecomputeRes = { plan_run_id: string; version: number; feasible: boolean;

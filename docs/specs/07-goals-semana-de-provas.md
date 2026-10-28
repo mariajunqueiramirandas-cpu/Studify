@@ -95,10 +95,11 @@ Phase 5 adds device **calendar sync** (GOL-09) and **energy-aware scheduling** (
 - **GOL-04.3** The planner respects: minutes available per weekday, date exceptions ("sábado não dá"), block length limits, max subjects per day, and quiet hours.
 - **GOL-04.4** When the work does not fit, the planner **triages** (§8.2.5) instead of overbooking: it shows exactly what was shortened or left out and offers "Aumentar tempo diário" or "Ajustar prioridades".
 - **GOL-04.5** Replanning runs automatically on the triggers in §8.2.6 and must be stable: items already done never change, today's plan is frozen once a session started today (except when a test is moved/cancelled), and no more than necessary moves.
-- **GOL-04.6** Each plan item has a one-line, template-generated **reason** ("Biologia hoje porque a prova é quinta e você está com 35% de domínio em Genética") — no AI call.
+- **GOL-04.6** Each plan item has a one-line **reason** ("Biologia hoje porque a prova é quinta e você está com 35% de domínio em Genética"). With coach guidance (GOL-04.10) the reason and a focus line come from the coach; otherwise the template text is used.
 - **GOL-04.7** The student can: mark an item done/skip, move an item to another day, pin an item (planner won't move it), and change daily minutes. Manual changes trigger a replan around pinned items.
-- **GOL-04.8** The planner is a **pure, deterministic function** in `packages/shared` (`buildPlan(input) → PlanResult`). The worker runs it as the source of truth; the app may run it offline to show a provisional plan, replaced by the server result on sync.
+- **GOL-04.8** The planner is a **pure function** of its input (the coach guidance of GOL-04.10 included) in `packages/shared` (`buildPlan(input) → PlanResult`). The worker runs it as the source of truth; the app may run it offline to show a provisional plan, replaced by the server result on sync.
 - **GOL-04.9** Plans are versioned (`plan_runs`); each run stores its trigger, feasibility and triage decisions for explanations and debugging.
+- **GOL-04.10** **AI plan coach.** Before each replan, the `plan.coach` task (§7.3) reads the student's situation — tests ahead, mastery and accuracy per topic, open mistakes by cause, overconfidence, the teacher's past-test points share, minutes available and studied — and decides what matters: a priority, an approach (learn / practice / review / maintain), a focus and a "why" per topic, a strategy and risk per test, 3–5 next steps up to the test, and the main risk. Priorities become the topic weights ω of the planner (§8.2.4), scaled into [0.3, 1.7] × the default so the coach can boost or demote a topic but never drop it; time, deadlines, feasibility and triage stay with `buildPlan`. Hoje shows the coach card (headline, risk, next steps; the full strategy in a sheet) when it was written today or yesterday. The coach is called only when the coached signals changed (a hash of coarse steps), at most once per study day unless a test, scope, grade, material or mastery band changed, and at most 3 times per day; failures and budget refusals keep the last guidance or the default weights — the plan never waits on AI.
 
 ### GOL-05 — "Hoje" screen
 
@@ -347,9 +348,18 @@ All calls: model `claude-opus-5-5`, budget check (PLT-04) before the call, `ai_u
 | **Length** | Fits one phone screen-height × 3 (≈ 350 words max) |
 | **Caching** | The notes block per test is cached so regeneration after a scope edit is cheap |
 
-### 7.3 No AI in the planner
+### 7.3 `plan.coach` (GOL-04.10)
 
-Planning, required-grade math, readiness and predicted grade are deterministic code (no model calls). Plan item reasons are templates (GOL-04.6). This keeps them explainable, testable, free and offline-capable.
+| | |
+|---|---|
+| **Runs** | Worker, standard API, inside `plan.recompute` / `plan.nightly` before `buildPlan`; skipped when the coached signals are unchanged |
+| **Inputs** | Tests in the next 45 days (title, subject, date, days left, weight, readiness, predicted grade); up to 40 scope topics by stake (mastery, studied, accuracy, answered questions, learn minutes, open mistakes by cause, overconfidence, teacher points share, days since studied); minutes available and review minutes for the next 7 days; minutes studied and items skipped in the last 7 days; the previous headline. Topic and test ids are sent as keys `T1…`, `E1…` |
+| **Effort** | `medium` |
+| **Output** | `S:PlanCoach`: `{ headline, exams: [{ exam_key, strategy, risk }], topics: [{ topic_key, priority 0–1, approach, focus, why }], next_steps: [{ when, title, detail, topic_key }], watch_out }`; unknown keys are dropped |
+| **Storage** | `plan_coach` (one row per student; the student reads it, the worker writes it); per-topic texts on `plan_items.reason_params.coach` (synced, so they work offline) |
+| **Cost** | ≈ 1.5k input + 3–4k output tokens, ≈ US$ 0.002 per call on Haiku 5.5; ≈ 1 call per active student per day |
+
+The time math stays deterministic: availability, review reservation, deadlines, feasibility, triage and placement are `buildPlan` (§8.2), so every plan fits the student's minutes whatever the model says. Required-grade math, readiness and predicted grade remain code.
 
 ### 7.4 Phase 2 hook (ING-07)
 

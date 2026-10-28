@@ -344,6 +344,18 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'WrongAnswerExplanation', schema: S.WrongAnswerExplanation, valid: { explanation_md: 'A mitocôndria produz ATP.', chosen_option_rationale_md: null, source_pages: [ref] }, invalid: { explanation_md: 'x', chosen_option_rationale_md: null, source_pages: [] } },
   { name: 'ContrastTable', schema: S.ContrastTable, valid: { title: 'Mitose x Meiose', rows: [{ aspect: 'Divisões', a: '1', b: '2' }, { aspect: 'Células', a: 'somáticas', b: 'germinativas' }], key_difference: 'Número de divisões.', example: 'Pele.', source_pages: [ref] }, invalid: { title: 'x', rows: [{ aspect: 'a', a: 'b', b: 'c' }], key_difference: 'x', example: 'x', source_pages: [ref] } },
   { name: 'FeedItems', schema: S.FeedItems, valid: { items: [{ type: 'quick_question', concept_key: 'c1', title: 'Você sabe?', body: 'Qual organela produz ATP?', formula_latex: null, question: { stem: 'Qual?', options: [{ id: 'A', text: 'Núcleo', rationale: 'Não.' }, { id: 'B', text: 'Mitocôndria', rationale: 'Sim.' }, { id: 'C', text: 'Lisossomo', rationale: 'Não.' }], correct: 'B' }, figure_page: null, caption: null, external_knowledge: false, source_pages: [ref] }] }, invalid: { items: [{ type: 'quick_question', concept_key: 'c1', title: 't', body: 'b', formula_latex: null, question: null, figure_page: null, caption: null, external_knowledge: false, source_pages: [ref] }] } },
+  {
+    name: 'PlanCoach',
+    schema: S.PlanCoach,
+    valid: {
+      headline: 'Fotossíntese é a prioridade: falta estudar e a prova é em 7 dias.',
+      exams: [{ exam_key: 'E1', strategy: 'Aprenda fotossíntese até quinta e use o fim de semana para questões.', risk: 'medium' }],
+      topics: [{ topic_key: 'T1', priority: 0.8, approach: 'practice', focus: 'Refaça questões de fase clara.', why: 'Você acertou 5 de 11.' }],
+      next_steps: [{ when: 'today', title: 'Fotossíntese: fase clara', detail: '25 minutos de teoria e 5 questões.', topic_key: 'T1' }],
+      watch_out: null,
+    },
+    invalid: { headline: 'x', exams: [], topics: [{ topic_key: 'X1', priority: 2, approach: 'learn', focus: 'a', why: 'b' }], next_steps: [], watch_out: null },
+  },
   { name: 'Cheatsheet', schema: S.Cheatsheet, valid: { title: 'Prova de Biologia', sections: [{ node_key: 't1', heading: 'Respiração', bullets: [{ text: 'A glicólise ocorre no citoplasma.', source_pages: [ref] }], formula: null }], watch_out: [] }, invalid: { title: 'x', sections: [], watch_out: [] } },
   { name: 'PastTestExtraction', schema: S.PastTestExtraction, valid: { test: { title: null, teacher_guess: 'Prof. Ana', year_guess: 2025, total_points: 10, duration_guess: 50 }, questions: [{ position: 1, page: 2, type: 'mcq_single', statement_md: 'Qual organela?', alternatives: [{ label: 'A', text_md: 'Núcleo' }, { label: 'B', text_md: 'Mitocôndria' }], answer: { value: 'B', source: 'printed' }, solution_md: null, points: 1, format_features: ['contextualized'], bloom: 'remember', difficulty: 1, node_matches: [{ node_key: 't1', confidence: 0.9 }] }] }, invalid: { test: { title: null, teacher_guess: null, year_guess: null, total_points: null, duration_guess: null }, questions: [{ position: 1, page: 2, type: 'trivia', statement_md: 'x', alternatives: null, answer: null, solution_md: null, points: null, format_features: [], bloom: 'remember', difficulty: 1, node_matches: [] }] } },
   { name: 'PredictedTest', schema: S.PredictedTest, valid: { questions: [{ slot_id: 's1', statement_md: 'Calcule.', alternatives: null, answer: '42', solution_md: 'Passo a passo.', explanation_md: 'Porque sim.', source_pages: [ref], rationale: 'Tema frequente no material.' }] }, invalid: { questions: [] } },

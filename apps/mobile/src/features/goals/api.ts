@@ -126,6 +126,27 @@ export function useUpcomingExams() {
   });
 }
 
+/** GOL-04.10: the AI coach output the planner used (headline, strategies, priorities, next steps). */
+export interface PlanCoach {
+  headline: string;
+  watch_out: string | null;
+  exams: { exam_id: string; title: string; strategy: string; risk: 'low' | 'medium' | 'high' }[];
+  topics: { node_id: string; title: string; priority: number; approach: string; focus: string; why: string }[];
+  next_steps: { when: 'today' | 'tomorrow' | 'this_week' | 'before_exam'; title: string; detail: string; node_id: string | null }[];
+}
+
+export function usePlanCoach() {
+  const { userId } = useSession();
+  return useQuery({
+    queryKey: ['plan_coach', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const found = await row<{ output: PlanCoach; local_date: string }>(supabase.from('plan_coach').select('output,local_date').eq('user_id', userId!).maybeSingle());
+      return found ? { ...found.output, localDate: found.local_date } : null;
+    },
+  });
+}
+
 export function useExam(examId: string | undefined) {
   return useQuery({
     queryKey: ['exam', examId],

@@ -10,6 +10,55 @@ beforeEach(() => {
   seedStudent(env.db);
 });
 
+const COACH_REPLY = {
+  headline: 'Foque no tópico mais fraco antes da prova.',
+  exams: [{ exam_key: 'E1', strategy: 'Primeiro a base do tópico fraco, depois questões.', risk: 'medium' }],
+  topics: [
+    { topic_key: 'T1', priority: 1, approach: 'learn', focus: 'Comece pela teoria.', why: 'Nunca estudado e pesa na prova.' },
+    { topic_key: 'T2', priority: 0, approach: 'maintain', focus: 'Só revisão.', why: 'Já está bom.' },
+    { topic_key: 'T9', priority: 1, approach: 'learn', focus: 'x', why: 'chave inexistente' },
+  ],
+  next_steps: [{ when: 'today', title: 'Teoria do tópico fraco', detail: '25 minutos e 3 questões.', topic_key: 'T1' }],
+  watch_out: null,
+};
+
+describe('plan.coach (GOL-04.10)', () => {
+  const coachCalls = () => env.claude.calls.filter((c) => JSON.stringify(c).includes('estrategista de estudos')).length;
+
+  it('turns the coach priorities into topic weights and writes its texts on the plan items', async () => {
+    env.claude.reply('estrategista de estudos', COACH_REPLY);
+    const res = await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    expect(res).toMatchObject({ status: 'planned' });
+    const [row] = env.db.rows('plan_coach');
+    expect(row).toMatchObject({ user_id: USER, prompt_version: 'plan.coach@v1', calls_today: 1 });
+    const topics = row!.output.topics as Array<{ node_id: string; priority: number }>;
+    expect(topics.map((t) => t.priority)).toEqual([1, 0]);
+    const [high, low] = topics.map((t) => t.node_id);
+    expect([high, low].sort()).toEqual([TOPIC, TOPIC_B].sort());
+    const items = env.db.rows('plan_items');
+    const prio = (node: string) => Math.max(...items.filter((i) => i.node_ids?.includes(node)).map((i) => Number(i.priority)));
+    expect(prio(high!)).toBeGreaterThan(prio(low!));
+    expect(items.find((i) => i.node_ids?.includes(high!))?.reason_params?.coach).toEqual({ why: 'Nunca estudado e pesa na prova.', focus: 'Comece pela teoria.', approach: 'learn' });
+    expect(row!.output.next_steps[0]).toMatchObject({ when: 'today', node_id: high });
+  });
+
+  it('does not call the model again when the signals did not change', async () => {
+    env.claude.reply('estrategista de estudos', COACH_REPLY);
+    await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'nightly' });
+    expect(coachCalls()).toBe(1);
+  });
+
+  it('still plans with the default weights when the coach fails', async () => {
+    env.claude.reply('estrategista de estudos', { refusal: true });
+    const res = await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    expect(res).toMatchObject({ status: 'planned' });
+    expect(env.db.rows('plan_coach')).toHaveLength(0);
+    expect(env.db.rows('plan_items').some((i) => i.reason_params?.coach)).toBe(false);
+  });
+});
+
 describe('plan.recompute (GOL-04)', () => {
   it('writes a plan run with items, and a second identical run writes nothing new', async () => {
     const first = await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });

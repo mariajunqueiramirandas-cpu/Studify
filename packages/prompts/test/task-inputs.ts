@@ -247,6 +247,19 @@ export const TASK_INPUTS: Record<string, unknown> = {
     unresolvedMistakes: [{ id: 'm1', stem: 'Onde ocorre a glicólise?', correctAnswer: 'Citoplasma', pages: [{ doc: 'D1', page: 12 }] }],
     contentLanguage: 'pt-BR',
   },
+  'plan.coach': {
+    today: '2026-11-03',
+    weekday: 'terça',
+    minutesNext7: [60, 60, 60, 90, 90, 60, 60],
+    adherence: { availableMinutes: 420, studiedMinutes: 180, skippedItems: 2 },
+    reviewMinutesNext7: [10, 8, 12, 6, 5, 9, 7],
+    exams: [{ key: 'E1', title: 'P1 de Biologia', subject: 'Biologia', date: '2026-11-10', daysLeft: 7, kind: 'prova', weight: 1, readiness: 0.35, predicted: { low: 5.1, mid: 6.2, high: 7.3 } }],
+    topics: [
+      { key: 'T1', title: 'Respiração celular', examKeys: ['E1'], mastery: 0.4, studied: true, accuracy: 0.45, answeredQuestions: 11, learnMinutes: 40, mistakes: { confused: 3 }, overconfident: true, teacherShare: 0.3, daysSinceStudied: 4 },
+      { key: 'T2', title: 'Fotossíntese', examKeys: ['E1'], mastery: null, studied: false, accuracy: null, answeredQuestions: 0, learnMinutes: 55, mistakes: {}, overconfident: false, teacherShare: null, daysSinceStudied: null },
+    ],
+    previousHeadline: null,
+  },
   'goals.diagnostic': {
     topics: [
       { key: 't1', title: 'Respiração celular', objectives: ['Explicar a glicólise.'] },

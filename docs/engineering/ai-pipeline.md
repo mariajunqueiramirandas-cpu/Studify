@@ -207,9 +207,10 @@ export async function callClaude<T>(call: TaskCall<T>) {
 | Task id | Features | Trigger | Runs | Input | Output | Effort | Class | Cache | Volume | Budget |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `scope.match` | GOL-03 | Content list typed/pasted/photographed | Edge (target < 15 s p50) | Content list text or image; subject outline | `S:ScopeMatch` | `medium` | S | SYS, OL | 1 per exam | user |
+| `plan.coach` | GOL-04.10 | Replan (`plan.recompute`, `plan.nightly`) when the coached signals changed; ≤ 3 per student per study day | Worker | Upcoming tests (≤ 45 days: date, weight, readiness, predicted grade), ≤ 40 scope topics (mastery, accuracy, open mistakes by cause, overconfidence, teacher points share, learn minutes, days since studied), next-7-day minutes and review load, last-7-day adherence | `S:PlanCoach` (keys T*/E* validated; priorities become topic weights ω, never feasibility) | `medium` | M | SYS | ≈ 1 per active student per day | user |
 | `vespera.cheatsheet` | GOL-07 | D − 1 04:00 local, or on open | Worker | In-scope `tldr` notes (with citations), glossary, unresolved mistakes | `S:Cheatsheet` (`source_pages` ⊆ pages cited by input notes) | `medium` | M | SYS, notes block | 1 per exam | user |
 
-The planner, required-grade math, readiness and predicted grade use **no AI** (spec 07 §7.3).
+The planner's priorities come from `plan.coach` (spec 07 GOL-04.10, §7.3); its time math (availability, deadlines, feasibility, triage, placement), required-grade math, readiness and predicted grade use **no AI**.
 
 ### 3.8 Prova Provável — [spec 08](../specs/08-prova-provavel.md)
 
