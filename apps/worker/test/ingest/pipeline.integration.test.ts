@@ -108,6 +108,7 @@ function respond(req: MockRequest): MockResponse | undefined {
           ? { key: 'c1', title: 'Membrana plasmática', summary: 'Controla a passagem de substâncias.', page_start: 3, page_end: 3, key_terms: ['bicamada'], formulas: [] }
           : { key: 'c1', title: 'Mitocôndria', summary: 'Produz ATP.', page_start: 1, page_end: 2, key_terms: ['ATP'], formulas: [] },
       ],
+      study_minutes: isMembrana ? 7 : 12,
     });
   }
   if (body.includes('indique pré-requisitos reais')) return text({ edges: [] });
@@ -351,6 +352,13 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
       [subjectId],
     );
     expect(topicStatus.rows.map((r) => r.content_status)).toEqual(['ready', 'ready']);
+    // The model's study time per topic (GOL-04 §8.2.2): stored per document and cached on the topic.
+    const estimates = await pool.query<{ minutes: number; est_learn_minutes: number }>(
+      `select e.minutes, n.est_learn_minutes from public.topic_study_estimates e join public.knowledge_nodes n on n.id = e.node_id
+        where n.subject_id = $1 order by e.minutes`,
+      [subjectId],
+    );
+    expect(estimates.rows).toEqual([{ minutes: 7, est_learn_minutes: 7 }, { minutes: 12, est_learn_minutes: 12 }]);
 
     const cards = await pool.query<{ n: string }>(`select count(*)::text as n from public.cards where subject_id = $1 and origin = 'generated'`, [subjectId]);
     expect(Number(cards.rows[0]?.n)).toBe(2);

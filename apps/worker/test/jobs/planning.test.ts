@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handlePlanNightly, handlePlanRecompute, handleScopeMatch, handleVesperaPrepare, readinessFor, scopeTopicsByExam } from '../../src/jobs/planning.ts';
 import { loadPlanContext } from '../../src/lib/plan-context.ts';
-import { EXAM, FakeEnv, NOW, TOPIC, TOPIC_B, USER, fakeEnv } from './fakes.ts';
+import { DOC, EXAM, FakeEnv, NOW, SUBJECT, TOPIC, TOPIC_B, USER, fakeEnv } from './fakes.ts';
 import { seedStudent } from './seed.ts';
 
 let env: FakeEnv;
@@ -21,6 +21,37 @@ const COACH_REPLY = {
   next_steps: [{ when: 'today', title: 'Teoria do tópico fraco', detail: '25 minutos e 3 questões.', topic_key: 'T1' }],
   watch_out: null,
 };
+
+describe('study time: the model estimate and the measured pace (spec 07 §8.2.1–§8.2.2)', () => {
+  const learnMinutesOf = (node: string) =>
+    env.db.rows('plan_items').filter((i) => i.node_ids?.includes(node) && (i.unit_type === 'learn' || i.unit_type === 'learn_light')).reduce((acc, i) => acc + Number(i.minutes), 0);
+
+  beforeEach(() => {
+    env.db.seed('documents', [{ id: DOC, subject_id: SUBJECT, kind: 'slides', deleted_at: null }]);
+    env.db.seed('node_sources', [{ node_id: TOPIC, document_id: DOC, page_start: 1, page_end: 10, origin: 'ai', deleted_at: null }]);
+  });
+
+  it('plans the page formula without an estimate, and the model estimate when there is one', async () => {
+    await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    expect(learnMinutesOf(TOPIC)).toBe(15); // 10 slides × 1.5 min
+    env.db.rows('plan_items').length = 0;
+    env.db.rows('plan_runs').length = 0;
+    env.db.seed('topic_study_estimates', [{ node_id: TOPIC, document_id: DOC, minutes: 40, prompt_version: 'ingest.topicDetail@v2' }]);
+    await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    expect(learnMinutesOf(TOPIC)).toBe(40);
+  });
+
+  it("scales learn time by the student's measured pace in the subject", async () => {
+    env.db.seed('topic_study_estimates', [{ node_id: TOPIC, document_id: DOC, minutes: 30, prompt_version: 'ingest.topicDetail@v2' }]);
+    const done = [1, 2, 3, 4, 5, 6].map((i) => `f000000${i}-0000-4000-8000-000000000000`);
+    env.db.seed('plan_items', done.map((id, i) => ({ id, user_id: USER, plan_run_id: 'old-run', local_date: `2026-10-2${i}`, subject_id: SUBJECT, unit_type: 'learn', minutes: 20, status: 'done', node_ids: [], deleted_at: null })));
+    env.db.seed('study_sessions', done.map((id, i) => ({ id: `s${i}`, user_id: USER, plan_item_id: id, active_minutes: 40, started_at: `2026-10-2${i}T15:00:00.000Z`, kind: 'mixed' })));
+    await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    // Six blocks at 2× the plan move κ from 1 to 1.88 (EMA α = 0.3): 30 min × 1.88 ≈ 57.
+    expect(learnMinutesOf(TOPIC)).toBeGreaterThanOrEqual(55);
+    expect(learnMinutesOf(TOPIC)).toBeLessThanOrEqual(60);
+  });
+});
 
 describe('plan.coach (GOL-04.10)', () => {
   const coachCalls = () => env.claude.calls.filter((c) => JSON.stringify(c).includes('estrategista de estudos')).length;

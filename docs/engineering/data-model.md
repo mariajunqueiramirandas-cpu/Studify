@@ -925,6 +925,9 @@ Unique `(owner_profile_id, school_year, coalesce(subject_id, '00000000-0000-0000
 #### `plan_runs` [svc] — GOL-04.9
 `user_id`, `version int`, `trigger` (`goal_created` · `exam_changed` · `scope_changed` · `day_missed` · `grade_logged` · `user_rebalance` · `nightly` · `availability_changed` · `material_added`), `input_hash text`, `feasible bool`, `triage jsonb`, `computed_by` (`server` · `device`). Unique `(user_id, version)`.
 
+#### `topic_study_estimates` [svc] — GOL-04 §8.2.2
+PK `(node_id, document_id)`: `minutes int` (1–600, the model's first-time study estimate for that topic's pages in that document, from `ingest.topicDetail`), `prompt_version`. Service only (no client access). The planner sums them per topic; `knowledge_nodes.est_learn_minutes` caches the sum.
+
 #### `plan_coach` [svc] — GOL-04.10
 One row per student (`user_id` PK): `plan_run_id` (the run that used it, N), `local_date` (study day it was written for), `signals_hash text` (same hash → no new AI call), `output jsonb` (`{headline, watch_out, exams: [{exam_id, title, strategy, risk}], topics: [{node_id, title, priority, approach, focus, why}], next_steps: [{when, title, detail, node_id}]}`), `prompt_version`, `calls_date`, `calls_today int` (daily call cap). The student selects their own row; only the worker writes. Per-topic texts are also copied to `plan_items.reason_params.coach`.
 

@@ -170,7 +170,8 @@ export function buildCoachInput(
         studied: m?.studied ?? false,
         accuracy: m && m.questionCount > 0 ? round(m.accuracy, 0.01) : null,
         answeredQuestions: m?.questionCount ?? 0,
-        learnMinutes: estLearnMinutes(planCtx.sourcesByNode.get(id) ?? []),
+        // This student's minutes: the topic's estimate times their measured pace in the subject.
+        learnMinutes: Math.round(estLearnMinutes(planCtx.sourcesByNode.get(id) ?? []) * (planCtx.pace.bySubject.get(nodeById.get(id)?.subjectId ?? '') ?? planCtx.pace.overall)),
         mistakes: extras.mistakes.get(id) ?? {},
         overconfident: extras.overconfident.has(id),
         teacherShare: extras.teacherShare.has(id) ? round(extras.teacherShare.get(id)!, 0.01) : null,

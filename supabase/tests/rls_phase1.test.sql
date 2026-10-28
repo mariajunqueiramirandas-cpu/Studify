@@ -433,6 +433,8 @@ select test_helpers.check_rows('bob reads no plan coach of alice', 'authenticate
   $$select user_id from public.plan_coach$$, 0);
 select test_helpers.check_err('clients cannot write the plan coach', 'authenticated', pg_temp.u('alice'),
   $$update public.plan_coach set signals_hash = 'x' where user_id = '11111111-1111-4111-8111-111111111111'$$);
+select test_helpers.check_err('clients cannot read topic study estimates (service only)', 'authenticated', pg_temp.u('alice'),
+  $$select node_id from public.topic_study_estimates$$);
 select test_helpers.check_rows('members read the Turma teacher profile', 'authenticated', pg_temp.u('bob'),
   $$select id from public.teacher_profiles$$, 1);
 select test_helpers.check_rows('dave reads no teacher profile', 'authenticated', pg_temp.u('dave'),

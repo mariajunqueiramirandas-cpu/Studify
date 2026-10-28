@@ -175,6 +175,7 @@ export async function replanUser(ctx: JobContext, planCtx: PlanContext, trigger:
     previousItems: enem ? planCtx.previousRows.filter((r) => r.goal_id !== enem.goalId) : planCtx.previousRows,
     desperate: planCtx.desperate,
     mode: planCtx.desperate ? 'desperate' : 'normal',
+    pace: planCtx.pace,
     topicWeights: (scope) => coachTopicWeights(scope, (id) => estLearnMinutes(planCtx.sourcesByNode.get(id) ?? []), coach),
   });
   const run: PlanRun = buildPlan(built.input, trigger);

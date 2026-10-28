@@ -36,10 +36,25 @@ export const DEFAULT_PLAN_SETTINGS: PlanSettings = {
 
 const LEARN_MIN_PER_PAGE: Record<MaterialKind, number> = { slides: 1.5, notes: 3, textbook: 4, other: 3 };
 
-/** est_learn_minutes(n) = clamp(Σ pages × f(kind), 10, 90) (spec 07 §8.2.2). */
-export function estLearnMinutes(sources: Array<{ kind: MaterialKind; pages: number }>): number {
-  const raw = sources.reduce((acc, s) => acc + s.pages * (LEARN_MIN_PER_PAGE[s.kind] ?? 3), 0);
-  return clamp(raw, 10, 90);
+/** Upper bound of est_learn_minutes from the page formula alone (spec 07 §8.2.2). */
+const FORMULA_MAX_MINUTES = 90;
+/** Upper bound when the model estimated the time from the pages themselves: dense material can need more. */
+const ESTIMATE_MAX_MINUTES = 180;
+
+/**
+ * est_learn_minutes(n) (spec 07 §8.2.2): Σ over the topic's sources of the model's estimate for that source when it
+ * has one (ingest.topicDetail read the pages), else pages × f(kind); clamped to 10–90 (formula only) or 10–180.
+ */
+export function estLearnMinutes(sources: ReadonlyArray<{ kind: MaterialKind; pages: number; minutes?: number | null }>): number {
+  let estimated = false;
+  const raw = sources.reduce((acc, s) => {
+    if (typeof s.minutes === 'number' && s.minutes > 0) {
+      estimated = true;
+      return acc + s.minutes;
+    }
+    return acc + s.pages * (LEARN_MIN_PER_PAGE[s.kind] ?? 3);
+  }, 0);
+  return clamp(raw, 10, estimated ? ESTIMATE_MAX_MINUTES : FORMULA_MAX_MINUTES);
 }
 
 /** Stable hash of the canonical input and trigger (stored as plan_runs.input_hash). */
@@ -259,7 +274,7 @@ function buildUnits(
     const allLight = relevant.every((s) => s.covered && (s.group === 'focus' || s.group === 'basic'));
     const learnKey = `learn:${t.id}`;
     if (!t.studied && !doneKeys.has(learnKey)) {
-      const minutesFull = Math.ceil(estLearnMinutes(t.sources) * p.settings.pace - EPS);
+      const minutesFull = Math.ceil(estLearnMinutes(t.sources) * (t.pace ?? p.settings.pace) - EPS);
       const deadlineRaw = relevant.map((s) => addDays(s.exam.localDate, -2)).sort()[0] ?? p.today;
       put({
         key: learnKey,
@@ -876,7 +891,7 @@ export function buildPlan(input: PlanInput, trigger: ReplanTrigger): PlanRun {
             agg.set(t.id, {
               id: t.id,
               order: t.order,
-              learnMin: estLearnMinutes(t.sources) * settings.pace,
+              learnMin: estLearnMinutes(t.sources) * (t.pace ?? settings.pace),
               gain,
             });
         }

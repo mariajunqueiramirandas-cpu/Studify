@@ -431,13 +431,17 @@ export interface WriteContext {
 /** Concept rows (S2). Duplicate normalized titles keep the existing concept and add the sources (ING-03.11). */
 export async function writeConcepts(
   ctx: WriteContext,
-  data: { concepts: Array<{ key: string; title: string; summary: string; page_start: number; page_end: number; key_terms: string[]; formulas: Array<{ latex: string; description: string }> }> },
+  data: {
+    concepts: Array<{ key: string; title: string; summary: string; page_start: number; page_end: number; key_terms: string[]; formulas: Array<{ latex: string; description: string }> }>;
+    study_minutes?: number;
+  },
   existingTitles: Map<string, string>,
 ): Promise<{ written: number; dropped: number }> {
   let written = 0;
   let dropped = 0;
   const allowed = labelMapAllowed(ctx.labels);
   await withTransaction(ctx.pool, async (client) => {
+    if (typeof data.study_minutes === 'number' && data.study_minutes > 0) await writeStudyEstimate(client, ctx, data.study_minutes);
     let position = (await client.query<{ n: number }>(
       `select coalesce(max(position) + 1, 0) as n from public.knowledge_nodes where parent_id = $1 and kind = 'concept' and deleted_at is null`,
       [ctx.bundle.topicId],
@@ -492,6 +496,31 @@ function documentForPages(allowed: ReadonlyArray<{ documentId: string; pages: re
     if (entry.pages.includes(start) && entry.pages.includes(end)) return entry.documentId;
   }
   return null;
+}
+
+/**
+ * The topic's study minutes for the documents of this call (GOL-04 §8.2.2), split by their share of the pages sent,
+ * and the cached total on knowledge_nodes.est_learn_minutes. A later estimate for the same document replaces it.
+ */
+async function writeStudyEstimate(sql: Sql, ctx: WriteContext, minutes: number): Promise<void> {
+  const byDoc = new Map<string, number>();
+  for (const [label, documentId] of Object.entries(ctx.labels.labels)) {
+    byDoc.set(documentId, (byDoc.get(documentId) ?? 0) + (ctx.labels.allowedPages[label]?.length ?? 0));
+  }
+  const totalPages = [...byDoc.values()].reduce((a, b) => a + b, 0);
+  for (const [documentId, pages] of byDoc) {
+    const share = totalPages > 0 ? pages / totalPages : 1 / byDoc.size;
+    await sql.query(
+      `insert into public.topic_study_estimates (node_id, document_id, minutes, prompt_version) values ($1, $2, $3, $4)
+       on conflict (node_id, document_id) do update set minutes = excluded.minutes, prompt_version = excluded.prompt_version`,
+      [ctx.bundle.topicId, documentId, Math.max(1, Math.round(minutes * share)), ctx.promptVersion],
+    );
+  }
+  await sql.query(
+    `update public.knowledge_nodes set est_learn_minutes = (select sum(minutes) from public.topic_study_estimates where node_id = $1)
+      where id = $1`,
+    [ctx.bundle.topicId],
+  );
 }
 
 async function addSource(sql: Sql, nodeId: string, documentId: string, pageStart: number, pageEnd: number): Promise<void> {

@@ -390,7 +390,7 @@ The schedule-import task is specified in [01](01-ingestion-knowledge-map.md). It
 | Available minutes `A(d)` | `study_preferences.minutes_by_weekday`, `availability_exceptions` |
 | Review forecast `R_raw(d)` | `forecastReviewLoad` (§8.3) |
 | Done / pinned items | `plan_items` |
-| Personal pace factor `κ` (actual ÷ estimated minutes, EMA α = 0.3, clamp 0.5–2.0, start 1.0) | `study_sessions` |
+| Personal pace factor `κ` per subject (active minutes of the sessions on a finished `learn` / `learn_light` item ÷ its planned minutes, last 60 days; EMA α = 0.3, each session clamped to 0.25–4, result clamped 0.5–2.0; start 1.0; a subject with < 3 sessions uses the student's overall κ, which stays 1.0 until 3 sessions) | `study_sessions` × `plan_items` (`learnPace`) |
 
 #### 8.2.2 Work units
 
@@ -405,7 +405,7 @@ For each scheduled test `e` and each topic `n ∈ N_e`:
 | `vespera(e)` | always | 25 (GOL-07) | fixed: `D_e − 1` | `D_e − 1` |
 | `upload_material(n)` | `n.is_placeholder` | 5 | today | `D_e − 3` |
 
-`est_learn_minutes(n) = clamp( Σ_{sources} pages × f(kind), 10, 90 )`, with `f(slides) = 1.5`, `f(notes) = 3`, `f(textbook) = 4`, `f(other) = 3` min/page. Units longer than `max_block_min` are split into blocks of `max_block_min` (last block ≥ `min_block_min`, merged otherwise).
+`est_learn_minutes(n) = clamp( Σ_{sources} m(source), 10, 90 | 180 )`: per (topic, document) source, `m` is the model's estimate (`topic_study_estimates.minutes`, written by `ingest.topicDetail` while it reads those pages: first-time study, no exercises) when there is one, else `pages × f(kind)` with `f(slides) = 1.5`, `f(notes) = 3`, `f(textbook) = 4`, `f(other) = 3` min/page. The upper clamp is 90 for the formula alone and 180 when any source has an estimate. `knowledge_nodes.est_learn_minutes` caches the sum of the estimates. Units longer than `max_block_min` are split into blocks of `max_block_min` (last block ≥ `min_block_min`, merged otherwise).
 
 A topic shared by two tests (e.g. recuperação with the same scope) produces **one** `learn` unit with the earliest deadline; practice units are per test.
 
@@ -483,7 +483,7 @@ activeExamScopes(userId, date): Array<{ examId; localDate; nodeIds: NodeId[] }>
 
 Planner obligations:
 
-1. **Reserve review time first:** `R(d) = min(ceil5(estMinutes(d)), 0.6 × A(d))`. `reviewSeconds` starts at 10 s and is learned per user (median of the last 200 reviews).
+1. **Reserve review time first:** `R(d) = min(ceil5(estMinutes(d)), 0.6 × A(d))`. `reviewSeconds` is the median `duration_ms` of the student's last 200 reviews between 1 s and 2 min (clamped 3–60 s, `reviewSecondsFrom`), once there are ≥ 20; before that `study_preferences.review_seconds_estimate`.
 2. **Set the new-card quota** for each day from the `learn` units placed that day: `quota(d) = min(50, floor(0.25 × learnMinutes(d) × 60 / 20))` (25% of learning time spent on first exposures at ~20 s per new card), distributed to subjects proportionally to their learn minutes.
 3. **Protect future load:** if adding `quota(d)` new cards would push the forecast for any of the next 7 days above `0.5 × A(day)` (assume each new card adds ≈ 3 reviews spread over the next 7 days), reduce `quota(d)` until it doesn't.
 4. **Stop new cards for a test** on `D_e − 1` (véspera day) and on `D_e`, except cards created from mistakes (`origin = from_mistake`), which are always allowed.

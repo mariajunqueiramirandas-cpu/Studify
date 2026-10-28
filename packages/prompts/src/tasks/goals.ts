@@ -153,7 +153,7 @@ export interface PlanCoachInput {
     /** Question accuracy 0–1, null without answered questions. */
     accuracy: number | null;
     answeredQuestions: number;
-    /** Estimated minutes to learn the topic from the material. */
+    /** Minutes this student needs to learn the topic: the estimate from the material times their measured pace. */
     learnMinutes: number;
     /** Open mistakes by cause (didnt_know, confused, careless, misread). */
     mistakes: Readonly<Record<string, number>>;

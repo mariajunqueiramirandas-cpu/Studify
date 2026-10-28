@@ -141,7 +141,7 @@ export interface PlanBuildData {
   scope: ScopeRow[];
   nodes: NodeInfo[];
   excludedNodeIds: ReadonlySet<string>;
-  sourcesByNode: ReadonlyMap<string, Array<{ kind: MaterialKind; pages: number }>>;
+  sourcesByNode: ReadonlyMap<string, Array<{ kind: MaterialKind; pages: number; minutes?: number | null }>>;
   masteries: ReadonlyMap<string, NodeMastery>;
   exceptions: Array<{ local_date: string; minutes: number }>;
   /** Review minutes per planned day from forecastReviewLoad (learning-engine §3.4). */
@@ -151,6 +151,8 @@ export interface PlanBuildData {
   mode: 'normal' | 'desperate';
   editedDay?: string;
   sessionStartedToday?: boolean;
+  /** κ, the student's measured pace (plan-context measuredPace); absent → 1 (spec 07 §8.2.1). */
+  pace?: { overall: number; bySubject: ReadonlyMap<string, number> };
   /** ω per scope topic of a test (the AI coach priorities, GOL-04.10); null keeps the default ∝ learn minutes. */
   topicWeights?: (scopeTopicIds: readonly string[]) => Record<string, number> | null;
 }
@@ -250,6 +252,7 @@ export function buildPlanInput(data: PlanBuildData): BuiltPlanInput {
       isPlaceholder: n.isPlaceholder,
       studied: m?.studied ?? false,
       mastery: m?.mastery ?? null,
+      ...(data.pace ? { pace: data.pace.bySubject.get(n.subjectId) ?? data.pace.overall } : {}),
     };
   });
 
