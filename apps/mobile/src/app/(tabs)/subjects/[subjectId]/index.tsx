@@ -24,6 +24,7 @@ import { colorKeyFromHex, setSubjectArchived, useDocuments, useSubject, useSubje
 import { OutlineTree } from '../../../../features/subjects/OutlineTree';
 import { useCanEditSubject, useMastery, useOutline } from '../../../../features/subjects/outline';
 import { ProcessingCard, ingestionJob } from '../../../../features/subjects/ProcessingCard';
+import { TrailCard } from '../../../../features/trail/TrailCard';
 import { openTutor } from '../../../../features/tutor/open';
 import { t } from '../../../../i18n';
 import { space, subjectColor, useTheme } from '../../../../theme';
@@ -83,6 +84,8 @@ export default function SubjectHome() {
           action={{ label: t('upload.button'), icon: 'add', onPress: () => router.push(`/subjects/${subjectId}/upload`) }}
         />
       ) : null}
+
+      {topics.length && s ? <TrailCard subjectId={subjectId} tint={subjectColor(colorKeyFromHex(s.color), scheme)} /> : null}
 
       {topics.length ? (
         <Row wrap>

@@ -55,9 +55,9 @@ describe('ENUMS registry', () => {
 });
 
 describe('FEATURE_IDS', () => {
-  it('has 89 unique PRD IDs', () => {
-    expect(FEATURE_IDS).toHaveLength(89);
-    expect(new Set(FEATURE_IDS).size).toBe(89);
+  it('has 90 unique PRD IDs', () => {
+    expect(FEATURE_IDS).toHaveLength(90);
+    expect(new Set(FEATURE_IDS).size).toBe(90);
   });
 
   it('matches the PRD §5 feature catalog exactly', () => {

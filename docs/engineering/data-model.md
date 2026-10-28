@@ -128,7 +128,7 @@ erDiagram
 | B. Subjects & knowledge map | `subjects`, `subject_user_settings`, `documents`, `document_pages`, `document_slices`, `knowledge_nodes`, `node_sources`, `node_prerequisites`, `node_relations`, `node_user_settings`, `node_events`, `schedule_imports`, `material_findings`, `material_finding_votes` | [§4](#4-core-ddl-phase-01), [§5.2](#52-subjects-documents-knowledge-map) |
 | C. Content items | `notes`, `note_highlights`, `topic_reads`, `glossary_terms`, `glossary_term_overrides`, `explanations`, `explanation_feedback`, `visuals`, `cards`, `card_overrides`, `questions`, `concept_contrasts`, `feed_items`, `mnemonics`, `memory_palaces`, `item_revisions`, `item_hides` | [§4](#4-core-ddl-phase-01), [§5.3](#53-content-items) |
 | D. Learning state | `card_states`, `review_logs`, `mastery`, `mastery_evidence`, `quizzes`, `quiz_attempts`, `attempt_answers`, `mistakes`, `essays`, `feed_impressions`, view `calibration_stats` | [§4](#4-core-ddl-phase-01), [§5.4](#54-per-user-learning-state) |
-| E. Goals & planning | `goals`, `exams`, `exam_scope_items`, `exam_scope_nodes`, `grading_rules`, `grade_components`, `plan_runs`, `plan_items`, `plan_coach`, `study_sessions`, `availability_exceptions`, `readiness_snapshots`, `performance_windows`, `teacher_profiles`, `topic_predictions`, `exam_outcome_topics` | [§4](#4-core-ddl-phase-01), [§5.5](#55-goals-exams-grading-planning) |
+| E. Goals & planning | `goals`, `exams`, `exam_scope_items`, `exam_scope_nodes`, `grading_rules`, `grade_components`, `plan_runs`, `plan_items`, `plan_coach`, `study_sessions`, `availability_exceptions`, `readiness_snapshots`, `performance_windows`, `teacher_profiles`, `topic_predictions`, `exam_outcome_topics`, `trails`, `trail_steps` | [§4](#4-core-ddl-phase-01), [§5.5](#55-goals-exams-grading-planning) |
 | F. Tutor | `tutor_threads`, `tutor_messages` | [§5.6](#56-tutor) |
 | G. Social & moderation | `duels`, `battles`, `battle_players`, `private.question_served`, `private.class_insights`, `study_rooms`, `divide_plans`, `contributions`, `question_votes`, `league_entries`, `quiz_shares`, `content_flags`, `private.moderation_actions` | [§5.7](#57-social-and-moderation) |
 | H. Interactive & camera | `podcast_episodes`, `podcast_plays`, `podcast_interactions`, `teaching_sessions`, `argument_sessions`, `camera_captures` | [§5.8](#58-interactive-learning-and-camera) |
@@ -927,6 +927,12 @@ Unique `(owner_profile_id, school_year, coalesce(subject_id, '00000000-0000-0000
 
 #### `topic_study_estimates` [svc] — GOL-04 §8.2.2
 PK `(node_id, document_id)`: `minutes int` (1–600, the model's first-time study estimate for that topic's pages in that document, from `ingest.topicDetail`), `prompt_version`. Service only (no client access). The planner sums them per topic; `knowledge_nodes.est_learn_minutes` caches the sum.
+
+#### `trails` [svc] — TRL-01
+One per `(user_id, subject_id)`: `status` (`active` · `completed`), `goal`, `plan jsonb` (`[{topicId, why, conceptIds}]` in path order), `outline_hash` (re-plan when it changes), `chapter_index`, `prompt_version` (null = outline order), `preparing_until` (generation lease), `completed_at`. The student selects their own row; only the API writes.
+
+#### `trail_steps` [svc] — TRL-01
+Every generated step of a trail: `trail_id`, `user_id`, `chapter_index`, `topic_id`, `concept_id`, `purpose` (`lesson` · `practice` · `remedial_lesson` · `remedial_question` · `checkpoint`), `round`, `for_step_id`, `created_seq` (unique per trail), `served_seq`, `status` (`ready` · `done` · `discarded`), `content jsonb`, `source_pages`, `response`, `correct`, `answered_at`, `prompt_version`. Own rows readable; only the API writes. `mastery_evidence.source` gains `trail`.
 
 #### `plan_coach` [svc] — GOL-04.10
 One row per student (`user_id` PK): `plan_run_id` (the run that used it, N), `local_date` (study day it was written for), `signals_hash text` (same hash → no new AI call), `output jsonb` (`{headline, watch_out, exams: [{exam_id, title, strategy, risk}], topics: [{node_id, title, priority, approach, focus, why}], next_steps: [{when, title, detail, node_id}]}`), `prompt_version`, `calls_date`, `calls_today int` (daily call cap). The student selects their own row; only the worker writes. Per-topic texts are also copied to `plan_items.reason_params.coach`.

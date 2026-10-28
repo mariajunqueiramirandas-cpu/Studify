@@ -29,6 +29,7 @@ Studify turns class PDFs into a complete study system (notes, flashcards, quizze
 | [11 — Câmera Mágica](specs/11-camera-magica.md) | CAM-01…03 |
 | [12 — Interactive learning](specs/12-interactive-learning.md) | INT-01…03 |
 | [13 — Motivation & wellbeing](specs/13-motivation-wellbeing.md) | MOT-01…04, WEL-01…04 |
+| [14 — Trilha (guided path)](specs/14-trilha.md) | TRL-01 |
 
 ## Engineering
 

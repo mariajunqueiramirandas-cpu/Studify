@@ -422,7 +422,7 @@ export const DesperateStatusSchema = z.enum(DESPERATE_STATUS);
 
 // ---------------------------------------------------------------- mastery and practice (§4.3–4.4, §5.4)
 
-// R13 / learning-engine: evidence sources. `diagnostic` comes from Modo Desespero (GOL-12).
+// R13 / learning-engine: evidence sources. `diagnostic` comes from Modo Desespero (GOL-12), `trail` from the Trilha (TRL-01).
 export const MASTERY_SOURCE = [
   'quiz_answer',
   'review',
@@ -434,9 +434,18 @@ export const MASTERY_SOURCE = [
   'boss',
   'simulado',
   'diagnostic',
+  'trail',
 ] as const;
 export type MasterySource = (typeof MASTERY_SOURCE)[number];
 export const MasterySourceSchema = z.enum(MASTERY_SOURCE);
+
+// TRL-01 (spec 14): the Trilha and its steps.
+export const TRAIL_STATUS = ['active', 'completed'] as const;
+export type TrailStatus = (typeof TRAIL_STATUS)[number];
+export const TRAIL_STEP_PURPOSE = ['lesson', 'practice', 'remedial_lesson', 'remedial_question', 'checkpoint'] as const;
+export type TrailStepPurposeName = (typeof TRAIL_STEP_PURPOSE)[number];
+export const TRAIL_STEP_STATUS = ['ready', 'done', 'discarded'] as const;
+export type TrailStepStatusName = (typeof TRAIL_STEP_STATUS)[number];
 
 // R6: quiz kinds.
 export const QUIZ_KIND = [
@@ -837,6 +846,7 @@ export const FEATURE_IDS = [
   'MOT-01', 'MOT-02', 'MOT-03', 'MOT-04',
   'WEL-01', 'WEL-02', 'WEL-03', 'WEL-04',
   'TRU-01', 'TRU-02',
+  'TRL-01',
 ] as const;
 export type FeatureId = (typeof FEATURE_IDS)[number];
 export const FeatureIdSchema = z.enum(FEATURE_IDS);
@@ -920,6 +930,9 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'availability_exceptions.source': AVAILABILITY_SOURCE,
   'desperate_modes.status': DESPERATE_STATUS,
   'mastery_evidence.source': MASTERY_SOURCE,
+  'trails.status': TRAIL_STATUS,
+  'trail_steps.purpose': TRAIL_STEP_PURPOSE,
+  'trail_steps.status': TRAIL_STEP_STATUS,
   'quizzes.kind': QUIZ_KIND,
   'quizzes.mode': QUIZ_MODE,
   'quiz_attempts.status': ATTEMPT_STATUS,

@@ -608,6 +608,53 @@ export const TASK_INPUTS: Record<string, unknown> = {
     contentLanguage: 'pt-BR',
   },
   'retro.title': { period: 'semester', stats: { active_hours: 42, cards_reviewed: 900, questions_answered: 300, longest_streak: 12 } },
+  'trail.plan': {
+    subjectName: 'Biologia',
+    units: [
+      {
+        title: 'Células',
+        topics: [
+          { key: 'T1', title: 'Respiração celular', summary: 'Como a célula obtém energia.', objectives: ['Explicar a glicólise.'], concepts: [{ key: 'C1', title: 'Glicólise' }, { key: 'C2', title: 'Ciclo de Krebs' }] },
+          { key: 'T2', title: 'Mitocôndria', summary: null, objectives: [], concepts: [] },
+        ],
+      },
+    ],
+    prerequisites: [{ key: 'T1', needs: ['T2'] }],
+    alreadyDone: [],
+    contentLanguage: 'pt-BR',
+    languageSubject: false,
+  },
+  'trail.lesson': {
+    topic: { ...topic, summary: 'Como a célula obtém energia.' },
+    concept: { key: 'c1', title: 'Glicólise', summary: 'Quebra da glicose no citoplasma.', keyTerms: ['glicólise', 'piruvato'] },
+    taughtBefore: ['Mitocôndria'],
+    slices: [bio],
+    contentLanguage: 'pt-BR',
+    languageSubject: false,
+  },
+  'trail.remediate': {
+    topic: { ...topic, summary: 'Como a célula obtém energia.' },
+    concept: { key: 'c1', title: 'Glicólise', summary: 'Quebra da glicose no citoplasma.', keyTerms: ['glicólise'] },
+    taughtBefore: [],
+    slices: [bio],
+    mistake: { stem: 'Onde ocorre a glicólise?', chosen: 'Na mitocôndria', correct: 'No citoplasma', explanation: 'A glicólise é anaeróbia e ocorre no citoplasma.', inChapterTest: false },
+    askedStems: ['Onde ocorre a glicólise?'],
+    contentLanguage: 'pt-BR',
+    languageSubject: false,
+  },
+  'trail.checkpoint': {
+    topic: { ...topic, summary: 'Como a célula obtém energia.' },
+    taughtBefore: ['Mitocôndria', 'Glicólise', 'Ciclo de Krebs'],
+    slices: [bio],
+    blueprint: [
+      { key: 'c1', title: 'Glicólise', count: 2, weak: false },
+      { key: 'c2', title: 'Ciclo de Krebs', count: 3, weak: true },
+    ],
+    askedStems: ['Onde ocorre a glicólise?'],
+    round: 1,
+    contentLanguage: 'pt-BR',
+    languageSubject: false,
+  },
 };
 
 export { questionRecord };

@@ -130,6 +130,7 @@ export type EvidenceSource =
   | 'caderno_retry'
   | 'session_check'
   | 'feed_quick'
+  | 'trail'
   | 'tutor_quiz'
   | 'duel'
   | 'battle'

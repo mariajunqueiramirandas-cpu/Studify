@@ -303,6 +303,31 @@ export const PAYLOAD_ALIASES: Record<string, string> = {
   ProblemPayload: 'question variant problem',
 };
 
+const trailTerm = { term: 'glicólise', definition: 'Quebra da glicose em duas moléculas de piruvato.' };
+const trailLesson = { title: 'Glicólise', body: 'A **glicólise** quebra a glicose no citoplasma.', terms: [trailTerm], source_pages: [ref] };
+const trailQuestion = {
+  stem: 'Onde ocorre a glicólise?',
+  options: [
+    { id: 'A', text: 'Na mitocôndria', rationale: 'Lá ocorre o ciclo de Krebs.' },
+    { id: 'B', text: 'No citoplasma', rationale: 'Correta: a glicólise é citoplasmática.' },
+    { id: 'C', text: 'No núcleo', rationale: 'O núcleo guarda o DNA.' },
+  ],
+  correct: 'B',
+  explanation: 'A glicólise acontece no citoplasma, antes da mitocôndria.',
+  tip: null,
+  terms: [],
+  source_pages: [ref],
+};
+const TRAIL_CASES: SchemaCase[] = [
+  { name: 'TrailPlan', schema: S.TrailPlan, valid: { goal: 'Entender como a célula obtém energia.', chapters: [{ topic_key: 'T1', why: 'É a base do resto.', concept_keys: ['C1'] }] }, invalid: { goal: 'x', chapters: [{ topic_key: 'X1', why: 'a', concept_keys: [] }] } },
+  { name: 'TrailTerm', schema: S.TrailTerm, valid: trailTerm, invalid: { term: '', definition: 'x' } },
+  { name: 'TrailLessonBody', schema: S.TrailLessonBody, valid: trailLesson, invalid: { ...trailLesson, source_pages: [] } },
+  { name: 'TrailQuestion', schema: S.TrailQuestion, valid: trailQuestion, invalid: { ...trailQuestion, correct: 'D' } },
+  { name: 'TrailLesson', schema: S.TrailLesson, valid: { lesson: trailLesson, questions: [trailQuestion, trailQuestion, trailQuestion] }, invalid: { lesson: trailLesson, questions: [trailQuestion] } },
+  { name: 'TrailRemediation', schema: S.TrailRemediation, valid: { lesson: trailLesson, question: trailQuestion }, invalid: { lesson: trailLesson, question: { ...trailQuestion, options: [trailQuestion.options[0], trailQuestion.options[0], trailQuestion.options[1]] } } },
+  { name: 'TrailCheckpoint', schema: S.TrailCheckpoint, valid: { questions: [{ ...trailQuestion, concept_key: 'c1' }] }, invalid: { questions: [{ ...trailQuestion, concept_key: 'c1', correct: 'D' }] } },
+];
+
 export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'LanguageTag', schema: S.LanguageTag, valid: 'pt-BR', invalid: 'portugues do brasil' },
   { name: 'Difficulty', schema: S.Difficulty, valid: 3, invalid: 9 },
@@ -365,4 +390,5 @@ export const SCHEMA_CASES: SchemaCase[] = [
   ...PHASE3_CASES,
   ...PHASE4_CASES,
   ...PHASE5_CASES,
+  ...TRAIL_CASES,
 ];

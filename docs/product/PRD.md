@@ -240,6 +240,14 @@ Spec: [01-ingestion-knowledge-map](../specs/01-ingestion-knowledge-map.md), [10-
 | TRU-01 | Page citations on every generated note, card, question and tutor answer | 0–1 |
 | TRU-02 | Error flag on any item; fixes propagate to the whole Turma | 1 (flag), 2 (propagation) |
 
+### 5.15 Trilha (TRL)
+
+Spec: [14-trilha](../specs/14-trilha.md)
+
+| ID | Feature | Phase |
+|---|---|---|
+| TRL-01 | Trilha: a guided path per subject — AI-chosen order, a short lesson per concept, questions with feedback, re-teaching on mistakes, a chapter test to move on; generated on demand and resumable | 5 |
+
 ## 6. Non-goals (explicitly cut)
 
 These were considered and **removed** by the product owner. Do not build them without a new decision.
