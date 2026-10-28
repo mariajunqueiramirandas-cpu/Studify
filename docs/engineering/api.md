@@ -92,6 +92,9 @@ RPC functions raise Postgres exceptions with `errcode` `P0001` and a `HINT` cont
 ### 2.4 Idempotency
 
 - Every **mutating API call** requires an `Idempotency-Key: <uuid v7>` header. The server stores `(user_id, function, key) → response` in `private.idempotency_keys` for 24 h; a retry with the same key returns the stored response (same status and body) without re-running side effects or re-charging AI budget. Same key with a different body → `409 idempotency_mismatch`.
+- App builds that follow running calls send `x-studify-operations: 1` on every call; the two rules below apply only to them (older builds get inline calls and `409 already_exists` for a repeat that is still running).
+- A retry with the same key while the call is **still running** answers `202` with `x-operation-status: running`, `Retry-After: 1` and `{ "status": "running", "operation_key": "<key>" }`. It is a status check, never a conflict: the app waits `Retry-After` and repeats the call with `operation_key` until it gets the stored answer (ADR 0009). A `202` without that header is a final answer.
+- **Deferred calls** (ADR 0009): functions that call Claude outside a stream run as a job on the API's `api.interactive` queue. They always take an `Idempotency-Key`, mutating or not, and the first request already answers `202 running`. An identical call from the same student while one runs (same function and body, another key) joins it: its `operation_key` is the running call's key. The stored answer of a deferred call can be a failure (a `4xx`, or a `5xx` after the queue's retry); each new tap uses a new key.
 - Rows created offline carry **client-generated UUIDs** (`review_logs.id`, `quiz_attempts.id`, `attempt_answers.id`, `study_sessions.id`, `xp_events.id`, `feed_impressions.id`); inserts are `on conflict (id) do nothing`, so the id itself is the idempotency key.
 
 ### 2.5 Rate limits and AI budget classes
@@ -124,7 +127,8 @@ type SseEvent =
 
 - Citations arrive as separate events so the UI can render 📄 chips progressively; `start`/`end` offsets refer to the final concatenated text.
 - A `refusal` ends the stream with `done.stop_reason = "refusal"` after the server-side fallback was tried where the model has one (Haiku 5.5 has none, so it ends at once); the app shows the spec's friendly refusal copy.
-- If the connection drops mid-stream, the client re-requests with the same `Idempotency-Key`; the server returns the completed message (stored) instead of generating again.
+- If the connection drops mid-stream (or no byte, heartbeat included, arrives for 45 s), the client re-requests with the same `Idempotency-Key`. The server keeps generating into the stored transcript after the client leaves: the re-request gets `202 running` until the turn is finished, then the whole stream as a replay, whose events the client already showed it skips (ADR 0009).
+- A stream opens before any plain Claude call the function makes, so the heartbeat covers the wait; errors after that arrive as the `error` event, which the app reads as the same ApiError as an HTTP error.
 
 ### 2.7 Dates and times
 
