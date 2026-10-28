@@ -87,8 +87,19 @@ no `container_name`. Do not add published ports: Traefik reaches the API through
 
 - **Code**: push to the deployed branch and redeploy from Dokploy (or enable auto-deploy with the Git webhook). The
   images rebuild from the lockfile (`pnpm install --frozen-lockfile`), so the same commit gives the same dependencies.
-- **Schema**: apply new migrations with `supabase db push` **before** deploying code that needs them. Migrations are
-  additive by convention (docs/engineering/data-model.md).
+- **Schema**: CI applies new migrations to production on every push to `main` (job *Apply migrations to production*
+  in `.github/workflows/ci.yml`), after the schema builds from scratch and the pgTAP suite and RLS gate pass on that
+  commit. It runs `supabase db push`, which applies only the migrations production has not recorded, so a push
+  without new migrations changes nothing. Setup, once:
+  1. GitHub → Settings → Environments → **New environment** `production` (optionally add yourself as a required
+     reviewer, so every production migration waits for a click).
+  2. In that environment add the secret **`SUPABASE_DB_URL`**: the **Session pooler** connection string (port
+     5432, user `postgres.<project-ref>`) with the database password. GitHub runners have no IPv6, so the direct
+     `db.<ref>.supabase.co` host does not work.
+  Migrations are additive by convention (docs/engineering/data-model.md), so the code deploy can run alongside;
+  when a migration must land first, merge it in its own PR before the code. Never apply a migration by hand (SQL
+  editor, MCP): it is recorded under a different version and the next `db push` stops on the mismatch (fix with
+  `supabase migration repair`).
 - **Rollback**: redeploy the previous commit in Dokploy. Migrations are not rolled back automatically.
 - **Mobile**: the app's API base is `EXPO_PUBLIC_API_URL` (default `https://studify.vendua.com.br/api`). Expo
   bakes it into the bundle at build time, so changing the host needs a new build.

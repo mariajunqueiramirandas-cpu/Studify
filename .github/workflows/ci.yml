@@ -109,6 +109,38 @@ jobs:
       - name: Every public table has RLS and a pgTAP test
         run: pnpm db:rls-coverage
 
+  # Applies new supabase/migrations to production on every push to main, once the schema has been built from scratch
+  # and the pgTAP suite and RLS gate passed on that commit. `db push` runs only the migrations production has not
+  # recorded (supabase_migrations.schema_migrations), so a push without new migrations is a no-op. Setup:
+  # docs/engineering/deployment.md §6 (secret SUPABASE_DB_URL in the `production` environment).
+  migrate-production:
+    name: Apply migrations to production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [database, rls-coverage]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: migrate-production
+      cancel-in-progress: false # never stop a push half-way
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+      - name: Check the database secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::SUPABASE_DB_URL is not set in the production environment (docs/engineering/deployment.md §6)"
+            exit 1
+          fi
+      - name: List pending migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+      - name: Apply pending migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --yes
+
   api:
     name: API (Bun typecheck and tests)
     runs-on: ubuntu-24.04
