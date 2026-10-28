@@ -10,8 +10,16 @@ import { planChapters, replan } from '../shared/trail-generate.ts';
 
 export const handler = defineFunction<TrailOpenReq>({
   name: 'trail-open',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
+  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009). A resume needs no
+  // Claude call, so it runs inline (inlineWhen) and answers at once.
   deferred: true,
+  inlineWhen: async (input, deps, userId) => {
+    const subject = await requireSubject(deps.db, userId, input.subject_id, 'read');
+    const outline = await loadOutline(deps.db, userId, subject.id);
+    const existing = await deps.db.from('trails').select('outline_hash').eq('user_id', userId).eq('subject_id', subject.id).maybeSingle();
+    if (existing.error) throw existing.error;
+    return !!existing.data && (existing.data as { outline_hash: string }).outline_hash === outlineHashOf(outline);
+  },
   mutating: true,
   aiCall: true,
   input: TrailOpenReqSchema,

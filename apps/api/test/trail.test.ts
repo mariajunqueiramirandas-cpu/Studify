@@ -8,6 +8,8 @@ import { IDS, seedWorld, v7 } from './world.ts';
 import { handler as trailOpen } from '../src/functions/trail-open.ts';
 import { handler as trailPrepare } from '../src/functions/trail-prepare.ts';
 import { handler as trailAnswer } from '../src/functions/trail-answer.ts';
+import { handler as trailGrade } from '../src/functions/trail-grade.ts';
+import { handler as trailSettle } from '../src/functions/trail-settle.ts';
 import { handler as explain } from '../src/functions/explain.ts';
 
 const reply = (value: unknown): FakeReply => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
@@ -207,4 +209,38 @@ test('trail: a finished unit offers its Chefão until it is defeated', async () 
   assertEquals((await open(2)).boss, { unit_id: unit, title: 'Plantas' });
   h.db.seed('boss_attempts', { id: v7(950), user_id: h.db.rows('trails')[0]!.user_id, unit_node_id: unit, passed: true, score: 0.8 });
   assertEquals((await open(3)).boss, null);
+});
+
+test('trail: grade gives the verdict, settle gives the explanation and the next step, and a miss is saved once', async () => {
+  const h = makeHarness((params) => byTask(params, PLAN));
+  await seedWorld(h);
+  let n = 500;
+  const call = async (fn: typeof trailOpen, name: string, body: unknown) => {
+    const res = await fn(request(name, { body, idem: v7(n++) }), h.deps);
+    return { status: res.status, body: await json(res) };
+  };
+
+  const opened = TrailStateSchema.parse((await call(trailOpen, 'trail-open', { subject_id: IDS.subject })).body);
+  const prepared = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: opened.trail_id })).body);
+  const read = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: opened.trail_id, step_id: prepared.step!.id, response: null })).body);
+  const q1 = read.state.step!.id;
+
+  // The verdict comes back without the explanation: the step is recorded, nothing else is written yet.
+  const graded = (await call(trailGrade, 'trail-grade', { trail_id: opened.trail_id, step_id: q1, response: 'A' })).body;
+  assertEquals(graded, { correct: false, correct_option: 'B' });
+  assertEquals(h.db.rows('mistakes').length, 0);
+
+  // Settling brings the explanation, the Caderno entry and the next state.
+  const settled = TrailAnswerResSchema.parse((await call(trailSettle, 'trail-settle', { trail_id: opened.trail_id, step_id: q1 })).body);
+  assertEquals(settled.feedback?.correct, false);
+  assertEquals(settled.feedback?.correct_option, 'B');
+  assertEquals(settled.feedback?.explanation, 'A clorofila fica no cloroplasto.');
+  assert(settled.mistake_id !== null, 'the miss is in the Caderno');
+  assertEquals(h.db.rows('mistakes').length, 1);
+
+  // A repeat settle does not save the miss again, and a repeat grade keeps the first verdict.
+  const again = TrailAnswerResSchema.parse((await call(trailSettle, 'trail-settle', { trail_id: opened.trail_id, step_id: q1 })).body);
+  assertEquals(again.mistake_id, null);
+  assertEquals(h.db.rows('mistakes').length, 1);
+  assertEquals((await call(trailGrade, 'trail-grade', { trail_id: opened.trail_id, step_id: q1, response: 'B' })).body, { correct: false, correct_option: 'B' });
 });

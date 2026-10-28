@@ -2,7 +2,7 @@
 // a step. The subject home reads its own trail row directly (RLS: own rows) to show the entry card without
 // creating a trail.
 import { useQuery } from '@tanstack/react-query';
-import type { TrailAnswerReq, TrailAnswerRes, TrailState } from '@studify/shared';
+import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailSettleReq, TrailState } from '@studify/shared';
 import { uuidv7 } from 'uuidv7';
 import { callFunction } from '../../api/functions';
 import { supabase } from '../../api/supabase';
@@ -18,6 +18,16 @@ export function prepareTrail(trailId: string) {
 
 export function answerStep(body: TrailAnswerReq) {
   return callFunction<TrailAnswerReq, TrailAnswerRes>('trail-answer', body, { idempotencyKey: uuidv7() });
+}
+
+/** A question's verdict, as soon as it is recorded. */
+export function gradeStep(body: TrailAnswerReq) {
+  return callFunction<TrailAnswerReq, TrailGradeRes>('trail-grade', body, { idempotencyKey: uuidv7() });
+}
+
+/** What the graded question leaves behind: its explanation, the Caderno entry and the next state. */
+export function settleStep(body: TrailSettleReq) {
+  return callFunction<TrailSettleReq, TrailAnswerRes>('trail-settle', body, { idempotencyKey: uuidv7() });
 }
 
 export interface TrailSummary {

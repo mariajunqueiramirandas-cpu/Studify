@@ -19,6 +19,8 @@ export const TRAIL = {
   checkpointPass: 0.7,
   /** Concepts re-taught after a failed chapter test, weakest first. */
   remediationsAfterCheckpoint: 3,
+  /** Lessons written ahead of the student, within the chapter (spec 14 §8.3). */
+  lookahead: 2,
   /** Ensine o Lucas closes every chapter: a finished lesson on the topic at the "good" band or above (spec 12 §5.2). */
   teachPassScore: 70,
 } as const;
@@ -271,7 +273,7 @@ export function conceptStates(chapter: TrailChapter, steps: readonly TrailStepVi
 /**
  * Content to prepare, blocking first (spec 14 §8.3, the buffer): what the next move needs now, then one step of
  * lookahead — the next concept's lesson, the chapter test while on the last concept, or the next chapter's first
- * lesson during the test. Never more than two generations per call.
+ * lesson during the test. At most one blocking need and TRAIL.lookahead lookaheads.
  */
 export function trailNeeds(
   chapter: TrailChapter,
@@ -286,9 +288,9 @@ export function trailNeeds(
   const current = currentConcept(chapter, steps);
   if (!inTest && current) {
     const after = chapter.conceptIds.slice(chapter.conceptIds.indexOf(current) + 1).filter((c) => conceptOutcome(steps, c) === 'open');
-    const upcoming = after.find((c) => !steps.some((s) => s.conceptId === c && s.purpose === 'lesson'));
-    if (upcoming) out.push({ need: { kind: 'teach', conceptId: upcoming }, blocking: false, nextChapter: false });
-    else if (after.length === 0) out.push({ need: { kind: 'checkpoint', round: 1 }, blocking: false, nextChapter: false });
+    const upcoming = after.filter((c) => !steps.some((s) => s.conceptId === c && s.purpose === 'lesson')).slice(0, TRAIL.lookahead);
+    for (const conceptId of upcoming) out.push({ need: { kind: 'teach', conceptId }, blocking: false, nextChapter: false });
+    if (upcoming.length === 0 && after.length === 0) out.push({ need: { kind: 'checkpoint', round: 1 }, blocking: false, nextChapter: false });
   } else if (inTest && nextChapter) {
     const first = nextChapter.chapter.conceptIds[0];
     if (first && !nextChapter.steps.some((s) => s.conceptId === first && s.purpose === 'lesson')) {
@@ -304,7 +306,7 @@ export function trailNeeds(
       seen.add(key);
       return true;
     })
-    .slice(0, 2);
+    .slice(0, 1 + TRAIL.lookahead);
 }
 
 /** Share of a chapter done: each concept counts one unit, the chapter test one more. */

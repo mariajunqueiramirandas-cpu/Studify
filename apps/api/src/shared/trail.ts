@@ -10,12 +10,14 @@ import {
   checkpointScore,
   chapterFraction,
   conceptStates,
+  evidenceWeight,
   nextTrailMove,
   trailNeeds,
   trailOutlineHash,
   trailProgress,
   type SourcePage,
   type TrailChapter,
+  type TrailFeedback,
   type TrailOutlineTopic,
   type TrailPrerequisite,
   type TrailState,
@@ -468,6 +470,46 @@ export async function saveMistake(deps: Deps, trail: TrailRow, row: StepRow, tim
     now,
   });
   return outcome.mistakeId;
+}
+
+/** The explanation of an answered question, from the content stored when it was written. */
+export function feedbackOf(row: StepRow): TrailFeedback {
+  const q = row.content as QuestionContent;
+  return {
+    correct: row.correct === true,
+    correct_option: q.correct,
+    explanation: q.explanation,
+    tip: q.tip,
+    rationales: q.options.map((o) => ({ id: o.id, text: o.text, rationale: o.rationale })),
+  };
+}
+
+/**
+ * What a graded question leaves behind: mastery evidence (learning-engine §5.2) and the recompute job, and for a
+ * miss the Caderno entry when `caderno` is set. The writes do not depend on each other, so they run together; the
+ * Caderno save is best effort, since the answer is already recorded.
+ */
+export async function recordQuestionAnswer(deps: Deps, trail: TrailRow, row: StepRow, timeSpentMs: number, now: Date, caderno: boolean): Promise<string | null> {
+  const { db } = deps;
+  const correct = row.correct === true;
+  const answeredAt = row.answered_at ?? now.toISOString();
+  const score = correct ? 1 : 0;
+  const weight = evidenceWeight({ id: row.id, conceptId: row.concept_id, answeredAt: new Date(answeredAt), questionType: 'mcq_single', source: 'trail', score });
+  const evidence = db.from('mastery_evidence').upsert(
+    [{ user_id: trail.user_id, node_id: row.concept_id, subject_id: trail.subject_id, source: 'trail', outcome: score, weight, ref_type: 'trail_step', ref_id: row.id, occurred_at: answeredAt }],
+    { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
+  );
+  const recompute = deps.enqueue('mastery.recompute', { user_id: trail.user_id, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${trail.user_id}`, startAfterSeconds: 60 });
+  const mistake =
+    caderno && !correct
+      ? saveMistake(deps, trail, row, timeSpentMs, now).catch((err) => {
+          console.warn('[trail] caderno', err instanceof Error ? err.message : err);
+          return null;
+        })
+      : Promise.resolve(null);
+  const [ev, , saved] = await Promise.all([evidence, recompute, mistake]);
+  if (ev.error) throw ev.error;
+  return saved;
 }
 
 export { checkpointScore };

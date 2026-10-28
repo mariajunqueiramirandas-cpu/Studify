@@ -28,6 +28,8 @@ import { handler as vesperaPrepare } from '../src/functions/vespera-prepare.ts';
 import { handler as trailOpen } from '../src/functions/trail-open.ts';
 import { handler as trailPrepare } from '../src/functions/trail-prepare.ts';
 import { handler as trailAnswer } from '../src/functions/trail-answer.ts';
+import { handler as trailGrade } from '../src/functions/trail-grade.ts';
+import { handler as trailSettle } from '../src/functions/trail-settle.ts';
 
 import type { Deps } from '../src/shared/deps.ts';
 
@@ -60,6 +62,8 @@ const FUNCTIONS: Array<[string, Handler, boolean, unknown]> = [
   ['trail-open', trailOpen, true, {}],
   ['trail-prepare', trailPrepare, true, {}],
   ['trail-answer', trailAnswer, true, { trail_id: 'x' }],
+  ['trail-grade', trailGrade, true, { trail_id: 'x' }],
+  ['trail-settle', trailSettle, true, { trail_id: 'x' }],
 ];
 
 for (const [name, handler, mutating, invalid] of FUNCTIONS) {
