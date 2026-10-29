@@ -65,7 +65,7 @@ export async function collectExport(ctx: OperationContext, userId: string): Prom
     files[name] = rows.length;
   };
 
-  const profile = await ctx.supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  const profile = await ctx.db.from('profiles').select('*').eq('id', userId).maybeSingle();
   if (profile.error) throw new JobDataError(`profiles: ${profile.error.message}`, 'db_error');
   const { invite_id: _invite, ...profileData } = (profile.data ?? {}) as Record<string, unknown>;
   add('profile.json', profileData ? [profileData] : []);
@@ -74,7 +74,7 @@ export async function collectExport(ctx: OperationContext, userId: string): Prom
     try {
       const rows = await fetchAll<Record<string, unknown>>(
         (from, to) =>
-          ctx.supabase.from(spec.table).select('*').eq(spec.column, userId).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<{
+          ctx.db.from(spec.table).select('*').eq(spec.column, userId).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<{
             data: Record<string, unknown>[] | null;
             error: { message: string } | null;
           }>,
@@ -90,7 +90,7 @@ export async function collectExport(ctx: OperationContext, userId: string): Prom
   try {
     const cards = await fetchAll<Record<string, unknown>>(
       (from, to) =>
-        ctx.supabase.from('cards').select(CARD_COLUMNS.join(',')).eq('personal_for_user_id', userId).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<{
+        ctx.db.from('cards').select(CARD_COLUMNS.join(',')).eq('personal_for_user_id', userId).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<{
           data: Record<string, unknown>[] | null;
           error: { message: string } | null;
         }>,
@@ -114,13 +114,13 @@ export interface ExportOutcome {
 /** account.export (SP-14): builds the archive, uploads it and records a 7-day window. */
 export async function handleAccountExport(ctx: OperationContext, raw: Record<string, unknown>): Promise<ExportOutcome> {
   const payload = ExportPayload.parse(raw);
-  const row = unwrap(await ctx.supabase.from('data_exports').select('id,user_id,status').eq('id', payload.export_id).maybeSingle(), 'data_exports') as {
+  const row = unwrap(await ctx.db.from('data_exports').select('id,user_id,status').eq('id', payload.export_id).maybeSingle(), 'data_exports') as {
     id: string;
     user_id: string;
     status: string;
   } | null;
   if (!row || row.status === 'ready') return { status: 'skipped' };
-  unwrap(await ctx.supabase.from('data_exports').update({ status: 'running' }).eq('id', row.id), 'data_exports');
+  unwrap(await ctx.db.from('data_exports').update({ status: 'running' }).eq('id', row.id), 'data_exports');
   try {
     await ctx.progress({ stage: 'collect', status: 'running', progress: 0.1 });
     const { entries, manifest } = await collectExport(ctx, row.user_id);
@@ -128,11 +128,11 @@ export async function handleAccountExport(ctx: OperationContext, raw: Record<str
     const zip = buildZip(entries);
     await ctx.progress({ stage: 'upload', status: 'running', progress: 0.8 });
     const path = `${row.user_id}/${row.id}.zip`;
-    const upload = await ctx.supabase.storage.from('exports').upload(path, zip, { contentType: 'application/zip', upsert: true });
+    const upload = await ctx.db.storage.from('exports').upload(path, zip, { contentType: 'application/zip', upsert: true });
     if (upload.error) throw new JobDataError(`exports upload: ${upload.error.message}`, 'storage');
     const now = ctx.now();
     unwrap(
-      await ctx.supabase
+      await ctx.db
         .from('data_exports')
         .update({ status: 'ready', storage_path: path, expires_at: new Date(now.getTime() + EXPORT_TTL_MS).toISOString(), completed_at: now.toISOString() })
         .eq('id', row.id),
@@ -140,11 +140,11 @@ export async function handleAccountExport(ctx: OperationContext, raw: Record<str
     );
     await ctx.execute('notify.dispatch', { user_id: row.user_id, type: 'export_ready', data: { export_id: row.id } }, { singletonKey: `export_ready:${row.id}` });
     // The link is handed out for the download window only; it is not stored (the row keeps the path).
-    const signed = await ctx.supabase.storage.from('exports').createSignedUrl(path, Math.floor(EXPORT_TTL_MS / 1000));
+    const signed = await ctx.db.storage.from('exports').createSignedUrl(path, Math.floor(EXPORT_TTL_MS / 1000));
     await ctx.progress({ stage: 'done', status: 'succeeded', progress: 1 });
     return { status: 'ready', path, files: Object.keys(manifest.files).length, signedUrl: signed.data?.signedUrl ?? null };
   } catch (err) {
-    unwrap(await ctx.supabase.from('data_exports').update({ status: 'failed' }).eq('id', row.id), 'data_exports');
+    unwrap(await ctx.db.from('data_exports').update({ status: 'failed' }).eq('id', row.id), 'data_exports');
     throw err;
   }
 }
@@ -162,54 +162,54 @@ export interface DeleteOutcome {
 export async function handleAccountDelete(ctx: OperationContext, raw: Record<string, unknown>): Promise<DeleteOutcome> {
   const payload = DeletePayload.parse(raw);
   const row = unwrap(
-    await ctx.supabase.from('account_deletions').select('id,user_id,delete_shared_uploads,status').eq('id', payload.deletion_id).maybeSingle(),
+    await ctx.db.from('account_deletions').select('id,user_id,delete_shared_uploads,status').eq('id', payload.deletion_id).maybeSingle(),
     'account_deletions',
   ) as { id: string; user_id: string; delete_shared_uploads: boolean; status: string } | null;
   if (!row || row.status === 'done') return { status: 'skipped' };
-  const owned = unwrapRows<{ id: string }>(await ctx.supabase.from('class_groups').select('id').eq('owner_id', row.user_id).is('deleted_at', null), 'class_groups');
+  const owned = unwrapRows<{ id: string }>(await ctx.db.from('class_groups').select('id').eq('owner_id', row.user_id).is('deleted_at', null), 'class_groups');
   if (owned.length > 0) {
-    unwrap(await ctx.supabase.from('account_deletions').update({ status: 'failed' }).eq('id', row.id), 'account_deletions');
+    unwrap(await ctx.db.from('account_deletions').update({ status: 'failed' }).eq('id', row.id), 'account_deletions');
     return { status: 'blocked', reason: 'owner_transfer_required' };
   }
-  unwrap(await ctx.supabase.from('account_deletions').update({ status: 'running' }).eq('id', row.id), 'account_deletions');
+  unwrap(await ctx.db.from('account_deletions').update({ status: 'running' }).eq('id', row.id), 'account_deletions');
   try {
-    unwrap(await ctx.supabase.from('ai_usage').update({ user_id: null }).eq('user_id', row.user_id), 'ai_usage');
+    unwrap(await ctx.db.from('ai_usage').update({ user_id: null }).eq('user_id', row.user_id), 'ai_usage');
 
     // Shared subjects keep working for the Turma: the creator becomes the Turma owner (creator is NOT NULL).
     const created = unwrapRows<{ id: string; owner_class_group_id: string | null }>(
-      await ctx.supabase.from('subjects').select('id,owner_class_group_id').eq('created_by', row.user_id).is('deleted_at', null),
+      await ctx.db.from('subjects').select('id,owner_class_group_id').eq('created_by', row.user_id).is('deleted_at', null),
       'subjects',
     );
     for (const subject of created.filter((s) => s.owner_class_group_id)) {
-      const group = unwrap(await ctx.supabase.from('class_groups').select('owner_id').eq('id', subject.owner_class_group_id ?? '').maybeSingle(), 'class_groups') as {
+      const group = unwrap(await ctx.db.from('class_groups').select('owner_id').eq('id', subject.owner_class_group_id ?? '').maybeSingle(), 'class_groups') as {
         owner_id: string;
       } | null;
-      if (group) unwrap(await ctx.supabase.from('subjects').update({ created_by: group.owner_id }).eq('id', subject.id), 'subjects');
+      if (group) unwrap(await ctx.db.from('subjects').update({ created_by: group.owner_id }).eq('id', subject.id), 'subjects');
     }
     if (row.delete_shared_uploads) {
       const uploads = unwrapRows<{ id: string }>(
-        await ctx.supabase.from('documents').select('id').eq('uploaded_by', row.user_id).is('deleted_at', null),
+        await ctx.db.from('documents').select('id').eq('uploaded_by', row.user_id).is('deleted_at', null),
         'documents',
       );
       for (const part of chunk(uploads.map((u) => u.id), IN_CHUNK)) {
-        unwrap(await ctx.supabase.from('documents').update({ deleted_at: ctx.now().toISOString() }).in('id', part), 'documents');
+        unwrap(await ctx.db.from('documents').update({ deleted_at: ctx.now().toISOString() }).in('id', part), 'documents');
       }
     }
-    unwrap(await ctx.supabase.from('invites').delete().eq('created_by', row.user_id), 'invites');
+    unwrap(await ctx.db.from('invites').delete().eq('created_by', row.user_id), 'invites');
 
-    const exportsOf = unwrapRows<{ storage_path: string | null }>(await ctx.supabase.from('data_exports').select('storage_path').eq('user_id', row.user_id), 'data_exports');
+    const exportsOf = unwrapRows<{ storage_path: string | null }>(await ctx.db.from('data_exports').select('storage_path').eq('user_id', row.user_id), 'data_exports');
     const paths = uniq(exportsOf.map((e) => e.storage_path).filter((p): p is string => !!p));
-    if (paths.length > 0) await ctx.supabase.storage.from('exports').remove(paths);
+    if (paths.length > 0) await ctx.db.storage.from('exports').remove(paths);
 
-    const removed = await ctx.supabase.auth.admin.deleteUser(row.user_id);
+    const removed = await ctx.db.auth.admin.deleteUser(row.user_id);
     if (removed.error) throw new JobDataError(`auth deleteUser: ${removed.error.message}`, 'auth');
     unwrap(
-      await ctx.supabase.from('account_deletions').update({ status: 'done', completed_at: ctx.now().toISOString() }).eq('id', row.id),
+      await ctx.db.from('account_deletions').update({ status: 'done', completed_at: ctx.now().toISOString() }).eq('id', row.id),
       'account_deletions',
     );
     return { status: 'done' };
   } catch (err) {
-    unwrap(await ctx.supabase.from('account_deletions').update({ status: 'failed' }).eq('id', row.id), 'account_deletions');
+    unwrap(await ctx.db.from('account_deletions').update({ status: 'failed' }).eq('id', row.id), 'account_deletions');
     throw err;
   }
 }
@@ -234,7 +234,7 @@ export async function handleAccountResetFiles(ctx: OperationContext, raw: Record
 
 async function removeObjects(ctx: OperationContext, bucket: string, paths: string[]): Promise<number> {
   for (const part of chunk(paths, 100)) {
-    const res = await ctx.supabase.storage.from(bucket).remove(part);
+    const res = await ctx.db.storage.from(bucket).remove(part);
     if (res.error) throw new JobDataError(`storage remove ${bucket}: ${res.error.message}`, 'storage');
   }
   return paths.length;
@@ -246,7 +246,7 @@ async function removeFolder(ctx: OperationContext, bucket: string, prefix: strin
   const folders = [prefix];
   while (folders.length > 0) {
     const folder = folders.pop() as string;
-    const res = await ctx.supabase.storage.from(bucket).list(folder, { limit: 1000 });
+    const res = await ctx.db.storage.from(bucket).list(folder, { limit: 1000 });
     if (res.error) throw new JobDataError(`storage list ${bucket}: ${res.error.message}`, 'storage');
     for (const entry of res.data ?? []) {
       if (entry.id === null) folders.push(`${folder}/${entry.name}`);
@@ -276,22 +276,22 @@ export async function handleStoragePurge(ctx: OperationContext, raw: Record<stri
   const purged: Record<string, number> = {};
   const errors: Record<string, string> = {};
   for (const table of PURGE_TABLES) {
-    const res = await ctx.supabase.from(table).delete().lt('deleted_at', cutoff).select('id');
+    const res = await ctx.db.from(table).delete().lt('deleted_at', cutoff).select('id');
     if (res.error) errors[table] = res.error.message;
     else purged[table] = (res.data ?? []).length;
   }
   const expired = unwrapRows<{ id: string; storage_path: string | null }>(
-    await ctx.supabase.from('data_exports').select('id,storage_path').eq('status', 'ready').lt('expires_at', now.toISOString()),
+    await ctx.db.from('data_exports').select('id,storage_path').eq('status', 'ready').lt('expires_at', now.toISOString()),
     'data_exports',
   );
   for (const e of expired) {
-    if (e.storage_path) await ctx.supabase.storage.from('exports').remove([e.storage_path]);
-    unwrap(await ctx.supabase.from('data_exports').update({ status: 'expired', storage_path: null }).eq('id', e.id), 'data_exports');
+    if (e.storage_path) await ctx.db.storage.from('exports').remove([e.storage_path]);
+    unwrap(await ctx.db.from('data_exports').update({ status: 'expired', storage_path: null }).eq('id', e.id), 'data_exports');
   }
-  const idempotency = await ctx.db.query("delete from private.idempotency_keys where created_at < now() - interval '24 hours'");
+  const idempotency = await ctx.sql.query("delete from private.idempotency_keys where created_at < now() - interval '24 hours'");
   purged.idempotency_keys = idempotency.rowCount ?? 0;
   // The Central de notificações keeps 60 days (data-model R34).
-  const inbox = await ctx.db.query("delete from public.notification_inbox where created_at < now() - interval '60 days'");
+  const inbox = await ctx.sql.query("delete from public.notification_inbox where created_at < now() - interval '60 days'");
   purged.notification_inbox = inbox.rowCount ?? 0;
   purged.camera_captures = await purgeCaptures(ctx, now);
   return { purged, exportsExpired: expired.length, errors };
@@ -304,13 +304,13 @@ export async function handleStoragePurge(ctx: OperationContext, raw: Record<stri
  */
 export async function purgeCaptures(ctx: OperationContext, now: Date): Promise<number> {
   const expired = unwrapRows<{ id: string; image_paths: string[] }>(
-    await ctx.supabase.from('camera_captures').select('id,image_paths').eq('saved', false).lt('expires_at', now.toISOString()).limit(500),
+    await ctx.db.from('camera_captures').select('id,image_paths').eq('saved', false).lt('expires_at', now.toISOString()).limit(500),
     'camera_captures',
   );
   for (const capture of expired) {
     const objects = capture.image_paths.filter((p) => p.startsWith('photos/')).map((p) => p.slice('photos/'.length));
-    if (objects.length > 0) await ctx.supabase.storage.from('photos').remove(objects);
-    unwrap(await ctx.supabase.from('camera_captures').delete().eq('id', capture.id), 'camera_captures');
+    if (objects.length > 0) await ctx.db.storage.from('photos').remove(objects);
+    unwrap(await ctx.db.from('camera_captures').delete().eq('id', capture.id), 'camera_captures');
   }
   return expired.length;
 }

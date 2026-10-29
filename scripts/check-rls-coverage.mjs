@@ -3,10 +3,10 @@
 //
 // Lists every table in schema `public` of the test database and fails when a table
 //   1. has row level security disabled, or
-//   2. is not mentioned in any supabase/tests/*.test.sql file (comments do not count).
+//   2. is not mentioned in any packages/db/pgtap/*.test.sql file (comments do not count).
 //
 // Usage: DATABASE_URL=postgresql://postgres:postgres@localhost:5432/studify_test node scripts/check-rls-coverage.mjs
-// Run `bash supabase/tests/run.sh` (or `pnpm db:test`) first so the schema exists.
+// Run `bash packages/db/pgtap/run.sh` (or `pnpm db:test`) first so the schema exists.
 import { createRequire } from 'node:module';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,7 +17,7 @@ const require = createRequire(import.meta.url);
 const { Client } = require('pg');
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const TESTS_DIR = join(ROOT, 'supabase', 'tests');
+const TESTS_DIR = join(ROOT, 'packages', 'db', 'pgtap');
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/studify_test';
 
 /** Removes `-- line` and block comments; quoted string literals are kept as they are. */

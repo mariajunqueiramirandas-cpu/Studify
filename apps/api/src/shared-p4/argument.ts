@@ -1,7 +1,7 @@
 // Treino de Argumentação (INT-03, spec 12 §7.5, §8.7): session loading, the thesis step and one debate round.
 // The opponent reply and the round feedback run in parallel. School sessions replay the topic slices of the
 // first round (stored, never selectable by the client); ENEM sessions send no documents.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { getTask, type RawTurn } from '@studify/prompts';
 import { ApiFailure, type ArgumentCriteria, type ArgumentRound } from '@studify/shared';
 import { callTask, citationsForStorage, unwrapResult } from '../shared/ai.ts';
@@ -34,7 +34,7 @@ export interface ArgumentRow {
   deleted_at: string | null;
 }
 
-export async function loadOwnArgument(db: SupabaseClient, userId: string, sessionId: string): Promise<ArgumentRow | null> {
+export async function loadOwnArgument(db: Db, userId: string, sessionId: string): Promise<ArgumentRow | null> {
   const res = await db.from('argument_sessions').select('*').eq('id', sessionId).maybeSingle();
   if (res.error) throw res.error;
   const row = res.data as ArgumentRow | null;

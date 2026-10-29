@@ -6,7 +6,7 @@ import type { OperationDefinition } from '../framework/types.ts';
 import { parsePayload } from '../framework/errors.ts';
 import { pollWave, type WavePlan } from '../ingest/waves.ts';
 import { onWaveCollected } from '../ingest/pipeline.ts';
-import { supabaseStore } from '../ingest/store.ts';
+import { fileStore } from '../ingest/store.ts';
 
 const uuid = z.uuid();
 
@@ -54,7 +54,7 @@ export const jobs: OperationDefinition<any>[] = [
     handler: async (ctx, data, meta) => {
       const payload = parsePayload(z.object({ ai_job_id: z.string().nullable().optional(), plan: PlanSchema }), data, 'batch.poll');
       const plan = { ...(payload.plan as unknown as WavePlan), aiJobId: (payload.plan as { aiJobId: string | null }).aiJobId ?? payload.ai_job_id ?? meta.aiJobId };
-      const store = supabaseStore(ctx.supabase);
+      const store = fileStore(ctx.db);
       const env = (await import('../ingest/env.ts')).createEnv(ctx, store);
       const summary = await pollWave(env, plan);
       if (summary.done) {

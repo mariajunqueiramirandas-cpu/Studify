@@ -5,8 +5,6 @@ const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
-  SUPABASE_URL: z.url().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   /** Points the SDK at the mock Claude server in tests and local runs. */
   ANTHROPIC_BASE_URL: z.url().optional(),
@@ -23,8 +21,6 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export interface TaskConfig {
   databaseUrl: string | null;
-  supabaseUrl: string | null;
-  supabaseServiceRoleKey: string | null;
   anthropicApiKey: string | null;
   anthropicBaseUrl: string | null;
   expoAccessToken: string | null;
@@ -52,8 +48,6 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
   const v = parsed.data;
   return {
     databaseUrl: v.DATABASE_URL ?? null,
-    supabaseUrl: v.SUPABASE_URL ?? null,
-    supabaseServiceRoleKey: v.SUPABASE_SERVICE_ROLE_KEY ?? null,
     anthropicApiKey: v.ANTHROPIC_API_KEY ?? null,
     anthropicBaseUrl: v.ANTHROPIC_BASE_URL ?? null,
     expoAccessToken: v.EXPO_ACCESS_TOKEN ?? null,
@@ -68,8 +62,6 @@ export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | unde
 export function assertRuntimeConfig(config: TaskConfig): void {
   const missing: string[] = [];
   if (!config.databaseUrl) missing.push('DATABASE_URL');
-  if (!config.supabaseUrl) missing.push('SUPABASE_URL');
-  if (!config.supabaseServiceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   if (!config.anthropicApiKey) missing.push('ANTHROPIC_API_KEY');
   if (missing.length > 0) {
     throw new Error(`missing environment variables: ${missing.join(', ')}`);

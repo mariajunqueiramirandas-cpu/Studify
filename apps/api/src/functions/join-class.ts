@@ -34,7 +34,7 @@ export const handler = defineP2<JoinClassInput>({
     };
     if (!code) return failCounted('invite_invalid');
 
-    const res = await p2.userRpc(ctx.user.jwt, 'join_class_group', { p_code: code });
+    const res = await p2.userRpc(ctx.user, 'join_class_group', { p_code: code });
     if (res.error) {
       const failure = failureFromPg(res.error);
       if (COUNTED_FAILURES.includes(failure.code)) return failCounted(failure.code);

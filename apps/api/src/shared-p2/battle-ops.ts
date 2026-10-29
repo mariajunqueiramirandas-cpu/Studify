@@ -1,6 +1,6 @@
 // Battle transitions executed by Edge Functions (spec 10 §8.3): open a question, broadcast state, read the
 // roster. Each transition is a conditional update, so a host action and a battle.tick cannot both apply.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { ApiFailure } from '@studify/shared';
 import type { P2Deps } from './deps.ts';
 import { scheduleAt } from './jobs.ts';
@@ -17,7 +17,7 @@ import {
   stateEvent,
 } from './battle.ts';
 
-export async function rosterOf(db: SupabaseClient, battleId: string): Promise<PlayerScore[]> {
+export async function rosterOf(db: Db, battleId: string): Promise<PlayerScore[]> {
   const { data, error } = await db.from('battle_players').select('user_id, nickname, score').eq('battle_id', battleId);
   if (error) throw error;
   return (data ?? []).map((r) => ({

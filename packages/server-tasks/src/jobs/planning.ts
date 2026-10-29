@@ -186,12 +186,12 @@ export async function replanUser(ctx: OperationContext, planCtx: PlanContext, tr
 
   const version = (planCtx.latestRun?.version ?? 0) + 1;
   const inserted = unwrap(
-    await ctx.supabase.from('plan_runs').insert(planRunRecord(planCtx.userId, version, trigger, run)).select('id').single(),
+    await ctx.db.from('plan_runs').insert(planRunRecord(planCtx.userId, version, trigger, run)).select('id').single(),
     'plan_runs insert',
   ) as { id: string } | null;
   if (!inserted) throw new JobDataError('plan_runs insert returned no row', 'db_error');
   const schoolRows = planItemRows(planCtx.userId, inserted.id, run, built, coach?.reasons);
-  if (coach?.fresh) unwrap(await ctx.supabase.from('plan_coach').update({ plan_run_id: inserted.id }).eq('user_id', planCtx.userId), 'plan_coach');
+  if (coach?.fresh) unwrap(await ctx.db.from('plan_coach').update({ plan_run_id: inserted.id }).eq('user_id', planCtx.userId), 'plan_coach');
   const schoolOrder = new Map<string, number>();
   for (const r of schoolRows) schoolOrder.set(r.local_date, Math.max(schoolOrder.get(r.local_date) ?? -1, r.order_in_day));
   const enemIds = new Set(extra.map((e) => e.id));
@@ -201,7 +201,7 @@ export async function replanUser(ctx: OperationContext, planCtx: PlanContext, tr
     ...carryOverDone(planCtx.previousRows as PlanItemRow[], run, inserted.id).filter((r) => !enemIds.has(typeof r.reason_params?.blockId === 'string' ? r.reason_params.blockId : '')),
   ];
   for (const part of chunk(rows, 200)) {
-    unwrap(await ctx.supabase.from('plan_items').insert(part), 'plan_items insert');
+    unwrap(await ctx.db.from('plan_items').insert(part), 'plan_items insert');
   }
   return { status: 'planned', version, reorganized: run.reorganized, movedMinutes: run.movedMinutes, items: rows.length };
 }
@@ -221,7 +221,7 @@ async function planOne(ctx: OperationContext, userId: string, trigger: ReplanTri
   const result = await replanUser(ctx, planCtx, trigger, guidance);
   if (withReadiness) {
     const rows = snapshots.map((s) => s.row);
-    if (rows.length > 0) unwrap(await ctx.supabase.from('readiness_snapshots').upsert(rows, { onConflict: 'user_id,exam_id,local_date' }), 'readiness_snapshots');
+    if (rows.length > 0) unwrap(await ctx.db.from('readiness_snapshots').upsert(rows, { onConflict: 'user_id,exam_id,local_date' }), 'readiness_snapshots');
   }
   return { result, planCtx };
 }
@@ -261,7 +261,7 @@ export async function handlePlanRecompute(ctx: OperationContext, data: Record<st
 export async function handlePlanNightly(ctx: OperationContext, data: Record<string, unknown>): Promise<{ planned: number; unchanged: number; fanout: number; eves?: number }> {
   const payload = NightlyPayload.parse(data);
   if (!payload.user_ids || payload.user_ids.length === 0) {
-    const profiles = unwrapRows<{ id: string; timezone: string | null }>(await ctx.supabase.from('profiles').select('id,timezone').is('deleted_at', null), 'profiles');
+    const profiles = unwrapRows<{ id: string; timezone: string | null }>(await ctx.db.from('profiles').select('id,timezone').is('deleted_at', null), 'profiles');
     const now = ctx.now();
     const due = profiles.filter((p) => localHour(now, safeTimeZone(p.timezone)) === 3).map((p) => p.id);
     const parts = chunk(due, 100);
@@ -357,12 +357,12 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
   const scopeCardIds = new Set(planCtx.learning.cards.filter((c) => c.nodeId !== null && scopeTopics.includes(topicOf(c.nodeId, nodeById) ?? '')).map((c) => c.cardId));
   const since = new Date(planCtx.now.getTime() - 7 * 24 * 3600 * 1000).toISOString();
   const errorLogs = unwrapRows<{ card_id: string }>(
-    await ctx.supabase.from('review_logs').select('card_id').eq('user_id', payload.user_id).eq('rating', 1).gte('reviewed_at', since),
+    await ctx.db.from('review_logs').select('card_id').eq('user_id', payload.user_id).eq('rating', 1).gte('reviewed_at', since),
     'review_logs',
   );
   const errorCardIds = uniq(errorLogs.map((l) => l.card_id).filter((id) => scopeCardIds.has(id))).sort();
   const mistakes = unwrapRows<{ id: string; question_id: string; node_id: string }>(
-    await ctx.supabase.from('mistakes').select('id,question_id,node_id').eq('user_id', payload.user_id).is('resolved_at', null).is('deleted_at', null),
+    await ctx.db.from('mistakes').select('id,question_id,node_id').eq('user_id', payload.user_id).is('resolved_at', null).is('deleted_at', null),
     'mistakes',
   ).filter((m) => scopeTopics.includes(topicOf(m.node_id, nodeById) ?? m.node_id));
   const mistakeIds = mistakes.map((m) => m.id).sort();
@@ -380,7 +380,7 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
   if (!session) return { status: 'no_session', examId: exam.id };
 
   const item = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('plan_items')
       .select('id,reason_params')
       .eq('user_id', payload.user_id)
@@ -403,7 +403,7 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
     .slice(0, 10);
   const notes = scopeTopics.length
     ? unwrapRows<{ node_id: string; body: string; citations: Citation[] | null }>(
-        await ctx.supabase.from('notes').select('node_id,body,citations').in('node_id', scopeTopics).eq('depth', 'tldr').eq('status', 'ready').is('deleted_at', null),
+        await ctx.db.from('notes').select('node_id,body,citations').in('node_id', scopeTopics).eq('depth', 'tldr').eq('status', 'ready').is('deleted_at', null),
         'notes',
       )
     : [];
@@ -425,13 +425,13 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
   }
   const glossary = scopeTopics.length
     ? unwrapRows<{ term: string; definition: string | null }>(
-        await ctx.supabase.from('glossary_terms').select('term,definition').in('node_id', scopeTopics).is('deleted_at', null).is('hidden_reason', null).limit(30),
+        await ctx.db.from('glossary_terms').select('term,definition').in('node_id', scopeTopics).is('deleted_at', null).is('hidden_reason', null).limit(30),
         'glossary_terms',
       )
     : [];
   const questions = mistakes.length
     ? unwrapRows<{ id: string; stem: string; payload: Record<string, unknown>; source_pages: Citation[] | null }>(
-        await ctx.supabase.from('questions').select('id,stem,payload,source_pages').in('id', mistakes.map((m) => m.question_id)),
+        await ctx.db.from('questions').select('id,stem,payload,source_pages').in('id', mistakes.map((m) => m.question_id)),
         'questions',
       )
     : [];
@@ -447,7 +447,7 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
   });
   const documentIds = [...labels.keys()];
   const titles = documentIds.length
-    ? new Map(unwrapRows<{ id: string; title: string }>(await ctx.supabase.from('documents').select('id,title').in('id', documentIds), 'documents').map((d) => [d.id, d.title] as const))
+    ? new Map(unwrapRows<{ id: string; title: string }>(await ctx.db.from('documents').select('id,title').in('id', documentIds), 'documents').map((d) => [d.id, d.title] as const))
     : new Map<string, string>();
 
   const input: CheatsheetInput = {
@@ -480,7 +480,7 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
   }));
   const cheatsheet = { title: outcome.result.data.title, sections, watch_out: watchOut, generatedAt: planCtx.now.toISOString() };
   unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('plan_items')
       .update({
         reason_params: {
@@ -502,24 +502,24 @@ export async function handleVesperaPrepare(ctx: OperationContext, data: Record<s
 export async function handleScopeMatch(ctx: OperationContext, data: Record<string, unknown>, scope: AiScope = { userId: null, feature: 'GOL-03.2' }): Promise<{ status: string; items: number }> {
   const payload = ScopePayload.parse(data);
   const exam = unwrap(
-    await ctx.supabase.from('exams').select('id,user_id,subject_id,status').eq('id', payload.exam_id).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('exams').select('id,user_id,subject_id,status').eq('id', payload.exam_id).is('deleted_at', null).maybeSingle(),
     'exams',
   ) as { id: string; user_id: string; subject_id: string | null; status: string } | null;
   if (!exam || exam.status !== 'scheduled') return { status: 'not_scheduled', items: 0 };
   if (!exam.subject_id) throw new JobDataError('scope.match: exam has no subject', 'no_subject');
   const stored = unwrapRows<{ raw_text: string; position: number }>(
-    await ctx.supabase.from('exam_scope_items').select('raw_text,position').eq('exam_id', exam.id).order('position', { ascending: true }),
+    await ctx.db.from('exam_scope_items').select('raw_text,position').eq('exam_id', exam.id).order('position', { ascending: true }),
     'exam_scope_items',
   );
   if (stored.length === 0) throw new JobDataError('scope.match: no content list stored for this exam', 'no_content');
 
-  const subject = unwrap(await ctx.supabase.from('subjects').select('content_language').eq('id', exam.subject_id).maybeSingle(), 'subjects') as { content_language: string | null } | null;
+  const subject = unwrap(await ctx.db.from('subjects').select('content_language').eq('id', exam.subject_id).maybeSingle(), 'subjects') as { content_language: string | null } | null;
   const nodes = unwrapRows<{ id: string; kind: string; title: string; summary: string | null }>(
-    await ctx.supabase.from('knowledge_nodes').select('id,kind,title,summary').eq('subject_id', exam.subject_id).is('deleted_at', null),
+    await ctx.db.from('knowledge_nodes').select('id,kind,title,summary').eq('subject_id', exam.subject_id).is('deleted_at', null),
     'knowledge_nodes',
   );
   const excluded = new Set(
-    unwrapRows<{ node_id: string }>(await ctx.supabase.from('node_user_settings').select('node_id').eq('user_id', exam.user_id).eq('excluded', true), 'node_user_settings').map((r) => r.node_id),
+    unwrapRows<{ node_id: string }>(await ctx.db.from('node_user_settings').select('node_id').eq('user_id', exam.user_id).eq('excluded', true), 'node_user_settings').map((r) => r.node_id),
   );
   const outline = nodes.map((n) => ({
     key: n.id,
@@ -549,14 +549,14 @@ export async function handleScopeMatch(ctx: OperationContext, data: Record<strin
 
   // Keep whatever the student already confirmed or set by hand (source user/default_all, or confirmed).
   const existingNodes = unwrapRows<{ node_id: string; source: string; confirmed: boolean }>(
-    await ctx.supabase.from('exam_scope_nodes').select('node_id,source,confirmed').eq('exam_id', exam.id),
+    await ctx.db.from('exam_scope_nodes').select('node_id,source,confirmed').eq('exam_id', exam.id),
     'exam_scope_nodes',
   );
   const kept = new Set(existingNodes.filter((r) => r.confirmed || r.source !== 'ai').map((r) => r.node_id));
 
-  unwrap(await ctx.supabase.from('exam_scope_items').delete().eq('exam_id', exam.id), 'exam_scope_items delete');
+  unwrap(await ctx.db.from('exam_scope_items').delete().eq('exam_id', exam.id), 'exam_scope_items delete');
   unwrap(
-    await ctx.supabase.from('exam_scope_items').insert(
+    await ctx.db.from('exam_scope_items').insert(
       items.map(({ item, index, best }) => ({
         exam_id: exam.id,
         raw_text: item.raw_text,
@@ -568,12 +568,12 @@ export async function handleScopeMatch(ctx: OperationContext, data: Record<strin
     ),
     'exam_scope_items insert',
   );
-  unwrap(await ctx.supabase.from('exam_scope_nodes').delete().eq('exam_id', exam.id).eq('source', 'ai').eq('confirmed', false), 'exam_scope_nodes delete');
+  unwrap(await ctx.db.from('exam_scope_nodes').delete().eq('exam_id', exam.id).eq('source', 'ai').eq('confirmed', false), 'exam_scope_nodes delete');
   const nodeRows = items
     .filter((x) => x.best && !kept.has(x.best.node_key))
     .map((x) => ({ exam_id: exam.id, node_id: x.best?.node_key ?? '', scope_item_id: null, source: 'ai', confidence: x.best?.confidence ?? 0, confirmed: false }));
-  if (nodeRows.length > 0) unwrap(await ctx.supabase.from('exam_scope_nodes').upsert(nodeRows, { onConflict: 'exam_id,node_id' }), 'exam_scope_nodes upsert');
-  unwrap(await ctx.supabase.from('exams').update({ scope_status: 'pending_review' }).eq('id', exam.id), 'exams update');
+  if (nodeRows.length > 0) unwrap(await ctx.db.from('exam_scope_nodes').upsert(nodeRows, { onConflict: 'exam_id,node_id' }), 'exam_scope_nodes upsert');
+  unwrap(await ctx.db.from('exams').update({ scope_status: 'pending_review' }).eq('id', exam.id), 'exams update');
   return { status: 'matched', items: items.length };
 }
 

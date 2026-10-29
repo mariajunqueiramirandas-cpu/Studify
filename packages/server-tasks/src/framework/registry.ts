@@ -1,11 +1,11 @@
 // Direct server operations. There is no pending queue, pickup delay, background consumer or automatic job retry.
 // Existing domain handlers retain their payload/progress contract while running in the caller's SSE operation.
 import type { ClaudeDeps } from '@studify/ai';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type pg from 'pg';
 import { ApiFailure } from '@studify/shared';
 import { randomUUID } from 'node:crypto';
-import type { OperationContext, OperationDefinition } from './types.ts';
+import type { Broadcast, OperationContext, OperationDefinition } from './types.ts';
 import { PermanentJobError } from './errors.ts';
 import { STANDARD_WAVE_CONCURRENCY } from './concurrency-defaults.ts';
 import { applyProgress, finishProgress, withProgressListener, ensureAiJob, isUuid, type ProgressPatch } from './progress.ts';
@@ -17,7 +17,9 @@ import type { Schedule, ScheduleOptions } from './scheduler.ts';
 
 export interface RuntimeDeps {
   pool: pg.Pool;
-  supabase: SupabaseClient;
+  db: Db;
+  /** Realtime broadcast. Default: none (events are dropped, clients refetch). */
+  broadcast?: Broadcast;
   claude: ClaudeDeps;
   push: PushService;
   log: Logger;
@@ -90,7 +92,7 @@ export class OperationRegistry {
       }
     };
     const ctx: OperationContext = {
-      supabase: this.deps.supabase, db: this.deps.pool,
+      db: this.deps.db, sql: this.deps.pool, broadcast: this.deps.broadcast ?? (async () => {}),
       ai: { ...this.deps.claude, signal: invocation.signal },
       log: this.deps.log.child({ operation: name, operationId: id }),
       now: this.deps.now,

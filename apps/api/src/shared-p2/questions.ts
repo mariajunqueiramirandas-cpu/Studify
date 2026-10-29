@@ -1,6 +1,6 @@
 // Question selection and projections for duels and battles (learning-engine §6.7, spec 10 §8.2).
 // The server is the only place that sees answer keys: `publicQuestion` and `snapshotQuestion` strip them.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import {
   ApiFailure,
   gradeAnswer,
@@ -31,14 +31,14 @@ export interface QuestionRow {
 const QUESTION_COLUMNS =
   'id, subject_id, node_id, type, stem, stimulus, payload, explanation, difficulty, source_pages, version';
 
-export async function loadQuestions(db: SupabaseClient, ids: readonly string[]): Promise<Map<string, QuestionRow>> {
+export async function loadQuestions(db: Db, ids: readonly string[]): Promise<Map<string, QuestionRow>> {
   if (ids.length === 0) return new Map();
   const { data, error } = await db.from('questions').select(QUESTION_COLUMNS).in('id', [...ids]).is('deleted_at', null);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.id as string, row as unknown as QuestionRow]));
 }
 
-export async function loadQuestion(db: SupabaseClient, id: string): Promise<QuestionRow | null> {
+export async function loadQuestion(db: Db, id: string): Promise<QuestionRow | null> {
   return (await loadQuestions(db, [id])).get(id) ?? null;
 }
 
@@ -99,7 +99,7 @@ export function snapshotQuestion(q: QuestionRow): Record<string, unknown> {
 }
 
 export interface PoolInput {
-  db: SupabaseClient;
+  db: Db;
   subjectId: string;
   nodeIds: readonly string[] | null;
   types?: readonly QuestionType[];
@@ -144,7 +144,7 @@ export interface RecentAnswer {
 
 /** Recent answers of the given users (for SOC-02.2 exclusion and daysSinceAnswered). */
 export async function recentAnswers(
-  db: SupabaseClient,
+  db: Db,
   userIds: readonly string[],
   sinceIso: string,
 ): Promise<RecentAnswer[]> {
@@ -159,7 +159,7 @@ export async function recentAnswers(
 
 /** Average mastery of the users on the given topics; 0.5 when nothing is known yet (learning-engine §6.1). */
 export async function targetMastery(
-  db: SupabaseClient,
+  db: Db,
   userIds: readonly string[],
   nodeIds: readonly string[],
 ): Promise<number> {

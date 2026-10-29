@@ -163,7 +163,7 @@ export async function submitWave(env: PipelineEnv, input: SubmitInput): Promise<
     singletonKey: `batch:${plan.batchId}`,
   });
   if (input.aiJobId) {
-    await applyProgress(env.ctx.db, input.aiJobId, {
+    await applyProgress(env.ctx.sql, input.aiJobId, {
       stage: input.purpose === 'concepts' ? 'S2' : input.purpose === 'content' ? 'S4' : 'transcription',
       status: 'waiting_batch',
       batch_id: plan.batchId,
@@ -191,7 +191,7 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
   const total = byTopic ? left.size : input.items.length;
   let finished = 0;
   if (input.aiJobId) {
-    await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
+    await applyProgress(env.ctx.sql, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
   }
   // Only page transcription comes here without the Batch API: background work in the shared lane.
   const lane = env.ctx.aiLane;
@@ -210,7 +210,7 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
     if (item.topicId) left.set(item.topicId, remaining);
     if (byTopic && remaining > 0) return;
     finished += 1;
-    if (input.aiJobId) await applyProgress(env.ctx.db, input.aiJobId, { items_total: total, items_done: finished });
+    if (input.aiJobId) await applyProgress(env.ctx.sql, input.aiJobId, { items_total: total, items_done: finished });
   });
   return summary;
 }
@@ -391,7 +391,7 @@ async function rerunStandard(env: PipelineEnv, item: PlanItem): Promise<CallResu
     const prepared = prepareCall('ingest.transcribePages', built, item.budget, refs);
     return callClaude(env.ctx.ai, withShortCache(prepared.call));
   }
-  const bundle = await loadTopicBundle(env.ctx.db, item.topicId as string);
+  const bundle = await loadTopicBundle(env.ctx.sql, item.topicId as string);
   if (!bundle) throw new Error(`topic ${item.topicId} disappeared before rerun`);
   const built = await buildKindCall(env, bundle, item.kind, refs, item.budget, item.language, item.part);
   return callClaude(env.ctx.ai, withShortCache(built.call));
@@ -420,7 +420,7 @@ export async function pollWave(env: PipelineEnv, plan: WavePlan): Promise<PollOu
     }
     if (plan.aiJobId) {
       const done = status.counts.succeeded + status.counts.errored + status.counts.canceled + status.counts.expired;
-      await applyProgress(env.ctx.db, plan.aiJobId, {
+      await applyProgress(env.ctx.sql, plan.aiJobId, {
         status: 'waiting_batch',
         batch_id: plan.batchId,
         items_total: plan.items.length,
@@ -497,11 +497,11 @@ export async function writeOutcome(
   if (item.kind === 'transcription') {
     return writeTranscription(env, item, data as { pages: Array<{ page: number; text: string; confidence: 'high' | 'medium' | 'low' }> });
   }
-  const bundle = await loadTopicBundle(env.ctx.db, item.topicId as string);
+  const bundle = await loadTopicBundle(env.ctx.sql, item.topicId as string);
   if (!bundle) return false;
   const labels = labelsOfBlocks(item.blocks);
   const ctx: WriteContext = {
-    pool: env.ctx.db,
+    pool: env.ctx.sql,
     bundle,
     createdBy: item.budget.userId ?? bundle.subject.createdBy,
     labels,
@@ -552,7 +552,7 @@ export async function writeOutcome(
 }
 
 async function existingFrontKeys(env: PipelineEnv, subjectId: string): Promise<string[]> {
-  const { rows } = await env.ctx.db.query<{ front: string }>(
+  const { rows } = await env.ctx.sql.query<{ front: string }>(
     `select front from public.cards where subject_id = $1 and deleted_at is null and status = 'active' limit 500`,
     [subjectId],
   );
@@ -579,7 +579,7 @@ async function writeTranscription(
       textItemsPath: null,
       transcriptionConfidence: p.confidence,
     }));
-  await upsertPages(env.ctx.db, documentId, pages);
+  await upsertPages(env.ctx.sql, documentId, pages);
   return pages.length > 0;
 }
 

@@ -1,7 +1,7 @@
 // Answers given outside a quiz (a saved Câmera Mágica question, CAM-02.10; a photographed essay answer,
 // PRA-07.9) still need an attempt_answers row so the Caderno de Erros (mistakes.attempt_answer_id) and the
 // mastery evidence have a source. This wraps them in a one-question practice quiz, submitted at once.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 
 export interface StandaloneAnswer {
   userId: string;
@@ -21,7 +21,7 @@ export interface StandaloneAnswer {
 }
 
 /** Creates quiz → submitted attempt → graded answer; returns the attempt_answers id. */
-export async function recordStandaloneAnswer(db: SupabaseClient, newId: () => string, a: StandaloneAnswer): Promise<string> {
+export async function recordStandaloneAnswer(db: Db, newId: () => string, a: StandaloneAnswer): Promise<string> {
   const quizId = newId();
   const attemptId = newId();
   const answerId = newId();

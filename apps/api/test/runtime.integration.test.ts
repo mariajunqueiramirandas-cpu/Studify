@@ -5,7 +5,7 @@ import { buildProdRuntime } from '../src/shared/prod.ts';
 // Separate from private-schema.test.ts's destructive temporary-schema harness.
 const url = process.env.RUNTIME_TEST_DATABASE_URL;
 (url ? test : test.skip)('production runtime loads direct operations, enforces one owner, and releases ownership on stop', async () => {
-  const config = loadConfig({ DATABASE_URL: url, SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'test', SUPABASE_ANON_KEY: 'test', ANTHROPIC_API_KEY: 'test' });
+  const config = loadConfig({ DATABASE_URL: url, SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'test', SUPABASE_ANON_KEY: 'test', ANTHROPIC_API_KEY: 'test', STORAGE_SIGNING_KEY: 'test-signing-key-0123456789abcdef', STORAGE_DIR: '/tmp/studify-runtime-test' });
   const first = buildProdRuntime(config);
   const second = buildProdRuntime(config);
   try {
@@ -38,7 +38,7 @@ const url = process.env.RUNTIME_TEST_DATABASE_URL;
   await pool.query(`insert into public.subjects (id, owner_profile_id, created_by, name, color, icon) values ($1, $2, $2, 'Física', '#0000aa', 'atom')`, [subject, user]);
   await pool.query(`insert into public.documents (id, subject_id, uploaded_by, title, kind, storage_path, size_bytes, checksum_sha256, status) values ($1, $2, $3, 'Apostila', 'textbook', 'documents/x.pdf', 10, $4, 'processing')`, [doc, subject, user, 'c'.repeat(64)]);
   await pool.query(`insert into public.ai_jobs (id, type, user_id, subject_id, document_id, status, stage) values ($1, 'ingest.document', $2, $3, $4, 'running', 'S4')`, [job, user, subject, doc]);
-  const config = loadConfig({ DATABASE_URL: url, SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'test', SUPABASE_ANON_KEY: 'test', ANTHROPIC_API_KEY: 'test' });
+  const config = loadConfig({ DATABASE_URL: url, SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'test', SUPABASE_ANON_KEY: 'test', ANTHROPIC_API_KEY: 'test', STORAGE_SIGNING_KEY: 'test-signing-key-0123456789abcdef', STORAGE_DIR: '/tmp/studify-runtime-test' });
   const runtime = buildProdRuntime(config);
   try {
     await runtime.start();

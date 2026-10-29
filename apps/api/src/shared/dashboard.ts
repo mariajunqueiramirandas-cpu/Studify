@@ -1,6 +1,6 @@
 // Shared pieces of the web dashboard functions (account-*, admin-*; api.md §4.11): the Minha conta read model,
 // the admin audit log, pilot invite codes and the protective age rule.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import {
   ApiFailure,
   DEFAULT_TIME_ZONE,
@@ -54,7 +54,7 @@ export function isTimeZone(zone: string): boolean {
 
 /** Appends one entry to private.admin_audit. A failed write is logged; the action it records has already happened. */
 export async function audit(
-  db: SupabaseClient,
+  db: Db,
   actorId: string,
   action: string,
   targetType: string,
@@ -108,7 +108,7 @@ interface ProfileRow {
 }
 
 /** The profile of the caller; a signed-in account without one has not finished sign-up in the app. */
-export async function requireProfile(db: SupabaseClient, userId: string): Promise<ProfileRow> {
+export async function requireProfile(db: Db, userId: string): Promise<ProfileRow> {
   const { data, error } = await db
     .from('profiles')
     .select('id, display_name, display_name_status, avatar_preset, school_year, timezone, foreign_language, app_role, birth_year, birth_month, privacy_notice_version, privacy_accepted_at, settings, created_at, deleted_at')
@@ -143,7 +143,7 @@ export async function loadAccountOverview(deps: Deps, user: AuthUser, now: Date)
   const [prefs, usageToday, budgets, streak, activity, memberships, devices, exports, deletion] = await Promise.all([
     db.from('study_preferences').select('quiet_start, quiet_end').eq('user_id', user.userId).maybeSingle(),
     // The same function the app's meter reads, run as the student (it reads auth.uid()).
-    deps.asUser(user.jwt).rpc('my_ai_usage_today'),
+    deps.asUser(user).rpc('my_ai_usage_today'),
     db.schema('private').from('ai_budgets').select('period_start, limit_micro_usd, spent_micro_usd')
       .eq('scope_type', 'user').eq('scope_id', user.userId).eq('period_type', 'day')
       .order('period_start', { ascending: false }).limit(14),
@@ -249,7 +249,7 @@ export async function loadAccountOverview(deps: Deps, user: AuthUser, now: Date)
 }
 
 /** One student for the Administração pages, with the audit entries about them. Null-safe: unknown → 404. */
-export async function loadAdminUserDetail(db: SupabaseClient, userId: string): Promise<AdminUserDetail> {
+export async function loadAdminUserDetail(db: Db, userId: string): Promise<AdminUserDetail> {
   const [detail, log] = await Promise.all([
     db.schema('private').rpc('admin_user_detail', { p_user: userId }),
     db.schema('private').rpc('admin_audit_list', { p_limit: 20, p_before: null, p_target: userId }),
@@ -261,7 +261,7 @@ export async function loadAdminUserDetail(db: SupabaseClient, userId: string): P
 }
 
 /** Limits, feature flags, app versions and pilot invites (Configurações and Convites pages). */
-export async function loadAdminSettings(db: SupabaseClient, baseUrl: string | null): Promise<AdminSettings> {
+export async function loadAdminSettings(db: Db, baseUrl: string | null): Promise<AdminSettings> {
   const [limits, flags, versions, invites] = await Promise.all([
     db.schema('private').rpc('admin_limits'),
     db.from('feature_flags').select('key, description, enabled_all, percentage, user_ids, class_group_ids, updated_at').order('key'),

@@ -2,7 +2,7 @@
 // state and the replay turns live in teaching_sessions columns the client cannot select. Document blocks of the
 // first turn are stored as references to document_slices and rebuilt byte-for-byte on replay, so the cached
 // prefix stays identical and no PDF bytes are kept in the row.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { DocumentMap, RawTurn } from '@studify/prompts';
 import {
   initialLucasState,
@@ -57,7 +57,7 @@ export interface TeachingRow {
   deleted_at: string | null;
 }
 
-export async function loadOwnSession(db: SupabaseClient, userId: string, sessionId: string): Promise<TeachingRow | null> {
+export async function loadOwnSession(db: Db, userId: string, sessionId: string): Promise<TeachingRow | null> {
   const { data, error } = await db.from('teaching_sessions').select('*').eq('id', sessionId).maybeSingle();
   if (error) throw error;
   const row = data as TeachingRow | null;
@@ -147,7 +147,7 @@ export function toStoredTurns(turns: readonly RawTurn[], slices: readonly Stored
 }
 
 /** Inverse of toStoredTurns: rebuilds base64 document sources from Storage (same bytes as the first turn). */
-export async function restoreTurns(db: SupabaseClient, turns: readonly RawTurn[], slices: readonly StoredSlice[]): Promise<RawTurn[]> {
+export async function restoreTurns(db: Db, turns: readonly RawTurn[], slices: readonly StoredSlice[]): Promise<RawTurn[]> {
   const cache = new Map<number, string>();
   const out: RawTurn[] = [];
   for (const turn of turns) {

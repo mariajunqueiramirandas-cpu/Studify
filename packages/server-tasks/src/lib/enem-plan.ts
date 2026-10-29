@@ -86,13 +86,13 @@ export function splitCapacity(
 /** Loads the ENEM side of a replan. Null when the user has no active ENEM goal (or no exam date yet). */
 export async function loadEnemPlanContext(ctx: OperationContext, planCtx: PlanContext): Promise<EnemPlanContext | null> {
   const goal = unwrap(
-    await ctx.supabase.from('goals').select('id,end_date,settings').eq('user_id', planCtx.userId).eq('mode', 'enem').eq('status', 'active').is('deleted_at', null).limit(1).maybeSingle(),
+    await ctx.db.from('goals').select('id,end_date,settings').eq('user_id', planCtx.userId).eq('mode', 'enem').eq('status', 'active').is('deleted_at', null).limit(1).maybeSingle(),
     'goals',
   ) as { id: string; end_date: string | null; settings: EnemGoalSettings | null } | null;
   if (!goal) return null;
   const settings = goal.settings ?? {};
   const editions = unwrapRows<{ year: number; day1_date: string | null; day2_date: string | null; start_time: string | null; day1_duration_min: number | null; day2_duration_min: number | null }>(
-    await ctx.supabase.from('enem_editions').select('year,day1_date,day2_date,start_time,day1_duration_min,day2_duration_min'),
+    await ctx.db.from('enem_editions').select('year,day1_date,day2_date,start_time,day1_duration_min,day2_duration_min'),
     'enem_editions',
   );
   const edition =
@@ -105,22 +105,22 @@ export async function loadEnemPlanContext(ctx: OperationContext, planCtx: PlanCo
 
   // Estimates: latest simulados (area_results) and graded essays; Meta SISU target of priority 1.
   const attempts = unwrapRows<{ finished_at: string | null; area_results: { areas?: Partial<Record<EnemArea, { score: number }>> } | null }>(
-    await ctx.supabase.from('quiz_attempts').select('finished_at,area_results').eq('user_id', planCtx.userId).eq('status', 'submitted').not('area_results', 'is', null).order('finished_at', { ascending: false }).limit(20),
+    await ctx.db.from('quiz_attempts').select('finished_at,area_results').eq('user_id', planCtx.userId).eq('status', 'submitted').not('area_results', 'is', null).order('finished_at', { ascending: false }).limit(20),
     'quiz_attempts',
   );
   const simulados = attempts.flatMap((a) => Object.entries(a.area_results?.areas ?? {}).map(([area, r]) => ({ area: area as EnemArea, score: r!.score, at: a.finished_at ?? '' })));
   const essays = unwrapRows<{ total: number | null; updated_at: string }>(
-    await ctx.supabase.from('essays').select('total,updated_at').eq('user_id', planCtx.userId).eq('kind', 'enem_redacao').eq('status', 'graded').is('deleted_at', null).order('updated_at', { ascending: false }).limit(3),
+    await ctx.db.from('essays').select('total,updated_at').eq('user_id', planCtx.userId).eq('kind', 'enem_redacao').eq('status', 'graded').is('deleted_at', null).order('updated_at', { ascending: false }).limit(3),
     'essays',
   );
   const estimates = currentEstimates(simulados, essays.filter((e) => e.total !== null).map((e) => ({ total: e.total!, at: e.updated_at })));
   const target = unwrap(
-    await ctx.supabase.from('sisu_targets').select('targets,manual,offer_id,cutoff_used,margin').eq('goal_id', goal.id).eq('priority', 1).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('sisu_targets').select('targets,manual,offer_id,cutoff_used,margin').eq('goal_id', goal.id).eq('priority', 1).is('deleted_at', null).maybeSingle(),
     'sisu_targets',
   ) as { targets: { targets?: SisuScores | null } | null; manual: { weights?: SisuScores } | null; offer_id: string | null; cutoff_used: number; margin: number } | null;
   let weights: SisuScores | null = target?.manual?.weights ?? null;
   if (target?.offer_id && !weights) {
-    const offer = unwrap(await ctx.supabase.from('sisu_offers').select('weights').eq('id', target.offer_id).maybeSingle(), 'sisu_offers') as { weights: SisuScores } | null;
+    const offer = unwrap(await ctx.db.from('sisu_offers').select('weights').eq('id', target.offer_id).maybeSingle(), 'sisu_offers') as { weights: SisuScores } | null;
     weights = offer?.weights ?? null;
   }
   let targets: Partial<Record<EnemArea, number>> | null = target?.targets?.targets ?? null;
@@ -131,13 +131,13 @@ export async function loadEnemPlanContext(ctx: OperationContext, planCtx: PlanCo
   const areaShares = enemAreaShares({ estimates, targets, weights });
 
   // ENEM topics: predicted shares × (1 − mastery) × area weight, mapped to the student's topic nodes.
-  const trends = unwrapRows<{ enem_topic_id: string; predicted_share: number }>(await ctx.supabase.from('enem_topic_trends').select('enem_topic_id,predicted_share').gt('predicted_share', 0), 'enem_topic_trends');
-  const topicRows = unwrapRows<{ id: string; area: EnemArea }>(await ctx.supabase.from('enem_topics').select('id,area'), 'enem_topics');
+  const trends = unwrapRows<{ enem_topic_id: string; predicted_share: number }>(await ctx.db.from('enem_topic_trends').select('enem_topic_id,predicted_share').gt('predicted_share', 0), 'enem_topic_trends');
+  const topicRows = unwrapRows<{ id: string; area: EnemArea }>(await ctx.db.from('enem_topics').select('id,area'), 'enem_topics');
   const areaOf = new Map(topicRows.map((t) => [t.id, t.area] as const));
   const topicNodeIds = planCtx.nodes.filter((n) => n.kind === 'topic' && !planCtx.excludedNodeIds.has(n.id)).map((n) => n.id);
   const links: Array<{ node_id: string; enem_topic_id: string; confidence: number }> = [];
   for (const part of chunk(topicNodeIds, IN_CHUNK)) {
-    links.push(...unwrapRows<{ node_id: string; enem_topic_id: string; confidence: number }>(await ctx.supabase.from('knowledge_node_enem_topics').select('node_id,enem_topic_id,confidence').in('node_id', part), 'knowledge_node_enem_topics'));
+    links.push(...unwrapRows<{ node_id: string; enem_topic_id: string; confidence: number }>(await ctx.db.from('knowledge_node_enem_topics').select('node_id,enem_topic_id,confidence').in('node_id', part), 'knowledge_node_enem_topics'));
   }
   const nodeMastery = new Map(topicNodeIds.map((id) => [id, planCtx.masteries.get(id)?.mastery ?? null] as const));
   const mastery = enemTopicMastery(links, nodeMastery);
@@ -277,9 +277,9 @@ export async function ensureEnemTags(ctx: OperationContext, planCtx: PlanContext
   if (subjectIds.length === 0) return 0;
   let queued = 0;
   for (const part of chunk(subjectIds, IN_CHUNK)) {
-    const subjects = unwrapRows<{ id: string; enem_area: string | null; system_kind: string | null }>(await ctx.supabase.from('subjects').select('id,enem_area,system_kind').in('id', part), 'subjects');
+    const subjects = unwrapRows<{ id: string; enem_area: string | null; system_kind: string | null }>(await ctx.db.from('subjects').select('id,enem_area,system_kind').in('id', part), 'subjects');
     for (const s of subjects.filter((x) => x.enem_area && !x.system_kind)) {
-      const nodes = unwrapRows<{ enem_skill_codes: string[] | null }>(await ctx.supabase.from('knowledge_nodes').select('enem_skill_codes').eq('subject_id', s.id).eq('kind', 'topic').is('deleted_at', null).limit(200), 'knowledge_nodes');
+      const nodes = unwrapRows<{ enem_skill_codes: string[] | null }>(await ctx.db.from('knowledge_nodes').select('enem_skill_codes').eq('subject_id', s.id).eq('kind', 'topic').is('deleted_at', null).limit(200), 'knowledge_nodes');
       if (nodes.length === 0 || nodes.some((n) => (n.enem_skill_codes ?? []).length > 0)) continue;
       await ctx.execute('enem.tag_nodes', { subject_id: s.id, user_id: planCtx.userId }, { singletonKey: `enem.tag_nodes:${s.id}:${planCtx.today}` });
       queued++;

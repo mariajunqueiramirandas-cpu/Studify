@@ -2,7 +2,7 @@
 // over document_pages.tsv (portuguese, accent-insensitive query) or from the knowledge map when the thread
 // is scoped to a topic. Only pages the thread has not sent yet are added (context pack). Earlier user turns
 // are replayed with their documents rebuilt from the same stored slices, so the replayed prefix is identical.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { PdfSlice } from '@studify/prompts';
 import { downloadBytes, sliceObjectPath } from './storage.ts';
 import { toBase64, prepareSlices, type PreparedSlice } from './slices.ts';
@@ -32,7 +32,7 @@ export interface PageHit {
   text: string | null;
 }
 
-export async function ftsPages(db: SupabaseClient, documentIds: string[], query: string, limit = 40): Promise<PageHit[]> {
+export async function ftsPages(db: Db, documentIds: string[], query: string, limit = 40): Promise<PageHit[]> {
   if (documentIds.length === 0 || query.length === 0) return [];
   const { data, error } = await db
     .from('document_pages')

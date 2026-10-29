@@ -2,7 +2,7 @@
 // (user, function, key). A placeholder row (status 102) is written before the work starts, so two
 // concurrent first calls cannot both run the side effects. A stale placeholder (crashed call) is
 // released after 10 minutes. Live streams join in memory; startup resolves orphaned placeholders (ADR 0010).
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 
 export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 export const IN_FLIGHT_STALE_MS = 10 * 60 * 1000;
@@ -43,7 +43,7 @@ interface KeyRow {
   created_at: string;
 }
 
-export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Promise<IdempotencyOutcome> {
+export async function beginIdempotent(db: Db, args: BeginArgs): Promise<IdempotencyOutcome> {
   // A fresh builder per statement: the private-schema query object is mutable, so reusing one would carry the
   // filters of the previous statement into the next.
   const table = () => db.schema('private').from('idempotency_keys');
@@ -91,7 +91,7 @@ export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Prom
 }
 
 /** Ownership of a request placeholder and its final stored response. */
-export function idempotencyHandle(db: SupabaseClient, userId: string, fn: string, key: string): IdempotencyHandle {
+export function idempotencyHandle(db: Db, userId: string, fn: string, key: string): IdempotencyHandle {
   const table = () => db.schema('private').from('idempotency_keys');
   return {
     async complete(stored: StoredResponse) {

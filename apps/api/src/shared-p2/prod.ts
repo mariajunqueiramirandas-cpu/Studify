@@ -5,7 +5,6 @@ import type { ApiConfig } from '../config.ts';
 import { buildProdRuntime, type ProdRuntime } from '../shared/prod.ts';
 import type { P2Deps } from './deps.ts';
 import { DEFAULT_MAIL_FROM, makeResendGuardianMail } from './mail.ts';
-import { makeRestBroadcaster } from './realtime.ts';
 import { publicBaseUrl } from './util.ts';
 
 export interface P2Runtime extends ProdRuntime {
@@ -16,11 +15,15 @@ export function buildP2Runtime(config: ApiConfig): P2Runtime {
   const base = buildProdRuntime(config);
   const deps: P2Deps = {
     ...base.deps,
-    userRpc: async (jwt, fn, args) => {
-      const res = await base.deps.asUser(jwt).rpc(fn, args);
+    userRpc: async (user, fn, args) => {
+      const res = await base.deps.asUser(user).rpc(fn, args);
       return { data: res.data, error: res.error };
     },
-    broadcast: makeRestBroadcaster(config.supabaseUrl, config.serviceRoleKey),
+    broadcast: async (messages) => {
+      for (const m of messages) base.realtime.broadcast(m.topic, m.event, m.payload);
+    },
+    realtime: base.realtime,
+    files: base.files,
     // BASE_URL unset → studify.vendua.com.br (D-05); set to empty → custom-scheme links.
     baseUrl: publicBaseUrl(config.baseUrl),
     randomInt: (maxExclusive: number) => {

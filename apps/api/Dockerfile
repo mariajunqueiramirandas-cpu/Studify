@@ -16,6 +16,7 @@ COPY apps/mobile/package.json apps/mobile/
 COPY apps/site/package.json apps/site/
 COPY apps/dashboard/package.json apps/dashboard/
 COPY packages/ai/package.json packages/ai/
+COPY packages/db/package.json packages/db/
 COPY packages/prompts/package.json packages/prompts/
 COPY packages/shared/package.json packages/shared/
 COPY packages/speech/package.json packages/speech/

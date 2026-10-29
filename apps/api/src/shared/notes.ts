@@ -1,6 +1,6 @@
 // Note rows and citations (LRN-01, data-model §5.3): one current note per (node, depth), the previous one
 // is superseded when a summary is regenerated (R4).
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 
 export const REGENERATE_LIMIT_PER_DAY = 3;
 
@@ -8,7 +8,7 @@ export function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter((w) => w.length > 0).length;
 }
 
-export async function supersedeCurrent(db: SupabaseClient, nodeId: string, depth: string): Promise<void> {
+export async function supersedeCurrent(db: Db, nodeId: string, depth: string): Promise<void> {
   const { error } = await db
     .from('notes')
     .update({ status: 'superseded' })
@@ -18,7 +18,7 @@ export async function supersedeCurrent(db: SupabaseClient, nodeId: string, depth
   if (error) throw error;
 }
 
-export async function currentNote(db: SupabaseClient, nodeId: string, depth: string) {
+export async function currentNote(db: Db, nodeId: string, depth: string) {
   const { data, error } = await db
     .from('notes')
     .select('id, status, body, citations')

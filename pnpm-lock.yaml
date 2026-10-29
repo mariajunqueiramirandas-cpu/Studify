@@ -32,6 +32,9 @@ importers:
       '@studify/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@studify/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@studify/prompts':
         specifier: workspace:*
         version: link:../../packages/prompts
@@ -409,6 +412,16 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
+  packages/db:
+    dependencies:
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+
   packages/prompts:
     dependencies:
       '@studify/shared':
@@ -429,6 +442,9 @@ importers:
       '@studify/ai':
         specifier: workspace:*
         version: link:../ai
+      '@studify/db':
+        specifier: workspace:*
+        version: link:../db
       '@studify/prompts':
         specifier: workspace:*
         version: link:../prompts

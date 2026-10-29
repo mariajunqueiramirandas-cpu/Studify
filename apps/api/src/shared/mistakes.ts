@@ -1,6 +1,6 @@
 // Caderno de Erros (PRA-04) and the auto remediation card (PRA-02): one place that turns a graded wrong
 // answer into a mistakes row plus a card, used by quiz-submit and grade-answer. No AI call here.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import {
   DEFAULT_TIME_ZONE,
   localDateOf,
@@ -41,7 +41,7 @@ export interface MistakeOutcome {
   cardId: string | null;
 }
 
-export async function recordMistake(db: SupabaseClient, newId: () => string, input: MistakeInput): Promise<MistakeOutcome> {
+export async function recordMistake(db: Db, newId: () => string, input: MistakeInput): Promise<MistakeOutcome> {
   if (mistakeEntryAction(input.score, input.confidence) !== 'create') return { mistakeId: null, cardId: null };
 
   const open = await db

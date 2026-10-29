@@ -17,7 +17,7 @@ const GradingPayload = z.object({ attempt_answer_id: z.string().min(1) });
 /** Pages of the material cited by a topic, as the grader sees them (text is data, see UNTRUSTED_DATA). */
 export async function topicPages(ctx: OperationContext, nodeId: string): Promise<Array<{ page: number; text: string }>> {
   const sources = unwrapRows<{ document_id: string; page_start: number; page_end: number }>(
-    await ctx.supabase.from('node_sources').select('document_id,page_start,page_end').eq('node_id', nodeId),
+    await ctx.db.from('node_sources').select('document_id,page_start,page_end').eq('node_id', nodeId),
     'node_sources',
   );
   const out: Array<{ page: number; text: string }> = [];
@@ -29,7 +29,7 @@ export async function topicPages(ctx: OperationContext, nodeId: string): Promise
     const maxPage = Math.max(...ranges.map((r) => r.page_end));
     for (const part of chunk(Array.from({ length: maxPage - minPage + 1 }, (_v, i) => minPage + i), IN_CHUNK)) {
       const rows = unwrapRows<{ page_number: number; text: string | null }>(
-        await ctx.supabase.from('document_pages').select('page_number,text').eq('document_id', docId).in('page_number', part),
+        await ctx.db.from('document_pages').select('page_number,text').eq('document_id', docId).in('page_number', part),
         'document_pages',
       );
       for (const row of rows.sort((a, b) => a.page_number - b.page_number)) {
@@ -53,7 +53,7 @@ export interface GradingOutcome {
 
 async function markFailed(ctx: OperationContext, answerId: string, reason: string): Promise<void> {
   unwrap(
-    await ctx.supabase.from('attempt_answers').update({ grading_status: 'failed', ai_feedback: { error: reason } }).eq('id', answerId).eq('grading_status', 'pending'),
+    await ctx.db.from('attempt_answers').update({ grading_status: 'failed', ai_feedback: { error: reason } }).eq('id', answerId).eq('grading_status', 'pending'),
     'attempt_answers update',
   );
 }
@@ -61,7 +61,7 @@ async function markFailed(ctx: OperationContext, answerId: string, reason: strin
 export async function handleGradingAnswer(ctx: OperationContext, data: Record<string, unknown>, scope: AiScope = { userId: null, feature: 'PRA-01.6' }): Promise<GradingOutcome> {
   const payload = GradingPayload.parse(data);
   const answer = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('attempt_answers')
       .select('id,user_id,question_id,response,correct,score,grading_status,confidence,answered_at')
       .eq('id', payload.attempt_answer_id)
@@ -82,7 +82,7 @@ export async function handleGradingAnswer(ctx: OperationContext, data: Record<st
   if (answer.grading_status !== 'pending') return { status: 'skipped', reason: 'already_graded' };
 
   const question = unwrap(
-    await ctx.supabase.from('questions').select('id,subject_id,node_id,concept_ids,type,stem,payload,explanation').eq('id', answer.question_id).maybeSingle(),
+    await ctx.db.from('questions').select('id,subject_id,node_id,concept_ids,type,stem,payload,explanation').eq('id', answer.question_id).maybeSingle(),
     'questions',
   ) as { id: string; subject_id: string; node_id: string; concept_ids: string[]; type: string; stem: string; payload: unknown; explanation: string | null } | null;
   if (!question) {
@@ -92,7 +92,7 @@ export async function handleGradingAnswer(ctx: OperationContext, data: Record<st
   if (question.type !== 'short_answer' && question.type !== 'essay_question') return { status: 'skipped', reason: 'not_ai_gradable' };
 
   const subject = unwrap(
-    await ctx.supabase.from('subjects').select('content_language,is_language_subject').eq('id', question.subject_id).maybeSingle(),
+    await ctx.db.from('subjects').select('content_language,is_language_subject').eq('id', question.subject_id).maybeSingle(),
     'subjects',
   ) as { content_language: string | null; is_language_subject: boolean } | null;
   const qtype = question.type;
@@ -163,7 +163,7 @@ export async function handleGradingAnswer(ctx: OperationContext, data: Record<st
   const correct = score >= 0.999;
   const pointsAwarded = round2(score * maxPoints);
   unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('attempt_answers')
       .update({
         correct,
@@ -181,11 +181,11 @@ export async function handleGradingAnswer(ctx: OperationContext, data: Record<st
 
   let mistakeCreated = false;
   if (createsMistake(score)) {
-    const owner = unwrap(await ctx.supabase.from('profiles').select('timezone').eq('id', answer.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
+    const owner = unwrap(await ctx.db.from('profiles').select('timezone').eq('id', answer.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
     const today = studyDayFor(ctx.now(), safeTimeZone(owner?.timezone), DEFAULT_ROLLOVER_HOUR);
     let remediationId: string | null = null;
     const shared = unwrap(
-      await ctx.supabase.from('subjects').select('owner_class_group_id').eq('id', question.subject_id).maybeSingle(),
+      await ctx.db.from('subjects').select('owner_class_group_id').eq('id', question.subject_id).maybeSingle(),
       'subjects',
     ) as { owner_class_group_id: string | null } | null;
     const personalFor = shared?.owner_class_group_id ? answer.user_id : null;
@@ -243,7 +243,7 @@ export async function handleGradingAnswer(ctx: OperationContext, data: Record<st
     confidence: answer.confidence === 1 || answer.confidence === 2 || answer.confidence === 3 || answer.confidence === 4 ? answer.confidence : null,
   });
   unwrap(
-    await ctx.supabase.from('mastery_evidence').upsert(
+    await ctx.db.from('mastery_evidence').upsert(
       [
         {
           user_id: answer.user_id,

@@ -207,8 +207,8 @@ select is(
       and c.relrowsecurity),
   15, 'all 15 Phase 2 tables have row level security enabled');
 
-select is((select count(*)::int from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'duels'),
-  1, 'the duels table is in the supabase_realtime publication');
+select is((select count(*)::int from pg_trigger where tgname = 'notify_row_change' and tgrelid = 'public.duels'::regclass),
+  1, 'the duels table notifies its row changes');
 
 select test_helpers.check_err('clients cannot read the private insight aggregates', 'authenticated', pg_temp.u('alice'),
   $$select 1 from private.class_insights$$);

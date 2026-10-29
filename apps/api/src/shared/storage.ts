@@ -1,6 +1,6 @@
 // Storage paths, downloads and PDF slices (ai-pipeline §4.1; data-model §5.2 document_slices).
 // A storage path in the database is `<bucket>/<object path>`, e.g. `documents/{subject}/{doc}.pdf`.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { PDFDocument } from 'pdf-lib';
 import { ApiFailure } from '@studify/shared';
 
@@ -31,7 +31,7 @@ export function sliceObjectPath(storagePath: string): string {
 }
 
 /** True when the object exists. Storage errors other than "not found" are rethrown. */
-export async function objectExists(db: SupabaseClient, path: string): Promise<boolean> {
+export async function objectExists(db: Db, path: string): Promise<boolean> {
   const { bucket, object } = splitStoragePath(path);
   const { error } = await db.storage.from(bucket).info(object);
   if (!error) return true;
@@ -39,14 +39,14 @@ export async function objectExists(db: SupabaseClient, path: string): Promise<bo
   throw error;
 }
 
-export async function downloadBytes(db: SupabaseClient, path: string): Promise<Uint8Array> {
+export async function downloadBytes(db: Db, path: string): Promise<Uint8Array> {
   const { bucket, object } = splitStoragePath(path);
   const { data, error } = await db.storage.from(bucket).download(object);
   if (error || !data) throw new ApiFailure('not_found');
   return new Uint8Array(await data.arrayBuffer());
 }
 
-export async function uploadBytes(db: SupabaseClient, path: string, bytes: Uint8Array): Promise<void> {
+export async function uploadBytes(db: Db, path: string, bytes: Uint8Array): Promise<void> {
   const { bucket, object } = splitStoragePath(path);
   const { error } = await db.storage.from(bucket).upload(object, bytes, { contentType: 'application/pdf', upsert: true });
   if (error) throw error;

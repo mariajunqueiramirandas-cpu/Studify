@@ -54,7 +54,7 @@ export type LiveOutcome = 'updated' | 'ended' | 'skipped';
  */
 export async function handleNotifyLive(ctx: OperationContext, raw: Record<string, unknown>): Promise<LiveOutcome> {
   const { ai_job_id } = LivePayload.parse(raw);
-  const { rows } = await ctx.db.query<LiveJobRow>(
+  const { rows } = await ctx.sql.query<LiveJobRow>(
     `select id, type, stage, status, progress, user_id, subject_id, document_id, started_at::text, items_total, items_done
        from public.ai_jobs where id = $1`,
     [ai_job_id],
@@ -68,7 +68,7 @@ export async function handleNotifyLive(ctx: OperationContext, raw: Record<string
     return 'ended';
   }
   const subject = job.subject_id
-    ? ((await ctx.db.query<{ name: string; color: string }>(`select name, color from public.subjects where id = $1`, [job.subject_id])).rows[0] ?? null)
+    ? ((await ctx.sql.query<{ name: string; color: string }>(`select name, color from public.subjects where id = $1`, [job.subject_id])).rows[0] ?? null)
     : null;
   const rich = liveRich(job, subject, ctx.now());
   if (!rich) return 'skipped';

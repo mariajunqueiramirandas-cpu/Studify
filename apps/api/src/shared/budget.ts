@@ -1,7 +1,7 @@
 // AI budget gate and usage log (security-privacy §7, ai-pipeline §9). The BudgetStore wraps the
 // service-only private.ai_budget_reserve / ai_budget_settle functions. The private schema is not exposed
 // through PostgREST; in production db.schema('private') runs over direct SQL (private-schema.ts).
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { AiUsageRow, BudgetReserveInput, BudgetReserveResult, BudgetScope, BudgetStore, UsageSink } from '@studify/ai';
 import { DEFAULT_TIME_ZONE, localDateOf } from '@studify/shared';
 import { failureFromPg, type PgErrorLike } from './errors.ts';
@@ -19,7 +19,7 @@ export function resetsAtFromHint(hint: string | null | undefined): string | unde
   return match ? `${match[1]}T00:00:00-03:00` : undefined;
 }
 
-export function makeBudgetStore(db: SupabaseClient): BudgetStore {
+export function makeBudgetStore(db: Db): BudgetStore {
   return {
     async reserve(input: BudgetReserveInput): Promise<BudgetReserveResult> {
       const { data, error } = await db.schema('private').rpc('ai_budget_reserve', {
@@ -80,7 +80,7 @@ export function usageRecord(row: AiUsageRow): Record<string, unknown> {
   };
 }
 
-export function makeUsageSink(db: SupabaseClient): UsageSink {
+export function makeUsageSink(db: Db): UsageSink {
   return {
     async record(row: AiUsageRow): Promise<void> {
       const { error } = await db.from('ai_usage').insert(usageRecord(row));
@@ -91,7 +91,7 @@ export function makeUsageSink(db: SupabaseClient): UsageSink {
 }
 
 /** Share of the user's daily AI budget used, 0–100 (PLT-04.2). Reads the private budget row only. */
-export async function usagePctToday(db: SupabaseClient, userId: string, now: Date): Promise<number> {
+export async function usagePctToday(db: Db, userId: string, now: Date): Promise<number> {
   const { data: profile } = await db.from('profiles').select('timezone').eq('id', userId).maybeSingle();
   const timeZone = (profile?.timezone as string | undefined) ?? DEFAULT_TIME_ZONE;
   const day = localDateOf(now, timeZone);

@@ -272,11 +272,11 @@ select test_helpers.check_err('bob cannot hide alice''s personal episode', 'auth
     values ('22222222-2222-4222-8222-222222222222', 'podcast_episode', 'e1000000-0000-4000-8000-000000000002', 'wrong')$$);
 
 -- =====================================================================
--- 8. Publication and Realtime (room:{room_id})
+-- 8. Row changes and Realtime (room:{room_id})
 -- =====================================================================
-select is((select count(*)::int from pg_publication_tables where pubname = 'supabase_realtime'
-            and tablename in ('camera_captures','podcast_episodes')),
-  2, 'camera_captures and podcast_episodes are in the supabase_realtime publication');
+select is((select count(*)::int from pg_trigger where tgname = 'notify_row_change'
+            and tgrelid in ('public.camera_captures'::regclass, 'public.podcast_episodes'::regclass)),
+  2, 'camera_captures and podcast_episodes notify their row changes');
 select test_helpers.check_scalar('two policies still guard realtime.messages', 'authenticated', pg_temp.u('alice'),
   $$select count(*)::text from pg_policies where schemaname = 'realtime' and tablename = 'messages'$$, '2');
 

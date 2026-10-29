@@ -1,6 +1,6 @@
 import { test } from 'bun:test';
 // Web dashboard functions (api.md §4.11): Minha conta for every student, Administração for the owner only.
-// The SQL read models (private.admin_*) are covered by supabase/tests/admin_dashboard.test.sql; here they are stubs.
+// The SQL read models (private.admin_*) are covered by packages/db/pgtap/admin_dashboard.test.sql; here they are stubs.
 import { assert, assertEquals, assertMatch } from './assert.ts';
 import { ALICE, BOB, NOW, json, makeHarness, request, withUsers, type Harness } from './fakes.ts';
 import { v7 } from './world.ts';

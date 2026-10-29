@@ -17,7 +17,7 @@ export interface MistakeInput {
 /** Creates the open Caderno entry for (user, question) unless one exists (PRA-04 unique rule). */
 export async function ensureOpenMistake(ctx: OperationContext, input: MistakeInput): Promise<{ created: boolean; id: string | null }> {
   const existing = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('mistakes')
       .select('id')
       .eq('user_id', input.userId)
@@ -32,7 +32,7 @@ export async function ensureOpenMistake(ctx: OperationContext, input: MistakeInp
   const due = nextRetry(newRetrySchedule(input.today));
   if (due === 'resolved') throw new JobDataError('retry schedule resolved on creation', 'invariant');
   const inserted = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('mistakes')
       .insert({
         user_id: input.userId,
@@ -68,7 +68,7 @@ export interface RemediationInput {
 /** A from_mistake card (PRA-02.3). Cards are created as data; the card's review state starts as New. */
 export async function createRemediationCard(ctx: OperationContext, input: RemediationInput): Promise<string | null> {
   const row = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('cards')
       .insert({
         subject_id: input.subjectId,

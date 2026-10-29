@@ -2,7 +2,7 @@
 // keeps only those original pages, in order. Slices are stored once per (document, purpose, range) in
 // document_slices and reused, so the same pages share one cache prefix (§4.1). Synchronous calls send
 // them as base64 (§4.2).
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { PdfSlice } from '@studify/prompts';
 import { pagesToRanges } from '@studify/ai';
 import { documentObjectPath, downloadBytes, sliceBytes, sliceObjectPath, uploadBytes } from './storage.ts';
@@ -63,7 +63,7 @@ export interface PrepareArgs {
  * Returns one prepared slice per contiguous range, in ascending page order. Missing slices are built
  * from the original PDF with pdf-lib, uploaded to the `slices` bucket and recorded in document_slices.
  */
-export async function prepareSlices(db: SupabaseClient, args: PrepareArgs): Promise<PreparedSlice[]> {
+export async function prepareSlices(db: Db, args: PrepareArgs): Promise<PreparedSlice[]> {
   const ranges = pagesToRanges(args.pages.map(Number));
   let source: Uint8Array | null = null;
   const out: PreparedSlice[] = [];

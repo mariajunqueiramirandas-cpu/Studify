@@ -3,7 +3,7 @@
 // implements the supabase-js query shapes the handlers use (filters, upsert with ON CONFLICT, counts,
 // RPC errors, storage objects, auth), the fake Claude client implements the SDK surface callClaude
 // uses (create, stream with text and citation events, final message), and the budget gate is injectable.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { AiUsageRow, AnthropicLike, BudgetReserveInput, BudgetReserveResult, BudgetScope, BudgetStore, UsageSink } from '@studify/ai';
 import { uuidV7 } from '@studify/shared';
 import type { Deps, Execute } from '../src/shared/deps.ts';
@@ -169,8 +169,8 @@ export class FakeDb {
   }
 
   /** Cast to the supabase-js type the handlers accept. */
-  asClient(): SupabaseClient {
-    return this as unknown as SupabaseClient;
+  asClient(): Db {
+    return this as unknown as Db;
   }
 }
 

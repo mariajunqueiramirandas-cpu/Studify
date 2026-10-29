@@ -1,6 +1,6 @@
 // Canonical value lists for every CHECK-constrained text column of the Phase 0–2 schema.
 // Source: docs/engineering/data-model.md §4 (DDL), §5 (value lists), §1.2 (R-decisions).
-// A later CI test compares `ENUMS` with the CHECK constraints in supabase/migrations/,
+// A later CI test compares `ENUMS` with the CHECK constraints in packages/db/migrations/,
 // so every key is exactly `<table>.<column>` (for `private.*` tables: the bare table name).
 // Enums are `text` + CHECK in Postgres, never Postgres enum types (data-model §1.1).
 import { z } from 'zod';

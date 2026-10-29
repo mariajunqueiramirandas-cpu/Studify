@@ -15,7 +15,7 @@ export const handler = defineFunction<AccountMembershipReq>({
     const userId = ctx.user.userId;
 
     if (input.action === 'leave') {
-      const { error } = await ctx.deps.asUser(ctx.user.jwt).rpc('leave_class_group', { p_class_group_id: input.class_group_id });
+      const { error } = await ctx.deps.asUser(ctx.user).rpc('leave_class_group', { p_class_group_id: input.class_group_id });
       if (error) {
         if (error.message === 'owner_must_transfer') {
           throw new ApiFailure('forbidden', { message: 'Você é dono(a) dessa turma. Passe a turma pra outra pessoa no app antes de sair.' });

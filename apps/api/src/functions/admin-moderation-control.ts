@@ -35,7 +35,7 @@ export const handler = defineFunction<AdminModerationControlReq>({
       if (flag.error) throw flag.error;
       if (!flag.data) throw new ApiFailure('not_found');
       if (!OPEN_FLAG.includes(flag.data.status as string)) throw new ApiFailure('already_completed', { message: 'Essa sinalização já foi resolvida.' });
-      const { error } = await ctx.deps.asUser(ctx.user.jwt).rpc('resolve_flag', { p_flag_id: input.flag_id, p_decision: input.decision });
+      const { error } = await ctx.deps.asUser(ctx.user).rpc('resolve_flag', { p_flag_id: input.flag_id, p_decision: input.decision });
       if (error) throw error;
       await audit(db, actor, `flag.${input.decision}`, 'content_flag', input.flag_id, { item_type: flag.data.item_type, item_id: flag.data.item_id });
     }

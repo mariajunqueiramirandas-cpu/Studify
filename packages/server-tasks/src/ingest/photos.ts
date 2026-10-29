@@ -40,7 +40,7 @@ export async function normalizePhoto(bytes: Uint8Array): Promise<{ bytes: Uint8A
 }
 
 export async function runPhotosToPdf(ctx: OperationContext, store: ObjectStore, payload: PhotoPayload): Promise<void> {
-  const doc = await loadDocument(ctx.db, payload.documentId);
+  const doc = await loadDocument(ctx.sql, payload.documentId);
   if (!doc || doc.deleted) return;
   const images: Array<{ bytes: Uint8Array; width: number; height: number }> = [];
   for (const path of payload.imagePaths) {
@@ -53,7 +53,7 @@ export async function runPhotosToPdf(ctx: OperationContext, store: ObjectStore, 
   const storagePath = `${doc.subjectId}/${doc.id}.pdf`;
   await store.upload(BUCKET.documents, storagePath, pdf, 'application/pdf');
   const checksum = createHash('sha256').update(pdf).digest('hex');
-  await patchDocument(ctx.db, doc.id, {
+  await patchDocument(ctx.sql, doc.id, {
     storagePath,
     sizeBytes: pdf.byteLength,
     checksum,

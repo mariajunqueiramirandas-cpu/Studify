@@ -5,7 +5,7 @@ import { sweepExpiredFiles, type FileRecord } from '@studify/ai';
 import type { OperationContext } from '../framework/types.ts';
 
 export async function runFilesSweep(ctx: OperationContext, nowMs: number): Promise<{ cleared: number; failed: number }> {
-  const { rows } = await ctx.db.query<{ id: string; anthropic_file_id: string; anthropic_file_expires_at: Date }>(
+  const { rows } = await ctx.sql.query<{ id: string; anthropic_file_id: string; anthropic_file_expires_at: Date }>(
     `select id, anthropic_file_id, anthropic_file_expires_at from public.document_slices
       where anthropic_file_id is not null order by anthropic_file_expires_at nulls first limit 500`,
   );
@@ -16,7 +16,7 @@ export async function runFilesSweep(ctx: OperationContext, nowMs: number): Promi
   }));
   const result = await sweepExpiredFiles(ctx.ai.client, records, nowMs);
   if (result.cleared.length > 0) {
-    await ctx.db.query(
+    await ctx.sql.query(
       `update public.document_slices set anthropic_file_id = null, anthropic_file_expires_at = null, updated_at = now()
         where id = any($1::uuid[])`,
       [result.cleared],

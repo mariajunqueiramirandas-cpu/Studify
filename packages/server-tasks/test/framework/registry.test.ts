@@ -7,7 +7,7 @@ function harness() {
   const writes: unknown[] = [];
   const registry = new OperationRegistry({
     log, pool: { query: async (...args: unknown[]) => { writes.push(args); return { rows: [] }; } } as unknown as RuntimeDeps['pool'],
-    supabase: {} as RuntimeDeps['supabase'], claude: {} as RuntimeDeps['claude'],
+    db: {} as RuntimeDeps['db'], claude: {} as RuntimeDeps['claude'],
     push: {} as RuntimeDeps['push'], now: () => new Date(),
     schedule: async (...args) => { scheduled.push(args); return 'calendar-id'; },
   });
@@ -56,7 +56,7 @@ describe('direct server operations', () => {
       },
     } as unknown as RuntimeDeps['pool'];
     const log = { child: () => log, info() {}, error() {} } as unknown as RuntimeDeps['log'];
-    const registry = new OperationRegistry({ log, pool, supabase: {} as RuntimeDeps['supabase'], claude: {} as RuntimeDeps['claude'], push: {} as RuntimeDeps['push'], now: () => new Date(), schedule: async () => 'calendar-id' });
+    const registry = new OperationRegistry({ log, pool, db: {} as RuntimeDeps['db'], claude: {} as RuntimeDeps['claude'], push: {} as RuntimeDeps['push'], now: () => new Date(), schedule: async () => 'calendar-id' });
     await registry.register([{ name: 'work', handler: async () => undefined }]);
     const finished = () => queries.filter((q) => q.text.includes("set status = 'succeeded'")).map((q) => q.values[0]);
     await registry.execute('work', { subject_id: '0190a000-0000-7000-8000-000000000001' });

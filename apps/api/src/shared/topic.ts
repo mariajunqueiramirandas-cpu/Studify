@@ -1,6 +1,6 @@
 // Loads what a topic-level generation needs (ai-pipeline §3, data-model §5.2–5.3): the topic node, its
 // concepts, the subject's language, and the pages of each source document, prepared as PDF slices.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { withContextPages, type PdfSlice, type TopicInput } from '@studify/prompts';
 import { ApiFailure } from '@studify/shared';
 import { requireNode, type SubjectRow } from './access.ts';
@@ -29,7 +29,7 @@ export interface TopicBundle {
   languageSubject: boolean;
 }
 
-export async function loadTopic(db: SupabaseClient, userId: string, nodeId: string): Promise<TopicBundle> {
+export async function loadTopic(db: Db, userId: string, nodeId: string): Promise<TopicBundle> {
   const { node, subject } = await requireNode(db, userId, nodeId);
   if (node.kind !== 'topic') throw new ApiFailure('invalid_request', { message: 'Isso não é um tópico.' });
 

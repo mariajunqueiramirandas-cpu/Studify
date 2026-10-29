@@ -1,11 +1,14 @@
 // Phase 2 dependency seam. Extends the shared Deps (supabase/functions/_shared/deps.ts) with what the
 // Turma, duel and battle functions need beyond the base pipeline. Tests build fakes for every member.
 import type { TtsProvider } from '@studify/speech';
+import type { FileStore } from '@studify/db';
+import type { RealtimeHub } from '../realtime/hub.ts';
 import type { Deps } from '../shared/deps.ts';
+import type { AuthUser } from '../shared/auth.ts';
 
-/** Runs an RPC as the signed-in user (anon key + user JWT), so auth.uid() is the caller (join_class_group). */
+/** Runs an RPC as the signed-in user (role authenticated, their claims), so auth.uid() is the caller (join_class_group). */
 export type UserRpc = (
-  jwt: string,
+  user: AuthUser,
   fn: string,
   args: Record<string, unknown>,
 ) => Promise<
@@ -23,7 +26,7 @@ export interface BroadcastMessage {
   private: true;
 }
 
-/** Sends broadcast messages through the Realtime REST endpoint (service key). Never throws to the caller. */
+/** Sends broadcast messages to the SSE realtime hub (realtime/hub.ts). Never throws to the caller. */
 export type Broadcaster = (messages: BroadcastMessage[]) => Promise<void>;
 
 /** Guardian verification mail (SP-03), sent through Resend (mail.ts). Undefined when RESEND_API_KEY is unset. */
@@ -32,6 +35,10 @@ export type GuardianMail = (args: { guardianEmail: string; verifyUrl: string }) 
 export interface P2Deps extends Deps {
   userRpc: UserRpc;
   broadcast: Broadcaster;
+  /** The SSE realtime hub (realtime-stream, realtime-join, ...). Absent in tests that do not use it. */
+  realtime?: RealtimeHub;
+  /** The file store behind db.storage (student uploads, signed links). Absent in tests that do not use it. */
+  files?: FileStore;
   /** Public host without scheme (e.g. "studify.app"), or null: links fall back to studify:// routes. */
   baseUrl: string | null;
   /** Uniform integer in [0, maxExclusive). Injected for tests (PIN generation). */

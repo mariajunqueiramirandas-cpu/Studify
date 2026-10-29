@@ -1,6 +1,6 @@
 // Domain clients, direct operation registry, and future calendar triggers, owned by the API process.
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ClaudeDeps } from '@studify/ai';
+import type { Db } from '@studify/db';
 import { ttsFromEnv, type TtsProvider } from '@studify/speech';
 import type { TaskConfig } from './env.ts';
 import { createBudgetStore } from './budget.ts';
@@ -11,6 +11,7 @@ import { createUsageSink } from './usage.ts';
 import { createExpoClient, createPushService, type PushService } from './push.ts';
 import { Scheduler, type Schedule } from './scheduler.ts';
 import { OperationRegistry, type RuntimeDeps } from './registry.ts';
+import type { Broadcast } from './types.ts';
 import { builtinJobs } from './builtin.ts';
 import { isTerminalStatus, setProgressListener } from './progress.ts';
 import type pg from 'pg';
@@ -29,7 +30,10 @@ export interface Runtime {
 
 export interface RuntimeOverrides {
   schedule?: Schedule;
-  supabase?: SupabaseClient;
+  /** The database client the API built (Studify's Postgres, Supabase Auth, the file store). Required. */
+  db?: Db;
+  /** Realtime broadcast to the API's WebSocket hub. Default: none. */
+  broadcast?: Broadcast;
   claude?: ClaudeDeps;
   pool?: pg.Pool;
   now?: () => Date;
@@ -48,7 +52,8 @@ export async function createRuntime(config: TaskConfig, overrides: RuntimeOverri
   const pool = overrides.pool ?? createPool(config.databaseUrl, config.pgPoolMax);
   const sql: Sql = pool;
 
-  const supabase = overrides.supabase ?? createSupabase(config);
+  const db = overrides.db;
+  if (!db) throw new Error('createRuntime needs the database client the API builds (overrides.db)');
   const claude =
     overrides.claude ??
     createClaudeDeps({
@@ -81,7 +86,8 @@ export async function createRuntime(config: TaskConfig, overrides: RuntimeOverri
     schedule: overrides.schedule ?? scheduler.schedule,
     cron: (name, expression) => scheduler.cron(name, expression),
     pool,
-    supabase,
+    db,
+    broadcast: overrides.broadcast,
     claude,
     push,
     log,
@@ -114,13 +120,4 @@ export async function createRuntime(config: TaskConfig, overrides: RuntimeOverri
       if (!overrides.pool) await pool.end();
     },
   };
-}
-
-function createSupabase(config: TaskConfig): SupabaseClient {
-  if (!config.supabaseUrl || !config.supabaseServiceRoleKey) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-  }
-  return createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 }

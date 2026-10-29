@@ -85,14 +85,14 @@ interface PageRef {
 /** Reporter weight (TRU-02.10): reports from a user whose last 10 were all rejected count 0 for auto-hide. */
 export async function reporterWeight(ctx: OperationContext, reporterId: string): Promise<number> {
   const recent = unwrapRows<{ status: string }>(
-    await ctx.supabase.from('content_flags').select('status').eq('reporter_id', reporterId).order('created_at', { ascending: false }).limit(10),
+    await ctx.db.from('content_flags').select('status').eq('reporter_id', reporterId).order('created_at', { ascending: false }).limit(10),
     'content_flags',
   );
   return recent.length === 10 && recent.every((r) => r.status === 'rejected') ? 0 : 1;
 }
 
 async function loadItem(ctx: OperationContext, spec: ItemSpec, id: string): Promise<Record<string, unknown> | null> {
-  return unwrap(await ctx.supabase.from(spec.table).select('*').eq('id', id).maybeSingle(), spec.table) as Record<string, unknown> | null;
+  return unwrap(await ctx.db.from(spec.table).select('*').eq('id', id).maybeSingle(), spec.table) as Record<string, unknown> | null;
 }
 
 function pageRefsOf(item: Record<string, unknown>, spec: ItemSpec): PageRef[] {
@@ -141,21 +141,21 @@ export interface TriageOutcome {
 /** flag.triage (TRU-02.4): AI verdict with page-checked evidence, then auto-hide and moderator notice. */
 export async function handleFlagTriage(ctx: OperationContext, data: Record<string, unknown>, scope: AiScope = { userId: null, feature: 'TRU-02.4' }): Promise<TriageOutcome> {
   const payload = TriagePayload.parse(data);
-  const flag = unwrap(await ctx.supabase.from('content_flags').select('*').eq('id', payload.flag_id).maybeSingle(), 'content_flags') as FlagRow | null;
+  const flag = unwrap(await ctx.db.from('content_flags').select('*').eq('id', payload.flag_id).maybeSingle(), 'content_flags') as FlagRow | null;
   if (!flag) return { status: 'skipped' };
   if (flag.status !== 'open') return { status: 'skipped' };
   const spec = ITEM_SPECS[flag.item_type as ItemType];
   if (!spec) {
-    unwrap(await ctx.supabase.from('content_flags').update({ status: 'triaged', ai_verdict: 'unsure', ai_explanation: 'Tipo de item sem triagem automática.' }).eq('id', flag.id), 'content_flags');
+    unwrap(await ctx.db.from('content_flags').update({ status: 'triaged', ai_verdict: 'unsure', ai_explanation: 'Tipo de item sem triagem automática.' }).eq('id', flag.id), 'content_flags');
     return { status: 'triaged', verdict: 'unclear' };
   }
   const item = await loadItem(ctx, spec, flag.item_id);
   if (!item) {
-    unwrap(await ctx.supabase.from('content_flags').update({ status: 'superseded' }).eq('id', flag.id), 'content_flags');
+    unwrap(await ctx.db.from('content_flags').update({ status: 'superseded' }).eq('id', flag.id), 'content_flags');
     return { status: 'superseded' };
   }
   if (Number(item.version ?? 1) !== flag.item_version) {
-    unwrap(await ctx.supabase.from('content_flags').update({ status: 'superseded' }).eq('id', flag.id), 'content_flags');
+    unwrap(await ctx.db.from('content_flags').update({ status: 'superseded' }).eq('id', flag.id), 'content_flags');
     return { status: 'superseded' };
   }
 
@@ -170,9 +170,9 @@ export async function handleFlagTriage(ctx: OperationContext, data: Record<strin
   }
   const node = spec.nodeField ? (item[spec.nodeField] as string | null) : null;
   const summary = node
-    ? unwrap(await ctx.supabase.from('knowledge_nodes').select('title,summary').eq('id', node).maybeSingle(), 'knowledge_nodes') as { title: string; summary: string | null } | null
+    ? unwrap(await ctx.db.from('knowledge_nodes').select('title,summary').eq('id', node).maybeSingle(), 'knowledge_nodes') as { title: string; summary: string | null } | null
     : null;
-  const subject = unwrap(await ctx.supabase.from('subjects').select('content_language').eq('id', String(item.subject_id ?? '')).maybeSingle(), 'subjects') as { content_language: string | null } | null;
+  const subject = unwrap(await ctx.db.from('subjects').select('content_language').eq('id', String(item.subject_id ?? '')).maybeSingle(), 'subjects') as { content_language: string | null } | null;
 
   const fields = spec.fields.filter((f) => item[f] !== undefined).map((f) => ({
     name: f,
@@ -223,7 +223,7 @@ export async function handleFlagTriage(ctx: OperationContext, data: Record<strin
 
   const weight = await reporterWeight(ctx, flag.reporter_id);
   unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('content_flags')
       .update({
         ai_verdict: aiVerdict,
@@ -244,7 +244,7 @@ export async function handleFlagTriage(ctx: OperationContext, data: Record<strin
   let moderatorsNotified = 0;
   if (flag.class_group_id) {
     const group = unwrapRows<{ reporter_id: string; reporter_weight: number }>(
-      await ctx.supabase
+      await ctx.db
         .from('content_flags')
         .select('reporter_id,reporter_weight')
         .eq('item_type', flag.item_type)
@@ -257,9 +257,9 @@ export async function handleFlagTriage(ctx: OperationContext, data: Record<strin
     const confidentError = aiVerdict === 'confirmed' && confidence === 'high' && (flag.reason === 'Gabarito errado' || flag.reason === 'Informação errada' || flag.reason === 'wrong_answer' || flag.reason === 'wrong_fact');
     if (reporters.size >= 3 || confidentError) {
       hidden = true;
-      unwrap(await ctx.supabase.from(spec.table).update({ hidden_reason: 'under_review' }).eq('id', flag.item_id), spec.table);
+      unwrap(await ctx.db.from(spec.table).update({ hidden_reason: 'under_review' }).eq('id', flag.item_id), spec.table);
       unwrap(
-        await ctx.supabase
+        await ctx.db
           .from('content_flags')
           .update({ status: 'hidden_pending' })
           .eq('item_type', flag.item_type)
@@ -268,13 +268,13 @@ export async function handleFlagTriage(ctx: OperationContext, data: Record<strin
           .in('status', ['open', 'triaged']),
         'content_flags',
       );
-      await ctx.db.query(
+      await ctx.sql.query(
         'insert into private.moderation_actions (actor_kind, action, target_type, target_id, reason, flag_id) values ($1, $2, $3, $4, $5, $6)',
         ['system', 'hide', flag.item_type, flag.item_id, 'auto_hide_tru_02_7', flag.id],
       );
     }
     const moderators = unwrapRows<{ user_id: string }>(
-      await ctx.supabase.from('class_group_members').select('user_id').eq('class_group_id', flag.class_group_id).in('role', ['owner', 'moderator']).eq('status', 'active'),
+      await ctx.db.from('class_group_members').select('user_id').eq('class_group_id', flag.class_group_id).in('role', ['owner', 'moderator']).eq('status', 'active'),
       'class_group_members',
     );
     for (const m of moderators) {
@@ -313,11 +313,11 @@ const ACTIVE_QUIZ_KINDS_EXCLUDED = ['duel', 'battle'];
  */
 export async function handleFlagApply(ctx: OperationContext, data: Record<string, unknown>): Promise<ApplyOutcome> {
   const payload = ApplyPayload.parse(data);
-  const flag = unwrap(await ctx.supabase.from('content_flags').select('*').eq('id', payload.flag_id).maybeSingle(), 'content_flags') as FlagRow | null;
+  const flag = unwrap(await ctx.db.from('content_flags').select('*').eq('id', payload.flag_id).maybeSingle(), 'content_flags') as FlagRow | null;
   if (!flag || flag.status !== 'accepted' || !flag.ai_proposed_fix) return { status: 'skipped', reason: 'not_accepted' };
   const spec = ITEM_SPECS[flag.item_type as ItemType];
   if (!spec) return { status: 'skipped', reason: 'unsupported_type' };
-  const already = unwrapRows<{ id: string }>(await ctx.supabase.from('item_revisions').select('id').eq('flag_id', flag.id), 'item_revisions');
+  const already = unwrapRows<{ id: string }>(await ctx.db.from('item_revisions').select('id').eq('flag_id', flag.id), 'item_revisions');
   if (already.length > 0) return { status: 'skipped', reason: 'already_applied' };
 
   const item = await loadItem(ctx, spec, flag.item_id);
@@ -328,13 +328,13 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
 
   const newVersion = flag.item_version + 1;
   const applied = unwrapRows<{ id: string }>(
-    await ctx.supabase.from(spec.table).update({ ...patch, version: newVersion, hidden_reason: null }).eq('id', flag.item_id).eq('version', flag.item_version).select('id'),
+    await ctx.db.from(spec.table).update({ ...patch, version: newVersion, hidden_reason: null }).eq('id', flag.item_id).eq('version', flag.item_version).select('id'),
     spec.table,
   );
   if (applied.length === 0) return { status: 'skipped', reason: 'concurrent_update' };
   const snapshot = { ...item, ...patch, version: newVersion, hidden_reason: null };
   unwrap(
-    await ctx.supabase.from('item_revisions').insert({
+    await ctx.db.from('item_revisions').insert({
       item_type: flag.item_type,
       item_id: flag.item_id,
       version: newVersion,
@@ -350,7 +350,7 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
   let regraded = 0;
   if (flag.item_type === 'card' && flag.ai_proposed_fix.answer_changed) {
     const reset = unwrapRows<{ user_id: string }>(
-      await ctx.supabase
+      await ctx.db
         .from('card_states')
         .update({ state: 0, reps: 0, lapses: 0, stability: 0, difficulty: 0, scheduled_days: 0, learning_steps: 0, due: ctx.now().toISOString(), last_review: null, introduced_at: null, is_leech: false })
         .eq('card_id', flag.item_id)
@@ -361,10 +361,10 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
     for (const r of reset) affected.add(r.user_id);
   }
   if (flag.item_type === 'question' && flag.ai_proposed_fix.answer_changed) {
-    const question = unwrap(await ctx.supabase.from('questions').select('id,type,payload,node_id').eq('id', flag.item_id).maybeSingle(), 'questions') as { id: string; type: string; payload: unknown; node_id: string } | null;
+    const question = unwrap(await ctx.db.from('questions').select('id,type,payload,node_id').eq('id', flag.item_id).maybeSingle(), 'questions') as { id: string; type: string; payload: unknown; node_id: string } | null;
     if (question && (AUTO_GRADABLE as readonly string[]).includes(question.type)) {
       const answers = unwrapRows<{ id: string; user_id: string; attempt_id: string; response: unknown; correct: boolean | null; score: number | null; points_max: number | null }>(
-        await ctx.supabase.from('attempt_answers').select('id,user_id,attempt_id,response,correct,score,points_max').eq('question_id', question.id).not('correct', 'is', null),
+        await ctx.db.from('attempt_answers').select('id,user_id,attempt_id,response,correct,score,points_max').eq('question_id', question.id).not('correct', 'is', null),
         'attempt_answers',
       );
       const quizzes = await quizKindsOf(ctx, uniq(answers.map((a) => a.attempt_id)));
@@ -383,7 +383,7 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
         if (result.pending || result.score === null) continue;
         const changed = Boolean(a.correct) !== Boolean(result.correct);
         unwrap(
-          await ctx.supabase
+          await ctx.db
             .from('attempt_answers')
             .update({ correct: result.correct, score: result.score, points_awarded: round2((result.score ?? 0) * (a.points_max ?? 1)), question_version: newVersion })
             .eq('id', a.id),
@@ -394,11 +394,11 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
         affected.add(a.user_id);
         if (result.correct) {
           unwrap(
-            await ctx.supabase.from('mistakes').update({ deleted_at: ctx.now().toISOString() }).eq('user_id', a.user_id).eq('question_id', question.id).eq('attempt_answer_id', a.id).is('resolved_at', null).is('deleted_at', null),
+            await ctx.db.from('mistakes').update({ deleted_at: ctx.now().toISOString() }).eq('user_id', a.user_id).eq('question_id', question.id).eq('attempt_answer_id', a.id).is('resolved_at', null).is('deleted_at', null),
             'mistakes',
           );
         } else {
-          const subject = unwrap(await ctx.supabase.from('questions').select('subject_id').eq('id', question.id).maybeSingle(), 'questions') as { subject_id: string } | null;
+          const subject = unwrap(await ctx.db.from('questions').select('subject_id').eq('id', question.id).maybeSingle(), 'questions') as { subject_id: string } | null;
           await ensureOpenMistake(ctx, {
             userId: a.user_id,
             questionId: question.id,
@@ -416,7 +416,7 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
   }
 
   unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('content_flags')
       .update({ status: 'superseded' })
       .eq('item_type', flag.item_type)
@@ -440,9 +440,9 @@ export async function handleFlagApply(ctx: OperationContext, data: Record<string
 async function quizKindsOf(ctx: OperationContext, attemptIds: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   for (const part of chunk(attemptIds, 150)) {
-    const attempts = unwrapRows<{ id: string; quiz_id: string }>(await ctx.supabase.from('quiz_attempts').select('id,quiz_id').in('id', part), 'quiz_attempts');
+    const attempts = unwrapRows<{ id: string; quiz_id: string }>(await ctx.db.from('quiz_attempts').select('id,quiz_id').in('id', part), 'quiz_attempts');
     const quizIds = uniq(attempts.map((a) => a.quiz_id));
-    const kinds = new Map(unwrapRows<{ id: string; kind: string }>(await ctx.supabase.from('quizzes').select('id,kind').in('id', quizIds), 'quizzes').map((q) => [q.id, q.kind] as const));
+    const kinds = new Map(unwrapRows<{ id: string; kind: string }>(await ctx.db.from('quizzes').select('id,kind').in('id', quizIds), 'quizzes').map((q) => [q.id, q.kind] as const));
     for (const a of attempts) out.set(a.id, kinds.get(a.quiz_id) ?? '');
   }
   return out;

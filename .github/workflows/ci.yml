@@ -75,7 +75,7 @@ jobs:
           done
           sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres';"
       - name: Build the schema and run the pgTAP suite
-        run: bash supabase/tests/run.sh
+        run: bash packages/db/pgtap/run.sh
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -126,7 +126,7 @@ jobs:
           done
           sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres';"
       - name: Build the schema
-        run: bash supabase/tests/run.sh
+        run: bash packages/db/pgtap/run.sh
       - name: Every public table has RLS and a pgTAP test
         run: pnpm db:rls-coverage
 

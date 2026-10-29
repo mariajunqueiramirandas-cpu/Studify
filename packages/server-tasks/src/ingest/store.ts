@@ -1,7 +1,7 @@
-// Object storage for the pipeline. Production uses the Supabase Storage service client (service role).
+// Object storage for the pipeline. Production uses the API's file store (db.storage, files on the API's disk).
 // Object keys are relative to the bucket. Paths follow the storage policies (migrations 20260101000200):
 // the first segment is the authorization key (subject id or document id).
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 
 export interface ObjectStore {
   download(bucket: string, path: string): Promise<Uint8Array>;
@@ -17,7 +17,7 @@ export const BUCKET = {
   photos: 'photos',
 } as const;
 
-export function supabaseStore(client: SupabaseClient): ObjectStore {
+export function fileStore(client: Db): ObjectStore {
   return {
     async download(bucket, path) {
       const { data, error } = await client.storage.from(bucket).download(path);

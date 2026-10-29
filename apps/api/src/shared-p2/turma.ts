@@ -1,6 +1,6 @@
 // Turma membership, settings, blocks and display names (SOC-01, SOC-02.11, SOC-X.3). Every query is
 // scoped by the caller id the handler already authenticated; nothing here trusts client input.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { ApiFailure } from '@studify/shared';
 
 export interface ActiveMember {
@@ -9,7 +9,7 @@ export interface ActiveMember {
   accepts_duels: boolean;
 }
 
-export async function activeMember(db: SupabaseClient, groupId: string, userId: string): Promise<ActiveMember | null> {
+export async function activeMember(db: Db, groupId: string, userId: string): Promise<ActiveMember | null> {
   const { data, error } = await db
     .from('class_group_members')
     .select('role, status, nickname, accepts_duels')
@@ -27,7 +27,7 @@ export async function activeMember(db: SupabaseClient, groupId: string, userId: 
 }
 
 /** Active member or 403 not_member. */
-export async function requireActiveMember(db: SupabaseClient, groupId: string, userId: string): Promise<ActiveMember> {
+export async function requireActiveMember(db: Db, groupId: string, userId: string): Promise<ActiveMember> {
   const member = await activeMember(db, groupId, userId);
   if (!member) throw new ApiFailure('not_member');
   return member;
@@ -38,7 +38,7 @@ export interface GroupRow {
   settings: Record<string, unknown>;
 }
 
-export async function loadGroup(db: SupabaseClient, groupId: string): Promise<GroupRow | null> {
+export async function loadGroup(db: Db, groupId: string): Promise<GroupRow | null> {
   const { data, error } = await db.from('class_groups').select('id, settings').eq('id', groupId).is('deleted_at', null)
     .maybeSingle();
   if (error) throw error;
@@ -47,7 +47,7 @@ export async function loadGroup(db: SupabaseClient, groupId: string): Promise<Gr
 }
 
 /** True when either user blocked the other (user_blocks is directional; the pair is hidden both ways). */
-export async function blockedEitherWay(db: SupabaseClient, a: string, b: string): Promise<boolean> {
+export async function blockedEitherWay(db: Db, a: string, b: string): Promise<boolean> {
   const first = await db.from('user_blocks').select('blocker_id').eq('blocker_id', a).eq('blocked_id', b).maybeSingle();
   if (first.error) throw first.error;
   if (first.data) return true;
@@ -58,7 +58,7 @@ export async function blockedEitherWay(db: SupabaseClient, a: string, b: string)
 }
 
 /** Display name used when no Turma nickname exists (profiles.display_name). Never the email. */
-export async function displayNameOf(db: SupabaseClient, userId: string): Promise<string> {
+export async function displayNameOf(db: Db, userId: string): Promise<string> {
   const { data, error } = await db.from('profiles').select('display_name').eq('id', userId).maybeSingle();
   if (error) throw error;
   return (data?.display_name as string | undefined) ?? 'Estudante';
