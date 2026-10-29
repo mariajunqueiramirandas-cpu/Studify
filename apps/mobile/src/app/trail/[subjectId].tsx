@@ -80,7 +80,6 @@ export default function TrailScreen() {
   const [state, setState] = useState<TrailState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [answer, setAnswer] = useState<Answered | null>(null);
   const [milestone, setMilestone] = useState<Milestone | null>(null);
@@ -234,7 +233,9 @@ export default function TrailScreen() {
       readLesson(body, state.next_step);
       return;
     }
-    setBusy(true);
+    // The step after the lesson is not written yet: recording the lesson and writing that step are one wait on the
+    // "Preparando" screen, not a spinner on the button first.
+    setWaiting(true);
     try {
       const res = await answerStep(body);
       // The next step may need content (a re-explanation after a miss): start it while the student reads.
@@ -244,7 +245,7 @@ export default function TrailScreen() {
     } catch (err) {
       fail(err);
     } finally {
-      setBusy(false);
+      setWaiting(false);
     }
   };
 
@@ -263,13 +264,19 @@ export default function TrailScreen() {
     void queryClient.invalidateQueries({ queryKey: ['trail', subjectId] });
   };
 
-  // Continue: the verdict is already on screen; move on once trail-settle has produced the next step.
+  // Continue: the verdict is already on screen, so the button never waits. Whatever is still on its way (the record
+  // from trail-settle, the next step's content) is one wait on the "Preparando" screen.
   const advance = async () => {
-    if (!settling.current) return;
+    const settle = settling.current;
+    if (!settle) return;
+    if (!answer?.settle) setWaiting(true);
     try {
-      await next(await settling.current);
+      await next(await settle);
     } catch (err) {
-      fail(err);
+      // The lesson's own error is already on screen.
+      if (err !== LESSON_NOT_RECORDED) fail(err);
+    } finally {
+      setWaiting(false);
     }
   };
 
@@ -342,20 +349,20 @@ export default function TrailScreen() {
     if (step.kind === 'lesson') {
       return (
         <ActionBar>
-          <Button label={t('trail.lesson_done')} loading={busy} onPress={() => void submit(null)} />
+          <Button label={t('trail.lesson_done')} onPress={() => void submit(null)} />
         </ActionBar>
       );
     }
     if (answer) {
       return (
         <ActionBar>
-          <Button label={t('trail.continue')} loading={!answer.settle} onPress={() => void advance()} />
+          <Button label={t('trail.continue')} onPress={() => void advance()} />
         </ActionBar>
       );
     }
     return (
       <ActionBar>
-        <Button label={t('trail.check')} disabled={!selected} disabledReason={t('trail.pick_one')} loading={busy} onPress={() => void submit(selected as TrailAnswerReq['response'])} />
+        <Button label={t('trail.check')} disabled={!selected} disabledReason={t('trail.pick_one')} onPress={() => void submit(selected as TrailAnswerReq['response'])} />
       </ActionBar>
     );
   })();
