@@ -45,6 +45,16 @@ The buffer also had a correctness bug: the chapter test it wrote ahead while the
 - Material processing starts page images and page transcription in the background and builds the outline from the PDF itself; "material pronto" means notes, glossary, cards and questions; Ache o Erro and problem sets follow (`ingest.topic_extras`). On start, the API schedules a resume for each material a restart interrupted, and the pipeline continues from what is written.
 - `plan.nightly` schedules `vespera.prepare` for the start of each test's eve (the day rollover + 5 min), so the eve screen opens on the sheet.
 
+### Material processing: the topic's slowest call, not the material's
+
+Timed on a production material (11 pages, 5 topics, before these changes): 4 min 16 s to "pronto". Page rendering and the AI reading of every page held the outline back for 68 s; the outline took 20 s, the concepts of each topic 8–9 s, notes, glossary and cards 15–30 s, and **one call per topic writing its 15 questions (16–23k output tokens) 60–85 s**, which was most of the wait once the rest ran in parallel.
+
+- A topic's question bank is written by up to three calls at once (`questions.generate@v3`), one per concept up to three: concepts are dealt in map order and question slots heaviest first, so the parts are about the same size and do not cover the same concept twice. A topic waits for its largest part. A resumed topic writes only the parts no question covers yet.
+- Every ingestion and Trilha call of the server waits in one lane of `AI_WAVE_CONCURRENCY` calls (it was that many per material, plus the Trilha and extras on top): outlines first, then topics by their place in their material, so the first topics of a new upload start before the last topics of an older one, then background work (extras, Trilha content, page transcription, prerequisites, material check). Calls a student is waiting on in the app do not use the lane.
+- A topic is open as soon as its own content is written. The processing screen lists the ready topics ("Já dá pra começar"), the subject's processing card and the live notification say how many are ready, and a topic finishing refreshes the outline at once.
+
+Expected for the same material: about a minute (outline ~20 s, concepts ~9 s, then the topic's slowest call ~25–30 s); for a large one, the first topics in about a minute and the rest as the lane allows.
+
 ### One way to show a wait
 
 Every generation screen shows its wait with one component (`GenerationStatus`): what is being made, the step, a bar filled from the progress the server reports (gliding when one long call reports none), elapsed time, the time left once a sixth is done, a "slower than usual" note, and — for background work — that the student can leave and will be told. Job rows arrive by Realtime and are merged into the screens' caches. Failures show the server's PT-BR message with a retry; every stream failure (network, deadline) reaches its screen. The lock-screen live notification updates at each step and at most every 30 s within one.
@@ -59,6 +69,7 @@ Every generation screen shows its wait with one component (`GenerationStatus`): 
 - **Write the whole Trilha for each student when they open a subject.** No waits after the first open, but the first open waits for minutes and the cost multiplies by the class size.
 - **Write everything ahead, including a re-teaching aimed at every wrong option.** Three wrong options per question make it several times the content for a rare path; the feedback of the wrong option already explains it, and the shared re-explanation attacks the common confusions.
 - **Fire-and-forget promises instead of the calendar.** Simpler, but lost on a restart and invisible to the drain on shutdown.
+- **Lower effort or fewer questions per topic.** Each would shorten the slowest call further, but the effort per task and the size of the bank are product decisions with eval evidence (ai-pipeline §2.2), not a speed fix.
 - **Fewer, larger model calls** (one call per Trilha concept for the lesson and what comes after it; one call per topic for notes, cards and questions). Output tokens set a call's duration, so one call writing two parts takes about as long as the two run one after the other and longer than the two in parallel, and the student waits for both parts to read the first; a failure loses both. The second Trilha call already reads the first one's cached material, so merging saves little. Calls are merged only where they repeat the same input with nothing to show in between; the gains here come from writing ahead and sharing what is written, not from fewer calls.
 
 ## Consequences
@@ -71,3 +82,5 @@ Every generation screen shows its wait with one component (`GenerationStatus`): 
 - A background trigger claimed by the calendar and interrupted by a crash is lost, like any calendar action (ADR 0010); grading stays pending and the Trilha content is written on demand or by the next open. An interrupted material is resumed on start; an ENEM redação whose grading was lost can be sent again.
 - Upload, podcast, grading, Prova provável and schedule-import requests answer in about a second; the app follows the job row, and the student may leave the screen.
 - Each test's Véspera sheet is paid for on its eve whether or not the student opens it.
+- Splitting the question bank sends the topic's pages three times instead of once (input tokens, a small share of the cost next to the output); the output is the same size.
+- With several uploads at once, each one finishes later than it would alone, and each one's first topics arrive sooner.
