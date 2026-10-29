@@ -16,6 +16,7 @@ scripts
 supabase
 **/test
 **/tests
+packages/db/pgtap
 **/*.test.ts
 
 # The mobile app is not part of any image. Its manifest stays, because the pnpm lockfile lists it.

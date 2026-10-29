@@ -5,3 +5,4 @@ export { migrate, readMigrations, MIGRATIONS_DIR, type MigrationFile } from './m
 export type { AuthResult, AuthUserRecord, DbAuth } from './auth.ts';
 export type { DbBucket, DbStorage, FileObject, StorageError, StorageResult, UploadOptions } from './storage-types.ts';
 export { FileStore, validBucket, validObjectName, type FileStorageOptions, type ObjectRow, type SignedTarget } from './storage.ts';
+export { parseLogic, parseOperation } from './filters.ts';
