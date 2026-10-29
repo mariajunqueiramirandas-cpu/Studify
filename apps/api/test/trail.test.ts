@@ -83,7 +83,9 @@ test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chap
   assertEquals(read.state.step?.kind, 'question');
   assertEquals(read.state.step?.id, prepared.next_step?.id);
   assertEquals(read.state.next_step, null);
-  assert(!JSON.stringify(read.state).includes('rationale') && !JSON.stringify(read.state).includes('"correct"'), 'the answer never reaches the app before answering');
+  // The answer travels with the question, so the app shows the verdict at once; the record still waits for trail-grade.
+  assertEquals(read.state.step?.kind === 'question' && read.state.step.answer.correct_option, 'B');
+  assertEquals(read.state.step?.kind === 'question' && read.state.step.answer.rationales.length, 4);
   const q1 = read.state.step!.id;
 
   // 4. Wrong answer: feedback that teaches, evidence 0, and the re-teaching needs content.

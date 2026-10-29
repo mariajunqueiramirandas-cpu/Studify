@@ -17,6 +17,15 @@ const StepBase = {
   source_pages: SourcePagesSchema,
 };
 
+/** A question's answer, sent with the step so the app can show the verdict and the explanation at once. */
+export const TrailStepAnswerSchema = z.object({
+  correct_option: z.string(),
+  explanation: z.string(),
+  tip: z.string().nullable(),
+  rationales: z.array(z.object({ id: z.string(), text: z.string(), rationale: z.string() })),
+});
+export type TrailStepAnswer = z.infer<typeof TrailStepAnswerSchema>;
+
 export const TrailStepSchema = z.discriminatedUnion('kind', [
   z.object({ ...StepBase, kind: z.literal('lesson'), title: z.string(), body: z.string() }),
   z.object({
@@ -26,6 +35,7 @@ export const TrailStepSchema = z.discriminatedUnion('kind', [
     options: z.array(z.object({ id: z.string(), text: z.string() })),
     /** Chapter test only: "3 de 6". */
     position: z.object({ index: z.int().min(1), total: z.int().min(1) }).nullable(),
+    answer: TrailStepAnswerSchema,
   }),
 ]);
 export type TrailStep = z.infer<typeof TrailStepSchema>;

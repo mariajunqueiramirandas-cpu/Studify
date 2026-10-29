@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailState, TrailStep } from '@studify/shared';
+import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailState, TrailStep, TrailStepAnswer } from '@studify/shared';
 import {
   ActionBar,
   BottomSheet,
@@ -55,6 +55,11 @@ type Milestone = { kind: 'chapter'; title: string; next: string | null } | { kin
 
 /** A question after the student answered: the verdict at once, the explanation when trail-settle returns. */
 type Answered = { stepId: string; grade: TrailGradeRes; settle: TrailAnswerRes | null };
+
+type TrailQuestion = Extract<TrailStep, { kind: 'question' }>;
+
+/** Rejects the record of a question whose lesson was not recorded; the lesson's own error is already on screen. */
+const LESSON_NOT_RECORDED = new Error('lesson not recorded');
 
 /** Concepts the path counts as learned: every concept of a finished chapter, and the cleared ones of the current. */
 function learnedOf(state: TrailState): string[] {
@@ -198,42 +203,50 @@ export default function TrailScreen() {
       });
   };
 
+  /** A question: the verdict is the step's own answer, shown at once; the record and the explanation follow behind it. */
+  const answerQuestion = (body: TrailAnswerReq, response: NonNullable<TrailAnswerReq['response']>, question: TrailQuestion) => {
+    const correct = response === question.answer.correct_option;
+    if (correct) cheer();
+    else thud();
+    setAnswer({ stepId: question.id, grade: { correct, correct_option: question.answer.correct_option }, settle: null });
+    // The server serves a question only once the lesson before it is recorded, so the record waits for that.
+    const lessonRecorded = reading.current;
+    settling.current = (async () => {
+      if (lessonRecorded && !(await lessonRecorded)) throw LESSON_NOT_RECORDED;
+      await gradeStep(body);
+      return settleStep({ trail_id: body.trail_id, step_id: question.id, time_spent_ms: body.time_spent_ms });
+    })().then((res) => {
+      // The next step may need content (a re-explanation after a miss): start it while the student reads.
+      pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
+      pending.current.catch(() => undefined);
+      setAnswer((cur) => (cur?.stepId === question.id ? { ...cur, settle: res } : cur));
+      return res;
+    });
+    settling.current.catch((err) => {
+      if (err !== LESSON_NOT_RECORDED) fail(err);
+    });
+  };
+
   const submit = async (response: TrailAnswerReq['response']) => {
     if (!state || !step) return;
     const body = { trail_id: state.trail_id, step_id: step.id, response, time_spent_ms: since(shownAt.current) };
-    if (response === null) {
-      // One tap per lesson: the next step is already on screen while the last lesson is being recorded.
-      if (reading.current) return;
-      if (state.next_step) {
-        readLesson(body, state.next_step);
-        return;
-      }
+    if (response !== null) {
+      if (step.kind === 'question') answerQuestion(body, response, step);
+      return;
+    }
+    // One tap per lesson: the next step is already on screen while the last lesson is being recorded.
+    if (reading.current) return;
+    if (state.next_step) {
+      readLesson(body, state.next_step);
+      return;
     }
     setBusy(true);
     try {
-      if (response === null) {
-        const res = await answerStep(body);
-        // The next step may need content (a re-explanation after a miss): start it while the student reads.
-        pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
-        pending.current.catch(() => undefined);
-        await next(res);
-        return;
-      }
-      // The server serves a question only once the lesson before it is recorded, so the verdict waits for that.
-      if (reading.current && !(await reading.current)) return;
-      // The verdict shows at once; the explanation, the Caderno and the next step follow in the background.
-      const grade = await gradeStep(body);
-      if (grade.correct) cheer();
-      else thud();
-      setAnswer({ stepId: step.id, grade, settle: null });
-      settling.current = settleStep({ trail_id: state.trail_id, step_id: step.id, time_spent_ms: body.time_spent_ms }).then((res) => {
-        // The next step may need content (a re-explanation after a miss): start it while the student reads.
-        pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
-        pending.current.catch(() => undefined);
-        setAnswer((cur) => (cur?.stepId === step.id ? { ...cur, settle: res } : cur));
-        return res;
-      });
-      settling.current.catch(fail);
+      const res = await answerStep(body);
+      // The next step may need content (a re-explanation after a miss): start it while the student reads.
+      pending.current = res.state.preparing ? untilReady(res.state) : Promise.resolve(res.state);
+      pending.current.catch(() => undefined);
+      await next(res);
     } catch (err) {
       fail(err);
     } finally {
@@ -575,6 +588,7 @@ function StepView({
           {answer ? (
             <Feedback
               answer={answer}
+              feedback={step.answer}
               picked={selected}
               borderColor={answer.grade.correct ? c.success : c.danger}
               onExplain={onExplain}
@@ -590,12 +604,14 @@ function StepView({
 
 function Feedback({
   answer,
+  feedback,
   picked,
   borderColor,
   onExplain,
   onAskTutor,
 }: {
   answer: Answered;
+  feedback: TrailStepAnswer;
   picked: string | null;
   borderColor: string;
   onExplain: () => void;
@@ -603,11 +619,10 @@ function Feedback({
 }) {
   const { colors: c } = useTheme();
   const { grade, settle } = answer;
-  const feedback = settle?.feedback ?? null;
   const reteach = !!settle?.state.preparing && !grade.correct;
   const saved = !!settle?.mistake_id;
-  const pickedRow = feedback?.rationales.find((r) => r.id === picked);
-  const right = feedback?.rationales.find((r) => r.id === grade.correct_option);
+  const pickedRow = feedback.rationales.find((r) => r.id === picked);
+  const right = feedback.rationales.find((r) => r.id === grade.correct_option);
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -616,24 +631,20 @@ function Feedback({
       <RichText variant="heading" style={{ color: borderColor }}>
         {grade.correct ? t('trail.correct') : t('trail.wrong', { letter: grade.correct_option })}
       </RichText>
-      {feedback && !grade.correct && pickedRow ? (
+      {!grade.correct && pickedRow ? (
         <View style={{ gap: space.xxs }}>
           <Text variant="label">{t('trail.why_wrong', { letter: pickedRow.id })}</Text>
           <RichContent variant="reading" text={pickedRow.rationale} />
         </View>
       ) : null}
-      {feedback && right ? (
+      {right ? (
         <View style={{ gap: space.xxs }}>
           <Text variant="label">{t('trail.why_right', { letter: right.id })}</Text>
           <RichContent variant="reading" text={right.rationale} />
         </View>
       ) : null}
-      {feedback ? (
-        <RichContent variant="reading" text={feedback.explanation} />
-      ) : (
-        <Text tone="secondary">{t('trail.explanation_loading')}</Text>
-      )}
-      {feedback?.tip ? (
+      <RichContent variant="reading" text={feedback.explanation} />
+      {feedback.tip ? (
         <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', backgroundColor: c.infoSoft, borderRadius: radius.md, padding: space.md }}>
           <Ionicons name="bulb-outline" size={20} color={c.info} />
           <View style={{ flex: 1, gap: space.xxs }}>

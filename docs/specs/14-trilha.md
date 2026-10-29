@@ -141,7 +141,7 @@ Chapters finished per active student per week; share of concepts cleared without
 - [ ] A wrong answer is followed by a remedial lesson and a new question before the next practice question.
 - [ ] A concept is cleared after 2 correct answers; after 5 answers without that it is "pra revisar" and the path moves on.
 - [ ] The chapter test has 4–10 questions, weights weak concepts, and passes at 70%; a failed round re-teaches and runs a new round.
-- [ ] The answer and rationales never reach the app before the student answers.
+- [ ] A question's answer and rationales travel with the step, so the verdict and the explanation show at once; the server records the answer when the student answers (trail-grade) and never grades it again.
 - [ ] Answering the same step twice writes one mastery evidence row.
 - [ ] Students cannot read or write another student's trail (pgTAP).
 - [ ] After the test is passed the chapter stays open until a Lucas lesson on the topic scores ≥ 70; a lesson at 55 is not enough.

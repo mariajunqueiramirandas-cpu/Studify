@@ -22,6 +22,7 @@ import {
   type TrailPrerequisite,
   type TrailState,
   type TrailStep,
+  type TrailStepAnswer,
   type TrailStepPurpose,
   type TrailStepView,
 } from '@studify/shared';
@@ -237,7 +238,12 @@ function publicStep(row: StepRow, outline: Outline, position: { index: number; t
     return { ...base, kind: 'lesson', title: c.title, body: c.body };
   }
   const q = row.content as QuestionContent;
-  return { ...base, kind: 'question', stem: q.stem, options: q.options.map((o) => ({ id: o.id, text: o.text })), position };
+  return { ...base, kind: 'question', stem: q.stem, options: q.options.map((o) => ({ id: o.id, text: o.text })), position, answer: answerOf(q) };
+}
+
+/** The answer a question carries to the app: the verdict and the explanation are shown at once, before the record. */
+function answerOf(q: QuestionContent): TrailStepAnswer {
+  return { correct_option: q.correct, explanation: q.explanation, tip: q.tip, rationales: q.options.map((o) => ({ id: o.id, text: o.text, rationale: o.rationale })) };
 }
 
 /** A chapter-test question's place in its round ("3 de 6"); other steps have none. */
@@ -493,14 +499,7 @@ export async function saveMistake(deps: Deps, trail: TrailRow, row: StepRow, tim
 
 /** The explanation of an answered question, from the content stored when it was written. */
 export function feedbackOf(row: StepRow): TrailFeedback {
-  const q = row.content as QuestionContent;
-  return {
-    correct: row.correct === true,
-    correct_option: q.correct,
-    explanation: q.explanation,
-    tip: q.tip,
-    rationales: q.options.map((o) => ({ id: o.id, text: o.text, rationale: o.rationale })),
-  };
+  return { correct: row.correct === true, ...answerOf(row.content as QuestionContent) };
 }
 
 /**
