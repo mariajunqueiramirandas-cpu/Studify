@@ -162,7 +162,7 @@
     "waiting_budget": "Seu limite de IA de hoje acabou. O material fica salvo e eu continuo amanhã.",
     "ready": "Pronto",
     "stages": {
-      "uploaded": "Na fila",
+      "uploaded": "Preparando…",
       "preflight": "Conferindo o arquivo…",
       "extracting": "Lendo seu material…",
       "outline": "Montando o mapa da matéria…",

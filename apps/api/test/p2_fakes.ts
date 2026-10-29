@@ -305,7 +305,7 @@ export function createFakeDeps(opts: FakeDepsOptions): FakeEnv {
     asUser: () => opts.db,
     verifyEmailCode: () => Promise.resolve(false),
     ai: aiStub,
-    enqueue: (queue, data, options) => {
+    execute: (queue, data, options) => {
       sent.push({ queue, data, options });
       return Promise.resolve(`job-${sent.length}`);
     },

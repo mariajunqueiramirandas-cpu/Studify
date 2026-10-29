@@ -56,7 +56,7 @@ export const handler = defineFunction<Req>({
       status: 'open',
     });
     if (inserted.error) throw inserted.error;
-    await deps.enqueue('flag.triage', { flag_id: flagId }, { singletonKey: flagId, retryLimit: 2 });
+    await deps.execute('flag.triage', { flag_id: flagId }, { singletonKey: flagId, });
 
     const body: FlagCreateRes = { flag_id: flagId, status: 'open', hidden_for_you: false };
     return ctx.json(body);

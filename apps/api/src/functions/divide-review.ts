@@ -15,8 +15,8 @@ export const MIN_CONTRIBUTION_CHARS = 80;
 
 export const handler = defineFunction<z.infer<typeof ContributionReviewReqSchema>>({
   name: 'divide-review',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: ContributionReviewReqSchema,

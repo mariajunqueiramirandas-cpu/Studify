@@ -109,8 +109,8 @@ async function topicPages(deps: Deps, nodeId: string | null) {
 
 export const handler = defineFunction<{ essay_id: string }>({
   name: 'grade-essay',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: GradeEssayReqSchema,
@@ -152,7 +152,7 @@ export const handler = defineFunction<{ essay_id: string }>({
       const jobId = await createAiJob(deps, { type: 'essay.grade', userId, stage: 'essay' });
       const marked = await db.from('essays').update({ status: 'grading', ...lineFields }).eq('id', essay.id);
       if (marked.error) throw marked.error;
-      await deps.enqueue('essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, { singletonKey: `essay.grade:${essay.id}` });
+      await deps.execute('essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, { singletonKey: `essay.grade:${essay.id}` });
       return ctx.json({ mode: 'async', job_id: jobId, eta_s: 90 } satisfies GradeEssayRes, 202);
     }
 

@@ -1,6 +1,6 @@
 # 0005 — Node.js job worker with pg-boss (hosting open)
 
-| Status | Accepted (hosting choice: **open**) |
+| Status | Superseded by [0010 — Direct SSE API](0010-direct-sse-api.md) |
 |---|---|
 | Date | 2026-10-26 |
 | Related | [Architecture](../architecture.md) · [API](../api.md) · [AI pipeline](../ai-pipeline.md) · [ADR 0002](0002-supabase-backend.md) |
@@ -18,7 +18,7 @@ Supabase Edge Functions are capped at 150 s wall clock on Free and 400 s on paid
 
 ## Decision
 
-- A separate **Node.js (TypeScript) worker** in `apps/worker`, sharing `packages/shared` and `packages/prompts`.
+- A separate **Node.js (TypeScript) worker** in `packages/server-tasks`, sharing `packages/shared` and `packages/prompts`.
 - **Queue: pg-boss**, in the same Supabase Postgres (dedicated `pgboss` schema). No extra queue infrastructure.
 - Edge Functions **enqueue**; the worker **consumes**. User-visible progress is mirrored into `ai_jobs` and broadcast over Realtime.
 - Jobs are **idempotent**, with deterministic keys (e.g. one knowledge map per document version), retries with exponential backoff, a dead-letter state surfaced in `ai_jobs.status = failed` with a PT-BR reason, and per-job timeouts.

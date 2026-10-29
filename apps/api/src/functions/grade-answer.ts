@@ -16,8 +16,8 @@ const AI_GRADED: ReadonlySet<string> = new Set(['short_answer', 'essay_question'
 
 export const handler = defineFunction<z.infer<typeof GradeAnswerReqSchema>>({
   name: 'grade-answer',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: GradeAnswerReqSchema,

@@ -57,11 +57,11 @@ export const handler = defineFunction<Req>({
     if (inserted.error) throw inserted.error;
     // One notification per recipient: notify.dispatch needs a user (the worker pushes to a user's devices).
     for (const recipient of await reportRecipients(deps.db, input.class_group_id ?? null, userId)) {
-      await deps.enqueue('notify.dispatch', {
+      await deps.execute('notify.dispatch', {
         user_id: recipient,
         type: 'report_created',
         data: { report_id: reportId, class_group_id: input.class_group_id ?? null },
-      }, { singletonKey: `report_created:${reportId}:${recipient}`, retryLimit: 3 });
+      }, { singletonKey: `report_created:${reportId}:${recipient}`, });
     }
 
     const body: ReportCreateRes = { report_id: reportId };

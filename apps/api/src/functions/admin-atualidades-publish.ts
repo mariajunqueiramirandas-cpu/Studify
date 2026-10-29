@@ -36,7 +36,7 @@ export const handler = defineFunction<AdminAtualidadesPublishReq>({
     const res = await db.from('atualidades_digests').update({ status: 'published', published_at: ctx.now.toISOString() }).eq('id', input.digest_id);
     if (res.error) throw res.error;
     // ENM-09.5: push to the students who opted in (the worker applies preferences and quiet hours).
-    await deps.enqueue('atualidades.notify', { digest_id: input.digest_id }, { singletonKey: `atualidades.notify:${input.digest_id}` });
+    await deps.execute('atualidades.notify', { digest_id: input.digest_id }, { singletonKey: `atualidades.notify:${input.digest_id}` });
     return ctx.json({ ok: true });
   },
 });

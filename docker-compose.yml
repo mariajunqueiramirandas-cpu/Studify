@@ -11,6 +11,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     env_file:
       - .env
     expose:
@@ -31,18 +32,6 @@ services:
     #   - traefik.http.routers.studify-api.tls.certresolver=letsencrypt
     #   - traefik.http.services.studify-api.loadbalancer.server.port=3000
 
-  # Queue consumer (pg-boss). Run one replica; see docs/engineering/deployment.md section 4.
-  worker:
-    build:
-      context: .
-      dockerfile: apps/worker/Dockerfile
-    restart: unless-stopped
-    # Lets in-flight jobs finish on SIGTERM (worker/src/index.ts stops pg-boss gracefully).
-    stop_grace_period: 60s
-    env_file:
-      - .env
-    networks:
-      - dokploy-network
 
 networks:
   dokploy-network:

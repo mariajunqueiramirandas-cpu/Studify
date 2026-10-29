@@ -1,4 +1,4 @@
-// Worker enqueue and push helpers (api §7, §9). The Edge side only enqueues; the worker consumes.
+// Worker execute and push helpers (api §7, §9). The Edge side only enqueues; the worker consumes.
 import type { P2Deps } from './deps.ts';
 import { secondsUntil } from './util.ts';
 import { ApiFailure } from '@studify/shared';
@@ -11,14 +11,14 @@ export async function scheduleAt(
   at: Date,
   singletonKey: string,
 ): Promise<string> {
-  const id = await deps.enqueue(queue, data, { startAfterSeconds: secondsUntil(at, deps.now()), singletonKey });
+  const id = await deps.execute(queue, data, { startAfterSeconds: secondsUntil(at, deps.now()), singletonKey });
   if (id === null) throw new ApiFailure('internal_error', { message: `Não consegui agendar ${queue}.` });
   return id;
 }
 
 /** Push through notify.dispatch (quiet hours, cap and toggles are applied by the worker, PLT-05). */
 export async function pushTo(deps: P2Deps, userId: string, type: string, data: Record<string, unknown>): Promise<void> {
-  await deps.enqueue('notify.dispatch', { user_id: userId, type, data }, {
+  await deps.execute('notify.dispatch', { user_id: userId, type, data }, {
     singletonKey: `push:${type}:${userId}:${String(data.duel_id ?? data.battle_id ?? data.exam_id ?? '')}`,
   });
 }

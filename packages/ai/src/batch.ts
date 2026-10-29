@@ -1,6 +1,6 @@
 // Message Batches helpers (ai-pipeline §7). Submit a wave, poll, collect results keyed by custom_id.
 // No fallbacks on Batch requests (§7.4): refused items can be re-run on the standard API.
-// Runtime-neutral: the worker drives the timing (pg-boss schedules polls); waitForBatch is for tests
+// Runtime-neutral: retained for provider/domain tests; production server operations use direct standard calls
 // and short scripts.
 
 import { callClaude, promptVersion } from "./callClaude.ts";

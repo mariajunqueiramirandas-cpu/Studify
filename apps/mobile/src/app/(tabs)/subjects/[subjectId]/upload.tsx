@@ -10,6 +10,7 @@ import { UPLOAD_KINDS, uploadMaterial, useDocuments, useSubjectJobs, type Docume
 import { useSharedFile, type SharedFile } from '../../../../features/subjects/share';
 import { options, t } from '../../../../i18n';
 import { space } from '../../../../theme';
+import { liveJobProgress } from '@studify/shared';
 import { messageFor } from '../../../../api/messages';
 
 const ERROR_KEYS: Record<string, string> = {
@@ -36,9 +37,12 @@ export default function Upload() {
   const [file, setFile] = useState<SharedFile | null>(() => (shared ? useSharedFile.getState().take() : null));
   const [kind, setKind] = useState<DocumentKind | null>(null);
   const [teacher, setTeacher] = useState('');
+  const [processing, setProcessing] = useState<{ stage: string; fraction?: number } | null>(null);
   const [pct, setPct] = useState<number | null>(null);
   const [error, setError] = useState<{ message: string; existingId?: string } | null>(null);
   const kindLabels = options('upload.kinds');
+  const processingView = processing ? liveJobProgress('ingest.document', processing.stage, 'running', processing.fraction ?? null) : null;
+  const processingLabel = processingView?.steps.find((step) => step.state === 'active')?.label ?? t('ingest.reading');
 
   const pick = async () => {
     const res = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: false });
@@ -52,6 +56,7 @@ export default function Upload() {
   const send = async () => {
     if (!file || !userId) return;
     setPct(0);
+    setProcessing(null);
     setError(null);
     try {
       const isFirst = (docs.data ?? []).length === 0;
@@ -64,6 +69,7 @@ export default function Upload() {
         kind: kind ?? 'other',
         teacherName: kind === 'past_test' ? teacher.trim() || null : null,
         onProgress: setPct,
+        onProcessing: (stage, fraction) => setProcessing({ stage, fraction }),
       });
       if (!out.ok) {
         setPct(null);
@@ -119,9 +125,9 @@ export default function Upload() {
           </Row>
           {pct !== null ? (
             <View style={{ gap: space.xs }}>
-              <ProgressBar value={pct / 100} label={t('upload.progress', { pct: Math.round(pct) })} />
+              <ProgressBar value={processingView?.fraction ?? pct / 100} label={processing ? processingLabel : t('upload.progress', { pct: Math.round(pct) })} />
               <Text variant="bodySmall" tone="secondary">
-                {t('upload.progress', { pct: Math.round(pct) })}
+                {processing ? processingLabel : t('upload.progress', { pct: Math.round(pct) })}
               </Text>
             </View>
           ) : null}

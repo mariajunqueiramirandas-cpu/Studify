@@ -1,237 +1,128 @@
-import { test } from 'bun:test';
-// ADR 0009: deferred calls and running repeats. A deferred call answers `202 running` at once and runs as a job; every
-// repeat with the same key is a status check until the job stores the answer, which the next repeat replays. A
-// repeat of a call that is still running is never a 409, and a stream whose client went away still finishes.
+import { expect, test } from 'bun:test';
 import { z } from 'zod';
 import { ApiFailure } from '@studify/shared';
-import { assert, assertEquals } from './assert.ts';
-import { ALICE, BOB, json, makeHarness, parseSse, request as plainRequest, withUsers } from './fakes.ts';
+import { ALICE, BOB, makeHarness, parseSse, request as plainRequest, withUsers } from './fakes.ts';
 import { v7 } from './world.ts';
-import { defineFunction, OPERATION_STATUS_HEADER, runDeferred } from '../src/shared/http.ts';
-import type { DeferredJob } from '../src/shared/deps.ts';
+import { defineFunction } from '../src/shared/http.ts';
+import { drainOperations } from '../src/shared/operations.ts';
 
-const doubled = defineFunction<{ n: number }>({
-  name: 'test-deferred-double',
-  mutating: false,
-  deferred: true,
-  input: z.object({ n: z.number() }),
-  run: async (ctx) => ctx.json({ doubled: ctx.input.n * 2, user: ctx.user.userId }, 201),
-});
-
-let failures: ApiFailure[] = [];
-const flaky = defineFunction<{ n: number }>({
-  name: 'test-deferred-flaky',
-  mutating: true,
-  deferred: true,
-  input: z.object({ n: z.number() }),
-  run: async (ctx) => {
-    const next = failures.shift();
-    if (next) throw next;
-    return ctx.json({ ok: ctx.input.n });
-  },
-});
-
-function harness() {
-  const h = makeHarness();
-  withUsers(h);
-  const jobs: DeferredJob[] = [];
-  h.deps.defer = async (job) => void jobs.push(job);
-  return { h, jobs };
+const request = (path: string, opts: Parameters<typeof plainRequest>[1] = {}) =>
+  plainRequest(path, { ...opts, headers: { accept: 'text/event-stream', ...opts.headers } });
+const harness = () => { const h = makeHarness(); withUsers(h); return h; };
+function gate() {
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => { release = resolve; });
+  return { release, wait };
 }
 
-/** A request from an app build that follows running calls (ADR 0009). */
-const request = (path: string, opts: Parameters<typeof plainRequest>[1] = {}) =>
-  plainRequest(path, { ...opts, headers: { 'x-studify-operations': '1', ...(opts.headers ?? {}) } });
-
-const isRunning = (res: Response) => res.status === 202 && res.headers.get(OPERATION_STATUS_HEADER) === 'running';
-
-test('deferred call: 202 running at once, then the stored answer on the next repeat', async () => {
-  const { h, jobs } = harness();
-  const key = v7(9001);
-  const first = await doubled(request('test-deferred-double', { idem: key, body: { n: 21 } }), h.deps);
-  assert(isRunning(first), 'the request does not wait for the work');
-  assertEquals(first.headers.get('retry-after'), '1');
-  assertEquals(await json(first), { status: 'running', operation_key: key });
-  assertEquals(jobs.length, 1);
-  assertEquals({ fn: jobs[0]!.fn, user: jobs[0]!.user_id, key: jobs[0]!.key }, { fn: 'test-deferred-double', user: ALICE.id, key });
-
-  assert(isRunning(await doubled(request('test-deferred-double', { idem: key, body: { n: 21 } }), h.deps)), 'still running before the job ran');
-  assertEquals(jobs.length, 1, 'a repeat queues nothing');
-
-  const stored = await runDeferred(jobs[0]!, h.deps, { finalAttempt: false });
-  assertEquals(stored.status, 201);
-
-  const done = await doubled(request('test-deferred-double', { idem: key, body: { n: 21 } }), h.deps);
-  assertEquals(done.status, 201);
-  assertEquals(done.headers.get('Idempotent-Replayed'), 'true');
-  assertEquals(await json(done), { doubled: 42, user: ALICE.id });
-});
-
-test('deferred call: an identical call while the first runs joins it; another body or student does not', async () => {
-  const { h, jobs } = harness();
-  const original = v7(9101);
-  await doubled(request('test-deferred-double', { idem: original, body: { n: 5 } }), h.deps);
-
-  const repeat = await doubled(request('test-deferred-double', { idem: v7(9102), body: { n: 5 } }), h.deps);
-  assert(isRunning(repeat));
-  assertEquals((await json(repeat)).operation_key, original, 'the app follows the running call');
-  assertEquals(jobs.length, 1, 'no second job for the same work');
-
-  await doubled(request('test-deferred-double', { idem: v7(9103), body: { n: 6 } }), h.deps);
-  await doubled(request('test-deferred-double', { idem: v7(9104), body: { n: 5 }, token: BOB.jwt }), h.deps);
-  assertEquals(jobs.length, 3);
-
-  await runDeferred(jobs[0]!, h.deps, { finalAttempt: false });
-  const later = await doubled(request('test-deferred-double', { idem: v7(9105), body: { n: 5 } }), h.deps);
-  assert(isRunning(later), 'after the first finished, the same body is a new call');
-  assertEquals((await json(later)).operation_key, v7(9105));
-  assertEquals(jobs.length, 4);
-});
-
-test('deferred call: a server error is retried by the queue, and the last attempt stores it for the app', async () => {
-  const { h, jobs } = harness();
-  failures = [new ApiFailure('ai_unavailable'), new ApiFailure('ai_unavailable')];
-  const key = v7(9201);
-  await flaky(request('test-deferred-flaky', { idem: key, body: { n: 1 } }), h.deps);
-
-  let threw = false;
-  await runDeferred(jobs[0]!, h.deps, { finalAttempt: false }).catch(() => (threw = true));
-  assert(threw, 'not the last attempt: rethrown so pg-boss retries');
-  assert(isRunning(await flaky(request('test-deferred-flaky', { idem: key, body: { n: 1 } }), h.deps)), 'the app keeps waiting');
-
-  const stored = await runDeferred(jobs[0]!, h.deps, { finalAttempt: true });
-  assertEquals(stored.status, 503);
-  const res = await flaky(request('test-deferred-flaky', { idem: key, body: { n: 1 } }), h.deps);
-  assertEquals(res.status, 503);
-  assertEquals((await json(res)).error.code, 'ai_unavailable');
-});
-
-test('deferred call: a client error is stored on the first attempt', async () => {
-  const { h, jobs } = harness();
-  failures = [new ApiFailure('invalid_request', { message: 'Não dá.' })];
-  const key = v7(9301);
-  await flaky(request('test-deferred-flaky', { idem: key, body: { n: 1 } }), h.deps);
-  const stored = await runDeferred(jobs[0]!, h.deps, { finalAttempt: false });
-  assertEquals(stored.status, 400);
-  const res = await flaky(request('test-deferred-flaky', { idem: key, body: { n: 1 } }), h.deps);
-  assertEquals((await json(res)).error.message, 'Não dá.');
-});
-
-test('deferred call: without a queue (deps.defer unset) the handler runs inline', async () => {
-  const h = makeHarness();
-  withUsers(h);
-  const res = await doubled(request('test-deferred-double', { idem: v7(9401), body: { n: 2 } }), h.deps);
-  assertEquals(res.status, 201);
-  assertEquals((await json(res)).doubled, 4);
-});
-
-test('a repeat of a mutating call that is still running answers 202 running, never 409', async () => {
-  const h = makeHarness();
-  withUsers(h);
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => (release = resolve));
-  const slow = defineFunction<{ n: number }>({
-    name: 'test-slow-inline',
-    mutating: true,
-    input: z.object({ n: z.number() }),
-    run: async (ctx) => {
-      await gate;
-      return ctx.json({ n: ctx.input.n });
-    },
-  });
-  const key = v7(9501);
-  const original = slow(request('test-slow-inline', { idem: key, body: { n: 7 } }), h.deps);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  const repeat = await slow(request('test-slow-inline', { idem: key, body: { n: 7 } }), h.deps);
-  assert(isRunning(repeat), `expected 202 running, got ${repeat.status}`);
-  release();
-  assertEquals((await original).status, 200);
-  const replay = await slow(request('test-slow-inline', { idem: key, body: { n: 7 } }), h.deps);
-  assertEquals(await json(replay), { n: 7 });
-});
-
-test('a stream whose client disconnects still finishes, and the reconnect replays all of it', async () => {
-  const h = makeHarness();
-  withUsers(h);
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => (release = resolve));
-  let finished!: () => void;
-  const settled = new Promise<void>((resolve) => (finished = resolve));
-  const streamed = defineFunction<{ q: string }>({
-    name: 'test-stream-detach',
-    mutating: true,
-    input: z.object({ q: z.string() }),
-    run: async (ctx) =>
-      ctx.sse(async (writer) => {
-        writer.send('meta', { request_id: ctx.requestId });
-        await gate;
-        writer.send('delta', { text: 'resposta inteira' });
-        writer.send('done', { stop_reason: 'end_turn' });
-        setTimeout(finished, 0);
-      }),
-  });
-  const key = v7(9601);
-  const res = await streamed(request('test-stream-detach', { idem: key, body: { q: 'oi' } }), h.deps);
+test('opens and flushes SSE before structured AI work finishes; delivers its result on the same connection', async () => {
+  const h = harness(); const pause = gate();
+  const handler = defineFunction({ name: 'stream-result', mutating: true, streamResult: true,
+    input: z.object({ n: z.number() }), run: async (ctx) => { await pause.wait; return ctx.json({ n: ctx.input.n * 2 }, 201); } });
+  const res = await handler(request('stream-result', { idem: v7(9001), body: { n: 21 } }), h.deps);
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-type')).toContain('text/event-stream');
+  expect(res.headers.get('x-accel-buffering')).toBe('no');
   const reader = res.body!.getReader();
-  await reader.read();
-  await reader.cancel();
-
-  const whileRunning = await streamed(request('test-stream-detach', { idem: key, body: { q: 'oi' } }), h.deps);
-  assert(isRunning(whileRunning), 'the reconnect waits instead of failing');
-
-  release();
-  await settled;
-  for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 1));
-  const replay = await streamed(request('test-stream-detach', { idem: key, body: { q: 'oi' } }), h.deps);
-  assertEquals(replay.status, 200);
-  assertEquals(
-    parseSse(await replay.text()).map((f) => f.event),
-    ['meta', 'delta', 'done'],
-  );
+  expect(new TextDecoder().decode((await reader.read()).value)).toContain(': connected');
+  pause.release();
+  let text = ''; for (;;) { const chunk = await reader.read(); if (chunk.done) break; text += new TextDecoder().decode(chunk.value); }
+  expect(parseSse(text).find((event) => event.event === 'done')?.data).toMatchObject({ result: { n: 42 }, status: 201 });
+  expect(h.enqueued).toHaveLength(0);
 });
 
-test('an older app build (no x-studify-operations) keeps the old contract: inline call, 409 while running', async () => {
-  const { h, jobs } = harness();
-  const res = await doubled(plainRequest('test-deferred-double', { idem: v7(9701), body: { n: 3 } }), h.deps);
-  assertEquals(res.status, 201, 'it would read a 202 running as the final answer');
-  assertEquals(jobs.length, 0);
-
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => (release = resolve));
-  const slow = defineFunction<{ n: number }>({
-    name: 'test-slow-old-client',
-    mutating: true,
-    input: z.object({ n: z.number() }),
-    run: async (ctx) => {
-      await gate;
-      return ctx.json({ n: ctx.input.n });
-    },
-  });
-  const key = v7(9702);
-  const original = slow(plainRequest('test-slow-old-client', { idem: key, body: { n: 1 } }), h.deps);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  const repeat = await slow(plainRequest('test-slow-old-client', { idem: key, body: { n: 1 } }), h.deps);
-  assertEquals(repeat.status, 409);
-  release();
-  await original;
+test('simultaneous repeats join live work; completed calls replay without generating again', async () => {
+  const h = harness(); const pause = gate(); let calls = 0;
+  const handler = defineFunction({ name: 'stream-join', mutating: true, streamResult: true,
+    run: async (ctx) => { calls++; await pause.wait; return ctx.json({ ok: true }); } });
+  const args = { idem: v7(9101), body: { n: 1 } };
+  const [first, second] = await Promise.all([handler(request('stream-join', args), h.deps), handler(request('stream-join', args), h.deps)]);
+  pause.release();
+  expect(parseSse(await first.text()).map((event) => event.event)).toEqual(['meta', 'done']);
+  expect(parseSse(await second.text()).map((event) => event.event)).toEqual(['meta', 'done']);
+  await drainOperations(h.deps);
+  const replay = await handler(request('stream-join', args), h.deps);
+  expect(replay.headers.get('idempotent-replayed')).toBe('true');
+  expect(parseSse(await replay.text()).at(-1)?.data).toMatchObject({ result: { ok: true } });
+  expect(calls).toBe(1);
 });
 
-const resumable = defineFunction<{ n: number }>({
-  name: 'test-deferred-resumable',
-  mutating: true,
-  deferred: true,
-  inlineWhen: async (input) => input.n === 0,
-  input: z.object({ n: z.number() }),
-  run: async (ctx) => ctx.json({ n: ctx.input.n }),
+test('new keys for identical active AI work join and each key becomes replayable', async () => {
+  const h = harness(); const pause = gate(); let calls = 0;
+  const handler = defineFunction({ name: 'stream-double-tap', mutating: true, streamResult: true,
+    run: async (ctx) => { calls++; await pause.wait; return ctx.json({ user: ctx.user.userId }); } });
+  const first = await handler(request('stream-double-tap', { idem: v7(9201) }), h.deps);
+  const second = await handler(request('stream-double-tap', { idem: v7(9202) }), h.deps);
+  pause.release(); await Promise.all([first.text(), second.text()]); await drainOperations(h.deps);
+  const replay = await handler(request('stream-double-tap', { idem: v7(9202) }), h.deps);
+  expect(replay.headers.get('idempotent-replayed')).toBe('true');
+  expect(calls).toBe(1);
 });
 
-test('a deferred call whose inlineWhen holds runs inline; otherwise it is queued as before', async () => {
-  const { h, jobs } = harness();
-  const resume = await resumable(request('test-deferred-resumable', { body: { n: 0 }, idem: v7(9001) }), h.deps);
-  assertEquals(resume.status, 200);
-  assertEquals(jobs.length, 0);
+test('same-key body mismatch fails; different students never join', async () => {
+  const h = harness(); const pause = gate(); const users: string[] = [];
+  const handler = defineFunction({ name: 'stream-isolation', mutating: true, streamResult: true,
+    run: async (ctx) => { users.push(ctx.user.userId); await pause.wait; return ctx.json({ ok: true }); } });
+  const first = await handler(request('stream-isolation', { idem: v7(9301), body: { n: 1 } }), h.deps);
+  expect((await handler(request('stream-isolation', { idem: v7(9301), body: { n: 2 } }), h.deps)).status).toBe(409);
+  const other = await handler(request('stream-isolation', { idem: v7(9301), body: { n: 1 }, token: BOB.jwt }), h.deps);
+  pause.release(); await Promise.all([first.text(), other.text()]);
+  expect(users.sort()).toEqual([ALICE.id, BOB.id].sort());
+});
 
-  const work = await resumable(request('test-deferred-resumable', { body: { n: 1 }, idem: v7(9002) }), h.deps);
-  assert(isRunning(work), 'a call that needs work is answered running');
-  assertEquals(jobs.length, 1);
+test('disconnect/reconnect resumes the live stream after Last-Event-ID, without waiting for completion', async () => {
+  const h = harness(); const pause = gate(); let calls = 0;
+  const handler = defineFunction({ name: 'stream-resume', mutating: true,
+    run: async (ctx) => ctx.sse(async (writer) => {
+      calls++; writer.send('delta', { text: 'first' }); await pause.wait;
+      writer.send('delta', { text: 'second' }); writer.send('done', { result: 'complete' });
+    }) });
+  const args = { idem: v7(9401) };
+  const first = await handler(request('stream-resume', args), h.deps);
+  const reader = first.body!.getReader(); await reader.read(); await reader.cancel();
+  const resumed = await handler(request('stream-resume', { ...args, headers: { 'Last-Event-ID': '2' } }), h.deps);
+  expect(resumed.status).toBe(200);
+  pause.release();
+  expect(parseSse(await resumed.text()).map((event) => event.event)).toEqual(['delta', 'done']);
+  await drainOperations(h.deps);
+  const replay = await handler(request('stream-resume', { ...args, headers: { 'Last-Event-ID': '2' } }), h.deps);
+  expect(parseSse(await replay.text()).map((event) => event.event)).toEqual(['delta', 'done']);
+  expect(calls).toBe(1);
+});
+
+test('terminal failures preserve their code and replay without a second paid attempt', async () => {
+  const h = harness(); let calls = 0;
+  const handler = defineFunction({ name: 'stream-failure', mutating: true, streamResult: true,
+    run: async () => { calls++; throw new ApiFailure('budget_exhausted'); } });
+  const args = { idem: v7(9501) };
+  const first = await handler(request('stream-failure', args), h.deps);
+  expect(parseSse(await first.text()).at(-1)).toMatchObject({ event: 'error', data: { code: 'budget_exhausted' } });
+  const replay = await handler(request('stream-failure', args), h.deps);
+  expect(parseSse(await replay.text()).at(-1)).toMatchObject({ event: 'error', data: { code: 'budget_exhausted' } });
+  expect(calls).toBe(1);
+});
+
+test('authentication and schema errors remain HTTP errors before any stream opens', async () => {
+  const h = harness(); let calls = 0;
+  const handler = defineFunction({ name: 'stream-validation', mutating: true, input: z.object({ n: z.number() }),
+    run: async (ctx) => { calls++; return ctx.json({ ok: true }); } });
+  expect((await handler(request('stream-validation', { token: null }), h.deps)).status).toBe(401);
+  expect((await handler(request('stream-validation', { body: { n: 'bad' } }), h.deps)).status).toBe(400);
+  expect(calls).toBe(0);
+});
+
+test('real HTTP connection receives bytes while the operation is still waiting for its result', async () => {
+  const h = harness(); const pause = gate();
+  const handler = defineFunction({ name: 'wire-stream', mutating: true, streamResult: true,
+    run: async (ctx) => { await pause.wait; return ctx.json({ ready: true }); } });
+  const server = Bun.serve({ port: 0, fetch: (req) => handler(req, h.deps) });
+  try {
+    const req = request('wire-stream', { idem: v7(9901) });
+    const response = await fetch(`http://127.0.0.1:${server.port}/wire-stream`, { method: 'POST', headers: req.headers, body: '{}' });
+    const reader = response.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    expect(first).toContain(': connected');
+    pause.release();
+    while (!(await reader.read()).done) { /* drain the actual HTTP body */ }
+  } finally { pause.release(); await server.stop(true); }
 });

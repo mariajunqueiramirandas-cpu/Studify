@@ -29,7 +29,7 @@ export const handler = defineFunction<z.infer<typeof AccountDeleteReqSchema>>({
     });
     if (inserted.error) throw inserted.error;
 
-    await ctx.deps.enqueue('account.delete', { deletion_id: deletionId, user_id: user.userId }, { retryLimit: 5 });
+    await ctx.deps.execute('account.delete', { deletion_id: deletionId, user_id: user.userId }, { });
 
     // Global sign-out: every refresh token is revoked (security-privacy §3). Failure is logged; the job still runs.
     const signedOut = await db.auth.admin.signOut(user.jwt, 'global');

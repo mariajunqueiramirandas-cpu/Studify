@@ -1,132 +1,145 @@
-// Server-sent events for streaming endpoints (api.md §2.6). Frames are `event: <name>` + `data: <json>`.
-// Every frame is also kept in a transcript, so a completed stream can be stored under its Idempotency-Key
-// and replayed (api §2.6: a retry returns the completed message instead of generating again).
+// A resumable SSE operation. Production work starts once; reconnects subscribe to the same live writer.
+// Completed transcripts are persisted by the HTTP pipeline under the request's Idempotency-Key.
 import { mapError } from './errors.ts';
 
 export const SSE_HEADERS: Record<string, string> = {
   'Content-Type': 'text/event-stream; charset=utf-8',
   'Cache-Control': 'no-cache, no-transform',
-  Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
 };
+const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
+const ERROR_RESERVE_BYTES = 64 * 1024;
+const MAX_PENDING_BYTES = 512 * 1024;
+const encoder = new TextEncoder();
+type Subscriber = { controller: ReadableStreamDefaultController<Uint8Array>; detach(): void };
 
 export class SseWriter {
-  #controller: ReadableStreamDefaultController<Uint8Array>;
-  #encoder = new TextEncoder();
-  #transcript = '';
+  #frames: Array<{ id: number; text: string }> = [];
+  #subscribers = new Set<Subscriber>();
+  #bytes = 0;
   #closed = false;
-  /** The client went away. Frames still go to the transcript so the finished stream can be replayed (ADR 0009). */
-  #detached = false;
+  #terminal = false;
+  #nextId = 1;
 
-  constructor(controller: ReadableStreamDefaultController<Uint8Array>) {
-    this.#controller = controller;
-  }
-
-  get closed(): boolean {
-    return this.#closed;
-  }
-
-  get transcript(): string {
-    return this.#transcript;
-  }
+  get closed(): boolean { return this.#closed; }
+  get terminal(): boolean { return this.#terminal; }
+  get transcript(): string { return this.#frames.map((frame) => frame.text).join(''); }
 
   send(event: string, data: unknown): void {
-    this.#write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (this.#closed || this.#terminal) return;
+    if (!/^[a-z][a-z0-9_-]*$/i.test(event)) throw new Error('invalid SSE event name');
+    const id = this.#nextId;
+    const text = `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    const bytes = encoder.encode(text);
+    // Keep room for a final error even if a producer exceeds its output allowance.
+    const limit = event === 'error' ? MAX_TRANSCRIPT_BYTES : MAX_TRANSCRIPT_BYTES - ERROR_RESERVE_BYTES;
+    if (this.#bytes + bytes.byteLength > limit) throw new Error('SSE output limit exceeded');
+    this.#nextId++;
+    this.#bytes += bytes.byteLength;
+    this.#frames.push({ id, text });
+    this.#terminal = event === 'done' || event === 'error';
+    this.#broadcast(bytes);
   }
 
-  /** Comment line: keeps mobile networks from dropping an idle stream while the model thinks (ai-pipeline §10.2). */
+  /** Heartbeats are deliberately absent from the replay log and never advance event IDs. */
   comment(text: string): void {
-    this.#write(`: ${text}\n\n`);
+    if (!this.#closed) this.#broadcast(encoder.encode(`: ${text.replace(/[\r\n]/g, '')}\n\n`));
   }
 
-  /** Stops writing to the socket; the producer keeps running and the transcript keeps growing. */
-  detach(): void {
-    this.#detached = true;
+  #broadcast(bytes: Uint8Array): void {
+    for (const subscriber of this.#subscribers) {
+      try {
+        if ((subscriber.controller.desiredSize ?? 0) < bytes.byteLength) {
+          subscriber.controller.error(new Error('SSE consumer too slow; reconnect to resume'));
+          subscriber.detach();
+        } else subscriber.controller.enqueue(bytes);
+      } catch { subscriber.detach(); }
+    }
+  }
+
+  subscribe(headers: Record<string, string> = {}, afterId = 0, signal?: AbortSignal): Response {
+    let subscriber: Subscriber;
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        const onAbort = () => { subscriber.detach(); try { controller.close(); } catch {} };
+        subscriber = {
+          controller,
+          detach: () => {
+            this.#subscribers.delete(subscriber);
+            signal?.removeEventListener('abort', onAbort);
+          },
+        };
+        // One replay chunk is bounded by the transcript cap. Future live data has a separate small buffer.
+        const replay = this.#frames.filter((frame) => frame.id > afterId).map((frame) => frame.text).join('');
+        controller.enqueue(encoder.encode(`: connected\n\n${replay}`));
+        if (this.#closed || signal?.aborted) controller.close();
+        else {
+          this.#subscribers.add(subscriber);
+          signal?.addEventListener('abort', onAbort, { once: true });
+        }
+      },
+      cancel: () => subscriber?.detach(),
+    }, { highWaterMark: MAX_PENDING_BYTES, size: (chunk) => chunk?.byteLength ?? 0 });
+    return new Response(stream, { status: 200, headers: { ...SSE_HEADERS, ...headers } });
   }
 
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    if (this.#detached) return;
-    try {
-      this.#controller.close();
-    } catch {
-      // Cancelled underneath us: nothing left to close.
-    }
-  }
-
-  #write(frame: string): void {
-    if (this.#closed) return;
-    this.#transcript += frame;
-    if (this.#detached) return;
-    try {
-      this.#controller.enqueue(this.#encoder.encode(frame));
-    } catch {
-      // The client disconnected between frames. Keep the transcript; a reconnect with the same key replays it.
-      this.#detached = true;
+    for (const subscriber of this.#subscribers) {
+      try { subscriber.controller.close(); } catch {}
+      subscriber.detach();
     }
   }
 }
 
-export interface SseSettled {
-  ok: boolean;
-  transcript: string;
-}
-
+export interface SseSettled { ok: boolean; transcript: string }
 export interface OpenSseOptions {
-  /** 0 disables the heartbeat (tests). Production uses 15 s. */
   heartbeatMs: number;
   headers?: Record<string, string>;
-  /** Called once the producer finished (ok) or failed (error event sent). */
   onSettled?: (settled: SseSettled) => Promise<void>;
-  /** Called when the client disconnects before the producer finishes. */
-  onCancel?: () => void;
+  signal?: AbortSignal;
 }
 
-/**
- * Starts a text/event-stream response. `producer` sends the events, including `done`. A thrown error
- * becomes a final `error` event with the ApiError body (api §2.6), so the stream always ends cleanly.
- */
-export function openSse(options: OpenSseOptions, producer: (writer: SseWriter) => Promise<void>): Response {
-  let timer: ReturnType<typeof setInterval> | undefined;
-  let writer: SseWriter | undefined;
-  const stopHeartbeat = () => {
-    if (timer !== undefined) clearInterval(timer);
-    timer = undefined;
-  };
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      writer = new SseWriter(controller);
-      const out = writer;
-      if (options.heartbeatMs > 0) {
-        timer = setInterval(() => out.comment('ping'), options.heartbeatMs);
+/** Owns the producer, independently of any particular network connection. */
+export class SseOperation {
+  readonly writer = new SseWriter();
+  readonly done: Promise<void>;
+  constructor(options: OpenSseOptions, producer: (writer: SseWriter) => Promise<void>) {
+    const timer = options.heartbeatMs > 0 ? setInterval(() => this.writer.comment('ping'), options.heartbeatMs) : undefined;
+    timer?.unref?.();
+    this.done = Promise.resolve().then(async () => {
+      let ok = false;
+      try {
+        await producer(this.writer);
+        if (!this.writer.terminal) throw new Error('SSE producer ended without a terminal event');
+        ok = true;
+      } catch (error) {
+        const mapped = mapError(error);
+        if (mapped.internal) console.error('sse producer failed', mapped.internal);
+        this.writer.send('error', { ...mapped.body.error, status: mapped.status });
       }
-      const settle = async (ok: boolean) => {
-        stopHeartbeat();
-        out.close();
-        await options.onSettled?.({ ok, transcript: out.transcript });
-      };
-      producer(out)
-        .then(() => settle(true))
-        .catch(async (err: unknown) => {
-          const mapped = mapError(err);
-          if (mapped.internal) console.error('sse producer failed', mapped.internal);
-          out.send('error', mapped.body.error);
-          await settle(false);
-        })
-        .catch((err: unknown) => console.error('sse settle failed', err));
-    },
-    cancel() {
-      // The client disconnected. The producer finishes into the transcript, which is stored under the
-      // Idempotency-Key, so the app's reconnect gets the whole answer instead of a second generation.
-      writer?.detach();
-      stopHeartbeat();
-      options.onCancel?.();
-    },
-  });
-  return new Response(stream, { status: 200, headers: { ...SSE_HEADERS, ...(options.headers ?? {}) } });
+      try {
+        // Persist BEFORE closing. A reconnect after EOF must find a replay, never a stale in-flight lock.
+        await options.onSettled?.({ ok, transcript: this.writer.transcript });
+      } finally {
+        if (timer !== undefined) clearInterval(timer);
+        this.writer.close();
+      }
+    });
+    // The caller can still await done; disconnected clients must never cause an unhandled rejection.
+    void this.done.catch((error: unknown) => console.error('sse settlement failed', error));
+  }
 }
 
-/** A completed SSE body replayed from idempotency storage: no generation, same frames. */
-export function replaySse(transcript: string, headers: Record<string, string> = {}): Response {
-  return new Response(transcript, { status: 200, headers: { ...SSE_HEADERS, ...headers } });
+export function openSse(options: OpenSseOptions, producer: (writer: SseWriter) => Promise<void>): Response {
+  const operation = new SseOperation(options, producer);
+  return operation.writer.subscribe(options.headers, 0, options.signal);
+}
+
+export function replaySse(transcript: string, headers: Record<string, string> = {}, afterId = 0): Response {
+  const body = afterId > 0
+    ? transcript.split('\n\n').filter((frame) => Number(/^id: (\d+)/m.exec(frame)?.[1] ?? 0) > afterId).join('\n\n') + '\n\n'
+    : transcript;
+  return new Response(body, { status: 200, headers: { ...SSE_HEADERS, ...headers } });
 }

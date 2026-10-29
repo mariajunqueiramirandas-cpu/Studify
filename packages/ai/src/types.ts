@@ -256,6 +256,8 @@ export type ChoiceKind = "concept" | "node" | "doc" | "page" | "topic" | "exam";
 export type Choices = Partial<Record<ChoiceKind, ReadonlyArray<string | number>>>;
 
 export interface ClaudeDeps {
+  /** Operation cancellation/deadline, inherited by every model call. */
+  signal?: AbortSignal;
   client: AnthropicLike;
   budget: BudgetStore;
   usage: UsageSink;

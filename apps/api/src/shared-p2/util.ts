@@ -37,7 +37,7 @@ export function startOfLocalDayIso(now: Date): string {
 
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Seconds from `now` until `at`, never negative (pg-boss startAfter). */
+/** Seconds from `now` until `at`, never negative (the API runtime startAfter). */
 export function secondsUntil(at: Date, now: Date): number {
   return Math.max(0, Math.ceil((at.getTime() - now.getTime()) / 1000));
 }

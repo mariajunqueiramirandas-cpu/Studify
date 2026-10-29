@@ -11,8 +11,8 @@ import { generateEnemQuestionsForNode } from '../shared-p4/enem-questions.ts';
 
 export const handler = defineFunction<z.infer<typeof QuestionsGenerateMoreReqSchema>>({
   name: 'questions-generate-more',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: QuestionsGenerateMoreReqSchema,

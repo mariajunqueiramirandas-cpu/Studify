@@ -1,4 +1,4 @@
-// admin-enem-import (ENM-02.8; api §4.10). Enqueues the bank import of one edition: the worker downloads the
+// admin-enem-import (ENM-02.8; api §4.10). Executes the bank import of one edition: the worker downloads the
 // booklets, answer keys and microdata, crops and transcribes items, cross-checks keys and publishes what passes.
 import { AdminEnemImportReqSchema, type AdminEnemImportReq } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
@@ -13,7 +13,7 @@ export const handler = defineFunction<AdminEnemImportReq>({
     const { deps, input } = ctx;
     await requireAppAdmin(deps.db, ctx.user.userId);
     const jobId = await createAiJob(deps, { type: 'enem.import_edition', userId: ctx.user.userId, stage: 'import' });
-    await deps.enqueue(
+    await deps.execute(
       'enem.import_edition',
       { year: input.year, application: input.application, ai_job_id: jobId, requested_by: ctx.user.userId },
       { singletonKey: `enem.import_edition:${input.year}:${input.application}` },

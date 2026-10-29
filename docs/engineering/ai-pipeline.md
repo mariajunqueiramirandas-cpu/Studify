@@ -4,12 +4,14 @@
 |---|---|
 | **Status** | Draft v1 |
 | **Scope** | Every Claude API call Studify makes: models, request defaults, the task catalog, PDF/image inputs, citations vs structured outputs, prompt caching, the Batch API, prompt architecture, budgets and cost, errors, observability and non-Claude AI services. |
-| **Decisions** | [ADR 0003 — Claude API (Haiku 5.5 default from 2026-10-27)](adr/0003-claude-api-opus-default.md) · [ADR 0005 — job worker](adr/0005-job-worker-pg-boss.md) · [ADR 0006 — retrieval without embeddings](adr/0006-retrieval-without-embeddings.md) |
+| **Decisions** | [ADR 0003 — Claude API (Haiku 5.5 default from 2026-10-27)](adr/0003-claude-api-opus-default.md) · [ADR 0010 — Direct SSE API](adr/0010-direct-sse-api.md) · [ADR 0006 — retrieval without embeddings](adr/0006-retrieval-without-embeddings.md) |
 | **Related** | [Architecture](architecture.md) · [Security & privacy](security-privacy.md) (§7 budgets, §8 AI safety) · [Testing strategy](testing-strategy.md) (§6 AI evals) · [Learning engine](learning-engine.md) (all deterministic logic — no AI) |
 
 The source of truth for *what* each feature asks the model is the spec's §7. This document says *how* every call is made, so the same rules apply everywhere. Where a spec and this document disagree, §14 lists the reconciliation; the spec text should be updated to match.
 
 ---
+
+The execution policy is [ADR 0010](adr/0010-direct-sse-api.md): all student work runs directly behind SSE in one API service. Production content waves use standard calls; Batch API details below describe retained provider capabilities and test coverage, not a production queue. Whole operations are not automatically retried.
 
 ## 1. Principles
 
@@ -480,7 +482,7 @@ await db.aiBatches.insert({ id: batch.id, job_id: wave.jobId, submitted_at: now(
 
 ### 7.3 Polling and results
 
-- A pg-boss scheduled job polls each open batch every **30 s** (`client.messages.batches.retrieve(id)`) until `processing_status === "ended"`, updating `ai_jobs.progress` from `request_counts`.
+- Batch polling remains a provider/domain test capability. Production content generation uses standard calls directly; there is no batch-polling queue.
 - A batch still running after **60 min** is cancelled; its unfinished requests are re-submitted on the standard API with concurrency 4 (spec 01 §8.2).
 - Results (`client.messages.batches.results(id)`) arrive **in any order** — always look up by `custom_id`, never by position.
 
@@ -759,7 +761,7 @@ try {
 
 | Failure | Edge Function (user waiting) | Worker |
 |---|---|---|
-| 429 / 5xx / 529 overloaded / connection | SDK retries (`maxRetries: 2`, built-in backoff); then PT-BR "Tá meio cheio por aqui, tenta de novo em instantes." | pg-boss retry with exponential backoff (2 s, 8 s, 30 s, 2 min, 10 min), max 5 |
+| 429 / 5xx / 529 overloaded / connection | SDK retries (`maxRetries: 2`, built-in backoff); then PT-BR "Tá meio cheio por aqui, tenta de novo em instantes." | No whole-operation retry; report the failure and allow an explicit retry from saved state (ADR 0010) |
 | 400 | Report to Sentry with params hash; user sees a generic error | Mark item/job `failed`; alert |
 | Invalid structured output | No retry: item salvage, else the spec's manual fallback (§5.1) | No retry: item salvage, else `failed` (§5.1) |
 | `refusal` | §2.4 | §2.4 / §7.3 |

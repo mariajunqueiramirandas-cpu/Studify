@@ -33,7 +33,7 @@ flowchart TB
 | `packages/prompts` | Prompt builders render deterministically; snapshot tests | — | AI evals (§6) |
 | `supabase/` migrations + RLS | — | **Every table**: RLS policy tests (§4) | Migration up/down on a copy of staging schema |
 | API functions | Pure handlers with injected clients | Against local Supabase with a **mock Claude** server | Smoke against staging |
-| Worker jobs | Job handlers with injected clients | pg-boss + local Supabase + mock Claude; recorded real responses for fixtures | Staging run on golden PDFs |
+| Direct operations | Domain handlers with injected clients | Local Postgres + direct registry + mock Claude; calendar restart and SSE reconnect tests | Staging run on golden PDFs |
 | Mobile app | Hooks, stores, formatting, sync engine | Sync engine against local Supabase; SQLite migrations | Maestro flows (§7), perf (§8), a11y (§9) |
 
 Tooling: **Vitest** for TypeScript unit/integration tests (Node and shared packages), **`bun test`** for the API server (`apps/api`), **Jest + React Native Testing Library** for app components (the Expo default), **pgTAP** for SQL/RLS tests, **fast-check** for property-based tests, **Maestro** for Android E2E.
@@ -94,9 +94,9 @@ Tooling: **Vitest** for TypeScript unit/integration tests (Node and shared packa
 - Each function is tested for: auth required, scope authorization (e.g. a tutor request for a subject the caller can't read → 403), budget gate (budget exhausted → error code, no Claude call made), input validation, and the happy path. Error paths cover Claude timeouts, refusal and invalid output.
 - **Streaming**: the tutor function streams tokens and emits citations mapped to original page numbers.
 
-### 5.2 Worker jobs
+### 5.2 Direct domain operations
 
-- pg-boss with local Postgres. Jobs are tested end-to-end with the mock Claude server returning **recorded real responses**, captured once from a staging run and stored in `apps/worker/test/fixtures/claude/`.
+- Direct operation registry and calendar triggers with local Postgres. Jobs are tested end-to-end with the mock Claude server returning **recorded real responses**, captured once from a staging run and stored in `packages/server-tasks/test/fixtures/claude/`.
 - Ingestion job on each golden PDF (§6.1): pages counted, text and spans extracted, slices created, knowledge map written, items written, `ai_jobs.progress` reaches 100, `ai_usage` rows recorded.
 - **Failure handling**: a malformed PDF fails with a user-visible reason. An encrypted PDF is rejected. A model output failing Zod is never re-asked: its invalid list items are dropped, otherwise the item is marked failed. A worker crash mid-job resumes idempotently (no duplicate nodes or items, enforced by deterministic keys).
 - **Batch API path**: mock batch lifecycle (`in_progress` → `ended`), results arriving in arbitrary order keyed by `custom_id`, partial failures.

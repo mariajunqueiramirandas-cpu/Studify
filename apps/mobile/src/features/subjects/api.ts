@@ -176,6 +176,7 @@ export interface UploadInput {
   kind: DocumentKind;
   teacherName?: string | null;
   onProgress?: (pct: number) => void;
+  onProcessing?: (stage: string, progress?: number) => void;
 }
 
 export type UploadOutcome =
@@ -193,6 +194,7 @@ export async function uploadMaterial(input: UploadInput): Promise<UploadOutcome>
   const documentId = uuidv7();
   const storagePath = `${input.subjectId}/${documentId}.pdf`;
   await uploadFile({ bucket: 'documents', path: storagePath, uri: input.uri, contentType: 'application/pdf', onProgress: input.onProgress });
+  let processingStage = 'S0';
   try {
     const res = await callFunction<IngestStartBody, { job_id: string; mode: 'full' | 'outline_only' }>(
       'ingest-start',
@@ -203,7 +205,12 @@ export async function uploadMaterial(input: UploadInput): Promise<UploadOutcome>
         kind: input.kind,
         teacher_name: input.teacherName ?? null,
       },
-      { idempotencyKey: documentId },
+      { idempotencyKey: documentId, onProgress: (event) => {
+        if (event.key !== 'operation.progress') return;
+        const progress = event.params as { stage?: string; progress?: number } | undefined;
+        if (progress?.stage) processingStage = progress.stage;
+        input.onProcessing?.(processingStage, progress?.progress);
+      } },
     );
     return { ok: true, documentId, jobId: res.job_id, mode: res.mode };
   } catch (e) {

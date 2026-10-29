@@ -1,6 +1,6 @@
 # 0009 — No request waits on Claude: AI work runs as a job or inside a stream
 
-| Status | Accepted |
+| Status | Superseded by [0010 — Direct SSE API](0010-direct-sse-api.md) |
 |---|---|
 | Date | 2026-10-28 |
 | Related | [0005 — Job worker with pg-boss](0005-job-worker-pg-boss.md) · [0008 — VPS, Bun and Hono](0008-vps-bun-hono-api.md) · [AI pipeline](../ai-pipeline.md) · [API](../api.md) |

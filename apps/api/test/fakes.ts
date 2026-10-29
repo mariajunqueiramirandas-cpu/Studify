@@ -6,7 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AiUsageRow, AnthropicLike, BudgetReserveInput, BudgetReserveResult, BudgetScope, BudgetStore, UsageSink } from '@studify/ai';
 import { uuidV7 } from '@studify/shared';
-import type { Deps, Enqueue } from '../src/shared/deps.ts';
+import type { Deps, Execute } from '../src/shared/deps.ts';
 
 export type Row = Record<string, unknown>;
 
@@ -527,7 +527,7 @@ export function makeHarness(reply: ReplyFn | FakeReply = { content: [{ type: 'te
   const enqueued: Harness['enqueued'] = [];
   const seenSingletons = new Set<string>();
   let seq = 0;
-  const enqueue: Enqueue = async (queue, data, options) => {
+  const execute: Execute = async (queue, data, options) => {
     if (options?.singletonKey) {
       const key = `${queue}:${options.singletonKey}`;
       if (seenSingletons.has(key)) return null;
@@ -544,7 +544,7 @@ export function makeHarness(reply: ReplyFn | FakeReply = { content: [{ type: 'te
     // Separate from db.auth on purpose: the service client must never verify a code (it would keep the session).
     verifyEmailCode: async (_email: string, code: string) => db.otpCode !== null && code === db.otpCode,
     ai: { client: claude, budget, usage, maxRetries: 0 },
-    enqueue,
+    execute,
     now: () => new Date(NOW),
     newId: () => uuidV7(NOW_MS + ++seq),
     heartbeatMs: 0,

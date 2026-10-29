@@ -15,8 +15,8 @@ import { scoringPlan, startState, type ModelPlan, type StoredPlan } from '../sha
 
 export const handler = defineFunction<z.infer<typeof TeachingStartReqSchema>>({
   name: 'teaching-start',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: TeachingStartReqSchema,

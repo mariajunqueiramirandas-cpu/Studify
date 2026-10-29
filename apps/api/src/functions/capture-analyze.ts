@@ -38,8 +38,8 @@ function storedResponse(c: CaptureRow): CaptureAnalyzeRes {
 
 export const handler = defineFunction<CaptureAnalyzeReq>({
   name: 'capture-analyze',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: CaptureAnalyzeReqSchema,

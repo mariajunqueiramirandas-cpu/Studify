@@ -1,8 +1,7 @@
 // Idempotency-Key handling (api.md §2.4). Rows live in private.idempotency_keys for 24 h, keyed by
 // (user, function, key). A placeholder row (status 102) is written before the work starts, so two
 // concurrent first calls cannot both run the side effects. A stale placeholder (crashed call) is
-// released after 10 minutes so the student can retry. A deferred call (ADR 0009) keeps its placeholder until
-// its job finishes, so every retry with the same key in the meantime gets `202 running`.
+// released after 10 minutes. Live streams join in memory; startup resolves orphaned placeholders (ADR 0010).
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -26,9 +25,7 @@ export type IdempotencyOutcome =
   | { kind: 'replay'; stored: StoredResponse }
   | { kind: 'mismatch' }
   /** The same key is still running. */
-  | { kind: 'in_flight' }
-  /** Another key with the same body is still running (deferred calls only): the caller should follow `key`. */
-  | { kind: 'joined'; key: string };
+  | { kind: 'in_flight' };
 
 export interface BeginArgs {
   userId: string;
@@ -36,11 +33,7 @@ export interface BeginArgs {
   key: string;
   requestHash: string;
   now: Date;
-  /**
-   * Deferred calls (ADR 0009): a second identical request from the same student while the first still runs joins it
-   * instead of paying for the same work again (a remount, a double tap, a resend under a new key).
-   */
-  joinSameRequest?: boolean;
+
 }
 
 interface KeyRow {
@@ -79,22 +72,6 @@ export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Prom
     if (removed.error) throw removed.error;
   }
 
-  if (args.joinSameRequest) {
-    const running = await table()
-      .select('key, created_at')
-      .eq('user_id', match.user_id)
-      .eq('function_name', match.function_name)
-      .eq('request_hash', args.requestHash)
-      .eq('status_code', IN_FLIGHT)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (running.error) throw running.error;
-    const sibling = ((running.data ?? []) as Array<{ key: string; created_at: string }>)[0];
-    if (sibling && args.now.getTime() - new Date(sibling.created_at).getTime() <= IN_FLIGHT_STALE_MS) {
-      return { kind: 'joined', key: sibling.key };
-    }
-  }
-
   const inserted = await table().insert({
     user_id: args.userId,
     function_name: args.fn,
@@ -113,7 +90,7 @@ export async function beginIdempotent(db: SupabaseClient, args: BeginArgs): Prom
   return { kind: 'new', handle: idempotencyHandle(db, args.userId, args.fn, args.key) };
 }
 
-/** The handle of an existing key: the request that wrote the placeholder, or the job that finishes a deferred call. */
+/** Ownership of a request placeholder and its final stored response. */
 export function idempotencyHandle(db: SupabaseClient, userId: string, fn: string, key: string): IdempotencyHandle {
   const table = () => db.schema('private').from('idempotency_keys');
   return {

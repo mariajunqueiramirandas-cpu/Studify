@@ -70,13 +70,15 @@ export const handler = defineFunction<z.infer<typeof NoteGenerateReqSchema>>({
         created_by: userId,
       });
       if (inserted.error) throw inserted.error;
-      await deps.enqueue(
+      await deps.execute(
         'content.regenerate_topic',
         { node_id: input.node_id, kinds: ['notes'], depth: input.depth, note_id: noteId, user_id: userId },
-        { singletonKey: `${input.node_id}:notes:${input.depth}`, retryLimit: 2 },
+        { singletonKey: `${input.node_id}:notes:${input.depth}`, },
       );
-      const body: NoteGenerateRes = { note_id: noteId, status: 'pending' };
-      return ctx.json(body, 202);
+      const finished = await currentNote(db, input.node_id, input.depth);
+      const status = finished?.id === noteId ? finished.status : 'pending';
+      const body: NoteGenerateRes = { note_id: noteId, status };
+      return ctx.json(body, status === 'ready' ? 200 : 202);
     }
 
     // depth = deep: streamed here (notes.deep, effort high, budget user).

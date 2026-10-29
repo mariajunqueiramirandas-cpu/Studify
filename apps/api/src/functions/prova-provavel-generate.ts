@@ -38,7 +38,7 @@ export const handler = defineP2<ProvaProvavelInput>({
     }
     if (generations >= PP_MAX_GENERATIONS) throw new ApiFailure('regenerate_limit');
 
-    const jobId = await p2.enqueue(
+    const jobId = await p2.execute(
       'pp.generate',
       { exam_id: i.exam_id, user_id: me },
       { singletonKey: `pp-generate:${me}:${i.exam_id}` },

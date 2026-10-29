@@ -12,66 +12,37 @@
 
 ```mermaid
 flowchart LR
-  subgraph Phone["Android phone"]
-    App["Studify app<br/>Expo / React Native"]
-    LocalDB[("SQLite<br/>offline cache")]
-    Widget["Home-screen widget"]
-    App <--> LocalDB
-    Widget <--> LocalDB
-  end
-
-  subgraph Supabase["Supabase"]
-    Auth["Auth"]
-    PG[("Postgres<br/>+ RLS")]
-    Storage[("Storage<br/>PDFs, images, audio")]
-    RT["Realtime<br/>duels, battles, rooms"]
-    Edge["API server (Bun + Hono)<br/>/api/name, sync API"]
-  end
-
-  Worker["Job worker<br/>Node.js + pg-boss"]
-  Claude["Claude API"]
-  TTS["TTS provider<br/>(Phase 3)"]
-  FCM["Firebase Cloud Messaging"]
-
-  App -- "auth" --> Auth
-  App -- "reads/writes (RLS)" --> PG
-  App -- "uploads" --> Storage
-  App <-- "subscriptions" --> RT
-  App -- "AI requests (stream)" --> Edge
-  Edge --> Claude
-  Edge -- "enqueue jobs" --> PG
-  Worker -- "poll jobs" --> PG
-  Worker --> Claude
-  Worker --> Storage
-  Worker --> TTS
-  Worker -- "push" --> FCM
-  FCM --> App
+  App["Android app · Expo"] <-->|"SSE: progress, deltas, final results"| API["Bun + Hono API · one service"]
+  App <--> LocalDB[(SQLite offline cache)]
+  App <--> Supabase["Supabase Auth · RLS · Storage · Realtime"]
+  API <--> Supabase
+  API --> Tasks["Direct domain operations · server-tasks library"]
+  Tasks --> Claude["Claude API"]
+  Tasks --> TTS["TTS provider"]
+  Tasks --> Push["Expo Push / FCM"]
+  API --> Calendar["Future deadlines and UTC schedules"]
+  Calendar --> Tasks
 ```
 
-**Three runtime pieces:**
+The Android app owns UI and offline study state. Supabase owns authentication, persistent data, RLS, Storage and social Realtime. One VPS API service owns privileged requests, model calls, ingestion, generation and timed operations. `packages/server-tasks` is a library loaded in that process; it has no standalone entry point or container.
 
-| Piece | Responsibility | Why |
-|---|---|---|
-| **Android app** (Expo) | All UI; offline cache of cards, review logs, notes; FSRS scheduling runs **on device** so reviews work offline. | Phone-first, offline reviews. |
-| **Supabase** | Auth, Postgres (source of truth, Row Level Security on every table), Storage, Realtime. |
-| **API server** (Bun + Hono, VPS) | Short synchronous AI calls and privileged operations (tutor chat, grading one answer, explain-differently, sync push, duels), served at `/api/<name>`. Formerly Supabase Edge Functions ([ADR 0008](adr/0008-vps-bun-hono-api.md)). | One managed backend; RLS keeps per-user and per-Turma data isolated without a custom API for plain CRUD. |
-| **Job worker** (Node.js, TypeScript) | Long-running and bulk work: PDF ingestion, knowledge-map generation, bulk card/question/note generation (Claude Batch API), podcast audio, nightly plan recomputation, push notifications. Queue: **pg-boss** on the same Postgres. | Ingestion can take minutes; Batch API is asynchronous; synchronous requests should not hold a connection for minutes. |
+Every new mobile request asks for SSE. Streams open after authentication, validation and idempotency admission, before handler work or model tokens. Structured results arrive in `done.result`; conversational responses stream deltas. Reconnects attach to the live operation with `Last-Event-ID`; completed transcripts replay for 24 hours. Heartbeats, bounded buffers, cancellation deadlines, crash recovery, one-replica ownership and rollout are specified in [ADR 0010](adr/0010-direct-sse-api.md).
 
-**Rule:** the Claude API key lives **only** in API server and worker secrets. The app never holds it and never calls Claude directly.
+Future notifications, battle deadlines and budget resets persist in a calendar table. Immediate operations bypass that table and execute directly. There is no pg-boss execution queue or separate worker service. Claude and other provider secrets stay in the API environment.
 
 ## 2. Tech stack
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Language | **TypeScript** everywhere | Shared types package between app, API server and worker. |
-| Monorepo | pnpm workspaces | `apps/mobile`, `apps/worker`, `apps/api` (API server), `supabase/` (migrations), `packages/shared` (types, schemas, FSRS wrapper, grading rules), `packages/prompts`. |
+| Language | **TypeScript** everywhere | Shared types package between app and API server. |
+| Monorepo | pnpm workspaces | `apps/mobile`, `packages/server-tasks`, `apps/api` (API server), `supabase/` (migrations), `packages/shared` (types, schemas, FSRS wrapper, grading rules), `packages/prompts`. |
 | Mobile | Expo SDK (latest stable), Expo Router, React Native | Android-only builds via EAS; development builds (not Expo Go) because of native modules (PDF viewer, widgets). |
 | Server state | TanStack Query | Caching, retries, optimistic updates. |
 | Local state | Zustand | UI/session state. |
 | Local DB | expo-sqlite + Drizzle ORM | Offline cards, card states, review logs, downloaded notes; sync queue. |
 | Validation | Zod | One schema per AI output and per API payload, shared across app/server. |
 | Backend | Supabase cloud (Postgres 15+, Auth, Storage, Realtime) + API server on Bun + Hono, on a VPS through Dokploy (`/api/<name>`; formerly Supabase Edge Functions) | Migrations in `supabase/migrations`. See [ADR 0008](adr/0008-vps-bun-hono-api.md) and [deployment.md](deployment.md). |
-| Queue | pg-boss | Jobs table in Postgres; retries with backoff. |
+| Operation transport | SSE | Immediate stream, live reconnect, persisted result replay; future calendar triggers in the same API process. |
 | AI | Claude API via `@anthropic-ai/sdk` | Details in [ai-pipeline.md](ai-pipeline.md). |
 | Spaced repetition | `ts-fsrs` | Runs on device and on server (same package version). |
 | PDF | Viewer: `react-native-pdf`. Server: `pdf-lib` (split/slice), `pdfjs-dist` (page count, text layer for search). | |
@@ -80,7 +51,7 @@ flowchart LR
 | Push | expo-notifications + FCM | |
 | Widgets | `react-native-android-widget` | MEM-04. |
 | Speech | On-device Android TTS/STT for read-aloud and voice input; cloud TTS for podcast (provider TBD in Phase 3) | Claude handles text only. |
-| Errors/crashes | Sentry (app + worker) | No analytics SDKs that profile minors. |
+| Errors/crashes | Sentry (app + API) | No analytics SDKs that profile minors. |
 | i18n | i18next with a single `pt-BR` locale at launch | All UI strings externalized from day one. |
 
 ## 3. Domain model
@@ -161,7 +132,7 @@ erDiagram
 | `user_reports` / `user_blocks` | Safety (SP-09). | |
 | `duels`, `battles`, `battle_players` | Competitive modes (Realtime). | participants, quiz, status, scores; server-side timing in `private.question_served` |
 | `essays` | Long answers: ENEM redação and school essay questions. | kind (`enem_redacao` / `school_answer`), theme/prompt, text, images, transcription, scores, feedback |
-| `ai_jobs` | User-visible job progress (mirrors pg-boss). | type, stage, parent job, items total/done, batch id, status (incl. `waiting_batch` / `waiting_budget`), progress, error |
+| `ai_jobs` | Persistent progress read model for direct operations. | operation id, type, stage, parent operation, items total/done, legacy batch id, status (incl. `waiting_batch` / `waiting_budget`), progress, error |
 | `ai_usage` | One row per Claude call. | user, class group, feature ID, task, model, input/output/cache tokens, `fallback_model`, `refusal_category`, cost (micro-USD), `price_version`, request id |
 | `private.ai_budgets` | Budget reservations per scope and period (PLT-04). | Not exposed to clients. |
 
@@ -193,24 +164,19 @@ sequenceDiagram
   participant A as App
   participant S as Storage
   participant E as Edge: ingest-start
-  participant Q as pg-boss
-  participant W as Worker
   participant C as Claude API
   A->>S: upload PDF (resumable)
-  A->>E: start ingestion(document_id)
-  E->>Q: enqueue ingest.document
-  E-->>A: job id
-  W->>Q: take job
-  W->>S: download PDF
-  W->>W: count pages, extract text layer, split if > limits
-  W->>C: knowledge map (PDF slices, cached)
-  C-->>W: outline JSON (validated with Zod)
-  W->>W: write knowledge_nodes, node_sources
-  Note over A: Outline visible (target < 2 min)
-  W->>C: Batch API: notes, glossary, cards, questions per topic
-  C-->>W: results (async)
-  W->>W: write items, update ai_jobs.progress
-  A-->>A: Realtime progress updates
+  A->>E: POST ingest-start, Accept SSE, Idempotency-Key
+  E-->>A: connected + meta immediately
+  E->>S: download and inspect PDF
+  E-->>A: status: extraction / outline
+  E->>C: generate knowledge map
+  C-->>E: validated outline
+  E-->>A: status: content generation
+  E->>C: standard content calls per topic
+  C-->>E: validated content
+  E-->>A: done: persisted result
+
 ```
 
 ### 4.2 Review (offline-first, MEM-02)

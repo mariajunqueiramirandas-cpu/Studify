@@ -30,15 +30,15 @@ studify/
 │  │  ├─ assets/               # fonts, images, bundled KaTeX/markdown-it web assets
 │  │  ├─ app.config.ts         # Expo config (dynamic, per environment)
 │  │  └─ eas.json
-│  └─ worker/                  # Job worker (Bun, pg-boss)
 ├─ supabase/
 │  ├─ migrations/              # SQL migrations + RLS policies
 │  ├─ tests/                   # RLS / SQL tests
 │  └─ seed.sql
 ├─ apps/api/                   # API server (Bun + Hono): /api/<name> functions, /api/health, link site
 ├─ packages/
+│  ├─ server-tasks/            # Direct domain operations loaded by the API
 │  ├─ shared/                  # types, Zod schemas, ts-fsrs wrapper, grading rules, planner, sync protocol
-│  └─ prompts/                 # versioned prompt templates + output schemas (used by worker & API)
+│  └─ prompts/                 # versioned prompt templates + output schemas (used by the API and its domain library)
 ├─ docs/
 ├─ package.json                # pnpm workspaces
 └─ pnpm-workspace.yaml

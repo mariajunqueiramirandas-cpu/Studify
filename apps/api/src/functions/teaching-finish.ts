@@ -35,8 +35,8 @@ function resultOf(session: TeachingRow): TeachingFinishRes {
 
 export const handler = defineFunction<z.infer<typeof TeachingFinishReqSchema>>({
   name: 'teaching-finish',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: TeachingFinishReqSchema,
@@ -81,10 +81,10 @@ export const handler = defineFunction<z.infer<typeof TeachingFinishReqSchema>>({
     if (evidence.length > 0) {
       const ins = await db.from('mastery_evidence').upsert(evidence, { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true });
       if (ins.error) throw ins.error;
-      await deps.enqueue('mastery.recompute', { user_id: userId, node_ids: [...byNode.keys()] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
+      await deps.execute('mastery.recompute', { user_id: userId, node_ids: [...byNode.keys()] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
     }
     if (body.score !== null) {
-      await deps.enqueue(
+      await deps.execute(
         'xp.award',
         { user_id: userId, events: [{ event: { kind: 'lucas_finished', score: body.score }, ref_type: 'teaching_session', ref_id: session.id, source_feature: 'INT-02', occurred_at: ctx.now.toISOString() }] },
         { singletonKey: `xp:teaching_session:${session.id}` },

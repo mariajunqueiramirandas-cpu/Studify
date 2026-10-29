@@ -11,8 +11,8 @@ import { claudeDepsFor } from '../shared/deps.ts';
 
 export const handler = defineFunction<z.infer<typeof ArgumentThemesReqSchema>>({
   name: 'argument-themes',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: false,
   aiCall: true,
   input: ArgumentThemesReqSchema,

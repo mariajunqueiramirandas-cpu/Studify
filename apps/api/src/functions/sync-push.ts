@@ -453,7 +453,7 @@ async function pushAnswers(st: PushState, items: AnswerItem[]): Promise<void> {
     if (grading.status === 'pending') pendingGrading.push(item.id);
   }
   for (const id of pendingGrading) {
-    await st.deps.enqueue('grading.answer', { attempt_answer_id: id }, { singletonKey: id, retryLimit: 2 });
+    await st.deps.execute('grading.answer', { attempt_answer_id: id }, { singletonKey: id, });
   }
 }
 
@@ -732,7 +732,7 @@ async function pushFlags(st: PushState, items: Item<'flag'>[]): Promise<void> {
         return;
       }
       st.acked.add(item.id);
-      await st.deps.enqueue('flag.triage', { flag_id: item.id }, { singletonKey: item.id, retryLimit: 2 });
+      await st.deps.execute('flag.triage', { flag_id: item.id }, { singletonKey: item.id, });
     });
   }
 }

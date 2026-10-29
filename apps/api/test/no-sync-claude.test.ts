@@ -1,8 +1,6 @@
 import { test } from 'bun:test';
-// ADR 0009: no request waits on Claude. A function whose code can reach a plain Claude call (callTask / callClaude),
-// directly or through shared helpers, must either be deferred (it runs as a job) or declare `claudeInsideStream` (it
-// makes the call inside its SSE producer, where the heartbeat flows). openStream is not a plain call. The check walks
-// the relative imports of apps/api/src at module level, so a new helper path cannot slip by.
+// Every plain model call declares a streamed structured result or executes inside an explicit SSE producer.
+// Walk relative imports so moving a call into a shared helper cannot bypass the architecture check.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { assertEquals } from './assert.ts';
@@ -34,7 +32,7 @@ function callsClaude(file: string, text: string): boolean {
   return /\b(callTask|callClaude)\(/.test(text);
 }
 
-test('every function that can reach a plain Claude call is deferred, and only those are', () => {
+test('every plain model call is covered by the SSE transport contract', () => {
   const files = sourceFiles(SRC);
   const texts = new Map(files.map((file) => [file, readFileSync(file, 'utf8')]));
   const graph = new Map(files.map((file) => [file, importsOf(file, texts.get(file)!)]));
@@ -56,17 +54,17 @@ test('every function that can reach a plain Claude call is deferred, and only th
   const name = (file: string) => relative(SRC, file);
   const declares = (file: string, field: string) => new RegExp(`^\\s*${field}:`, 'm').test(texts.get(file)!);
   const reachesClaude = functions.filter((file) => visit(file, new Set())).map(name).sort();
-  const covered = functions.filter((file) => declares(file, 'deferred') || declares(file, 'claudeInsideStream')).map(name).sort();
+  const covered = functions.filter((file) => declares(file, 'streamResult') || declares(file, 'claudeInsideStream')).map(name).sort();
 
   assertEquals(
     reachesClaude.filter((file) => !covered.includes(file)),
     [],
-    'these functions reach a plain Claude call outside a stream: add `deferred` (or move the call into the SSE producer and declare `claudeInsideStream`)',
+    'these functions reach a plain Claude call outside a stream: add `streamResult` (or move the call into the SSE producer and declare `claudeInsideStream`)',
   );
   assertEquals(
     covered.filter((file) => !reachesClaude.includes(file)),
     [],
-    'these functions declare `deferred` or `claudeInsideStream` but never call Claude (remove the declaration)',
+    'these functions declare `streamResult` or `claudeInsideStream` but never call Claude (remove the declaration)',
   );
   assertEquals(
     functions.filter((file) => declares(file, 'claudeInsideStream') && !/ctx\.sse\(/.test(texts.get(file)!)).map(name),
