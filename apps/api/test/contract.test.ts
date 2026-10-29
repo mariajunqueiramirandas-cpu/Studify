@@ -30,6 +30,23 @@ import { handler as trailPrepare } from '../src/functions/trail-prepare.ts';
 import { handler as trailAnswer } from '../src/functions/trail-answer.ts';
 import { handler as trailGrade } from '../src/functions/trail-grade.ts';
 import { handler as trailSettle } from '../src/functions/trail-settle.ts';
+import { handler as accountOverview } from '../src/functions/account-overview.ts';
+import { handler as accountUpdate } from '../src/functions/account-update.ts';
+import { handler as accountMembership } from '../src/functions/account-membership.ts';
+import { handler as accountDeviceRemove } from '../src/functions/account-device-remove.ts';
+import { handler as accountExportLink } from '../src/functions/account-export-link.ts';
+import { handler as adminOverview } from '../src/functions/admin-overview.ts';
+import { handler as adminAiUsage } from '../src/functions/admin-ai-usage.ts';
+import { handler as adminUsers } from '../src/functions/admin-users.ts';
+import { handler as adminUser } from '../src/functions/admin-user.ts';
+import { handler as adminUserControl } from '../src/functions/admin-user-control.ts';
+import { handler as adminClassGroups } from '../src/functions/admin-class-groups.ts';
+import { handler as adminClassGroupControl } from '../src/functions/admin-class-group-control.ts';
+import { handler as adminModeration } from '../src/functions/admin-moderation.ts';
+import { handler as adminModerationControl } from '../src/functions/admin-moderation-control.ts';
+import { handler as adminSettings } from '../src/functions/admin-settings.ts';
+import { handler as adminSettingsControl } from '../src/functions/admin-settings-control.ts';
+import { handler as adminAudit } from '../src/functions/admin-audit.ts';
 
 import type { Deps } from '../src/shared/deps.ts';
 
@@ -64,6 +81,23 @@ const FUNCTIONS: Array<[string, Handler, boolean, unknown]> = [
   ['trail-answer', trailAnswer, true, { trail_id: 'x' }],
   ['trail-grade', trailGrade, true, { trail_id: 'x' }],
   ['trail-settle', trailSettle, true, { trail_id: 'x' }],
+  ['account-overview', accountOverview, false, undefined],
+  ['account-update', accountUpdate, true, {}],
+  ['account-membership', accountMembership, true, { action: 'leave' }],
+  ['account-device-remove', accountDeviceRemove, true, {}],
+  ['account-export-link', accountExportLink, false, { export_id: 'x' }],
+  ['admin-overview', adminOverview, false, undefined],
+  ['admin-ai-usage', adminAiUsage, false, { days: 0 }],
+  ['admin-users', adminUsers, false, { filter: 'everyone' }],
+  ['admin-user', adminUser, false, {}],
+  ['admin-user-control', adminUserControl, true, { action: 'delete_everything' }],
+  ['admin-class-groups', adminClassGroups, false, undefined],
+  ['admin-class-group-control', adminClassGroupControl, true, { action: 'set_budget' }],
+  ['admin-moderation', adminModeration, false, undefined],
+  ['admin-moderation-control', adminModerationControl, true, { action: 'report' }],
+  ['admin-settings', adminSettings as unknown as Handler, false, undefined],
+  ['admin-settings-control', adminSettingsControl as unknown as Handler, true, { action: 'set_limits', global_month_micro_usd: -1 }],
+  ['admin-audit', adminAudit, false, { limit: 0 }],
 ];
 
 for (const [name, handler, mutating, invalid] of FUNCTIONS) {

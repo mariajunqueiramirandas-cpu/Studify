@@ -72,7 +72,7 @@
 | Storage on device | LargeSecureStore: AES-256 key in `expo-secure-store` (Android Keystore), encrypted session in MMKV ([mobile-app.md §12](mobile-app.md#12-auth-on-device)). |
 | Sign-out | "Sair" clears SQLite user data, MMKV and the file cache. "Sair de todos os dispositivos" revokes all refresh tokens (`signOut({ scope: 'global' })`). |
 | OTP abuse | Supabase Auth rate limits plus a per-email cooldown of 60 s. Generic responses ("Se este e-mail estiver cadastrado…") so emails can't be enumerated. |
-| Service accounts | The worker and Edge Functions use the **service-role key** from secrets. Edge Functions handling user requests **also** verify the caller's JWT and authorize explicitly before any service-role query. The API verifies the signature locally when the project uses asymmetric signing keys and remembers a verified token for at most 60 s (never past its expiry), so a revoked session keeps working until its access token expires, as with any locally verified JWT (ADR 0011). |
+| Service accounts | The worker and Edge Functions use the **service-role key** from secrets. Edge Functions handling user requests **also** verify the caller's JWT and authorize explicitly before any service-role query. The API verifies the token with Supabase Auth (`auth.getUser`, which also refuses a suspended account) and remembers a verified token for at most 60 s (never past its expiry), so a revoked session is refused within a minute; a suspension forgets the account's remembered tokens and takes effect at once (ADR 0011). |
 
 ## 4. Authorization: Row Level Security
 
@@ -259,7 +259,7 @@ Guardians of users under 16 can request deletion through the supervision panel (
 ## 12. Logging, monitoring and incident response
 
 - **Logs** contain ids, feature ids, durations, token counts and error codes. They never contain note or card text, tutor messages, essay text, emails or file names.
-- **Audit log** (append-only) for moderation actions, role changes, account deletions, exports, guardian link changes and key rotations.
+- **Audit log** (append-only) for moderation actions, role changes, account deletions, exports, guardian link changes and key rotations. Changes made from the web dashboard's Administração (roles, name reviews, suspensions, limits, flags, minimum version, invites, report and flag decisions) are in `private.admin_audit`; suspensions and removals also in `private.moderation_actions`.
 - **Alerts**: spend at 80% of cap, error-rate spikes (Sentry), auth anomalies (OTP volume), storage growth.
 
 **Incident runbook:**

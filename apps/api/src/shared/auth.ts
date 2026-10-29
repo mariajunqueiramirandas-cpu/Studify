@@ -1,9 +1,9 @@
-// JWT verification (api.md §2.1, security-privacy §3). Every user call verifies the caller's access token before any
-// service-role query, and the authorization checks in access.ts use the verified user id only. The signature is
-// checked locally against the project's signing keys when it signs with asymmetric keys (auth.getClaims, JWKS cached
-// by supabase-js); otherwise getClaims asks Supabase Auth, as getUser did. A verified token is remembered briefly,
-// so a burst of calls from one session pays one verification (ADR 0011).
+// JWT verification (api.md §2.1, security-privacy §3). Every user call goes through supabase.auth.getUser
+// before any service-role query, and the authorization checks in access.ts use the returned user id only.
+// A verified token is remembered briefly (never past its expiry), so a burst of calls from one session pays one
+// round trip to Supabase Auth (ADR 0011); a suspension forgets the account's tokens, so it still takes effect at once.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ApiFailure } from '@studify/shared';
 import { AuthError } from './errors.ts';
 
 export interface AuthUser {
@@ -24,6 +24,16 @@ export function bearerToken(req: Request): string | null {
   return match?.[1] ?? null;
 }
 
+/** The token's own expiry (ms), read from its payload once Supabase Auth has accepted it; null when unreadable. */
+function expiryOf(jwt: string): number | null {
+  try {
+    const payload = JSON.parse(Buffer.from(jwt.split('.')[1] ?? '', 'base64url').toString('utf8')) as { exp?: unknown };
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function authenticate(req: Request, db: SupabaseClient): Promise<AuthUser> {
   const jwt = bearerToken(req);
   if (!jwt) throw new AuthError();
@@ -34,13 +44,23 @@ export async function authenticate(req: Request, db: SupabaseClient): Promise<Au
   if (hit && hit.until > now) return hit.user;
   if (hit) verified.delete(jwt);
 
-  const { data, error } = await db.auth.getClaims(jwt);
-  const claims = data?.claims;
-  // Only a signed-in student's token: the project's anon and service keys are valid JWTs too, without a user.
-  if (error || !claims || typeof claims.sub !== 'string' || !claims.sub || claims.role !== 'authenticated') throw new AuthError();
-  const user: AuthUser = { userId: claims.sub, email: typeof claims.email === 'string' && claims.email ? claims.email : null, jwt };
-  const expiresAt = typeof claims.exp === 'number' ? claims.exp * 1000 : now;
+  const { data, error } = await db.auth.getUser(jwt);
+  if (error || !data?.user) throw new AuthError();
+  // A suspended account (admin-user-control) cannot refresh its session; this stops the access token it still
+  // holds as well, so a suspension takes effect at once instead of when the token expires.
+  const bannedUntil = data.user.banned_until;
+  if (bannedUntil && Date.parse(bannedUntil) > now) {
+    throw new ApiFailure('banned', { message: 'Sua conta está suspensa. Fale com quem organiza o Studify.' });
+  }
+  const user: AuthUser = { userId: data.user.id, email: data.user.email ?? null, jwt };
   if (verified.size >= VERIFIED_MAX) verified.delete(verified.keys().next().value!);
-  verified.set(jwt, { user, until: Math.min(now + VERIFIED_MS, expiresAt) });
+  verified.set(jwt, { user, until: Math.min(now + VERIFIED_MS, expiryOf(jwt) ?? now + VERIFIED_MS) });
   return user;
+}
+
+/** Forgets the remembered tokens of an account (a suspension), so its next call is checked by Supabase Auth again. */
+export function forgetUser(db: SupabaseClient, userId: string): void {
+  const verified = verifiedBy.get(db);
+  if (!verified) return;
+  for (const [jwt, entry] of verified) if (entry.user.userId === userId) verified.delete(jwt);
 }

@@ -21,15 +21,20 @@ async function main(): Promise<void> {
     throw err;
   }
   if (!existsSync(config.siteDir)) log('warn', 'static site directory not found', { siteDir: config.siteDir });
+  if (!existsSync(config.dashboardDir)) log('warn', 'dashboard directory not found', { dashboardDir: config.dashboardDir });
 
   const runtime = buildP2Runtime(config);
   await runtime.start();
-  const app = createApp(runtime.deps, config.siteDir, config.apkUrl);
+  const app = createApp(runtime.deps, config.siteDir, config.apkUrl, {
+    dir: config.dashboardDir,
+    supabaseUrl: config.supabaseUrl,
+    anonKey: config.anonKey,
+  });
 
   // idleTimeout 255 s (the Bun maximum): AI calls can run past the default 10 s without writing bytes,
   // and SSE streams send a heartbeat every 15 s (shared/sse.ts).
   const server = Bun.serve({ port: config.port, fetch: app.fetch, idleTimeout: 255 });
-  log('info', 'api listening', { version: VERSION, port: server.port, siteDir: config.siteDir });
+  log('info', 'api listening', { version: VERSION, port: server.port, siteDir: config.siteDir, dashboardDir: config.dashboardDir });
 
   let stopping = false;
   const shutdown = async (signal: string): Promise<void> => {

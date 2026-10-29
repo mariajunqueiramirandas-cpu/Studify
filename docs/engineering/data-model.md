@@ -15,7 +15,7 @@
 
 | Topic | Convention |
 |---|---|
-| Database | Postgres 15+ (Supabase). App tables live in `public` (exposed through PostgREST, RLS always on). Internal tables that clients must never read directly live in schema `private` (not exposed): `private.class_insights`, `private.ai_budgets`, `private.question_served`, `private.moderation_actions`. Helper functions used by policies live in `private` and are `security definer`, `stable`, with `set search_path = ''`. |
+| Database | Postgres 15+ (Supabase). App tables live in `public` (exposed through PostgREST, RLS always on). Internal tables that clients must never read directly live in schema `private` (not exposed): `private.class_insights`, `private.ai_budgets`, `private.ai_budget_limits`, `private.question_served`, `private.moderation_actions`, `private.admin_audit`. Helper functions used by policies live in `private` and are `security definer`, `stable`, with `set search_path = ''`. |
 | Naming | `snake_case`, plural table names, singular column names. FKs are `<entity>_id`. Booleans are adjectives or `is_`/`has_` (`hidden`, `is_leech`, `has_bookmarks`). Code names are English; PT-BR only in UI strings. |
 | Primary keys | `uuid`, **UUID v7** (time-ordered). Default `public.uuid_v7()` — a thin wrapper over the built-in `uuidv7()` on Postgres ≥ 18, or a PL/pgSQL implementation on older versions. Clients **may** supply ids (offline-created rows: attempts, answers, review logs, overrides, XP events); the server never trusts them for authorization. |
 | Join tables | Composite PK of the two FKs (e.g. `class_group_members (class_group_id, user_id)`). |
@@ -134,7 +134,7 @@ erDiagram
 | H. Interactive & camera | `podcast_episodes`, `podcast_plays`, `podcast_interactions`, `teaching_sessions`, `argument_sessions`, `camera_captures` | [§5.8](#58-interactive-learning-and-camera) |
 | I. Motivation & wellbeing | `xp_events`, `daily_activity`, `streaks`, `achievements`, `boss_attempts`, `retrospectives`, `nudge_events` | [§5.9](#59-motivation-and-wellbeing) |
 | J. ENEM | `enem_editions`, `enem_skills`, `enem_topics`, `knowledge_node_enem_topics`, `enem_items`, `enem_item_params`, `enem_topic_stats`, `enem_topic_trends`, `enem_redacao_themes`, `essay_themes`, `repertorio_items`, `sisu_offers`, `sisu_targets`, `atualidades_digests`, `atualidades_items` | [§5.10](#510-enem) |
-| K. AI ops & platform | `ai_jobs`, `ai_usage`, `private.ai_budgets`, `private.idempotency_keys`, `feature_flags`, `app_versions`, `data_exports`, `account_deletions` | [§5.11](#511-ai-operations-and-platform) |
+| K. AI ops & platform | `ai_jobs`, `ai_usage`, `private.ai_budgets`, `private.ai_budget_limits`, `private.admin_audit`, `private.idempotency_keys`, `feature_flags`, `app_versions`, `data_exports`, `account_deletions` | [§5.11](#511-ai-operations-and-platform) |
 
 ---
 
@@ -1224,6 +1224,12 @@ PK `version_code int`; `version_name`, `runtime_version`, `install_url`, `releas
 
 #### `release_notes` — PLT-06.6
 PK `version text`; `published_at`, `items jsonb` (PT-BR strings). Read by any authenticated user; written by svc.
+
+#### `private.ai_budget_limits` [svc] — PLT-04.6
+PK `(scope_type, scope_id)`; `scope_type` (`user` · `class_group` · `global`), `scope_id` (zero UUID = the default for that type; a user id = that student's override; Turma overrides stay in `class_groups.ai_budget_monthly_micro_usd`), `limit_micro_usd`, `updated_by N` (plain uuid), `updated_at`. Read by `private.ai_budget_limit`; written by `private.ai_budget_set_limit`, which also updates the open periods of `private.ai_budgets`. Missing rows fall back to `private.ai_budget_default` ($1/user/day, $50/Turma/month, $100/month global).
+
+#### `private.admin_audit` [append] [svc] — security §12
+`id`, `actor_id N` (plain uuid: the log outlives the admin's profile), `action` (e.g. `user.suspend`, `settings.set_limits`, `invite.create`), `target_type`, `target_id N` (text: a uuid, flag key or version code), `details jsonb` (object), `created_at`. Every change made from the web dashboard's Administração. Append-only (`private.forbid_mutation`), retained ≥ 5 years.
 
 #### `private.idempotency_keys` [svc] — api.md §2.4
 PK `(user_id, function_name, key)`; `request_hash text`, `status_code int`, `response jsonb`, `created_at`. Rows older than 24 h are purged nightly. Lets Edge Functions return the stored response when a client retries a mutating call with the same `Idempotency-Key`.

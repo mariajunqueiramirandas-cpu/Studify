@@ -70,7 +70,7 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | PLT-02.6 | **Onboarding sequence** (screens S-AUTH-01…08 in [ux-guidelines.md](../design/ux-guidelines.md)): Entrar → (código) → convite (new accounts only) → idade → (responsável, if required) → seu perfil (incl. the privacy notice and its acceptance) → "Pra que você vai estudar?" → primeira matéria + upload. While the first upload processes, the app offers "Criar sua Semana de Provas" (GOL-01) and starts the first session as soon as the outline exists (ING-03). |
 | PLT-02.7 | The privacy notice (SP-13) is shown in plain PT-BR during onboarding, with a short teen-friendly summary on top and the full text one tap away. Acceptance is stored with the notice version. A new notice version asks for acceptance again on next launch. |
 | PLT-02.8 | **Sign out** ("Sair") clears local data. If the device has unsynced reviews in the outbox, sign-out first tries to sync; if offline, it warns "Você tem revisões que ainda não foram salvas na nuvem" and offers to wait. "Sair de todos os dispositivos" revokes all sessions. |
-| PLT-02.9 | **Export and deletion (SP-14)** are self-service in Perfil → Privacidade: export produces a JSON + CSV archive; deletion follows the process and grace period in [security-privacy.md §10](../engineering/security-privacy.md#10-data-retention-export-and-deletion). Content the user uploaded to a Turma follows the same section's rules for shared content. |
+| PLT-02.9 | **Export and deletion (SP-14)** are self-service in Perfil → Privacidade (and on the web dashboard, `/painel/privacidade`): export produces a JSON + CSV archive; deletion follows the process and grace period in [security-privacy.md §10](../engineering/security-privacy.md#10-data-retention-export-and-deletion). Content the user uploaded to a Turma follows the same section's rules for shared content. |
 
 ### PLT-03 — Subjects / Matérias (Phase 0)
 
@@ -94,7 +94,7 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | PLT-04.3 | At **80%** of the daily limit, a one-time gentle notice appears in the app (not a push). At **100%**, AI actions show the limit state with the reset time. Everything already generated keeps working: reviews, existing quizzes, notes, glossary, the PDF viewer, Caderno de Erros, plans. |
 | PLT-04.4 | **Ingestion and limits.** Before an upload starts processing, its estimated cost is reserved. If the reservation fails, the user can process **only the outline now** (cheap) and the rest is scheduled for the next day, or cancel. Already-running jobs are never killed halfway by the daily limit; they settle against it. |
 | PLT-04.5 | **Shared Turma content** is charged to the Turma's monthly budget, not to the member who uploaded it ([architecture §3.2 rule 4](../engineering/architecture.md#32-ownership-and-sharing-rules)). The Turma owner sees the Turma's usage as a percentage. |
-| PLT-04.6 | **Owner controls.** The owner (role `app_admin`) sets the per-user daily limit, per-Turma monthly limit and global monthly cap, and receives alerts at 80% and 100% of the global cap and when a user exceeds 5× the median daily spend. Phase 0: configured through environment config and SQL. Phase 1: an owner-only screen Perfil → Administração with spend by day, feature and Turma. |
+| PLT-04.6 | **Owner controls.** The owner (role `app_admin`) sets the per-user daily limit, per-Turma monthly limit and global monthly cap, and receives alerts at 80% and 100% of the global cap and when a user exceeds 5× the median daily spend. Phase 0: configured through environment config and SQL. Now: the web dashboard's Administração (`/painel/admin`, [api.md §4.12](../engineering/api.md#412-web-dashboard-painel)) sets all three limits and per-student and per-Turma overrides, shows spend by day, feature, task, model and Turma, and raises the 80% / 100% / 5×-median alerts. |
 | PLT-04.7 | Rate limit of 10 AI requests per user per minute and 60 tutor messages per day ([security-privacy.md §7](../engineering/security-privacy.md#7-rate-limiting-and-ai-budgets-plt-04)), with the PT-BR messages in §5. |
 
 ### PLT-05 — Notifications (Phase 1)
@@ -144,7 +144,7 @@ Implementation detail lives in [mobile-app.md](../engineering/mobile-app.md) and
 | Primeira matéria | Create subject + upload | Leads into ING-01 |
 | Perfil (tab) | Profile, goals, settings, privacy, usage, storage, feedback, novidades | |
 | Uso de IA | Today's usage meter | PLT-04.2 |
-| Administração | Owner-only spend dashboard | Phase 1 |
+| Administração | Owner-only spend dashboard | On the web dashboard (`/painel/admin`), not in the app |
 | Armazenamento | Downloads and cache | PLT-07.4 |
 | Atualização obrigatória | Blocking update screen | PLT-06.3 |
 
@@ -322,4 +322,4 @@ When downloads exceed the cache limit, evict in this order until under the limit
 | 4 | Domain for HTTPS invite links, the landing page and the privacy notice. | Yes |
 | 5 | Should Google and email accounts with the same address be linked automatically? | Can default to "no" for v1 |
 | 6 | Default cache limit (500 MB proposed). | Can default |
-| 7 | Should the owner-only Administração screen exist in the app (Phase 1) or stay in the Supabase dashboard? | Can default to in-app |
+| 7 | Should the owner-only Administração screen exist in the app (Phase 1) or stay in the Supabase dashboard? | Resolved: a web dashboard served by the API at `/painel` (spend, limits, users, Turmas, moderation, invites, flags, audit log) |

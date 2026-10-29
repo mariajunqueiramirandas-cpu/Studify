@@ -2,6 +2,7 @@
 **/node_modules
 # The image builds the link site itself (apps/api/Dockerfile, stage site).
 apps/site/dist
+apps/dashboard/dist
 .git
 .github
 .env

@@ -49,9 +49,9 @@ The buffer also had a correctness bug: the chapter test it wrote ahead while the
 
 Every generation screen shows its wait with one component (`GenerationStatus`): what is being made, the step, a bar filled from the progress the server reports (gliding when one long call reports none), elapsed time, the time left once a sixth is done, a "slower than usual" note, and — for background work — that the student can leave and will be told. Job rows arrive by Realtime and are merged into the screens' caches. Failures show the server's PT-BR message with a retry; every stream failure (network, deadline) reaches its screen. The lock-screen live notification updates at each step and at most every 30 s within one.
 
-### Verify tokens locally
+### Remember verified tokens briefly
 
-`authenticate` verifies the access token's signature locally when the project's signing keys allow it (`auth.getClaims`, JWKS cached by supabase-js) and keeps a verified token for at most 60 seconds or until it expires, whichever comes first, so a burst of requests from one session pays one verification.
+`authenticate` verifies the access token with Supabase Auth (`auth.getUser`, which also reports a suspension) and remembers a verified token for at most 60 seconds or until it expires, whichever comes first, so a burst of requests from one session pays one verification. Suspending an account (`admin-user-control`) forgets its remembered tokens, so the suspension still takes effect at once. Verifying the signature locally (`auth.getClaims`) would save the remaining round trip, but a JWT does not carry the suspension, which would then wait for the token to expire.
 
 ## Alternatives considered
 

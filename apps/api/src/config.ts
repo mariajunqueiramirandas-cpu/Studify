@@ -19,6 +19,8 @@ const Env = z.object({
   BASE_URL: z.string().optional(),
   /** Directory with the built link site. Default: apps/site/dist in the repo (the image sets /app/site). */
   SITE_DIR: z.string().min(1).optional(),
+  /** Directory with the built web dashboard (/painel). Default: apps/dashboard/dist in the repo (the image sets /app/dashboard). */
+  DASHBOARD_DIR: z.string().min(1).optional(),
   /** Where /download redirects. Default: the newest GitHub Release's studify.apk (site.ts DEFAULT_APK_URL). */
   APK_URL: z.url().optional(),
   /** Resend key for the guardian mail (SP-03). Unset: no guardian mail is sent. Sign-in codes go through Supabase's SMTP. */
@@ -39,6 +41,7 @@ export interface ApiConfig {
   /** Raw BASE_URL: undefined means the default host, '' means custom-scheme links (see shared-p2/util.ts). */
   baseUrl: string | undefined;
   siteDir: string;
+  dashboardDir: string;
   apkUrl: string;
   resendApiKey: string | undefined;
   mailFrom: string | undefined;
@@ -55,6 +58,9 @@ export class ConfigError extends Error {
 
 /** Default site directory: apps/site/dist (`pnpm --filter @studify/site build`), relative to this file (apps/api/src). */
 export const DEFAULT_SITE_DIR = path.resolve(import.meta.dir, '../../site/dist');
+
+/** Default dashboard directory: apps/dashboard/dist (`pnpm --filter @studify/dashboard build`). */
+export const DEFAULT_DASHBOARD_DIR = path.resolve(import.meta.dir, '../../dashboard/dist');
 
 /** Empty strings mean "unset", except BASE_URL where empty has a meaning (custom-scheme links). */
 function withoutEmpty(env: Record<string, string | undefined>): Record<string, string | undefined> {
@@ -87,6 +93,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     databaseUrl: v.DATABASE_URL,
     baseUrl: env.BASE_URL === undefined ? undefined : env.BASE_URL.trim(),
     siteDir: v.SITE_DIR ?? DEFAULT_SITE_DIR,
+    dashboardDir: v.DASHBOARD_DIR ?? DEFAULT_DASHBOARD_DIR,
     apkUrl: v.APK_URL ?? DEFAULT_APK_URL,
     resendApiKey: v.RESEND_API_KEY,
     mailFrom: v.MAIL_FROM,

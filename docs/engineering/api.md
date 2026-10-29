@@ -47,7 +47,7 @@ flowchart LR
 
 ### 2.1 Authentication and headers
 
-- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). API functions verify it first (`supabase.auth.getClaims(jwt)`: the signature is checked locally against the project's signing keys when they are asymmetric, by Supabase Auth otherwise; a verified token is remembered for at most 60 s and never past its expiry, ADR 0011) and authorize explicitly before any service-role query (security-privacy.md §3). Only tokens of a signed-in user (`role = authenticated`, with `sub`) are accepted.
+- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). API functions verify it first (`supabase.auth.getUser(jwt)`, which refuses a suspended account with `403 banned`; a verified token is remembered for at most 60 s and never past its expiry, and a suspension forgets the account's tokens, ADR 0011) and authorize explicitly before any service-role query (security-privacy.md §3).
 - Client headers on every API call: `x-studify-version: <android versionCode>`, `x-studify-schema: <sync schema version>`, `x-device-id: <stable per-install id>`.
 - A client below `min_supported_version_code` ([data-model §5.11](data-model.md#511-ai-operations-and-platform) `app_versions`) or with an unknown future schema gets **`426 Upgrade Required`** with code `app_update_required`.
 
@@ -551,7 +551,42 @@ Every Trilha call (`trail-open`, `trail-prepare`, `trail-answer`, `trail-settle`
 
 ### 4.10 Admin (app admin only)
 
-`admin-budgets` (PLT-04.6: read spend by day/feature/Turma, set limits), `admin-enem-import` (`Req { year, application? }`; enqueue `enem.import_edition` after the admin uploads `enem/{year}/raw/` with a `manifest.json`, the ITENS_PROVA microdata CSV and one booklet PDF + answer key per day; nothing is published unless every check passes), `admin-atualidades-publish` (ENM-09), `admin-moderation` (escalated reports, takedowns). All check `private.is_app_admin()`.
+`admin-enem-import` (`Req { year, application? }`; enqueue `enem.import_edition` after the admin uploads `enem/{year}/raw/` with a `manifest.json`, the ITENS_PROVA microdata CSV and one booklet PDF + answer key per day; nothing is published unless every check passes) and `admin-atualidades-publish` (ENM-09). Spend, limits, users and moderation are the web dashboard's admin functions (§4.12). All admin functions answer 403 unless `profiles.app_role = 'app_admin'` (`requireAppAdmin`).
+
+### 4.12 Web dashboard (`/painel`)
+
+The API container also serves the web dashboard (`apps/dashboard`) at `/painel`. It signs in with the same e-mail code as the app (`shouldCreateUser: false`: the web never creates accounts) and calls only the functions below, with the same conventions (§2: Bearer JWT, `POST`, Idempotency-Key on mutating calls). Request schemas and response types: `packages/shared/src/core/schemas/edge-dashboard.ts`. The admin read models are `private.admin_*` SQL functions (migration `20261029120000_admin_dashboard.sql`, tested in `supabase/tests/admin_dashboard.test.sql`). Every admin change is written to `private.admin_audit`.
+
+**Minha conta** (any signed-in student with a profile; 404 with "Termine o cadastro no app" before sign-up is complete):
+
+| Function | Mutating | Request → response |
+|---|---|---|
+| `account-overview` | no | `{}` → `AccountOverview`: profile, theme and channels, quiet hours, AI use **as percentages only** (today, by feature, 14 days; PLT-04.2), study week, Turmas, devices with push, exports, open deletion |
+| `account-update` | yes | any of `display_name` (back to `pending` review, SP-11; blocklist as at sign-up), `school_year`, `timezone` (IANA), `foreign_language`, `theme`, `notifications{reviews,plan,class,processing}`, `quiet_start`/`quiet_end` (under 18: ≥ 8 h, PLT-05.3) → `AccountOverview` |
+| `account-membership` | yes | `{ action: 'leave', class_group_id }` (runs `leave_class_group` as the student; the owner must transfer first) or `{ action: 'update', class_group_id, league_opt_in?, accepts_duels?, contribute_insights? }` → `AccountOverview` |
+| `account-device-remove` | yes | `{ device_id }` → invalidates that push token → `AccountOverview` |
+| `account-export-link` | no | `{ export_id }` → `{ url, expires_in: 300 }` for the caller's ready, unexpired export |
+
+Export, reset and deletion reuse `account-export`, `account-reset` and `account-delete` (§4.1); the page sends the fresh e-mail code first, as the app does. "Sair de todos os dispositivos" is Supabase Auth's global sign-out.
+
+**Administração** (`app_admin` only; money in micro-USD):
+
+| Function | Mutating | Request → response |
+|---|---|---|
+| `admin-overview` | no | `{}` → people, 30-day series (cost, calls, sign-ups, students who studied), month spend vs the global cap (with what counts against it; admins are exempt), top features and Turmas, students over 5× today's median spend (PLT-04.6), moderation counts, operations and recent failures, server version |
+| `admin-ai-usage` | no | `{ days: 1–366 }` → totals, cost per day, per feature (refusals, p50/p95 latency, cache-read ratio), per task, per serving model, per Turma, personal spend, top users, refusals by category (ai-pipeline §11) |
+| `admin-users` | no | `{ query?, filter: all\|admins\|pending_names\|suspended\|minors\|deleting, limit, offset }` → `{ total, rows }` (search by name, e-mail or id; `%`/`_` are literal) |
+| `admin-user` | no | `{ user_id }` → profile, sign-in, Turmas, devices, spend and limit, activity, operations, reports, exports, deletion, audit entries. No study content |
+| `admin-user-control` | yes | `{ user_id, action }`: `set_role`, `approve_name`, `reject_name`, `suspend {days\|null, reason}` (GoTrue ban + `moderation_actions`), `unsuspend`, `set_daily_limit {limit_micro_usd\|null}` → user detail. Nobody removes their own admin role or suspends themselves; an admin loses the role before a suspension |
+| `admin-class-groups` | no | `{}` → Turmas with owner, members, subjects, month spend, limit, open reports; the default limit |
+| `admin-class-group-control` | yes | `{ action: 'set_budget', class_group_id, limit_micro_usd\|null }` |
+| `admin-moderation` | no | `{}` → open/escalated reports, open content flags with the AI triage, names to review, app feedback |
+| `admin-moderation-control` | yes | `{ action: 'report', report_id, decision: actioned\|dismissed\|escalated, note? }` or `{ action: 'flag', flag_id, decision: accept\|reject\|remove }` (runs `resolve_flag` as the admin) → queue |
+| `admin-settings` | no | `{}` → AI limits (effective, configured, built-in), feature flags, app versions, pilot invites with links |
+| `admin-settings-control` | yes | `set_limits {user_day_micro_usd?, class_group_month_micro_usd?, global_month_micro_usd?}` (null = built-in placeholder), `flag_upsert {key, description?, enabled_all?, percentage?}`, `version_block {version_code, blocks_older}`, `invite_create {email?, uses = 1, expires_in_days = 14}`, `invite_revoke {invite_id}` → `{ settings, invite? }` |
+| `admin-audit` | no | `{ limit, before? }` → `{ entries }` newest first (`before` is the last entry's `created_at` as sent) |
+
+Limits come from `private.ai_budget_limits` through `private.ai_budget_limit` (a student's override, else the default; a Turma's own limit, else the default; else the Phase 0 placeholder). `private.ai_budget_set_limit` also updates the open day and month in `private.ai_budgets`, so a change applies at once. A suspended account (`auth.users.banned_until` in the future) is refused by every function with `banned` (403), not only when its token expires.
 
 ---
 

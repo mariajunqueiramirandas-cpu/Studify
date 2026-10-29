@@ -79,12 +79,14 @@ interface RingProps {
   size?: number;
   stroke?: number;
   color?: string;
+  /** The unfilled part of the ring (default: the well colour). */
+  trackColor?: string;
   children?: ReactNode;
   label?: string;
 }
 
 /** ProgressRing / GoalRing / readiness ring (ux §6). */
-export function ProgressRing({ value, size = 64, stroke = 7, color, children, label }: RingProps) {
+export function ProgressRing({ value, size = 64, stroke = 7, color, trackColor, children, label }: RingProps) {
   const { colors: c } = useTheme();
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
@@ -97,7 +99,7 @@ export function ProgressRing({ value, size = 64, stroke = 7, color, children, la
       accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}
     >
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={c.surface2} strokeWidth={stroke} fill="none" />
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor ?? c.surface2} strokeWidth={stroke} fill="none" />
         <Circle
           cx={size / 2}
           cy={size / 2}

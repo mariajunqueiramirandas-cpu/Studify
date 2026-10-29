@@ -29,7 +29,8 @@ const UNIQUE: Record<string, string[][]> = {
   trail_concept_content: [['concept_id']],
   trail_subject_plans: [['subject_id']],
   exam_scope_nodes: [['exam_id', 'node_id']],
-  invites: [['id']],
+  invites: [['id'], ['code']],
+  feature_flags: [['key']],
   profiles: [['id']],
   study_preferences: [['user_id']],
   visuals: [['id'], ['node_id', 'type']],
@@ -61,11 +62,12 @@ export class FakeDb {
   readonly tables = new Map<string, Row[]>();
   readonly rpcs = new Map<string, RpcFn>();
   readonly objects = new Map<string, Uint8Array>();
-  readonly users = new Map<string, { id: string; email: string | null }>();
+  readonly users = new Map<string, { id: string; email: string | null; banned_until?: string | null }>();
   readonly deletedUsers: string[] = [];
   readonly signedOut: string[] = [];
-  /** Token verifications that reached auth.getClaims (the API remembers a verified token for a minute). */
-  claimChecks = 0;
+  readonly userUpdates: Array<{ id: string; attributes: Record<string, unknown> }> = [];
+  /** Token verifications that reached auth.getUser (the API remembers a verified token for a minute). */
+  userChecks = 0;
   otpCode: string | null = null;
   readonly rpcCalls: Array<{ name: string; args: Record<string, unknown>; schema: string }> = [];
 
@@ -114,20 +116,19 @@ export class FakeDb {
     const db = this;
     return {
       getUser: async (jwt: string) => {
+        db.userChecks += 1;
         const user = db.users.get(jwt);
         if (!user) return { data: { user: null }, error: { message: 'invalid jwt' } };
-        return { data: { user: { id: user.id, email: user.email } }, error: null };
-      },
-      getClaims: async (jwt: string) => {
-        db.claimChecks += 1;
-        const user = db.users.get(jwt);
-        if (!user) return { data: null, error: { message: 'invalid jwt' } };
-        return { data: { claims: { sub: user.id, email: user.email, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 } }, error: null };
+        return { data: { user: { id: user.id, email: user.email, banned_until: user.banned_until ?? undefined } }, error: null };
       },
       admin: {
         signOut: async (jwt: string, scope: string) => {
           db.signedOut.push(`${jwt}:${scope}`);
           return { error: null };
+        },
+        updateUserById: async (id: string, attributes: Record<string, unknown>) => {
+          db.userUpdates.push({ id, attributes });
+          return { data: { user: { id } }, error: null };
         },
         deleteUser: async (id: string) => {
           db.deletedUsers.push(id);

@@ -44,6 +44,9 @@ create table if not exists auth.users (
   email      text unique,
   created_at timestamptz not null default now()
 );
+-- Read by the admin dashboard functions (20261029120000_admin_dashboard.sql); same names and types as GoTrue.
+alter table auth.users add column if not exists last_sign_in_at timestamptz;
+alter table auth.users add column if not exists banned_until timestamptz;
 revoke all on auth.users from anon, authenticated, service_role;
 
 -- Same resolution order as Supabase: request.jwt.claim.sub, then the claims JSON.
