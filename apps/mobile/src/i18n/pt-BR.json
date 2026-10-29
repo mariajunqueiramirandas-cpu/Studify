@@ -580,6 +580,16 @@
   "ai": {
     "refusal": "Não consigo ajudar com isso aqui. Quer perguntar de outro jeito?"
   },
+  "practice_hub": {
+    "quiz": "Fazer quiz",
+    "quiz_hint": "Questões do seu material, com explicação",
+    "mock": "Simulado",
+    "mock_hint": "Prova com tempo, do jeito da escola",
+    "more": "Mais",
+    "deck_minutes": "Leva uns {n} min",
+    "deck_label_one": "cartão pra revisar",
+    "deck_label_other": "cartões pra revisar"
+  },
   "today": {
     "greeting_morning": "Bom dia, {name}!",
     "greeting_afternoon": "Boa tarde, {name}!",
@@ -590,6 +600,7 @@
     "continue": "Continuar sessão",
     "quick": "Só tenho {n} minutos",
     "quick_title": "Quanto tempo você tem?",
+    "quick_short": "Só tenho",
     "no_goal": "Tem prova chegando? Crie sua Semana de Provas e eu monto o plano.",
     "create_goal": "Criar Semana de Provas",
     "plan_title": "Plano de hoje",
@@ -605,6 +616,9 @@
     "exams_title": "Próximas provas"
   },
   "session": {
+    "stat_cards": "Cartões",
+    "stat_questions": "Questões",
+    "stat_time": "Tempo",
     "title": "Sessão",
     "end_title": "Fim da sessão",
     "summary": "Você estudou {min} min: {cards} cartões, {questions} questões e {topics} tópicos.",
@@ -1099,7 +1113,12 @@
     "sign_out_all": "Sair de todos os dispositivos",
     "edit_profile": "Editar perfil",
     "avatar": "Avatar",
-    "version": "Versão {v}"
+    "version": "Versão {v}",
+    "stat_streak": "dias seguidos",
+    "stat_minutes": "min hoje",
+    "stat_xp": "XP no total",
+    "stat_shields": "escudos",
+    "card_title": "Carteirinha de estudante"
   },
   "settings": {
     "title": "Configurações",

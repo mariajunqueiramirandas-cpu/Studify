@@ -367,11 +367,17 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 | Component | Notes |
 |---|---|
 | `AppBar` | Back, title, ≤ 2 actions, optional context chip below |
-| `BottomTabBar` | 5 tabs, labels always visible, badge dot for Turma requests |
-| `Button` (primary / secondary / text / destructive) | Min height 48 dp; primary is full-width in the thumb zone |
+| `BottomTabBar` | A dock: 5 tabs on a key-like bar floating off the screen edges, on its own ledge. Labels always visible; the chosen tab's icon sits in an inked primary key and its label goes bold; badge dot for Turma requests |
+| `Button` (primary / secondary / text / destructive / tonal / lamp) | Min height 48 dp; primary is full-width in the thumb zone. A disabled primary, tonal, lamp or destructive key turns grey instead of fading. Inside an `ActionBar` keys are 50 dp and text buttons 40 dp (48 dp target via hit slop), so the sticky footer stays a strip. Hoje has no sticky footer: its start key lives in the mission hero |
 | `IconButton` | 48×48 dp touch target, 24 dp icon, mandatory accessibility label |
+| `IconTile` | A small tinted square holding an icon (36 dp in list rows, 44 dp on hub tiles and Hoje cards); tones `primary`, `lagoon`, `lamp`, `success`, `danger`, `neutral`, or a subject colour. List rows show their icon in one; radio and checkbox icons stay bare |
+| `Notebook` | A subject on the Matérias shelf: cover in the subject hue, binding, emblem, and a paper label with the name and the next test. The subject form shows one as a live preview |
+| `CodeField` | One-time code as six key caps over a single invisible input (keyboard, paste and autofill go to that input) |
 | `Chip` (filter / scope / status / **PageChip**) | Squared key when tappable, inline text when it only states something; PageChip is a footnote link (icon + page label), tap and long-press behaviors (§5.3) |
 | `Card` (subject, topic, plan item, test, Hoje card) | The subject color hangs as a bookmark ribbon from the top edge |
+| Hero (`hero` / `onHero` tokens) | At most one ink-filled deep-indigo panel per screen: Hoje's mission (greeting, goal ring, the lamp-yellow start key, 10/20/30 min quick keys) and Perfil's student ID card. On a hero the loud key is `Button variant="lamp"` |
+| Calendar page | Hoje's tests as tear-off pages: weekday on a band in the subject colour, the day big, countdown under it |
+| Day trail | Hoje's plan as a path: due reviews first, then each stop with its check key on the rail; walked parts of the path turn `success` |
 | `CountdownChip` | Calendar leaf with the day, then "Faltam 3 dias" / "É amanhã!" / "Hoje às 14:00" |
 | `ProgressBar`, `ProgressRing`, `GoalRing` | Goal ring on Hoje; readiness ring on tests |
 | `Flashcard` | Front/back, flip animation (reduced-motion: crossfade), tags |
