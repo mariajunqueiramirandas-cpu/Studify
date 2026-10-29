@@ -156,7 +156,8 @@ export async function planSubject(ctx: OperationContext, input: { subjectId: str
   const budget = budgetOf(subject, input.userId, null);
   let result: CallResult<unknown>;
   try {
-    result = await callClaude(ctx.ai, withShortCache(prepareCall('trail.plan', built, budget, [], { topic: [...topicKey.values()], concept: [...conceptKey.values()] }).call));
+    const run = () => callClaude(ctx.ai, withShortCache(prepareCall('trail.plan', built, budget, [], { topic: [...topicKey.values()], concept: [...conceptKey.values()] }).call));
+    result = ctx.aiLane ? await ctx.aiLane({ position: 0, background: true }, run) : await run();
   } catch (err) {
     if (err instanceof BudgetExceededError) return 'budget';
     throw err;
@@ -284,7 +285,9 @@ export async function prepareTopicContent(ctx: OperationContext, input: { topicI
   const call = async (taskId: 'trail.lesson' | 'trail.reinforce', built: BuiltPrompt): Promise<unknown> => {
     if (outcome.budget) return null;
     try {
-      const result = await callClaude(ctx.ai, withShortCache(prepareCall(taskId, built, budget, refs).call));
+      // Written ahead, no student waiting: background in the shared lane.
+      const run = () => callClaude(ctx.ai, withShortCache(prepareCall(taskId, built, budget, refs).call));
+      const result = ctx.aiLane ? await ctx.aiLane({ position: 0, background: true }, run) : await run();
       if (result.status === 'ok') return result.data;
       ctx.log.warn({ topicId: bundle.topicId, taskId, status: result.status }, 'trail content: no output');
     } catch (err) {

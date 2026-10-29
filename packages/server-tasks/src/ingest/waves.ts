@@ -193,10 +193,12 @@ export async function runWaveNow(env: PipelineEnv, input: SubmitInput): Promise<
   if (input.aiJobId) {
     await applyProgress(env.ctx.db, input.aiJobId, { stage, status: 'running', items_total: total, items_done: 0 });
   }
+  // Only page transcription comes here without the Batch API: background work in the shared lane.
+  const lane = env.ctx.aiLane;
   await mapLimit(input.items, env.ctx.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY, async ({ item, call }) => {
     let handled = false;
     if (!summary.budgetExceeded) {
-      const outcome = await runItemNow(env, item, call);
+      const outcome = lane ? await lane({ position: 0, background: true }, () => runItemNow(env, item, call)) : await runItemNow(env, item, call);
       if (outcome === 'budget') summary.budgetExceeded = true;
       handled = outcome === 'written';
     }

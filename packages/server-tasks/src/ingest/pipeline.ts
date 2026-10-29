@@ -23,7 +23,7 @@ import { loadTopicBundle, missingQuestionParts, sourcesOf, topicSliceRefs, conte
 import { expandKinds, type TopicKind } from './custom-id.ts';
 import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
-import { mapLimit, priorityLimiter } from './concurrency.ts';
+import { aiLane, mapLimit } from './concurrency.ts';
 import { STANDARD_WAVE_CONCURRENCY } from '../framework/concurrency-defaults.ts';
 import { uuidV7 } from '@studify/shared';
 
@@ -463,7 +463,8 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
   const feedEnabled = await tableExists(sql, 'public.feed_items');
   const docLanguage = payload.documentId ? (await loadDocument(sql, payload.documentId))?.language ?? null : null;
   const size = ctx.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY;
-  const limit = priorityLimiter(size);
+  // Shared with every other material on this server (aiLane); a context without one (tests) gets its own.
+  const lane = ctx.aiLane ?? aiLane(size);
   const total = payload.nodeIds.length;
   let conceptsLeft = withConcepts ? total : 0;
   let topicsDone = 0;
@@ -489,8 +490,8 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
     language: contentLanguageOf(bundle, docLanguage),
   });
   // One paid call; once the budget refuses a call, the calls still waiting are not started.
-  const run = (priority: number, built: Awaited<ReturnType<typeof topicItem>>) =>
-    limit(priority, async () => {
+  const run = (position: number, built: Awaited<ReturnType<typeof topicItem>>) =>
+    lane({ position, background: payload.secondary }, async () => {
       if (budgetExceeded) return 'skipped' as const;
       const outcome = await runItemNow(env, built.item, built.call);
       if (outcome === 'budget') budgetExceeded = true;

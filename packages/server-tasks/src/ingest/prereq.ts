@@ -59,7 +59,8 @@ export async function runPrerequisites(
     { jobId: input.aiJobId, feature: 'ING-03', userId: input.userId },
   );
   const prepared = prepareCall('ingest.prerequisites', built, budget, []);
-  const result: CallResult<unknown> = await callClaude(ctx.ai, withShortCache(prepared.call));
+  const call = () => callClaude(ctx.ai, withShortCache(prepared.call));
+  const result: CallResult<unknown> = ctx.aiLane ? await ctx.aiLane({ position: 0, background: true }, call) : await call();
   if (result.status !== 'ok') return { status: 'failed', written: 0, dropped: 0 };
 
   const byKey = new Map(promptNodes.map((n) => [n.key, n]));

@@ -45,3 +45,27 @@ export function priorityLimiter(size: number): <T>(priority: number, fn: () => P
       next();
     });
 }
+
+/** Where a model call waits in the shared lane: lower first. */
+export interface LaneOrder {
+  /** Its place in the material: -1 for the outline (everything waits on it), then the topic's index in the map. */
+  position: number;
+  /** Work no student is waiting on (extras, Trilha content, page transcription, prerequisites): after the rest. */
+  background?: boolean;
+}
+
+export type AiLane = <T>(order: LaneOrder, fn: () => Promise<T>) => Promise<T>;
+
+const BACKGROUND = 1_000_000;
+
+/**
+ * The model calls of every material processed by this server share one lane of `size` calls (AI_WAVE_CONCURRENCY),
+ * so two uploads at once, or one upload while another material writes its Trilha, stay within the API's rate
+ * limits instead of each running `size` calls. Outlines go first, then topics by their place in their material:
+ * the first topics of a new upload start before the last topics of an older one, so every student gets something to
+ * open within the first minute. Background work takes what is left.
+ */
+export function aiLane(size: number): AiLane {
+  const limit = priorityLimiter(size);
+  return (order, fn) => limit((order.background ? BACKGROUND : 0) + order.position, fn);
+}

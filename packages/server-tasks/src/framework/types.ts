@@ -30,6 +30,8 @@ export interface OperationContext {
   useBatch?: boolean;
   /** Standard calls a content wave runs at once (AI_WAVE_CONCURRENCY). */
   waveConcurrency?: number;
+  /** The lane every ingestion and Trilha model call of this server waits in (one per runtime, see aiLane). */
+  aiLane?: import('../ingest/concurrency.ts').AiLane;
 }
 
 export interface OperationDefinition<T = Record<string, unknown>> {
