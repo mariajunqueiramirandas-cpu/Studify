@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { uuidv7 } from 'uuidv7';
 import { callFunction } from '../../api/functions';
 import { supabase } from '../../api/supabase';
+import { realtime, type RealtimeChannel } from '../../api/realtime';
 import { rows } from '../common/query';
 
 export interface RoomRow {
@@ -65,11 +66,11 @@ export function useRoomChannel(roomId: string, me: { userId: string | null; nick
     hiddenRef.current = hidden;
   }, [hidden]);
   const statusRef = useRef(me.status);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     if (!me.userId) return undefined;
-    const channel = supabase.channel(`room:${roomId}`, { config: { private: true, presence: { key: me.userId } } });
+    const channel = realtime.channel(`room:${roomId}`, { presence: { key: me.userId } });
     channelRef.current = channel;
     channel
       .on('broadcast', { event: 'timer' }, ({ payload }) => onTimer(payload as RoomTimerState))
@@ -91,7 +92,7 @@ export function useRoomChannel(roomId: string, me: { userId: string | null; nick
       });
     return () => {
       channelRef.current = null;
-      void supabase.removeChannel(channel);
+      void realtime.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, me.userId]);

@@ -9,6 +9,7 @@ import { uuidv7 } from 'uuidv7';
 import { callFunction, streamFunction } from '../../api/functions';
 import { queryClient } from '../../api/queryClient';
 import { supabase } from '../../api/supabase';
+import { realtime, rowTopic } from '../../api/realtime';
 import { useSession } from '../auth/session';
 import { row, rows } from '../common/query';
 import { toEventHandler, type StreamHandlers } from '../learn/api';
@@ -65,11 +66,11 @@ export function useEpisode(episodeId: string | undefined) {
   });
   useEffect(() => {
     if (!episodeId) return undefined;
-    const channel = supabase
-      .channel(`podcast:${episodeId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'podcast_episodes', filter: `id=eq.${episodeId}` }, () => void queryClient.invalidateQueries({ queryKey: ['podcast', episodeId] }))
+    const channel = realtime
+      .channel(rowTopic('podcast_episodes', 'id', episodeId))
+      .on('change', () => void queryClient.invalidateQueries({ queryKey: ['podcast', episodeId] }))
       .subscribe();
-    return () => void supabase.removeChannel(channel);
+    return () => void realtime.removeChannel(channel);
   }, [episodeId]);
   return query;
 }

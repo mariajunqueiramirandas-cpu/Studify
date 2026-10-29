@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { supabase } from '../../api/supabase';
+import { realtime } from '../../api/realtime';
 import { ActionBar, Banner, Button, Card, Celebrate, Leaderboard, QuestionView, RichContent, Screen, Text, TimerRing, useOverlay } from '../../components';
 import { useSession } from '../../features/auth/session';
 import { battleAnswer, battleControl, battleJoin, type BattleStatus, type QuestionPublic } from '../../features/class/api';
@@ -51,7 +51,7 @@ export default function BattleScreen() {
       joined.current = true;
       void battleJoin(pinParam).catch((e: unknown) => overlay.snack(messageFor(e)));
     }
-    const channel = supabase.channel(`battle:${battleId}`, { config: { private: true, presence: { key: userId ?? 'anon' } } });
+    const channel = realtime.channel(`battle:${battleId}`, { presence: { key: userId ?? 'anon' } });
     channel
       .on('broadcast', { event: 'state' }, ({ payload }) => {
         const s = payload as BattleState;
@@ -69,7 +69,7 @@ export default function BattleScreen() {
         if (status === 'SUBSCRIBED') void channel.track({ user_id: userId, nickname: '' });
       });
     return () => {
-      void supabase.removeChannel(channel);
+      void realtime.removeChannel(channel);
     };
   }, [battleId, userId, isHost, pinParam, overlay]);
 

@@ -194,14 +194,23 @@ export class RealtimeHub {
     return true;
   }
 
-  /** Updates this connection's presence on a channel it joined with presence. */
-  track(connectionId: string, user: AuthUser, topic: string, payload: Record<string, unknown>): boolean {
+  /**
+   * Sets this connection's presence on a channel it joined (supabase-js: subscribe, then track). The first track
+   * on a channel is checked against the presence policy. Returns an error code, or null when tracked.
+   */
+  async track(connectionId: string, user: AuthUser, topic: string, key: string, payload: Record<string, unknown>): Promise<string | null> {
     const conn = this.#connection(connectionId, user);
     const entry = conn?.topics.get(topic);
-    if (!conn || !entry?.presence) return false;
-    entry.presence = { key: entry.presence.key, payload };
+    if (!conn || !entry) return 'not_found';
+    if (!entry.presence) {
+      if (!PRIVATE_TOPIC.test(topic) || !(await this.canSendPresence(user, topic))) return 'forbidden';
+      // The check awaited: the channel may have been left meanwhile.
+      if (conn.topics.get(topic) !== entry) return 'not_found';
+    }
+    // user_id is always the verified student, so nobody can appear as someone else in a room or battle.
+    entry.presence = { key, payload: { ...payload, user_id: user.userId } };
     this.#presenceChanged(topic);
-    return true;
+    return null;
   }
 
   /** `{ key: [payload, ...] }`, the shape supabase-js presenceState() had. */

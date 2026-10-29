@@ -38,7 +38,7 @@ const appVersionCode = (): string => {
   return String(android?.versionCode ?? 1);
 };
 
-async function authHeaders(idempotencyKey: string | null): Promise<Record<string, string>> {
+export async function authHeaders(idempotencyKey: string | null): Promise<Record<string, string>> {
   const env = getEnv();
   const { data } = await supabase.auth.getSession();
   const headers: Record<string, string> = {

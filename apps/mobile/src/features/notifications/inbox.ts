@@ -5,6 +5,7 @@ import { RICH_CHANNELS, parseRichNotification, type RichNotification } from '@st
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '../../api/supabase';
+import { realtime, rowTopic, type RealtimeChannel } from '../../api/realtime';
 import { logger } from '../../lib/logger';
 import { useSession } from '../auth/session';
 import { rows } from '../common/query';
@@ -92,7 +93,7 @@ export function useUnreadCount(): number {
 
 // One channel per app, however many screens show the badge or the list.
 let channelUsers = 0;
-let channelRef: ReturnType<typeof supabase.channel> | null = null;
+let channelRef: RealtimeChannel | null = null;
 
 function useInboxRealtime() {
   const { userId } = useSession();
@@ -101,9 +102,9 @@ function useInboxRealtime() {
     if (!userId) return undefined;
     channelUsers++;
     if (!channelRef) {
-      channelRef = supabase
-        .channel(`inbox:${userId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_inbox', filter: `user_id=eq.${userId}` }, () => {
+      channelRef = realtime
+        .channel(rowTopic('notification_inbox', 'user_id', userId))
+        .on('change', () => {
           void qc.invalidateQueries({ queryKey: ['inbox'] });
           void qc.invalidateQueries({ queryKey: ['inboxUnread'] });
         })
@@ -112,7 +113,7 @@ function useInboxRealtime() {
     return () => {
       channelUsers--;
       if (channelUsers === 0 && channelRef) {
-        void supabase.removeChannel(channelRef);
+        void realtime.removeChannel(channelRef);
         channelRef = null;
       }
     };

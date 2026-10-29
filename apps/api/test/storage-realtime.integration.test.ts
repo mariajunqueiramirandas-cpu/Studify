@@ -208,6 +208,8 @@ maybe('realtime: channels follow the realtime policies, row changes and broadcas
   await expect(join(`user:${BOB}`)).rejects.toMatchObject({ body: { code: 'forbidden' } });
   // Presence is only for battles, duels and rooms (realtime_presence_send).
   await expect(join(`user:${ALICE}`, { key: ALICE, payload: {} })).rejects.toMatchObject({ body: { code: 'forbidden' } });
+  await expect(call('realtime-track', 'token-alice', { connection_id: alice.id, topic: `user:${ALICE}`, key: ALICE, payload: { status: 'here' } })).rejects.toMatchObject({ body: { code: 'forbidden' } });
+  await expect(call('realtime-track', 'token-alice', { connection_id: alice.id, topic: `battle:${JOB}`, key: ALICE, payload: {} })).rejects.toMatchObject({ body: { code: 'not_found' } });
   // Another student cannot act on Alice's stream.
   await expect(call('realtime-join', 'token-bob', { connection_id: alice.id, topic: `user:${BOB}` })).rejects.toMatchObject({ body: { code: 'not_found' } });
 

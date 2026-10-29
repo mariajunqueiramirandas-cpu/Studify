@@ -71,7 +71,7 @@ export const realtimeLeave = defineFunction<z.infer<typeof LeaveInput>>({
   run: async (ctx) => ctx.json({ left: hubOf(ctx.deps).leave(ctx.input.connection_id, ctx.user, ctx.input.topic) }),
 });
 
-const TrackInput = z.object({ connection_id: z.string().uuid(), topic: Topic, payload: z.record(z.string(), z.unknown()) });
+const TrackInput = z.object({ connection_id: z.string().uuid(), topic: Topic, key: z.string().min(1).max(100), payload: z.record(z.string(), z.unknown()) });
 
 export const realtimeTrack = defineFunction<z.infer<typeof TrackInput>>({
   name: 'realtime-track',
@@ -80,7 +80,8 @@ export const realtimeTrack = defineFunction<z.infer<typeof TrackInput>>({
   input: TrackInput,
   run: async (ctx) => {
     if (JSON.stringify(ctx.input.payload).length > 2048) throw new ApiFailure('invalid_request');
-    if (!hubOf(ctx.deps).track(ctx.input.connection_id, ctx.user, ctx.input.topic, ctx.input.payload)) throw new ApiFailure('not_found');
+    const refused = await hubOf(ctx.deps).track(ctx.input.connection_id, ctx.user, ctx.input.topic, ctx.input.key, ctx.input.payload);
+    if (refused) throw new ApiFailure(refused === 'forbidden' ? 'forbidden' : 'not_found');
     return ctx.json({ tracked: true });
   },
 });
