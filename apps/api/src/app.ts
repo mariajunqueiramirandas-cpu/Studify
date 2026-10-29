@@ -1,4 +1,5 @@
-// The HTTP surface: /api/health, the function routes under /api/<name> and the static link site.
+// The HTTP surface: /api/health, the function routes under /api/<name>, the web dashboard at /painel and the
+// static link site.
 // Built from the runtime deps by server.ts; tests drive it with app.request() and the same fakes.
 import { Hono } from 'hono';
 import { createHash } from 'node:crypto';
@@ -7,12 +8,13 @@ import pkg from '../package.json' with { type: 'json' };
 import { jsonResponse } from './shared/http.ts';
 import { log } from './log.ts';
 import { mountSite } from './site.ts';
+import { mountDashboard, type DashboardConfig } from './dashboard.ts';
 import { ROUTES } from './routes.ts';
 import type { P2Deps } from './shared-p2/deps.ts';
 
 export const VERSION: string = pkg.version;
 
-export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string): Hono {
+export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string, dashboard?: DashboardConfig): Hono {
   const app = new Hono();
 
   app.use('*', async (c, next) => {
@@ -53,6 +55,7 @@ export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string): Hono 
     return handler(c.req.raw, deps);
   });
 
+  if (dashboard) mountDashboard(app, dashboard);
   mountSite(app, siteDir, apkUrl);
 
   app.notFound((c) => {
