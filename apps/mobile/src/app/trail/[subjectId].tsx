@@ -90,10 +90,13 @@ export default function TrailScreen() {
   const pending = useRef<Promise<TrailState> | null>(null);
   // trail-settle for the question on screen; Continue waits for it.
   const settling = useRef<Promise<TrailAnswerRes> | null>(null);
+  // A lesson read while its next step is already on screen: its answer is recorded behind it (resolves true when it is).
+  const reading = useRef<Promise<boolean> | null>(null);
 
-  const show = useCallback((s: TrailState) => {
+  // `restartClock` false: the step on screen has been on it since before the server answered (see readLesson).
+  const show = useCallback((s: TrailState, restartClock = true) => {
     version.current += 1;
-    shownAt.current = Date.now();
+    if (restartClock) shownAt.current = Date.now();
     // Flashcards (TRL-01.15): what the path taught goes first among the new cards of the review queue.
     rememberLearned(learnedOf(s));
     if (s.chapter_done) setMilestone({ kind: 'chapter', title: s.chapter_done.title, next: s.chapter_done.next_title });
@@ -174,9 +177,38 @@ export default function TrailScreen() {
 
   const step = state?.step ?? null;
 
+  /** A lesson read: the step after it is on screen at once and the answer is recorded behind it (trail-answer). */
+  const readLesson = (body: TrailAnswerReq, upcoming: TrailStep) => {
+    // A background prefetch that lands now must not put the lesson back on screen.
+    version.current += 1;
+    shownAt.current = Date.now();
+    setState((cur) => (cur ? { ...cur, step: upcoming, next_step: null, prefetch: false } : cur));
+    setSelected(null);
+    reading.current = answerStep(body)
+      .then((res) => (res.state.preparing ? land(res.state) : show(res.state, res.state.step?.id !== upcoming.id)))
+      .then(
+        () => true,
+        (err) => {
+          fail(err);
+          return false;
+        },
+      )
+      .finally(() => {
+        reading.current = null;
+      });
+  };
+
   const submit = async (response: TrailAnswerReq['response']) => {
     if (!state || !step) return;
     const body = { trail_id: state.trail_id, step_id: step.id, response, time_spent_ms: since(shownAt.current) };
+    if (response === null) {
+      // One tap per lesson: the next step is already on screen while the last lesson is being recorded.
+      if (reading.current) return;
+      if (state.next_step) {
+        readLesson(body, state.next_step);
+        return;
+      }
+    }
     setBusy(true);
     try {
       if (response === null) {
@@ -187,6 +219,8 @@ export default function TrailScreen() {
         await next(res);
         return;
       }
+      // The server serves a question only once the lesson before it is recorded, so the verdict waits for that.
+      if (reading.current && !(await reading.current)) return;
       // The verdict shows at once; the explanation, the Caderno and the next step follow in the background.
       const grade = await gradeStep(body);
       if (grade.correct) cheer();

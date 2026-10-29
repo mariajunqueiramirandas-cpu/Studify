@@ -240,6 +240,27 @@ function publicStep(row: StepRow, outline: Outline, position: { index: number; t
   return { ...base, kind: 'question', stem: q.stem, options: q.options.map((o) => ({ id: o.id, text: o.text })), position };
 }
 
+/** A chapter-test question's place in its round ("3 de 6"); other steps have none. */
+function positionOf(row: StepRow, chapterSteps: StepRow[]): { index: number; total: number } | null {
+  if (row.purpose !== 'checkpoint') return null;
+  const qs = chapterSteps.filter((s) => s.purpose === 'checkpoint' && s.round === row.round && s.status !== 'discarded').sort((a, b) => a.created_seq - b.created_seq);
+  return { index: qs.findIndex((s) => s.id === row.id) + 1, total: qs.length };
+}
+
+/**
+ * The step that follows a lesson on screen, when it is already written. The app shows it as soon as the student
+ * is done with the lesson and records the lesson behind it, so the next step does not wait on the server. It follows
+ * the same rule trail-answer serves by, with the lesson marked read.
+ */
+function stepAfterLesson(chapter: TrailChapter, views: TrailStepView[], row: StepRow, chapterSteps: StepRow[], outline: Outline): TrailStep | null {
+  if (isQuestionPurpose(row.purpose)) return null;
+  const read = views.map((v) => (v.id === row.id ? { ...v, status: 'done' as const } : v));
+  const move = nextTrailMove(chapter, read);
+  if (move.kind !== 'serve') return null;
+  const next = chapterSteps.find((s) => s.id === move.stepId)!;
+  return publicStep(next, outline, positionOf(next, chapterSteps));
+}
+
 /** Ensine o Lucas on the topic (TRL-01.12): the best finished score and how many lessons were finished. */
 export async function lucasResult(db: SupabaseClient, userId: string, topicId: string): Promise<{ best: number | null; attempts: number }> {
   const rows = await db.from('teaching_sessions').select('score').eq('user_id', userId).eq('node_id', topicId).eq('status', 'finished').is('deleted_at', null);
@@ -296,6 +317,7 @@ export async function buildState(
   const views = chapterSteps.map(toView);
 
   let step: TrailStep | null = null;
+  let nextStep: TrailStep | null = null;
   let preparing = false;
   let phase: TrailState['phase'] = trail.status === 'completed' || !chapter ? 'completed' : 'learning';
   let checkpoint: TrailState['checkpoint'] = null;
@@ -317,12 +339,8 @@ export async function buildState(
         if (upd.error) throw upd.error;
         row.served_seq = served;
       }
-      let position: { index: number; total: number } | null = null;
-      if (row.purpose === 'checkpoint') {
-        const qs = chapterSteps.filter((s) => s.purpose === 'checkpoint' && s.round === row.round && s.status !== 'discarded').sort((a, b) => a.created_seq - b.created_seq);
-        position = { index: qs.findIndex((s) => s.id === row.id) + 1, total: qs.length };
-      }
-      step = publicStep(row, outline, position);
+      step = publicStep(row, outline, positionOf(row, chapterSteps));
+      nextStep = stepAfterLesson(chapter, views, row, chapterSteps, outline);
     } else if (move.kind === 'need') {
       preparing = true;
       if (move.need.kind === 'checkpoint') phase = 'checkpoint';
@@ -352,6 +370,7 @@ export async function buildState(
     phase,
     checkpoint,
     step,
+    next_step: nextStep,
     teach,
     boss: await bossFor(deps.db, trail, outline),
     chapter_done: extras.chapterDone ?? null,

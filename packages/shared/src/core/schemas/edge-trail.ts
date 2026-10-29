@@ -57,6 +57,8 @@ export const TrailStateSchema = z.object({
   checkpoint: z.object({ round: z.int().min(1), answered: z.int().min(0), total: z.int().min(0), correct: z.int().min(0) }).nullable(),
   /** The step to show now, or null while its content is being prepared (or the path is complete). */
   step: TrailStepSchema.nullable(),
+  /** On a lesson: the step that follows once it is read, when it is already written. The app shows it at once and sends the lesson's answer behind it. */
+  next_step: TrailStepSchema.nullable(),
   teach: z
     .object({ topic_id: UuidSchema, title: z.string(), pass_score: z.int().min(0).max(100), best_score: z.int().min(0).max(100).nullable(), attempts: z.int().min(0) })
     .nullable(),
