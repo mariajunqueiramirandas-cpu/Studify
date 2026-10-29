@@ -13,8 +13,8 @@ Each ADR records one significant decision: its context, the decision, the altern
 | [0007](0007-offline-first-append-only-reviews.md) | Offline-first with append-only review logs | Accepted | 2026-10-26 |
 | [0008](0008-vps-bun-hono-api.md) | API server on a VPS with Bun and Hono (Supabase Edge Functions retired) | Accepted | 2026-10-27 |
 | [0009](0009-no-request-waits-on-claude.md) | No request waits on Claude: AI work runs as a job or inside a stream | Superseded by 0010 | 2026-10-28 |
-
 | [0010](0010-direct-sse-api.md) | Direct SSE operations in one API service | Accepted | 2026-10-28 |
+| [0011](0011-write-ahead-and-background-work.md) | Write content ahead (the Trilha, once per subject), keep side work in the background | Accepted | 2026-10-29 |
 
 ## Template
 

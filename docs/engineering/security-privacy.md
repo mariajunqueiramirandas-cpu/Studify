@@ -72,7 +72,7 @@
 | Storage on device | LargeSecureStore: AES-256 key in `expo-secure-store` (Android Keystore), encrypted session in MMKV ([mobile-app.md §12](mobile-app.md#12-auth-on-device)). |
 | Sign-out | "Sair" clears SQLite user data, MMKV and the file cache. "Sair de todos os dispositivos" revokes all refresh tokens (`signOut({ scope: 'global' })`). |
 | OTP abuse | Supabase Auth rate limits plus a per-email cooldown of 60 s. Generic responses ("Se este e-mail estiver cadastrado…") so emails can't be enumerated. |
-| Service accounts | The worker and Edge Functions use the **service-role key** from secrets. Edge Functions handling user requests **also** verify the caller's JWT and authorize explicitly before any service-role query. |
+| Service accounts | The worker and Edge Functions use the **service-role key** from secrets. Edge Functions handling user requests **also** verify the caller's JWT and authorize explicitly before any service-role query. The API verifies the signature locally when the project uses asymmetric signing keys and remembers a verified token for at most 60 s (never past its expiry), so a revoked session keeps working until its access token expires, as with any locally verified JWT (ADR 0011). |
 
 ## 4. Authorization: Row Level Security
 

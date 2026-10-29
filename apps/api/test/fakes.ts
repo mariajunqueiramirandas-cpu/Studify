@@ -64,6 +64,8 @@ export class FakeDb {
   readonly users = new Map<string, { id: string; email: string | null }>();
   readonly deletedUsers: string[] = [];
   readonly signedOut: string[] = [];
+  /** Token verifications that reached auth.getClaims (the API remembers a verified token for a minute). */
+  claimChecks = 0;
   otpCode: string | null = null;
   readonly rpcCalls: Array<{ name: string; args: Record<string, unknown>; schema: string }> = [];
 
@@ -115,6 +117,12 @@ export class FakeDb {
         const user = db.users.get(jwt);
         if (!user) return { data: { user: null }, error: { message: 'invalid jwt' } };
         return { data: { user: { id: user.id, email: user.email } }, error: null };
+      },
+      getClaims: async (jwt: string) => {
+        db.claimChecks += 1;
+        const user = db.users.get(jwt);
+        if (!user) return { data: null, error: { message: 'invalid jwt' } };
+        return { data: { claims: { sub: user.id, email: user.email, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 } }, error: null };
       },
       admin: {
         signOut: async (jwt: string, scope: string) => {

@@ -22,7 +22,10 @@ export interface FakeDb {
   /** Clock for created_at on inserted rows (kept in step with the deps clock). */
   clock: () => string;
   rpcCalls: { name: string; args: Row }[];
-  auth: { getUser(jwt: string): Promise<{ data: { user: { id: string; email: string | null } | null }; error: Err }> };
+  auth: {
+    getUser(jwt: string): Promise<{ data: { user: { id: string; email: string | null } | null }; error: Err }>;
+    getClaims(jwt: string): Promise<{ data: { claims: { sub: string; email: string | null; role: string; exp: number } } | null; error: Err }>;
+  };
   from(table: string): Builder;
   rpc(name: string, args: Row): Promise<Result>;
   schema(name: string): { from(table: string): Builder; rpc(name: string, args: Row): Promise<Result> };
@@ -238,6 +241,14 @@ export function createFakeDb(config: FakeConfig = {}): FakeDb & SupabaseClient {
         const user = config.users?.[jwt];
         return Promise.resolve(
           user ? { data: { user }, error: null } : { data: { user: null }, error: { message: 'invalid jwt' } },
+        );
+      },
+      getClaims(jwt: string) {
+        const user = config.users?.[jwt];
+        return Promise.resolve(
+          user
+            ? { data: { claims: { sub: user.id, email: user.email, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 } }, error: null }
+            : { data: null, error: { message: 'invalid jwt' } },
         );
       },
     },

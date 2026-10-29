@@ -47,7 +47,7 @@ flowchart LR
 
 ### 2.1 Authentication and headers
 
-- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). API functions call `supabase.auth.getUser(jwt)` first and authorize explicitly before any service-role query (security-privacy.md §3).
+- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). API functions verify it first (`supabase.auth.getClaims(jwt)`: the signature is checked locally against the project's signing keys when they are asymmetric, by Supabase Auth otherwise; a verified token is remembered for at most 60 s and never past its expiry, ADR 0011) and authorize explicitly before any service-role query (security-privacy.md §3). Only tokens of a signed-in user (`role = authenticated`, with `sub`) are accepted.
 - Client headers on every API call: `x-studify-version: <android versionCode>`, `x-studify-schema: <sync schema version>`, `x-device-id: <stable per-install id>`.
 - A client below `min_supported_version_code` ([data-model §5.11](data-model.md#511-ai-operations-and-platform) `app_versions`) or with an unknown future schema gets **`426 Upgrade Required`** with code `app_update_required`.
 

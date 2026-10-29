@@ -28,7 +28,9 @@ The Android app owns UI and offline study state. Supabase owns authentication, p
 
 Every new mobile request asks for SSE. Streams open after authentication, validation and idempotency admission, before handler work or model tokens. Structured results arrive in `done.result`; conversational responses stream deltas. Reconnects attach to the live operation with `Last-Event-ID`; completed transcripts replay for 24 hours. Heartbeats, bounded buffers, cancellation deadlines, crash recovery, one-replica ownership and rollout are specified in [ADR 0010](adr/0010-direct-sse-api.md).
 
-Future notifications, battle deadlines and budget resets persist in a calendar table. Immediate operations bypass that table and execute directly. There is no pg-boss execution queue or separate worker service. Claude and other provider secrets stay in the API environment.
+Future notifications, battle deadlines and budget resets persist in a calendar table. Immediate operations bypass that table and execute directly; side work the caller does not wait for (AI grading, triage, pushes, regeneration) is a calendar trigger due now, so it never lengthens a request ([ADR 0011](adr/0011-write-ahead-and-background-work.md)). There is no pg-boss execution queue or separate worker service. Claude and other provider secrets stay in the API environment.
+
+Content is written ahead, not when a student asks for it: a material's notes, glossary, cards, questions and its Trilha (lessons, re-explanations, chapter-test questions and the path order) are written while it is processed, once per subject, and students read them. Model calls in a student's request are left for what is personal by nature: the tutor, "Explica de outro jeito", grading, Ensine o Lucas, the camera.
 
 ## 2. Tech stack
 
