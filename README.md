@@ -18,14 +18,15 @@ All roadmap phases (0–5) are implemented in code and covered by automated test
 | Path | What |
 |---|---|
 | `apps/mobile` | Expo / React Native app (Expo Router, SQLite + Drizzle with offline sync, TanStack Query, zustand); local Android module `modules/studify-focus` for Modo foco |
-| `apps/api` | Bun + Hono API server (`/api/<name>`), deployed on the VPS |
+| `apps/api` | Bun + Hono API server (`/api/<name>`), deployed on the VPS; also serves the link site and the web dashboard |
+| `apps/dashboard` | Web dashboard at `/painel` (Vite + React): Minha conta for every student, Administração for the owner |
 | `packages/server-tasks` | Direct server operations: ingestion, generation, planning, grading, notifications; loaded by the API, no separate worker |
 | `packages/shared` | Domain logic shared by app and API (FSRS, planner, TRI, grading, motivation, wellbeing) and the API/sync schemas |
 | `packages/prompts` | Prompt tasks, output schemas and fixtures |
 | `packages/ai`, `packages/speech` | Claude client with budgets; TTS providers |
 | `supabase` | Migrations, RLS and pgTAP tests |
 
-Common commands (from the root): `pnpm typecheck`, `pnpm test`, `pnpm db:test` (pgTAP against a local Postgres), `pnpm db:rls-coverage`, `pnpm api:dev`. The app: `pnpm --filter @studify/mobile start` (needs a development build for the native modules).
+Common commands (from the root): `pnpm typecheck`, `pnpm test`, `pnpm db:test` (pgTAP against a local Postgres), `pnpm db:rls-coverage`, `pnpm api:dev`, `pnpm --filter @studify/dashboard dev` (the web dashboard against a local API). The app: `pnpm --filter @studify/mobile start` (needs a development build for the native modules).
 
 The backend runs as one SSE API service. See [ADR 0010](docs/engineering/adr/0010-direct-sse-api.md) for streaming, reconnects, scheduling and rollout.
 

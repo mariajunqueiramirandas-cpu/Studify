@@ -259,7 +259,7 @@ Guardians of users under 16 can request deletion through the supervision panel (
 ## 12. Logging, monitoring and incident response
 
 - **Logs** contain ids, feature ids, durations, token counts and error codes. They never contain note or card text, tutor messages, essay text, emails or file names.
-- **Audit log** (append-only) for moderation actions, role changes, account deletions, exports, guardian link changes and key rotations.
+- **Audit log** (append-only) for moderation actions, role changes, account deletions, exports, guardian link changes and key rotations. Changes made from the web dashboard's Administração (roles, name reviews, suspensions, limits, flags, minimum version, invites, report and flag decisions) are in `private.admin_audit`; suspensions and removals also in `private.moderation_actions`.
 - **Alerts**: spend at 80% of cap, error-rate spikes (Sentry), auth anomalies (OTP volume), storage growth.
 
 **Incident runbook:**
