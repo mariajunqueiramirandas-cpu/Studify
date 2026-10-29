@@ -26,6 +26,8 @@ const UNIQUE: Record<string, string[][]> = {
   mastery_evidence: [['ref_type', 'ref_id', 'node_id']],
   trails: [['id'], ['user_id', 'subject_id']],
   trail_steps: [['id'], ['trail_id', 'created_seq']],
+  trail_concept_content: [['concept_id']],
+  trail_subject_plans: [['subject_id']],
   exam_scope_nodes: [['exam_id', 'node_id']],
   invites: [['id'], ['code']],
   feature_flags: [['key']],
@@ -64,6 +66,8 @@ export class FakeDb {
   readonly deletedUsers: string[] = [];
   readonly signedOut: string[] = [];
   readonly userUpdates: Array<{ id: string; attributes: Record<string, unknown> }> = [];
+  /** Token verifications that reached auth.getUser (the API remembers a verified token for a minute). */
+  userChecks = 0;
   otpCode: string | null = null;
   readonly rpcCalls: Array<{ name: string; args: Record<string, unknown>; schema: string }> = [];
 
@@ -112,6 +116,7 @@ export class FakeDb {
     const db = this;
     return {
       getUser: async (jwt: string) => {
+        db.userChecks += 1;
         const user = db.users.get(jwt);
         if (!user) return { data: { user: null }, error: { message: 'invalid jwt' } };
         return { data: { user: { id: user.id, email: user.email, banned_until: user.banned_until ?? undefined } }, error: null };
@@ -347,6 +352,18 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
     if (this.#op === 'insert' || this.#op === 'upsert') {
       const list = Array.isArray(this.#payload) ? this.#payload : [this.#payload as Row];
       const out: Row[] = [];
+      // One statement: a plain insert that conflicts anywhere writes none of its rows, as in Postgres.
+      if (this.#op === 'insert') {
+        const before = table.length;
+        for (const raw of list) {
+          if (this.#findConflict({ ...raw })) {
+            table.length = before;
+            return { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } };
+          }
+          table.push({ ...raw });
+        }
+        table.length = before;
+      }
       for (const raw of list) {
         const row: Row = { ...raw };
         // Column defaults the database would fill in: receipt time for created_at.

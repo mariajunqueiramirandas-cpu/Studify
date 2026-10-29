@@ -20,6 +20,7 @@ import { jobs as ingestJobs } from '../../src/jobs/ingest.ts';
 import { jobs as contentJobs } from '../../src/jobs/content.ts';
 import { jobs as batchJobs } from '../../src/jobs/batch.ts';
 import { jobs as filesJobs } from '../../src/jobs/files.ts';
+import { jobs as trailJobs } from '../../src/jobs/trail.ts';
 import { FakeObjectStore, InMemoryQueue, fakeSupabase } from './support/fakes.ts';
 import { loadTopicBundle, writeNote } from '../../src/ingest/topics.ts';
 import { setProgressListener } from '../../src/framework/progress.ts';
@@ -55,6 +56,27 @@ function respond(req: MockRequest): MockResponse | undefined {
   const isMembrana = topic === TOPIC_MEMBRANA;
   const text = (value: unknown): MockResponse => ({ kind: 'message', message: { text: JSON.stringify(value) } });
 
+  // The Trilha written ahead (lib/trail-content.ts): the subject's path and each concept's lesson and reinforcement.
+  const trailPage = [{ doc: 'D1', page_start: isMembrana ? 3 : 1, page_end: isMembrana ? 3 : 1 }];
+  const trailQuestion = (stem: string) => ({
+    stem,
+    options: ['A', 'B', 'C', 'D'].map((id) => ({ id, text: `Opção ${id}`, rationale: `Por que a ${id}.` })),
+    correct: 'B',
+    explanation: 'A B é a certa.',
+    tip: null,
+    terms: [],
+    source_pages: trailPage,
+  });
+  const trailLesson = (title: string) => ({ title, body: `A **${title}** em poucas linhas.`, terms: [], source_pages: trailPage });
+  if (body.includes('monte a trilha de estudo')) {
+    return text({ goal: 'Entender a célula.', chapters: [{ topic_key: 'T2', why: 'A membrana vem antes.', concept_keys: [] }, { topic_key: 'T1', why: 'Depois as organelas.', concept_keys: [] }] });
+  }
+  if (body.includes('Escreva o que vem depois dessa aula')) {
+    return text({ lesson: trailLesson('Outro jeito'), remedial_questions: [1, 2, 3].map((n) => trailQuestion(`De novo ${n}`)), test_questions: [1, 2, 3, 4].map((n) => trailQuestion(`Teste ${n}`)) });
+  }
+  if (body.includes('Escreva a aula deste conceito')) {
+    return text({ lesson: trailLesson(isMembrana ? 'Membrana' : 'Mitocôndria'), questions: [1, 2, 3].map((n) => trailQuestion(`Pergunta ${n}`)) });
+  }
   if (body.includes('transcreva fielmente as páginas enviadas')) {
     return text({ pages: [1, 2, 3].map((page) => ({ page, text: `Página ${page} lida pela IA.`, confidence: 'high' })) });
   }
@@ -217,7 +239,7 @@ function captureExpo(): ExpoLike & { sent: ExpoPushMessage[] } {
 }
 
 // ING-06 runs as its own job after S2; these tests cover S0–S4 only, so the checker is a no-op here.
-const materialCheckStub = [{ name: 'ingest.material_check', handler: async () => undefined }];
+const materialCheckStub = [{ name: 'ingest.material_check', tracksProgress: false, handler: async () => undefined }];
 
 describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)', () => {
   let pool: pg.Pool;
@@ -329,7 +351,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
     const { backend, registry, expo, push } = runtime(store, { useBatch: true });
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
     const requestsBefore = mock.requests.length;
 
     await registry.execute('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
@@ -415,6 +437,25 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     expect(usage.rows.find((r) => r.task === 'ingest.topicDetail')?.batch).toBe(true);
     expect(usage.rows.find((r) => r.task === 'ingest.outline')?.batch).toBe(false);
 
+    // The Trilha is written ahead, while the material is processed (ADR 0011): every concept has its lesson, practice,
+    // re-explanation and chapter-test questions, and the subject has its path, all as shared content.
+    const trailContent = await pool.query<{ concept_id: string; practice: unknown[]; remedial_questions: unknown[]; test_questions: unknown[]; reinforced: boolean }>(
+      `select concept_id, practice, remedial_questions, test_questions, remedial_lesson is not null as reinforced from public.trail_concept_content where subject_id = $1`,
+      [subjectId],
+    );
+    expect(trailContent.rows).toHaveLength(2);
+    for (const row of trailContent.rows) {
+      expect(row).toMatchObject({ reinforced: true });
+      expect([row.practice.length, row.remedial_questions.length, row.test_questions.length]).toEqual([3, 3, 4]);
+    }
+    expect(usage.rows.filter((r) => r.task.startsWith('trail.')).map((r) => r.task).sort()).toEqual(['trail.lesson', 'trail.plan', 'trail.reinforce']);
+    const trailPlan = await pool.query<{ goal: string; n: number }>(`select goal, jsonb_array_length(chapters) as n from public.trail_subject_plans where subject_id = $1`, [subjectId]);
+    expect(trailPlan.rows[0]).toEqual({ goal: 'Entender a célula.', n: 2 });
+    // The background work (page reading, prerequisites, extras, the Trilha) never shows up as a job of its own: the app
+    // would list the material as processing again after "material pronto".
+    const jobs = await pool.query<{ type: string; status: string }>(`select type, status from public.ai_jobs where subject_id = $1 or document_id = $2`, [subjectId, docId]);
+    expect(jobs.rows).toEqual([{ type: 'ingest.document', status: 'succeeded' }]);
+
     const job = await pool.query<{ status: string; stage: string; items_total: number; items_done: number; batch_id: string | null }>(
       `select status, stage, items_total, items_done, batch_id from public.ai_jobs where document_id = $1 and type = 'ingest.document'`,
       [docId],
@@ -448,7 +489,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
     const { backend, registry, expo, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
     const requestsBefore = mock.requests.length;
     // Every stage the material's job reports, in order (the app shows the latest one).
     const stages: string[] = [];
@@ -498,7 +539,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     store.put('documents', storagePath, bytes, 'application/pdf');
     // One call at a time makes the order deterministic.
     const { backend, registry, push } = runtime(store, { waveConcurrency: 1 });
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
     const requestsBefore = mock.requests.length;
 
     await registry.execute('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
@@ -544,7 +585,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { userId, subjectId, docId, storagePath, bytes } = await seed();
     store.put('documents', storagePath, bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
     await registry.execute('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
     await backend.drain(4000);
     expect(backend.failedJobs).toEqual([]);
@@ -588,7 +629,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     });
     try {
       const { backend, registry, push } = runtime(store, { useBatch: true });
-      await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+      await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
       await registry.execute('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
       await backend.drain(4000);
       expect(backend.failedJobs).toEqual([]);
@@ -612,7 +653,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const locked = await seed({ bytes: encryptedPdfBytes() });
     store.put('documents', locked.storagePath, locked.bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
     const requestsBefore = mock.requests.length;
     await registry.execute('ingest.document', { document_id: locked.docId, mode: 'full', user_id: locked.userId });
     await backend.drain(200);
@@ -634,7 +675,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const first = await seed();
     store.put('documents', first.storagePath, first.bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
     await registry.execute('ingest.document', { document_id: first.docId, mode: 'full', user_id: first.userId });
     await backend.drain(4000);
     const before = await pool.query<{ id: string; title: string; position: number; parent_id: string | null }>(
@@ -681,7 +722,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     const { userId, docId, storagePath, bytes } = await seed({ budgetLimit: 0 });
     store.put('documents', storagePath, bytes, 'application/pdf');
     const { backend, registry, push } = runtime(store);
-    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub]);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
 
     await registry.execute('ingest.document', { document_id: docId, mode: 'full', user_id: userId });
     await backend.drain(200);

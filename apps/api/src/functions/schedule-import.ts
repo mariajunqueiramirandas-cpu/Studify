@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { ApiFailure } from '@studify/shared';
 import { defineP2 } from '../shared-p2/http.ts';
 import { canReadSubject, loadSubject } from '../shared/access.ts';
+import { inBackground } from '../shared/deps.ts';
+import { createAiJob } from '../shared/jobs.ts';
 
 export const ScheduleImportInput = z.object({ document_id: z.uuid() });
 export type ScheduleImportInput = z.infer<typeof ScheduleImportInput>;
@@ -36,10 +38,10 @@ export const handler = defineP2<ScheduleImportInput>({
     });
     if (inserted.error) throw inserted.error;
 
-    const jobId = await p2.execute('schedule.import', { schedule_import_id: scheduleImportId }, {
-      singletonKey: `schedule-import:${scheduleImportId}`,
-    });
-    if (!jobId) throw new ApiFailure('internal_error', { message: 'Não consegui iniciar a leitura do cronograma.' });
+    // Read in the background (ADR 0011); the app follows the job row (a failure included) and then the import.
+    const jobId = await createAiJob(p2, { type: 'schedule.import', userId: me, subjectId: subject.id, documentId: i.document_id, stage: 'extract' });
+    const started = await inBackground(p2, 'schedule.import', { schedule_import_id: scheduleImportId, ai_job_id: jobId }, `schedule-import:${scheduleImportId}`);
+    if (!started) throw new ApiFailure('internal_error', { message: 'Não consegui iniciar a leitura do cronograma.' });
     return ctx.json({ job_id: jobId, schedule_import_id: scheduleImportId }, 202);
   },
 });

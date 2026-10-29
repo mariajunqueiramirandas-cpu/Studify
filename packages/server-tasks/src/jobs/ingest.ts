@@ -67,6 +67,8 @@ export const jobs: OperationDefinition<any>[] = [
   {
     name: 'ingest.render_pages',
     concurrency: 1,
+    // Side work of a material, in the background: a failure here never marks the material's own job failed.
+    tracksProgress: false,
     handler: async (ctx, data, meta) => {
       const p = parsePayload(RenderPayload, data, 'ingest.render_pages');
       const rendered = await runRenderPages(ctx, store(ctx), p.document_id);
@@ -75,6 +77,7 @@ export const jobs: OperationDefinition<any>[] = [
   },
   {
     name: 'ingest.transcribe_pages',
+    tracksProgress: false,
     handler: async (ctx, data, meta) => {
       const p = parsePayload(TranscribePayload, data, 'ingest.transcribe_pages');
       await runTranscription(ctx, store(ctx), {

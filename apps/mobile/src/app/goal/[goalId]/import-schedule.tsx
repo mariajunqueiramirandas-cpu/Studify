@@ -1,10 +1,12 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { uuidv7 } from 'uuidv7';
 import { callFunction } from '../../../api/functions';
 import { uploadFile } from '../../../api/storage';
-import { ActionBar, Banner, Button, Card, ListItem, Row, Screen, Text, useOnline, useOverlay } from '../../../components';
+import { ActionBar, Banner, Button, Card, GenerationStatus, ListItem, Row, Screen, Text, useOnline, useOverlay } from '../../../components';
+import { useJob } from '../../../api/realtime';
+import { jobErrorText } from '../../../features/progress/jobs';
 import { useSession } from '../../../features/auth/session';
 import { rpc } from '../../../features/common/query';
 import { weekdayDate } from '../../../features/common/format';
@@ -23,8 +25,16 @@ export default function ImportSchedule() {
   const overlay = useOverlay();
   const invalidate = useInvalidateGoal();
   const [importId, setImportId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const imp = useScheduleImport(importId);
+  // Reading the photo runs on the server (ADR 0011); its job row (Realtime) says when it is over and how it went.
+  const job = useJob(jobId).data;
+  const reading = !!jobId && (!job || job.status === 'queued' || job.status === 'running');
+  const imp = useScheduleImport(importId, reading);
+  const finished = job?.status === 'succeeded';
+  useEffect(() => {
+    if (finished) void imp.refetch();
+  }, [finished]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pick = async (camera: boolean) => {
     const res = camera ? await ImagePicker.launchCameraAsync({ quality: 0.8, mediaTypes: ['images'] }) : await ImagePicker.launchImageLibraryAsync({ quality: 0.8, mediaTypes: ['images'] });
@@ -38,14 +48,15 @@ export default function ImportSchedule() {
       const doc = await callFunction<{ subject_id: string; image_paths: string[]; kind: string }, { document_id: string }>('upload-photos', { subject_id: subject.id, image_paths: [path], kind: 'other' }, { idempotencyKey: id });
       const r = await startScheduleImport(doc.document_id);
       setImportId(r.schedule_import_id);
-    } catch {
-      overlay.snack(t('error.generation'));
+      setJobId(r.job_id);
+    } catch (e) {
+      overlay.snack(messageFor(e, t('error.generation')));
     } finally {
       setBusy(false);
     }
   };
 
-  const extracted = imp.data?.extracted ?? null;
+  const extracted = finished && imp.data ? (imp.data.extracted ?? []) : null;
   return (
     <Screen
       title={t('schedule_import.title')}
@@ -78,7 +89,8 @@ export default function ImportSchedule() {
       }
     >
       <Text tone="secondary">{t('schedule_import.hint')}</Text>
-      {importId && !extracted ? <Banner kind="info" icon="hourglass-outline" message={t('schedule_import.extracting')} /> : null}
+      {reading ? <GenerationStatus title={t('schedule_import.extracting')} startedAt={job?.started_at as string | undefined} queued={job?.status === 'queued'} slowAfterS={40} /> : null}
+      {job && (job.status === 'failed' || job.status === 'cancelled') ? <GenerationStatus title={t('schedule_import.title')} error={jobErrorText(job)} onRetry={online ? () => void pick(true) : undefined} /> : null}
       {extracted ? (
         <>
           <Text variant="heading">{t('schedule_import.review')}</Text>

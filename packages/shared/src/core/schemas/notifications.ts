@@ -217,15 +217,16 @@ export const LIVE_JOB_STEPS = {
     { stages: ['S2', 'S3'], label: 'Encontrando conceitos', weight: 0.25 },
     { stages: ['S4', 'done'], label: 'Resumos e cartões', weight: 0.5 },
   ],
+  // The script is the long call (0–0.6); the voices fill 0.6–0.95 line by line.
   'podcast.generate': [
-    { stages: ['script'], label: 'Roteiro' },
-    { stages: ['audio'], label: 'Vozes' },
-    { stages: ['done'], label: 'Pronto' },
+    { stages: ['script'], label: 'Roteiro', weight: 0.6 },
+    { stages: ['audio'], label: 'Vozes', weight: 0.35 },
+    { stages: ['done'], label: 'Pronto', weight: 0.05 },
   ],
   'essay.grade': [
-    { stages: ['grading'], label: 'Competências' },
-    { stages: ['repertorio'], label: 'Repertório' },
-    { stages: ['done'], label: 'Nota' },
+    { stages: ['grading'], label: 'Competências', weight: 0.7 },
+    { stages: ['repertorio'], label: 'Repertório', weight: 0.25 },
+    { stages: ['done'], label: 'Nota', weight: 0.05 },
   ],
   'pp.generate': [
     { stages: ['extract'], label: 'Provas antigas' },
@@ -307,6 +308,16 @@ export function liveKeyOf(job: Pick<LiveJobRow, 'id' | 'type' | 'document_id'>):
 }
 
 /**
+ * Seconds left for work that is `fraction` done after `elapsedS`, extrapolated from the pace so far. Null until the
+ * estimate means something: a sixth of the work done and 20 s elapsed. The live notification and the app's progress
+ * cards use the same estimate, so they never disagree.
+ */
+export function etaSeconds(fraction: number, elapsedS: number): number | null {
+  if (!(fraction >= 0.16) || !(elapsedS > 20) || fraction >= 1) return null;
+  return Math.round((elapsedS * (1 - fraction)) / fraction);
+}
+
+/**
  * The live progress payload for a running job (Uber-style: steps, bar, time left). Null for jobs that are
  * not shown live. Time left is extrapolated from the elapsed time once a sixth of the work is done.
  */
@@ -316,7 +327,7 @@ export function liveRich(job: LiveJobRow, subject: { name: string; color: string
   const progress = liveJobProgress(type, job.stage, job.status, job.progress);
   if (progress.state !== 'running') return null;
   const elapsed = job.started_at ? (now.getTime() - new Date(job.started_at).getTime()) / 1000 : 0;
-  const eta = progress.fraction >= 0.16 && elapsed > 20 ? Math.round((elapsed * (1 - progress.fraction)) / progress.fraction) : null;
+  const eta = etaSeconds(progress.fraction, elapsed);
   const active = progress.steps.find((s) => s.state === 'active')?.label ?? progress.steps[0]!.label;
   const copy = LIVE_COPY[type];
   const link = job.type === 'ingest.document' && job.subject_id ? `studify://subjects/${job.subject_id}/processing` : undefined;

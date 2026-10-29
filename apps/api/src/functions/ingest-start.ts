@@ -12,7 +12,7 @@ import { requireSubject } from '../shared/access.ts';
 import { documentObjectPath, downloadBytes, objectExists } from '../shared/storage.ts';
 import { activeJobCount, createAiJob } from '../shared/jobs.ts';
 import { BudgetExceededError } from '@studify/ai';
-import type { Deps } from '../shared/deps.ts';
+import { inBackground, type Deps } from '../shared/deps.ts';
 
 export const MAX_BYTES = 100 * 1024 * 1024;
 export const MAX_PAGES = 1000;
@@ -186,7 +186,9 @@ export const handler = defineFunction<z.infer<typeof IngestStartReqSchema>>({
     const jobId = await createAiJob(deps, { type: 'ingest.document', userId, subjectId: subject.id, documentId: doc.id as string, stage: 'S0' });
     const updated = await deps.db.from('documents').update({ status: 'processing', error_code: null }).eq('id', doc.id as string);
     if (updated.error) throw updated.error;
-    await deps.execute('ingest.document', { document_id: doc.id, mode, ai_job_id: jobId }, { singletonKey: doc.id as string, });
+    // The material is processed in the background (ADR 0011): the app opens the processing screen at once and follows
+    // the job row live, instead of holding the upload screen until every topic is written.
+    await inBackground(deps, 'ingest.document', { document_id: doc.id, mode, ai_job_id: jobId }, doc.id as string);
 
     const body: IngestStartRes = {
       job_id: jobId,

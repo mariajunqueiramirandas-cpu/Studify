@@ -1,8 +1,8 @@
 import type { SchoolEssayFeedback } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
-import { AiBadge, Banner, Button, Card, Chip, ErrorState, PageChips, RichContent, Row, Screen, SkeletonList, Text } from '../../components';
-import { gradeEssay, useEssay } from '../../features/camera/api';
+import { AiBadge, Banner, Button, Card, Chip, ErrorState, GenerationStatus, PageChips, RichContent, Row, Screen, SkeletonList, Text } from '../../components';
+import { essayGradeFailure, useEssay, useRegrade } from '../../features/camera/api';
 import { formatGrade } from '../../features/common/format';
 import { ReadAloudButton } from '../../features/voice/VoiceButtons';
 import { causeLabel } from '../../components/Practice';
@@ -17,23 +17,24 @@ import { space, useTheme } from '../../theme';
 export default function EssayResult() {
   const { essayId } = useLocalSearchParams<{ essayId: string }>();
   const essay = useEssay(essayId);
+  const regrade = useRegrade(essayId, essay.refetch);
   const { colors: c } = useTheme();
   const e = essay.data;
 
   if (essay.isError) return <Screen title={t('essay.title')}><ErrorState onRetry={essay.refetch} /></Screen>;
   if (!e) return <Screen title={t('essay.title')}><SkeletonList rows={4} /></Screen>;
-  if (e.status === 'grading' || e.status === 'draft') {
+  const failure = regrade.run ? regrade.run.error : essayGradeFailure(e);
+  if (failure) {
     return (
       <Screen title={t('essay.title')} closeIcon onBack={() => router.back()}>
-        <Text tone="secondary">{t('essay.grading')}</Text>
-        <SkeletonList rows={3} />
+        <GenerationStatus title={t('essay.grading_title')} error={failure} onRetry={regrade.start} />
       </Screen>
     );
   }
-  if (e.status === 'failed') {
+  if (regrade.run || e.status === 'grading') {
     return (
       <Screen title={t('essay.title')} closeIcon onBack={() => router.back()}>
-        <Banner kind="danger" message={t('error.generation')} action={{ label: t('global.retry'), onPress: () => void gradeEssay(e.id).then(() => essay.refetch()) }} />
+        <GenerationStatus title={t('essay.grading_title')} detail={t('essay.grading_detail')} startedAt={regrade.run?.startedAt ?? e.updated_at} slowAfterS={45} />
       </Screen>
     );
   }

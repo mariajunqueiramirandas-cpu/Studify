@@ -334,11 +334,16 @@ test('admin-user-control: promoting a student is applied and audited', async () 
 
 test('admin-user-control: suspension bans the auth user, records the moderation action, and can be lifted', async () => {
   const h = setup({ admin: true });
+  // Bob's token was verified a moment ago, so the API remembers it.
+  assertEquals((await accountOverview(request('account-overview', { token: BOB.jwt }), h.deps)).status, 200);
   const res = await adminUserControl(body(h, 'admin-user-control', { action: 'suspend', user_id: BOB.id, days: 3, reason: 'Nome ofensivo repetido' }, 1), h.deps);
   assertEquals(res.status, 200);
   assertEquals(h.db.userUpdates, [{ id: BOB.id, attributes: { ban_duration: '72h' } }]);
   const [mod] = h.db.rows('moderation_actions');
   assertEquals([mod!.action, mod!.actor_kind, mod!.target_id, mod!.reason], ['ban', 'app_admin', BOB.id, 'Nome ofensivo repetido']);
+  // The suspension reaches the token the API remembered: Bob's next call is refused at once.
+  h.db.users.set(BOB.jwt, { id: BOB.id, email: BOB.email, banned_until: '2099-01-01T00:00:00Z' });
+  assertEquals((await accountOverview(request('account-overview', { token: BOB.jwt }), h.deps)).status, 403);
   await adminUserControl(body(h, 'admin-user-control', { action: 'unsuspend', user_id: BOB.id }, 2), h.deps);
   assertEquals(h.db.userUpdates[1], { id: BOB.id, attributes: { ban_duration: 'none' } });
   assertEquals(h.db.rows('admin_audit').map((a) => a.action), ['user.suspend', 'user.unsuspend']);

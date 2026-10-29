@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { ActionBar, Banner, Button, Card, ProgressBar, Row, Screen, Section, Text, useOverlay } from '../../../../components';
+import { ActionBar, Banner, Button, Card, GenerationStatus, Row, Screen, Section, Text, useOverlay } from '../../../../components';
 import { DOCUMENT_ERROR_KEYS } from '../../../../features/subjects/errors';
 import { retryIngestion, useDocuments, useSubjectJobs } from '../../../../features/subjects/api';
 import { useOutline } from '../../../../features/subjects/outline';
@@ -44,10 +44,21 @@ export default function Processing() {
         </ActionBar>
       }
     >
-      <Card tone="soft">
-        <Text variant="heading">{view.label}</Text>
-        {isJobActive(job) ? <ProgressBar value={view.fraction} label={view.label} /> : null}
-      </Card>
+      {isJobActive(job) ? (
+        <GenerationStatus
+          title={t('ingest.processing_title')}
+          detail={view.label}
+          fraction={job?.status === 'queued' ? null : view.fraction}
+          startedAt={job?.started_at ?? job?.created_at}
+          queued={job?.status === 'queued'}
+          slowAfterS={240}
+          canLeave
+        />
+      ) : (
+        <Card tone="soft">
+          <Text variant="heading">{view.label}</Text>
+        </Card>
+      )}
       <Section>
         {view.steps.map(({ label, state }) => (
           <Row key={label} gap={space.md}>

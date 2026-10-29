@@ -1,9 +1,9 @@
 import { test } from 'bun:test';
-// Trilha (TRL-01, spec 14): open → prepare → answer through a whole chapter, with a wrong answer that is
-// re-taught, the chapter test, mastery evidence, resume without new AI calls and the plan fallback.
-import { TrailAnswerResSchema, TrailStateSchema } from '@studify/shared';
+// Trilha (TRL-01, spec 14): a whole chapter from the content written ahead (ADR 0011) with no model call, what is
+// missing written on demand into the shared content, the subject's path adopted, and concurrent opens.
+import { TrailAnswerResSchema, TrailStateSchema, trailOutlineHash } from '@studify/shared';
 import { assert, assertEquals } from './assert.ts';
-import { BOB, json, makeHarness, request, type FakeReply } from './fakes.ts';
+import { ALICE, BOB, json, makeHarness, request, type FakeReply } from './fakes.ts';
 import { IDS, seedWorld, v7 } from './world.ts';
 import { handler as trailOpen } from '../src/functions/trail-open.ts';
 import { handler as trailPrepare } from '../src/functions/trail-prepare.ts';
@@ -11,6 +11,7 @@ import { handler as trailAnswer } from '../src/functions/trail-answer.ts';
 import { handler as trailGrade } from '../src/functions/trail-grade.ts';
 import { handler as trailSettle } from '../src/functions/trail-settle.ts';
 import { handler as explain } from '../src/functions/explain.ts';
+import { buildState, loadOutline, loadSteps, loadTrail } from '../src/shared/trail.ts';
 
 const reply = (value: unknown): FakeReply => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
 const page = [{ doc: 'D1', page_start: 12, page_end: 12 }];
@@ -41,66 +42,80 @@ function byTask(params: Record<string, unknown>, planReply: unknown): FakeReply 
 
 const PLAN = { goal: 'Explicar como as plantas produzem energia.', chapters: [{ topic_key: 'T1', why: 'É o começo de tudo.', concept_keys: ['C1'] }] };
 
-test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chapter test, Lucas, completion', async () => {
+
+/** The subject's map as the path sees it (one topic, one concept): what its path is planned from. */
+const OUTLINE_HASH = trailOutlineHash([{ id: IDS.topic, title: 'Fotossíntese', order: 0, concepts: [{ id: IDS.concept, title: 'Clorofila', order: 0 }] }]);
+const stored = [{ document_id: IDS.doc, page_start: 12, page_end: 12 }];
+const bankQuestion = (stem: string) => ({ ...question(stem), source_pages: stored });
+
+/** Content written ahead for the concept (trail.prepare_topic), as the material's processing stores it. */
+function seedWrittenAhead(h: ReturnType<typeof makeHarness>) {
+  h.db.seed('trail_subject_plans', { subject_id: IDS.subject, outline_hash: OUTLINE_HASH, goal: PLAN.goal, chapters: [{ topicId: IDS.topic, why: 'É o começo de tudo.', conceptIds: [IDS.concept] }], prompt_version: 'trail.plan@v1' });
+  h.db.seed('trail_concept_content', {
+    concept_id: IDS.concept,
+    topic_id: IDS.topic,
+    subject_id: IDS.subject,
+    lesson: { ...lesson('Clorofila'), source_pages: stored },
+    practice: ['Onde fica a clorofila?', 'Qual organela é verde?', 'Reserva'].map(bankQuestion),
+    remedial_lesson: { ...lesson('Outro jeito'), source_pages: stored },
+    remedial_questions: ['De novo: onde?', 'E agora, onde?', 'Mais uma vez'].map(bankQuestion),
+    test_questions: [1, 2, 3, 4].map((n) => bankQuestion(`Teste ${n}`)),
+    prompt_version: 'trail.lesson@v1',
+    reinforce_prompt_version: 'trail.reinforce@v1',
+  });
+}
+
+test('trail: with the content written ahead a whole chapter runs with no model call: lesson, a miss re-taught and saved, test, Lucas', async () => {
   const h = makeHarness((params) => byTask(params, PLAN));
   await seedWorld(h);
+  seedWrittenAhead(h);
   let n = 10;
   const call = async (fn: typeof trailOpen, name: string, body: unknown, token?: string) => {
     const res = await fn(request(name, { body, idem: v7(n++), ...(token ? { token } : {}) }), h.deps);
     return { status: res.status, body: await json(res) };
   };
 
-  // 1. Open: the plan is made, the first step still needs content.
+  // 1. Open: the subject's path and the first lesson at once — nothing to prepare, nothing written in the background.
   const opened = await call(trailOpen, 'trail-open', { subject_id: IDS.subject });
   assertEquals(opened.status, 200, JSON.stringify(opened.body));
   const s0 = TrailStateSchema.parse(opened.body);
   assertEquals(s0.goal, PLAN.goal);
   assertEquals(s0.chapters.map((c) => c.title), ['Fotossíntese']);
   assertEquals(s0.chapters[0]!.why, 'É o começo de tudo.');
-  assertEquals(s0.preparing, true);
-  assertEquals(s0.step, null);
-  assertEquals(h.claude.calls.length, 1);
-  const trailId = s0.trail_id;
-
-  // Opening again resumes: no second plan.
-  await call(trailOpen, 'trail-open', { subject_id: IDS.subject });
-  assertEquals(h.claude.calls.length, 1);
-
-  // 2. Prepare: the lesson and its questions; the chapter test is the next lookahead.
-  const prepared = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: trailId })).body);
-  assertEquals(prepared.step?.kind, 'lesson');
-  assert(prepared.step?.kind === 'lesson' && prepared.step.body.includes('clorofila'));
-  assertEquals(prepared.step?.terms[0]?.term, 'clorofila');
-  assertEquals(prepared.step?.source_pages, [{ document_id: IDS.doc, page_start: 12, page_end: 12 }]);
-  assertEquals(prepared.prefetch, true);
+  assertEquals(s0.preparing, false);
+  assertEquals(s0.prefetch, false);
+  assertEquals(s0.step?.kind, 'lesson');
+  assert(s0.step?.kind === 'lesson' && s0.step.body.includes('clorofila'));
+  assertEquals(s0.step?.terms[0]?.term, 'clorofila');
+  assertEquals(s0.step?.source_pages, stored);
+  assertEquals(h.db.rows('trails')[0]!.prompt_version, 'trail.plan@v1');
+  assertEquals(h.enqueued.filter((e) => e.queue.startsWith('trail.')), [], 'everything this chapter needs is already written');
   // The question after the lesson is already written, so the app can show it before the lesson is recorded.
-  assertEquals(prepared.next_step?.kind, 'question');
-  const lessonId = prepared.step!.id;
+  assertEquals(s0.next_step?.kind, 'question');
+  const trailId = s0.trail_id;
+  const lessonId = s0.step!.id;
 
-  // 3. Read the lesson: the first question comes, without its answer, and it is the one shown ahead of the answer.
+  // 2. Read the lesson: the first question, with its answer, so the app shows the verdict at once.
   const read = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: lessonId, response: null })).body);
   assertEquals(read.feedback, null);
-  assertEquals(read.state.step?.kind, 'question');
-  assertEquals(read.state.step?.id, prepared.next_step?.id);
-  assertEquals(read.state.next_step, null);
-  // The answer travels with the question, so the app shows the verdict at once; the record still waits for trail-grade.
+  assertEquals(read.state.step?.id, s0.next_step?.id);
   assertEquals(read.state.step?.kind === 'question' && read.state.step.answer.correct_option, 'B');
   assertEquals(read.state.step?.kind === 'question' && read.state.step.answer.rationales.length, 4);
   const q1 = read.state.step!.id;
 
-  // 4. Wrong answer: feedback that teaches, evidence 0, and the re-teaching needs content.
+  // 3. Wrong answer: feedback that teaches, evidence 0, the Caderno entry, and the re-explanation right away.
   const wrong = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: q1, response: 'A' })).body);
   assertEquals(wrong.feedback?.correct, false);
   assertEquals(wrong.feedback?.correct_option, 'B');
   assertEquals(wrong.feedback?.rationales.find((r) => r.id === 'A')?.rationale, 'Lá ocorre a respiração.');
-  assertEquals(wrong.state.preparing, true);
+  assertEquals(wrong.state.preparing, false);
+  assertEquals(wrong.state.step?.purpose, 'remedial_lesson');
   const evidence = h.db.rows('mastery_evidence');
   assertEquals(evidence.length, 1);
   assertEquals(evidence[0]!.source, 'trail');
   assertEquals(evidence[0]!.outcome, 0);
   assertEquals(evidence[0]!.node_id, IDS.concept);
   assert(h.enqueued.some((e) => e.queue === 'mastery.recompute'));
-  // The miss is in the Caderno: a personal bank question answered in the trail's attempt, with a mistake row.
   assert(wrong.mistake_id !== null);
   const mistake = h.db.rows('mistakes')[0]!;
   assertEquals(mistake.id, wrong.mistake_id);
@@ -120,27 +135,23 @@ test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chap
   assertEquals(again.feedback?.correct, false);
   assertEquals(h.db.rows('mastery_evidence').length, 1);
 
-  // 5. Re-teaching: another explanation, then a fresh question on the same point.
-  const remedial = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: trailId })).body);
-  assertEquals(remedial.step?.purpose, 'remedial_lesson');
-  const rq = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: remedial.step!.id, response: null })).body);
+  // 4. Re-teaching: the other angle, then a fresh question on the same point; then the practice goes on.
+  const rq = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: wrong.state.step!.id, response: null })).body);
   assertEquals(rq.state.step?.purpose, 'remedial_question');
+  assert(rq.state.step?.kind === 'question' && rq.state.step.stem === 'De novo: onde?');
   const q2 = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: rq.state.step!.id, response: 'B' })).body);
   assertEquals(q2.feedback?.correct, true);
   assertEquals(q2.state.step?.purpose, 'practice');
 
-  // 6. Second right answer clears the concept; the chapter test is next.
+  // 5. The second right answer clears the concept, and the chapter test is there at once.
   const cleared = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: q2.state.step!.id, response: 'B' })).body);
   assertEquals(cleared.state.phase, 'checkpoint');
-  assertEquals(cleared.state.preparing, true);
+  assertEquals(cleared.state.preparing, false);
   assertEquals(cleared.state.chapters[0]!.concepts[0]!.state, 'cleared');
+  assert(cleared.state.step?.kind === 'question' && cleared.state.step.position?.index === 1 && cleared.state.step.position.total === 4);
 
-  const test1 = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: trailId })).body);
-  assertEquals(test1.step?.purpose, 'checkpoint');
-  assert(test1.step?.kind === 'question' && test1.step.position?.index === 1 && test1.step.position.total === 4);
-
-  // 7. All right: the test is passed, and Ensine o Lucas closes the chapter.
-  let last = test1;
+  // 6. All right: the test is passed, and Ensine o Lucas closes the chapter.
+  let last = cleared.state;
   let res: ReturnType<typeof TrailAnswerResSchema.parse> | null = null;
   for (let i = 0; i < 4; i++) {
     res = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: last.step!.id, response: 'B' })).body);
@@ -150,7 +161,6 @@ test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chap
   assertEquals(res!.state.phase, 'teach');
   assertEquals(res!.state.teach, { topic_id: IDS.topic, title: 'Fotossíntese', pass_score: 70, best_score: null, attempts: 0 });
   assertEquals(res!.state.chapter_done, null);
-  assertEquals(res!.state.status, 'active');
 
   // A weak lesson is not enough; a good one closes the chapter (and here the whole path) on the way back.
   const user = h.db.rows('trails')[0]!.user_id;
@@ -166,7 +176,7 @@ test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chap
   assertEquals(closed.progress, 1);
   // The spare practice question was discarded with the chapter.
   assert(h.db.rows('trail_steps').some((s) => s.status === 'discarded'));
-  assertEquals(h.claude.calls.length, 4); // plan, lesson, re-teaching, chapter test
+  assertEquals(h.claude.calls.length, 0, 'the whole chapter came from the content written ahead');
 
   // Another student cannot touch this trail.
   const bob = await call(trailPrepare, 'trail-prepare', { trail_id: trailId }, BOB.jwt);
@@ -175,15 +185,115 @@ test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chap
   assertEquals(bobAnswer.status, 404);
 });
 
-test('trail: an unusable plan falls back to the outline order', async () => {
-  const h = makeHarness((params) => byTask(params, { nope: true }));
+test('trail: what is not written ahead yet is written on demand, the lesson for everyone, and the rest starts in the background', async () => {
+  const h = makeHarness((params) => byTask(params, PLAN));
   await seedWorld(h);
-  const res = await trailOpen(request('trail-open', { body: { subject_id: IDS.subject }, idem: v7(1) }), h.deps);
-  assertEquals(res.status, 200);
-  const state = TrailStateSchema.parse(await json(res));
-  assertEquals(state.chapters.map((c) => c.topic_id), [IDS.topic]);
-  assertEquals(state.goal, null);
+  let n = 100;
+  const call = async (fn: typeof trailOpen, name: string, body: unknown) => {
+    const res = await fn(request(name, { body, idem: v7(n++) }), h.deps);
+    return { status: res.status, body: await json(res) };
+  };
+
+  // Open never calls Claude: outline order until the subject's path exists, which is planned in the background, as is
+  // the chapter's content.
+  const s0 = TrailStateSchema.parse((await call(trailOpen, 'trail-open', { subject_id: IDS.subject })).body);
+  assertEquals(h.claude.calls.length, 0);
+  assertEquals(s0.goal, null);
+  assertEquals(s0.chapters.map((c) => c.topic_id), [IDS.topic]);
+  assertEquals(s0.chapters[0]!.why, null);
   assertEquals(h.db.rows('trails')[0]!.prompt_version, null);
+  assertEquals(s0.preparing, true);
+  assertEquals(s0.step, null);
+  const background = h.enqueued.filter((e) => e.queue.startsWith('trail.'));
+  assertEquals(background.map((e) => [e.queue, e.options?.startAfterSeconds]), [['trail.plan_subject', 0], ['trail.prepare_topic', 0]]);
+  assertEquals(background[1]!.data.topic_id, IDS.topic);
+  const trailId = s0.trail_id;
+
+  // The step on screen is written now, into the subject's shared content, and copied from there.
+  const prepared = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: trailId })).body);
+  assertEquals(prepared.step?.kind, 'lesson');
+  assertEquals(prepared.step?.source_pages, [{ document_id: IDS.doc, page_start: 12, page_end: 12 }]);
+  assertEquals(prepared.next_step?.kind, 'question');
+  assertEquals(h.claude.calls.length, 1);
+  const shared = h.db.rows('trail_concept_content');
+  assertEquals(shared.map((r) => [r.concept_id, (r.practice as unknown[]).length, r.remedial_lesson ?? null]), [[IDS.concept, 3, null]]);
+  // The chapter test is not written ahead for this concept yet: the app may ask for it in the background.
+  assertEquals(prepared.prefetch, true);
+
+  // A miss with no re-explanation written ahead: written for this student's answer.
+  const read = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: prepared.step!.id, response: null })).body);
+  const wrong = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: read.state.step!.id, response: 'A' })).body);
+  assertEquals(wrong.state.preparing, true);
+  const remedial = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: trailId })).body);
+  assertEquals(remedial.step?.purpose, 'remedial_lesson');
+  const rq = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: remedial.step!.id, response: null })).body);
+  const q2 = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: rq.state.step!.id, response: 'B' })).body);
+  const cleared = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: q2.state.step!.id, response: 'B' })).body);
+  assertEquals(cleared.state.phase, 'checkpoint');
+  assertEquals(cleared.state.preparing, true);
+  const test1 = TrailStateSchema.parse((await call(trailPrepare, 'trail-prepare', { trail_id: trailId })).body);
+  assertEquals(test1.step?.purpose, 'checkpoint');
+  assertEquals(h.claude.calls.length, 3); // lesson, re-teaching, chapter test
+
+  // A classmate (here, the same subject opened from scratch) gets that lesson with no call and no wait.
+  h.db.tables.set('trail_steps', []);
+  h.db.tables.set('trails', []);
+  const fresh = TrailStateSchema.parse((await call(trailOpen, 'trail-open', { subject_id: IDS.subject })).body);
+  assertEquals(fresh.step?.kind, 'lesson');
+  assertEquals(fresh.preparing, false);
+  assertEquals(h.claude.calls.length, 3);
+});
+
+test('trail: a trail that started in outline order takes the subject path for the chapters not started', async () => {
+  const h = makeHarness((params) => byTask(params, PLAN));
+  await seedWorld(h);
+  const unit = 'a0000000-0000-4000-8000-0000000000f1';
+  const topic2 = 'a0000000-0000-4000-8000-0000000000f2';
+  h.db.seed('knowledge_nodes', { id: unit, subject_id: IDS.subject, parent_id: null, kind: 'unit', title: 'Plantas', summary: null, learning_objectives: [], key_terms: [], formulas: [], deleted_at: null, position: 0 });
+  h.db.seed('knowledge_nodes', { id: topic2, subject_id: IDS.subject, parent_id: unit, kind: 'topic', title: 'Respiração', summary: null, learning_objectives: [], key_terms: [], formulas: [], deleted_at: null, position: 1 });
+  h.db.table('knowledge_nodes').find((r) => r.id === IDS.topic)!.parent_id = unit;
+  h.db.seed('node_sources', { id: v7(901), node_id: topic2, document_id: IDS.doc, page_start: 13, page_end: 14, origin: 'ai', deleted_at: null });
+  const open = async (n: number) => TrailStateSchema.parse(await json(await trailOpen(request('trail-open', { body: { subject_id: IDS.subject }, idem: v7(n) }), h.deps)));
+
+  const first = await open(1);
+  assertEquals(first.chapters.map((c) => c.topic_id), [IDS.topic, topic2]);
+  assertEquals(first.goal, null);
+
+  // The subject's path is ready (trail.plan_subject finished): nothing was started yet, so the whole path follows it.
+  h.db.seed('trail_subject_plans', { subject_id: IDS.subject, outline_hash: 'x', goal: 'Entender as plantas.', chapters: [{ topicId: topic2, why: 'Primeiro a respiração.', conceptIds: [] }, { topicId: IDS.topic, why: 'Depois a luz.', conceptIds: [IDS.concept] }], prompt_version: 'trail.plan@v1' });
+  const adopted = await open(2);
+  assertEquals(adopted.chapters.map((c) => [c.topic_id, c.why]), [[topic2, 'Primeiro a respiração.'], [IDS.topic, 'Depois a luz.']]);
+  assertEquals(adopted.goal, 'Entender as plantas.');
+  assertEquals(h.db.rows('trails')[0]!.prompt_version, 'trail.plan@v1');
+  assertEquals(h.claude.calls.length, 0);
+});
+
+test('trail: two requests copying the same step from the content written ahead store it once', async () => {
+  const h = makeHarness((params) => byTask(params, PLAN));
+  await seedWorld(h);
+  seedWrittenAhead(h);
+  const open = (n: number) => trailOpen(request('trail-open', { body: { subject_id: IDS.subject }, idem: v7(n) }), h.deps).then(json);
+  // Two devices open the subject at the same moment.
+  const [a, b] = await Promise.all([open(1), open(2)]);
+  assertEquals(TrailStateSchema.parse(a).step?.id, TrailStateSchema.parse(b).step?.id);
+  assertEquals(h.db.rows('trails').length, 1);
+  assertEquals(h.db.rows('trail_steps').filter((s) => s.purpose === 'lesson').length, 1);
+  assertEquals(h.db.rows('trail_steps').length, 4, 'one lesson and its three questions');
+
+  // A miss read by two requests from the same snapshot (the app's trail-answer and trail-settle can overlap): both
+  // copy the re-explanation, the second collides on the creation number, re-reads and finds it already there.
+  const state = TrailStateSchema.parse(a);
+  let n = 10;
+  const call = (fn: typeof trailOpen, name: string, body: unknown) => fn(request(name, { body, idem: v7(n++) }), h.deps).then(json);
+  const read = TrailAnswerResSchema.parse(await call(trailAnswer, 'trail-answer', { trail_id: state.trail_id, step_id: state.step!.id, response: null }));
+  await call(trailGrade, 'trail-grade', { trail_id: state.trail_id, step_id: read.state.step!.id, response: 'A' });
+  const trail = await loadTrail(h.deps.db, ALICE.id, state.trail_id);
+  const [outline, snapshot] = await Promise.all([loadOutline(h.deps.db, ALICE.id, IDS.subject), loadSteps(h.deps.db, state.trail_id)]);
+  const [x, y] = await Promise.all([buildState(h.deps, trail, [...snapshot], outline), buildState(h.deps, trail, [...snapshot], outline)]);
+  assertEquals(x.step?.purpose, 'remedial_lesson');
+  assertEquals(y.step?.id, x.step?.id);
+  assertEquals(h.db.rows('trail_steps').filter((s) => s.purpose === 'remedial_lesson').length, 1);
+  assertEquals(h.db.rows('trail_steps').filter((s) => s.purpose === 'remedial_question').length, 1);
 });
 
 test('trail: a subject without ready topics cannot open a trail', async () => {

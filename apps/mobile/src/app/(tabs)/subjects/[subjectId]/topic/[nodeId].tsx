@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   EmptyState,
+  GenerationStatus,
   IconButton,
   ListItem,
   MarkdownView,
@@ -24,6 +25,7 @@ import {
   useOverlay,
 } from '../../../../../components';
 import { useSession } from '../../../../../features/auth/session';
+import { messageFor } from '../../../../../api/messages';
 import { pageLabel } from '../../../../../features/common/format';
 import { createUserCard, generateMoreCards, generateMoreQuestions, NOTE_DEPTHS, recordTopicRead, requestNote, streamDeepNote, useGlossary, useNodeCounts, useNotes, useSubjectCards, type GlossaryTerm, type NoteDepth } from '../../../../../features/learn/api';
 import { ExplainSheet } from '../../../../../features/learn/ExplainSheet';
@@ -114,18 +116,14 @@ export default function TopicScreen() {
           ) : (
             <EmptyState message={t('topic.no_questions')} />
           )}
-          <Button
-            variant="text"
-            icon="sparkles-outline"
+          <GenerateMore
             label={t('topic.generate_more_questions')}
+            writing={t('topic.writing_questions')}
             disabled={!online}
-            onPress={async () => {
-              try {
-                await generateMoreQuestions(nodeId);
-                void counts.refetch();
-              } catch {
-                overlay.snack(t('error.generation'));
-              }
+            run={async () => {
+              const out = await generateMoreQuestions(nodeId);
+              void counts.refetch();
+              return t('topic.more_questions_done', { n: out.question_ids.length });
             }}
           />
         </View>
@@ -262,6 +260,32 @@ function TopicFacts({ objectives, formulas, sources, subjectId }: { objectives: 
   );
 }
 
+/** "Gerar mais": the wait shows while the model writes (GenerationStatus), then how many came out, or what failed. */
+function GenerateMore({ label, writing, disabled, run }: { label: string; writing: string; disabled: boolean; run: () => Promise<string> }) {
+  const overlay = useOverlay();
+  const [running, setRunning] = useState(false);
+  if (running) return <GenerationStatus compact title={writing} slowAfterS={40} />;
+  return (
+    <Button
+      compact
+      variant="text"
+      icon="sparkles-outline"
+      label={label}
+      disabled={disabled}
+      onPress={async () => {
+        setRunning(true);
+        try {
+          overlay.snack(await run());
+        } catch (e) {
+          overlay.snack(messageFor(e, t('error.generation')));
+        } finally {
+          setRunning(false);
+        }
+      }}
+    />
+  );
+}
+
 function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRetrieval, busy }: { subjectId: string; nodeId: string; readyTopics: number; totalTopics: number; keyTerms: string[]; onRetrieval: () => void; busy: boolean }) {
   const notes = useNotes(nodeId);
   const { userId } = useSession();
@@ -276,6 +300,18 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
   const opened = useRef(Date.now());
   const note = notes.data?.find((n) => n.depth === depth && n.status === 'ready');
   const pending = notes.data?.find((n) => n.depth === depth && n.status !== 'ready');
+  const [retrying, setRetrying] = useState(false);
+  const retryNote = async () => {
+    setRetrying(true);
+    try {
+      await requestNote(nodeId, depth, true);
+      await notes.refetch();
+    } catch (e) {
+      overlay.snack(messageFor(e, t('error.generation')));
+    } finally {
+      setRetrying(false);
+    }
+  };
   const glossary = useGlossary(subjectId);
 
   // A topic that isn't ready is moved up the generation queue when opened (ING-03.13).
@@ -303,7 +339,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
       },
       onError: (e) => {
         setDeep(null);
-        overlay.snack(e.code === 'budget_exhausted' ? t('budget.user_daily') : t('error.generation'));
+        overlay.snack(e.code === 'budget_exhausted' ? t('budget.user_daily') : messageFor(e, t('error.generation')));
       },
     });
   };
@@ -349,14 +385,25 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
       ) : depth === 'deep' ? (
         deep ? (
           <View style={{ gap: space.sm }}>
-            <RichContent variant="reading" text={deep.text || t('tutor.thinking')} />
-            {deep.streaming ? <Text tone="secondary">Gerando… leva uns 30 segundos</Text> : <AiBadge />}
+            {deep.text ? <RichContent variant="reading" text={deep.text} /> : null}
+            {deep.streaming ? <GenerationStatus compact title={t('notes.deep_writing')} detail={deep.text ? null : t('notes.deep_reading')} slowAfterS={60} /> : <AiBadge />}
           </View>
         ) : (
-          <Button variant="tonal" icon="sparkles-outline" label="Gerar versão aprofundada" disabled={!online} disabledReason={t('offline.ai_disabled')} onPress={startDeep} />
+          <Button variant="tonal" icon="sparkles-outline" label={t('notes.deep_generate')} disabled={!online} disabledReason={t('offline.ai_disabled')} onPress={startDeep} />
         )
       ) : (
-        <Banner kind="info" icon="hourglass-outline" message={pending?.status === 'failed' ? t('error.generation') : t('notes.not_ready', { done: readyTopics, total: totalTopics })} action={pending?.status === 'failed' ? { label: t('global.retry'), onPress: () => void requestNote(nodeId, depth, true).then(() => notes.refetch()) } : undefined} />
+        pending?.status === 'failed' && !retrying ? (
+          <GenerationStatus title={t('notes.writing')} error={t('notes.failed')} onRetry={online ? () => void retryNote() : undefined} />
+        ) : (
+          <GenerationStatus
+            title={t('notes.writing')}
+            detail={totalTopics ? t('notes.topics_ready', { done: readyTopics, total: totalTopics }) : null}
+            fraction={totalTopics ? readyTopics / totalTopics : null}
+            startedAt={pending?.updated_at}
+            slowAfterS={120}
+            canLeave
+          />
+        )
       )}
       <TermSheet term={termRow ?? null} visible={!!term} onClose={() => setTerm(null)} subjectId={subjectId} nodeId={nodeId} />
     </View>
@@ -383,19 +430,14 @@ function CardsTab({ subjectId, nodeId, shared }: { subjectId: string; nodeId: st
       <Row wrap>
         <Button compact variant="tonal" icon="add" label={t('topic.new_card')} onPress={() => router.push({ pathname: '/subjects/[subjectId]/card/[cardId]', params: { subjectId, cardId: 'new', nodeId, shared: shared ? '1' : '' } })} />
         <Button compact variant="tonal" icon="image-outline" label={t('occlusion.new')} onPress={() => router.push({ pathname: '/occlusion/new', params: { subjectId, nodeId } })} />
-        <Button
-          compact
-          variant="text"
-          icon="sparkles-outline"
+        <GenerateMore
           label={t('topic.generate_more_cards')}
+          writing={t('topic.writing_cards')}
           disabled={!online}
-          onPress={async () => {
-            try {
-              await generateMoreCards(nodeId);
-              void cards.refetch();
-            } catch {
-              overlay.snack(t('error.generation'));
-            }
+          run={async () => {
+            const out = await generateMoreCards(nodeId);
+            void cards.refetch();
+            return t('topic.more_cards_done', { n: out.card_ids.length });
           }}
         />
       </Row>

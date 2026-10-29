@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
+import { ApiFailure } from '@studify/shared';
 import { Scheduler } from '../../src/framework/scheduler.ts';
 import { createLogger } from '../../src/framework/logger.ts';
 
@@ -37,5 +38,24 @@ describe.skipIf(!url)('calendar triggers against Postgres', () => {
     await scheduler.tick();
     expect(calls).toEqual(['nightly', 'battle']);
     release(); await scheduler.stop();
+  });
+  it('re-schedules work its operation was too busy to start, with the same key, and fires it later', async () => {
+    const calls: unknown[] = [];
+    let busy = true;
+    const scheduler = new Scheduler(pool, log, async (name, data) => {
+      if (busy) throw new ApiFailure('rate_limited');
+      calls.push([name, data]);
+    });
+    await scheduler.schedule('grading.answer', { attempt_answer_id: 'a1' }, { startAfter: 0, singletonKey: 'a1' });
+    await scheduler.tick(); await scheduler.stop();
+    const parked = await pool.query<{ singleton_key: string; due_at: Date }>(`select singleton_key, due_at from private.scheduled_actions where name = 'grading.answer'`);
+    expect(parked.rows.map((r) => r.singleton_key)).toEqual(['grading.answer:a1']);
+    expect(parked.rows[0]!.due_at.getTime()).toBeGreaterThan(Date.now());
+    // The same key is still taken while it waits: a second request for that answer does not add another run.
+    expect(await scheduler.schedule('grading.answer', { attempt_answer_id: 'a1' }, { startAfter: 0, singletonKey: 'a1' })).toBeNull();
+    busy = false;
+    await pool.query(`update private.scheduled_actions set due_at = now() - interval '1 second' where name = 'grading.answer'`);
+    await scheduler.tick(); await scheduler.stop();
+    expect(calls).toEqual([['grading.answer', { attempt_answer_id: 'a1' }]]);
   });
 });

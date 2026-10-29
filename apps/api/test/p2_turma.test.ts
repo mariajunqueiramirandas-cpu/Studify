@@ -270,7 +270,7 @@ test('prova-provavel-generate: queues pp.generate for the owner; 404 for another
   assertEquals(other.status, 404);
   const first = await provaProvavel(post({ exam_id: EXAM }, { jwt: 'jwt-alice' }), e.deps);
   assertEquals(first.status, 202);
-  assert(e.sent.some((s) => s.queue === 'pp.generate' && s.data.exam_id === EXAM && s.data.user_id === ALICE));
+  assert(e.sent.some((s) => s.queue === 'pp.generate' && s.data.exam_id === EXAM && s.data.user_id === ALICE && (s.options as { startAfterSeconds?: number })?.startAfterSeconds === 0));
   (e.db.tables.quizzes as Row[]).push(
     ...[1, 2, 3].map((n) => ({ id: `q${n}`, owner_id: ALICE, kind: 'predicted_test', scope: { exam_id: EXAM } })),
   );

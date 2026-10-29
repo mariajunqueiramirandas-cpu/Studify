@@ -20,7 +20,7 @@ import { defineFunction } from '../shared/http.ts';
 import { loadSubject, canReadSubject, requireSubject, type SubjectRow } from '../shared/access.ts';
 import { callTask, unwrapResult } from '../shared/ai.ts';
 import { budgetCtxFor } from '../shared/ctx.ts';
-import { claudeDepsFor, type Deps } from '../shared/deps.ts';
+import { claudeDepsFor, inBackground, type Deps } from '../shared/deps.ts';
 import { createAiJob, activeJobCount } from '../shared/jobs.ts';
 import { recordMistake } from '../shared/mistakes.ts';
 import { captureImages } from '../shared-p3/capture.ts';
@@ -43,6 +43,23 @@ interface EssayRow {
   feedback: SchoolEssayFeedback | null;
   parent_essay_id: string | null;
   deleted_at: string | null;
+  updated_at: string;
+}
+
+// A redação marked as being graded with no grading running (a restart interrupted it), or marked this long ago,
+// lost its grading: it can be graded again.
+const STUCK_GRADING_MS = 15 * 60_000;
+
+async function gradingRuns(deps: Parameters<typeof activeJobCount>[0], userId: string, essay: EssayRow): Promise<boolean> {
+  if (essay.status !== 'grading' || Date.now() - Date.parse(essay.updated_at) >= STUCK_GRADING_MS) return false;
+  const { count, error } = await deps.db
+    .from('ai_jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('type', 'essay.grade')
+    .in('status', ['queued', 'running', 'waiting_batch', 'waiting_budget']);
+  if (error) throw error;
+  return (count ?? 0) > 0;
 }
 
 interface GradeOut {
@@ -125,7 +142,7 @@ export const handler = defineFunction<{ essay_id: string }>({
     if (!essay.text.trim()) throw new ApiFailure('invalid_request', { message: 'Escreva ou confirme a resposta antes de corrigir.' });
 
     if (essay.kind === 'enem_redacao') {
-      if (essay.status === 'grading') throw new ApiFailure('already_exists', { message: 'Sua redação já está sendo corrigida.' });
+      if (await gradingRuns(deps, userId, essay)) throw new ApiFailure('already_exists', { message: 'Sua redação já está sendo corrigida.' });
       if (!essay.theme_id && !essay.prompt?.theme) throw new ApiFailure('invalid_request', { message: 'Escolha o tema da redação antes de corrigir.' });
       // ENM-05.2: up to 7 lines is "texto insuficiente", decided here without a model call.
       const check = redacaoLineCheck(essay.text, essay.input_mode);
@@ -152,7 +169,7 @@ export const handler = defineFunction<{ essay_id: string }>({
       const jobId = await createAiJob(deps, { type: 'essay.grade', userId, stage: 'essay' });
       const marked = await db.from('essays').update({ status: 'grading', ...lineFields }).eq('id', essay.id);
       if (marked.error) throw marked.error;
-      await deps.execute('essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, { singletonKey: `essay.grade:${essay.id}` });
+      await inBackground(deps, 'essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, `essay.grade:${essay.id}`);
       return ctx.json({ mode: 'async', job_id: jobId, eta_s: 90 } satisfies GradeEssayRes, 202);
     }
 

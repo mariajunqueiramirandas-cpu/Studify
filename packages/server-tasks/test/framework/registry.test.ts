@@ -47,6 +47,24 @@ describe('direct server operations', () => {
     await registry.execute('slow', {}, { singletonKey: 'same' });
     expect(attempts).toBe(2);
   });
+  it('finishes the progress row it created, and leaves a row handed in by a caller to that caller', async () => {
+    const queries: Array<{ text: string; values: unknown[] }> = [];
+    const pool = {
+      query: async (text: string, values: unknown[] = []) => {
+        queries.push({ text, values });
+        return text.includes('insert into public.ai_jobs') ? { rows: [{ id: 'own-row' }], rowCount: 1 } : { rows: [], rowCount: 1 };
+      },
+    } as unknown as RuntimeDeps['pool'];
+    const log = { child: () => log, info() {}, error() {} } as unknown as RuntimeDeps['log'];
+    const registry = new OperationRegistry({ log, pool, supabase: {} as RuntimeDeps['supabase'], claude: {} as RuntimeDeps['claude'], push: {} as RuntimeDeps['push'], now: () => new Date(), schedule: async () => 'calendar-id' });
+    await registry.register([{ name: 'work', handler: async () => undefined }]);
+    const finished = () => queries.filter((q) => q.text.includes("set status = 'succeeded'")).map((q) => q.values[0]);
+    await registry.execute('work', { subject_id: '0190a000-0000-7000-8000-000000000001' });
+    expect(finished()).toEqual(['own-row']);
+    queries.length = 0;
+    await registry.execute('work', { subject_id: '0190a000-0000-7000-8000-000000000001', ai_job_id: '0190a000-0000-7000-8000-000000000002' });
+    expect(finished()).toEqual([]);
+  });
   it('stores only explicitly delayed actions in the calendar', async () => {
     const { registry, scheduled } = harness();
     let ran = false;

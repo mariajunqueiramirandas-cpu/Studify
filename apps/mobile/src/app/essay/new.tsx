@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { ActionBar, Banner, Button, Card, Row, Screen, Text, TextField, useOnline, useOverlay } from '../../components';
+import { ActionBar, Banner, Button, Card, GenerationStatus, Row, Screen, Text, TextField, useOnline, useOverlay } from '../../components';
+import { messageFor } from '../../api/messages';
 import { useSession } from '../../features/auth/session';
 import { createTypedEssay, gradeEssay } from '../../features/camera/api';
 import { MicButton } from '../../features/voice/VoiceButtons';
@@ -41,8 +42,7 @@ export default function NewEssay() {
       await gradeEssay(essayId);
       router.replace({ pathname: '/essay/[essayId]', params: { essayId } });
     } catch (e) {
-      const code = (e as { code?: string }).code;
-      overlay.snack(code === 'budget_exhausted' || code === 'rate_limited' ? t('budget.user_daily') : t('error.generation'));
+      overlay.snack(messageFor(e, t('error.generation')));
     } finally {
       setBusy(false);
     }
@@ -55,6 +55,7 @@ export default function NewEssay() {
       onBack={() => router.back()}
       footer={
         <ActionBar>
+          {busy ? <GenerationStatus compact title={t('essay.grading_title')} detail={t('essay.grading_detail')} slowAfterS={45} /> : null}
           <Button label={t('essay.grade')} loading={busy} disabled={!online || !text.trim() || (!bankQuestion && !question.trim())} disabledReason={online ? undefined : t('offline.ai_disabled')} onPress={() => void grade()} />
         </ActionBar>
       }

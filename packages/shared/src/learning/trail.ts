@@ -122,6 +122,53 @@ export function normalizeTrailPlan(
   });
 }
 
+/** A knowledge-map row, as much of it as the path needs. */
+export interface TrailMapNode {
+  id: string;
+  parent_id: string | null;
+  kind: 'unit' | 'topic' | 'concept';
+  title: string;
+  position: number;
+  is_placeholder?: boolean | null;
+}
+
+/**
+ * The topics a path can teach (spec 14 §8.1), in outline order: not a placeholder from a content list, with pages of
+ * material to teach from, and not excluded (a student's "não cai na prova", which also hides what is under it).
+ * Concepts follow their topic. The API (per student) and the content written ahead (per subject) both use it, so
+ * their outline hashes agree.
+ */
+export function trailTopicsOf(
+  nodes: readonly TrailMapNode[],
+  withPages: ReadonlySet<string>,
+  excluded: ReadonlySet<string> = new Set(),
+): TrailOutlineTopic[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const isExcluded = (n: TrailMapNode): boolean => excluded.has(n.id) || (n.parent_id !== null && byId.has(n.parent_id) && isExcluded(byId.get(n.parent_id)!));
+  const rootPos = (n: TrailMapNode): number => {
+    const parent = n.parent_id ? byId.get(n.parent_id) : undefined;
+    return parent && parent.kind === 'unit' ? parent.position * 1000 + n.position : n.position * 1000;
+  };
+  return nodes
+    .filter((n) => n.kind === 'topic' && !n.is_placeholder && withPages.has(n.id) && !isExcluded(n))
+    .map((n) => ({
+      id: n.id,
+      title: n.title,
+      order: rootPos(n),
+      concepts: nodes.filter((c) => c.kind === 'concept' && c.parent_id === n.id && !isExcluded(c)).map((c) => ({ id: c.id, title: c.title, order: c.position })),
+    }));
+}
+
+/** Titles of the concepts a path teaches before `conceptId` (or up to it, `inclusive`), the last 12. */
+export function taughtBeforeIn(order: readonly string[], conceptId: string, titleOf: (id: string) => string | undefined, inclusive = false): string[] {
+  const idx = order.indexOf(conceptId);
+  return order
+    .slice(0, Math.max(0, idx + (inclusive ? 1 : 0)))
+    .slice(-12)
+    .map(titleOf)
+    .filter((t): t is string => !!t);
+}
+
 /** Stable fingerprint of what a plan was built from: topic and concept ids in outline order. */
 export function trailOutlineHash(topics: readonly TrailOutlineTopic[]): string {
   const text = [...topics]
@@ -208,18 +255,24 @@ export function checkpointScore(steps: readonly TrailStepView[], round: number):
   return { correct, total: qs.length, passed: correct / qs.length >= TRAIL.checkpointPass };
 }
 
+/** True while a concept of the chapter is neither cleared nor shaky: the chapter test has not begun. */
+function isLearning(chapter: TrailChapter, steps: readonly TrailStepView[]): boolean {
+  return chapter.conceptIds.some((c) => conceptOutcome(steps, c) === 'open');
+}
+
 /**
  * The next thing the student does in a chapter (spec 14 §8.2): resume a shown step; else, for the first open
  * concept, its lesson, the re-teaching of its last wrong answer, then its next question; once every concept is
  * cleared or shaky, the chapter test; after a failed round, re-teach the missed concepts and run a new round.
- * `need` means that content must be generated first.
+ * `need` means that content must be generated first. A chapter test written ahead (the buffer writes it while the
+ * student is on the last concept) waits until every concept is done: its questions never cut the learning short.
  */
 export function nextTrailMove(chapter: TrailChapter, steps: readonly TrailStepView[]): TrailMove {
   const open = steps.filter((s) => s.status === 'ready' && s.servedSeq !== null).sort(byServed);
   if (open[0]) return { kind: 'serve', stepId: open[0].id };
 
   const round = Math.max(0, ...steps.filter((s) => s.purpose === 'checkpoint').map((s) => s.round));
-  if (round > 0) {
+  if (round > 0 && !isLearning(chapter, steps)) {
     const pending = steps.filter((s) => s.purpose === 'checkpoint' && s.round === round && s.status === 'ready').sort(byCreated);
     if (pending[0]) return { kind: 'serve', stepId: pending[0].id };
     const score = checkpointScore(steps, round);
@@ -255,9 +308,8 @@ export function nextTrailMove(chapter: TrailChapter, steps: readonly TrailStepVi
   return { kind: 'need', need: { kind: 'checkpoint', round: 1 } };
 }
 
-/** The concept the student is on (null in the chapter test). */
+/** The concept the student is on (null in the chapter test, once every concept is cleared or shaky). */
 export function currentConcept(chapter: TrailChapter, steps: readonly TrailStepView[]): string | null {
-  if (steps.some((s) => s.purpose === 'checkpoint')) return null;
   return chapter.conceptIds.find((c) => conceptOutcome(steps, c) === 'open') ?? null;
 }
 
@@ -284,14 +336,14 @@ export function trailNeeds(
   const move = nextTrailMove(chapter, steps);
   if (move.kind === 'need') out.push({ need: move.need, blocking: true, nextChapter: false });
 
-  const inTest = steps.some((s) => s.purpose === 'checkpoint') || (move.kind === 'need' && move.need.kind === 'checkpoint');
   const current = currentConcept(chapter, steps);
-  if (!inTest && current) {
+  if (current) {
     const after = chapter.conceptIds.slice(chapter.conceptIds.indexOf(current) + 1).filter((c) => conceptOutcome(steps, c) === 'open');
     const upcoming = after.filter((c) => !steps.some((s) => s.conceptId === c && s.purpose === 'lesson')).slice(0, TRAIL.lookahead);
     for (const conceptId of upcoming) out.push({ need: { kind: 'teach', conceptId }, blocking: false, nextChapter: false });
-    if (upcoming.length === 0 && after.length === 0) out.push({ need: { kind: 'checkpoint', round: 1 }, blocking: false, nextChapter: false });
-  } else if (inTest && nextChapter) {
+    const testWritten = steps.some((s) => s.purpose === 'checkpoint');
+    if (upcoming.length === 0 && after.length === 0 && !testWritten) out.push({ need: { kind: 'checkpoint', round: 1 }, blocking: false, nextChapter: false });
+  } else if (nextChapter) {
     const first = nextChapter.chapter.conceptIds[0];
     if (first && !nextChapter.steps.some((s) => s.conceptId === first && s.purpose === 'lesson')) {
       out.push({ need: { kind: 'teach', conceptId: first }, blocking: false, nextChapter: true });

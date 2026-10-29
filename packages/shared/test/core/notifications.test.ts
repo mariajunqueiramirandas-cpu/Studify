@@ -72,6 +72,13 @@ describe('live job progress', () => {
     expect(failed.steps.map((s) => s.state)).toEqual(['done', 'failed', 'pending']);
   });
 
+  it('fills podcast and essay bands with the progress their jobs report', () => {
+    expect(liveJobProgress('podcast.generate', 'script', 'running', 0.1).fraction).toBe(0.1);
+    expect(liveJobProgress('podcast.generate', 'audio', 'running', 0.6).fraction).toBe(0.6);
+    expect(liveJobProgress('podcast.generate', 'audio', 'running', 0.8).fraction).toBe(0.8);
+    expect(liveJobProgress('essay.grade', 'repertorio', 'running', 0.7).fraction).toBe(0.7);
+  });
+
   it('treats an unknown stage as the first step', () => {
     expect(liveJobProgress('pp.generate', 'something_new', 'running', null).steps[0]!.state).toBe('active');
   });

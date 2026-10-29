@@ -13,7 +13,10 @@ export interface OperationContext {
   /** Claude dependencies (client, BudgetStore over private.ai_budget_*, UsageSink → ai_usage). */
   ai: ClaudeDeps;
   log: Logger;
-  /** Invoke a child operation now, or register an explicitly future calendar trigger. */
+  /**
+   * Invoke a child operation now and await it, or register a calendar trigger with `startAfter` (seconds or a date).
+   * `startAfter: 0` starts it in the background within about a second, without holding the caller (ADR 0011).
+   */
   execute: (name: string, data: Record<string, unknown>, opts?: { singletonKey?: string; startAfter?: Date | number }) => Promise<string | null>;
   /** Update the user-visible ai_jobs row mirrored for this the API runtime job (progress, stage, status). */
   progress: (patch: { stage?: string; status?: string; progress?: number; items_total?: number; items_done?: number; error_code?: string; error_message_key?: string }) => Promise<void>;

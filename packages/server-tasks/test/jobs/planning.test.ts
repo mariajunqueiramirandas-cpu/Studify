@@ -154,6 +154,22 @@ describe('plan.nightly (GOL-04, GOL-08, GOL-11)', () => {
     expect(snapshots[0]?.evidence).toMatchObject({ notEnough: true });
   });
 
+  it('writes the Véspera sheet at the start of the eve, and not on other days', async () => {
+    await handlePlanNightly(env.ctx, { user_ids: [USER] });
+    expect(env.enqueued.some((e) => e.name === 'vespera.prepare')).toBe(false);
+    // 03:30 on the day before the test (study day still the day before it): due at 04:05, when the eve begins.
+    env.setNow('2026-11-02T06:30:00.000Z');
+    const result = await handlePlanNightly(env.ctx, { user_ids: [USER] });
+    expect(result.eves).toBe(1);
+    expect(env.enqueued.find((e) => e.name === 'vespera.prepare')).toMatchObject({ data: { exam_id: EXAM, user_id: USER }, opts: { singletonKey: EXAM, startAfter: new Date('2026-11-02T07:05:00.000Z') } });
+  });
+
+  it('writes it at once when the run already falls on the eve', async () => {
+    env.setNow('2026-11-02T15:00:00.000Z');
+    await handlePlanNightly(env.ctx, { user_ids: [USER] });
+    expect(env.enqueued.find((e) => e.name === 'vespera.prepare')).toMatchObject({ opts: { singletonKey: EXAM, startAfter: 0 } });
+  });
+
   it('readiness is computed from the scope and mastery (pure helper)', async () => {
     const planCtx = await loadPlanContext(env.ctx, USER);
     const scope = scopeTopicsByExam(planCtx!);

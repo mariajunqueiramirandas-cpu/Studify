@@ -64,7 +64,9 @@ export async function runPhotosToPdf(ctx: OperationContext, store: ObjectStore, 
     if (code === '23505') throw new PermanentJobError('already_exists', 'duplicate document checksum in subject');
     throw err;
   });
+  // The material is processed in the background (ADR 0011): upload-photos answers once the PDF and its row exist.
   await ctx.execute('ingest.document', { document_id: doc.id, mode: 'full', user_id: payload.userId, ai_job_id: payload.aiJobId }, {
     singletonKey: `ingest:${doc.id}`,
+    startAfter: 0,
   });
 }

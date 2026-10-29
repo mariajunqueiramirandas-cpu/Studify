@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { handleEssayGrade, handleRetaFinal, handleTagNodes, handleThemesPredict, handleTopicStats, sheetLines, themeKey, titleSimilarity } from '../../src/jobs/enem.ts';
+import { handleEssayGrade, handleRetaFinal, handleTagNodes, handleThemesPredict, handleTopicStats, jobs as enemJobs, sheetLines, themeKey, titleSimilarity } from '../../src/jobs/enem.ts';
 import { handleAtualidadesNotify, handleAtualidadesWeekly, validateDigest, weekStartOf } from '../../src/jobs/atualidades.ts';
 import { handlePlanRecompute } from '../../src/jobs/planning.ts';
 import { cropRegions, findQuestionMarkers, groupItems, itemForMarker, parseAnswerKey, parseItensProva } from '../../src/enem/import-parse.ts';
@@ -95,6 +95,14 @@ describe('essay.grade (ENM-05)', () => {
     expect(await handleEssayGrade(env.ctx, { essay_id: ESSAY, user_id: USER }, { aiJobId: null })).toEqual({ status: 'failed' });
     expect(env.db.rows('essays')[0]!.status).toBe('failed');
     expect(await handleEssayGrade(env.ctx, { essay_id: ESSAY, user_id: USER_B }, { aiJobId: null })).toEqual({ status: 'skipped' });
+  });
+
+  it('a grading that crashes leaves the essay failed, so it can be graded again', async () => {
+    seedEssay();
+    // No reply for the grader: the call throws instead of answering.
+    const op = enemJobs.find((j) => j.name === 'essay.grade')!;
+    await expect(op.handler(env.ctx, { essay_id: ESSAY, user_id: USER }, { jobId: 'j', aiJobId: null, attempt: 1 })).rejects.toThrow();
+    expect(env.db.rows('essays')[0]!.status).toBe('failed');
   });
 
   it('wraps typed essays into 75-character sheet lines', () => {

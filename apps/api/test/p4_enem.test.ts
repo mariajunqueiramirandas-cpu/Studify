@@ -162,6 +162,30 @@ test('grade-essay (ENEM): theme required, ≤ 7 lines is zero without a model ca
   assertEquals(limited.status, 429);
 });
 
+test('grade-essay (ENEM): a redação being graded is refused; one whose grading was lost is graded again', async () => {
+  const h = makeHarness();
+  await seedWorld(h);
+  const long = 'A mobilidade urbana brasileira enfrenta desafios históricos de planejamento e investimento. '.repeat(12);
+  const essay = (id: string, updatedAt: string) =>
+    h.db.seed('essays', { id, user_id: ALICE.id, kind: 'enem_redacao', theme_id: null, question_id: null, prompt: { theme: 'Mobilidade urbana' }, text: long, input_mode: 'typed', image_paths: [], capture_id: null, status: 'grading', deleted_at: null, updated_at: updatedAt });
+  essay(v7(1), new Date().toISOString());
+  h.db.seed('ai_jobs', { id: v7(21), user_id: ALICE.id, type: 'essay.grade', status: 'running' });
+  const busy = await gradeEssay(request('grade-essay', { body: { essay_id: v7(1) }, idem: v7(11) }), h.deps);
+  assertEquals(busy.status, 409);
+  assert(!h.enqueued.some((e) => e.queue === 'essay.grade'));
+
+  // The grading was interrupted (its job row failed on the restart): it can be sent again right away.
+  h.db.table('ai_jobs').find((j) => j.id === v7(21))!.status = 'failed';
+  const resent = await json(await gradeEssay(request('grade-essay', { body: { essay_id: v7(1) }, idem: v7(15) }), h.deps));
+  assertEquals(resent.mode, 'async');
+
+  // Marked long ago: lost, whatever its job row says.
+  essay(v7(2), new Date(Date.now() - 20 * 60_000).toISOString());
+  h.db.seed('ai_jobs', { id: v7(22), user_id: ALICE.id, type: 'essay.grade', status: 'running' });
+  const again = await json(await gradeEssay(request('grade-essay', { body: { essay_id: v7(2) }, idem: v7(12) }), h.deps));
+  assertEquals(again.mode, 'async');
+});
+
 test('essay-theme-generate: past ENEM themes are reused rows; predicted pick; a typed theme is moderated first', async () => {
   const replies: FakeReply[] = [
     reply({ allowed: false, category: 'offensive' }),

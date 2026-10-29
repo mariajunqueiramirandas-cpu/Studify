@@ -224,6 +224,8 @@ export {
   stableTopoOrder,
   normalizeTrailPlan,
   trailOutlineHash,
+  trailTopicsOf,
+  taughtBeforeIn,
   conceptOutcome,
   checkpointSize,
   checkpointScore,
@@ -237,6 +239,7 @@ export {
 } from './trail.ts';
 export type {
   TrailOutlineTopic,
+  TrailMapNode,
   TrailPrerequisite,
   TrailChapter,
   ProposedChapter,

@@ -51,5 +51,22 @@ select test_helpers.check_sqlstate('the Caderno holds Trilha answers in a trail 
 select test_helpers.check_sqlstate('Trilha steps can be re-explained (LRN-03)',
   $$insert into public.explanations (subject_id, target_type, target_id, style, language, body, prompt_version) values ('a0000000-0000-4000-8000-000000000001', 'trail_step', 'b2000000-0000-4000-8000-000000000001', 'simpler', 'pt-BR', 'x', 'explain.restyle@v1')$$, null);
 
+-- Content written ahead for the whole subject (ADR 0011): only the API reads and writes it.
+insert into public.trail_concept_content (concept_id, topic_id, subject_id, lesson, practice, prompt_version) values
+  ('a7000000-0000-4000-8000-000000000002', 'a7000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
+   '{"title":"Membrana","body":"A membrana separa.","terms":[],"source_pages":[]}', '[]', 'trail.lesson@v1');
+insert into public.trail_subject_plans (subject_id, outline_hash, chapters, prompt_version) values
+  ('a0000000-0000-4000-8000-000000000001', 'h', '[]', 'trail.plan@v1');
+select test_helpers.check_err('students do not read the shared Trilha content', 'authenticated', '11111111-1111-4111-8111-111111111111',
+  $$select concept_id from public.trail_concept_content$$);
+select test_helpers.check_err('students do not write the shared Trilha content', 'authenticated', '11111111-1111-4111-8111-111111111111',
+  $$update public.trail_concept_content set practice = '[]'$$);
+select test_helpers.check_err('students do not read the subject path', 'authenticated', '11111111-1111-4111-8111-111111111111',
+  $$select subject_id from public.trail_subject_plans$$);
+select test_helpers.check_err('anon does not read the subject path', 'anon', null,
+  $$select subject_id from public.trail_subject_plans$$);
+select test_helpers.check_sqlstate('one shared content row per concept',
+  $$insert into public.trail_concept_content (concept_id, topic_id, subject_id, lesson, practice, prompt_version) values ('a7000000-0000-4000-8000-000000000002', 'a7000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001', '{}', '[]', 'x')$$, '23505');
+
 select * from finish();
 rollback;

@@ -3,11 +3,13 @@ import { documentBlocks, lines, section, text, type PdfSlice } from '../blocks.t
 import { stableStringify } from '../stable-json.ts';
 import { TAG, wrapUntrusted } from '../untrusted.ts';
 import { FORMAT, GROUNDING, PTBR_STYLE, SAFETY, UNTRUSTED_DATA } from '../fragments/index.ts';
-import { TrailCheckpoint, TrailLesson, TrailPlan, TrailRemediation } from '../schemas/trail.ts';
+import { TrailCheckpoint, TrailLesson, TrailPlan, TrailReinforcement, TrailRemediation } from '../schemas/trail.ts';
 import { contentLanguageLines, feedbackLanguageLines, userTurn, type TopicInput } from './shared.ts';
 
 // ---------------------------------------------------------------------------
-// Trilha (TRL-01, spec 14 §7): the path order and the content of each step, generated on demand
+// Trilha (TRL-01, spec 14 §7): the path order and the content of each step. The plan, the lessons and their
+// reinforcement are written ahead, once per subject, while the material is processed (ADR 0011); trail.remediate
+// and trail.checkpoint stay for the cases the shared content does not cover.
 // ---------------------------------------------------------------------------
 
 const PLAN_RULES = [
@@ -128,6 +130,42 @@ export const trailLesson = defineTask<TrailLessonInput, ReturnType<typeof TrailL
       ...stepContext(input),
       section('Conceito desta aula (JSON):', stableStringify(input.concept)),
       'Escreva a aula deste conceito e exatamente 3 perguntas sobre ele, em dificuldade crescente: 1) reconhecer a ideia, 2) entender ou aplicar, 3) aplicar numa situação nova.',
+      'Retorne apenas o objeto estruturado pedido.',
+    );
+    return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };
+  },
+});
+
+export interface TrailReinforceInput extends TrailLessonInput {
+  /** The lesson already written for this concept: the re-explanation must take another angle. */
+  lesson: { title: string; body: string };
+  /** Stems of the lesson's questions: none of the new questions may repeat them. */
+  askedStems: readonly string[];
+}
+
+// Same system and documents as trail.lesson, so the call reads the cache the lesson call just wrote.
+export const trailReinforce = defineTask<TrailReinforceInput, ReturnType<typeof TrailReinforcement.parse>>({
+  id: 'trail.reinforce',
+  version: 1,
+  features: ['TRL-01.6', 'TRL-01.7'],
+  effort: 'medium',
+  maxTokensClass: 'L',
+  runs: 'worker',
+  budget: 'content',
+  output: { mode: 'structured', schema: TrailReinforcement },
+  system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, STEP_RULES],
+  cache: '1h',
+  build: (input, ctx) => {
+    const docs = documentBlocks(input.slices, ctx.ttl);
+    const body = lines(
+      ...stepContext(input),
+      section('Conceito (JSON):', stableStringify(input.concept)),
+      section('Aula que o estudante já viu (JSON):', stableStringify(input.lesson)),
+      input.askedStems.length ? section('Enunciados já usados neste conceito (não repita):', stableStringify(input.askedStems)) : null,
+      'Escreva o que vem depois dessa aula, para todos os estudantes desta matéria:',
+      '- lesson: uma nova aula curta que reexplica o conceito por outro ângulo (outra analogia, outro exemplo, passo a passo), para quem errou uma pergunta: ataque as confusões mais comuns sobre ele, sem culpa e sem repetir o exemplo da aula.',
+      '- remedial_questions: exatamente 3 perguntas novas que testam o mesmo ponto de outro jeito, para depois dessa reexplicação.',
+      '- test_questions: exatamente 4 perguntas para o teste do capítulo, em nível de prova: mais aplicação e comparação do que definição decorada.',
       'Retorne apenas o objeto estruturado pedido.',
     );
     return { messages: [userTurn([...docs.blocks, text(body)])], documents: { labels: docs.labels, allowedPages: docs.allowedPages } };

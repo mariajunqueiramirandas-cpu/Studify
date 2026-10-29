@@ -122,7 +122,7 @@ test('vespera-prepare: queues the sheet for the student’s exam; another studen
   const ok = await vesperaPrepare(request('vespera-prepare', { idem: v7(860), body: { exam_id: IDS.exam } }), h.deps);
   assertEquals(ok.status, 202);
   assertEquals((await json(ok)).status, 'preparing');
-  assertEquals(h.enqueued.some((e) => e.queue === 'vespera.prepare'), true);
+  assertEquals(h.enqueued.find((e) => e.queue === 'vespera.prepare')?.options?.startAfterSeconds, 0);
   const foreign = await vesperaPrepare(request('vespera-prepare', { idem: v7(861), body: { exam_id: IDS.bobExam } }), h.deps);
   assertEquals(foreign.status, 404);
 });

@@ -12,6 +12,7 @@ import { useDb } from '../../db/DatabaseProvider';
 import { subjects } from '../../db/schema';
 import { richNotifier } from '../../platform/rich-notify';
 import { useSession } from '../auth/session';
+import { mergeJobRow, type AiJob } from '../subjects/api';
 
 const ACTIVE = ['queued', 'running', 'waiting_batch', 'waiting_budget'];
 
@@ -24,7 +25,9 @@ export function useLiveJobs() {
     if (!userId) return undefined;
     const channel = supabase
       .channel(`livejobs:${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_jobs', filter: `user_id=eq.${userId}` }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_jobs', filter: `user_id=eq.${userId}` }, (payload: { new?: Partial<AiJob> }) => {
+        // The new row goes straight into the screens' caches: progress shows the moment the server writes it.
+        if (payload.new?.id) mergeJobRow(qc, payload.new as Partial<AiJob> & { id: string });
         void qc.invalidateQueries({ queryKey: ['liveJobs', userId] });
       })
       .subscribe();

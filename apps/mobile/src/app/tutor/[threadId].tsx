@@ -14,6 +14,7 @@ import { appendTranscript } from '../../features/voice/speech-text';
 import { readAloud, stopReading, useReadAloud, useVoiceInput } from '../../features/voice/voice';
 import { options, t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
+import { messageFor } from '../../api/messages';
 
 interface UiMessage {
   id: string;
@@ -25,6 +26,8 @@ interface UiMessage {
   notInMaterial?: { nearest?: string } | null;
   distress?: boolean;
   serverId?: string;
+  /** Why the answer stopped, in PT-BR (the network, the server). */
+  error?: string;
 }
 
 const MAX_CHARS = 4000;
@@ -90,9 +93,9 @@ export default function TutorThread() {
     setInput('');
     const assistantId = `a-${Date.now()}`;
     setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', text: body, citations: [], general: false, status: 'complete' }, { id: assistantId, role: 'assistant', text: '', citations: [], general: allowGeneral, status: 'streaming' }]);
-    setStatus(null);
+    // The wait says something from the first moment, then what the server is doing (reading N pages).
+    setStatus(t('tutor.thinking'));
     const patch = (fn: (m: UiMessage) => UiMessage) => setMessages((all) => all.map((m) => (m.id === assistantId ? fn(m) : m)));
-    const timer = setTimeout(() => setStatus(t('tutor.thinking')), 3000);
     const { handle: h } = sendTutorMessage(
       { ...(threadId ? { thread_id: threadId } : { scope: scope ?? undefined }), mode, message: body, allow_general_answer: allowGeneral || undefined, voice: spoken || voiceModeRef.current || undefined },
       {
@@ -100,9 +103,11 @@ export default function TutorThread() {
           if (d.thread_id) setThreadId(String(d.thread_id));
           if (d.message_id) patch((m) => ({ ...m, serverId: String(d.message_id) }));
         },
-        onStatus: (key) => setStatus(key === 'tutor.searching_pages' ? t('tutor.reading') : t(key, { defaultValue: t('tutor.thinking') })),
+        onStatus: (key, params) => {
+          const pages = Number(params?.pages ?? 0);
+          setStatus(key === 'tutor.searching_pages' ? (pages > 0 ? t('tutor.reading_pages', { count: pages }) : t('tutor.reading')) : t(key, { defaultValue: t('tutor.thinking') }));
+        },
         onDelta: (d) => {
-          clearTimeout(timer);
           setStatus(null);
           patch((m) => ({ ...m, text: m.text + d }));
         },
@@ -112,7 +117,6 @@ export default function TutorThread() {
           if (name === 'marcar_fora_do_material') patch((m) => ({ ...m, notInMaterial: { nearest: (payload as { topico_mais_proximo?: string } | null)?.topico_mais_proximo } }));
         },
         onDone: (d) => {
-          clearTimeout(timer);
           setStatus(null);
           patch((m) => {
             const s = stripSafetyMarkers(m.text);
@@ -124,12 +128,11 @@ export default function TutorThread() {
           if (typeof d.usage_pct_today === 'number' && d.usage_pct_today >= 80) setLimitLeft(Math.max(0, Math.round((100 - d.usage_pct_today) / 1.6)));
         },
         onError: (e) => {
-          clearTimeout(timer);
           setStatus(null);
           if (e.code === 'budget_exhausted' || e.code === 'rate_limited') {
             setBlocked('limit');
             setMessages((all) => all.filter((m) => m.id !== assistantId));
-          } else patch((m) => ({ ...m, status: 'interrupted' }));
+          } else patch((m) => ({ ...m, status: 'interrupted', error: messageFor(e, t('tutor.interrupted')) }));
         },
       },
     );
@@ -226,7 +229,7 @@ export default function TutorThread() {
                 <PageChips sources={item.citations} subjectId={scope?.subject_id} max={6} />
                 {item.status === 'interrupted' ? (
                   <Row2>
-                    <Text tone="warning">{t('tutor.interrupted')}</Text>
+                    <Text tone="warning" style={{ flex: 1 }}>{item.error ?? t('tutor.interrupted')}</Text>
                     {lastUser ? <Button compact variant="text" label={t('global.retry')} onPress={() => send(lastUser.text)} /> : null}
                   </Row2>
                 ) : null}

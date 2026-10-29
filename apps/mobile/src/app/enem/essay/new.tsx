@@ -60,9 +60,9 @@ export default function NewEnemEssay() {
     try {
       const id = params.essayId ?? (await createEnemEssay(userId, { themeId, themeTitle: theme.data?.title ?? typedTheme, text }));
       if (params.essayId) await updateEssayText(params.essayId, text);
-      await gradeEssay(id);
+      const graded = await gradeEssay(id);
       getKv().remove(DRAFT_KEY);
-      router.replace({ pathname: '/enem/essay/[essayId]', params: { essayId: id } });
+      router.replace({ pathname: '/enem/essay/[essayId]', params: { essayId: id, ...(graded.mode === 'async' ? { jobId: graded.job_id } : {}) } });
     } catch (e) {
       overlay.snack(messageFor(e));
     } finally {

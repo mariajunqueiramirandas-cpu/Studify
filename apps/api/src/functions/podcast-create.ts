@@ -4,6 +4,7 @@
 // Otherwise the episode row is created and podcast.generate (worker) writes the script and the audio.
 import { ApiFailure, PodcastCreateReqSchema, allocatePodcastTopics, podcastCacheKey, type PodcastCreateReq, type PodcastCreateRes } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 import { requireSubject } from '../shared/access.ts';
 import { activeJobCount, createAiJob } from '../shared/jobs.ts';
 
@@ -109,7 +110,7 @@ export const handler = defineFunction<PodcastCreateReq>({
       throw inserted.error;
     }
     const jobId = await createAiJob(deps, { type: 'podcast.generate', userId, subjectId: subject.id, stage: 'podcast' });
-    await deps.execute('podcast.generate', { episode_id: episodeId, ai_job_id: jobId, user_id: userId }, { singletonKey: `podcast:${episodeId}` });
+    await inBackground(deps, 'podcast.generate', { episode_id: episodeId, ai_job_id: jobId, user_id: userId }, `podcast:${episodeId}`);
     const finished = await db.from('podcast_episodes').select('status').eq('id', episodeId).single();
     if (finished.error) throw finished.error;
     if (finished.data?.status === 'failed') throw new ApiFailure('ai_unavailable');

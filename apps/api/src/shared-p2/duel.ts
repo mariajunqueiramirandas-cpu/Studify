@@ -214,10 +214,11 @@ export async function recordDuelAnswer(args: RecordAnswerArgs): Promise<RecordAn
     { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
   );
   if (evidence.error) throw evidence.error;
+  // Debounced like every other evidence writer, so a duel answer never waits on the recompute.
   await deps.execute(
     'mastery.recompute',
     { user_id: attempt.user_id, node_ids: [question.node_id] },
-    { singletonKey: attempt.user_id, },
+    { singletonKey: `mastery.recompute:${attempt.user_id}`, startAfterSeconds: 60 },
   );
   return { kind: 'recorded', correct: outcome.correct, points, timeout: args.timeout };
 }

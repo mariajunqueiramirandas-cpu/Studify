@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
 import { ApiError, callFunction } from '../../api/functions';
 import { uploadFile } from '../../api/storage';
@@ -58,8 +58,35 @@ export interface AiJob {
   error_code: string | null;
   subject_id?: string | null;
   document_id?: string | null;
+  /** Set when the work began; progress cards count elapsed time and time left from it. */
+  started_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+const FINISHED_JOB = new Set(['done', 'succeeded', 'failed', 'cancelled']);
+
+/**
+ * A job row as Realtime delivers it, written straight into the caches the screens read (the subject's jobs, the job
+ * itself), so progress moves the moment the server writes it instead of at the next poll. When a job finishes, or a
+ * material's map is written, what it produced is read again.
+ */
+export function mergeJobRow(qc: QueryClient, row: Partial<AiJob> & { id: string }): void {
+  qc.setQueryData(['job', row.id], (prev: object | undefined) => (prev ? { ...prev, ...row } : prev));
+  const subjectId = row.subject_id;
+  if (!subjectId) return;
+  let previous: AiJob | undefined;
+  qc.setQueryData<AiJob[]>(['subject', subjectId, 'jobs'], (list) => {
+    if (!list) return list;
+    previous = list.find((j) => j.id === row.id);
+    return previous ? list.map((j) => (j.id === row.id ? { ...j, ...row } : j)) : [row as AiJob, ...list].slice(0, 5);
+  });
+  if (row.status && FINISHED_JOB.has(row.status) && !FINISHED_JOB.has(previous?.status ?? '')) {
+    void qc.invalidateQueries({ queryKey: ['subject', subjectId] });
+  } else if (row.stage && row.stage !== previous?.stage) {
+    void qc.invalidateQueries({ queryKey: ['subject', subjectId, 'outline'] });
+    void qc.invalidateQueries({ queryKey: ['subject', subjectId, 'documents'] });
+  }
 }
 
 // Subject colors are stored as hex (data-model CHECK); the palette key is recovered for theming.
@@ -163,7 +190,8 @@ export function useSubjectJobs(subjectId: string | undefined) {
           .order('created_at', { ascending: false })
           .limit(5),
       ),
-    refetchInterval: (q) => ((q.state.data ?? []).some((j) => !['done', 'succeeded', 'failed', 'cancelled'].includes(j.status)) ? 4000 : false),
+    // Realtime keeps the rows current (mergeJobRow); the poll is the fallback for a dropped connection.
+    refetchInterval: (q) => ((q.state.data ?? []).some((j) => !FINISHED_JOB.has(j.status)) ? 8000 : false),
   });
 }
 

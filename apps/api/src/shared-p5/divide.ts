@@ -1,6 +1,6 @@
 // SOC-06 Dividir e conquistar: loading a contribution for its author and starting the merge job.
 import { ApiFailure } from '@studify/shared';
-import type { Deps } from '../shared/deps.ts';
+import { inBackground, type Deps } from '../shared/deps.ts';
 
 export interface ContributionRow {
   id: string;
@@ -40,7 +40,7 @@ export async function startMerge(deps: Deps, plan: DividePlanRow): Promise<strin
   const updated = await deps.db.from('divide_plans').update({ status: 'merging' }).eq('id', plan.id).eq('status', 'open').select('id');
   if (updated.error) throw updated.error;
   if (!updated.data || updated.data.length === 0) return null;
-  return deps.execute('divide.merge', { divide_plan_id: plan.id }, { singletonKey: `divide-merge:${plan.id}`, });
+  return inBackground(deps, 'divide.merge', { divide_plan_id: plan.id }, `divide-merge:${plan.id}`);
 }
 
 /** True when every claimed topic has an approved contribution from its claimer. */

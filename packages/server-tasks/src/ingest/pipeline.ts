@@ -30,8 +30,13 @@ import { uuidV7 } from '@studify/shared';
 /** Topics whose S4 requests are prepared at once (loads, existing-output checks, slices). */
 const PREPARE_CONCURRENCY = 6;
 
-/** What S4 writes for each topic of a new material (public kind names, see expandKinds). */
-const CONTENT_KINDS = ['notes', 'glossary', 'cards', 'questions', 'find_error', 'problems'];
+/** What S4 writes for each topic of a new material before it is ready (public kind names, see expandKinds). */
+const CONTENT_KINDS = ['notes', 'glossary', 'cards', 'questions'];
+/**
+ * Written right after the material is ready, in the background (ADR 0011): practice the student reaches later. In
+ * the same wave as the notes and cards they took a third of the calls and held "material pronto" back.
+ */
+const EXTRA_KINDS = ['find_error', 'problems'];
 
 export const FAILURE_BODY: Readonly<Record<string, string>> = {
   password_protected: 'Esse PDF tem senha. Tira a senha e envia de novo.',
@@ -149,6 +154,8 @@ export async function runIngestDocument(ctx: OperationContext, store: ObjectStor
       }
       current = (await loadDocument(sql, doc.id)) ?? current;
       env.documents.set(doc.id, Promise.resolve(current));
+    } else {
+      await resumePageWork(stage, doc.id, payload);
     }
 
     // ---- S1 ----------------------------------------------------------------
@@ -287,8 +294,12 @@ async function preflightAndExtract(
   await upsertPages(sql, doc.id, rows);
   await patchDocument(sql, doc.id, { pageCount: pages.length, hasBookmarks: pre.hasBookmarks });
 
+  // Page images and the AI reading of every page start in the background (ADR 0011): the outline and the content
+  // read the PDF itself, so neither waits on them. Awaited here, they held the map back for as long as rendering
+  // every page and transcribing it took, and a second upload at the same time failed on the renderer's limit.
   await ctx.execute('ingest.render_pages', { document_id: doc.id, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
     singletonKey: `render:${doc.id}`,
+    startAfter: 0,
   });
   // Every page is read by the AI, not only scanned ones: the PDF's own text layer is often garbled (fonts,
   // columns, formulas). Its text stays as the fallback until a transcription replaces it, and its positioned
@@ -297,9 +308,32 @@ async function preflightAndExtract(
   if (all.length > 0) {
     await ctx.execute('ingest.transcribe_pages', { document_id: doc.id, pages: all, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
       singletonKey: `transcribe:${doc.id}`,
+      startAfter: 0,
     });
   }
   return { status: 'ok' };
+}
+
+/**
+ * A material resumed after S0 (a restart cut it off, or the budget parked it) starts again the background page work
+ * S0 started, for the pages it has not finished: images, and the AI reading. The keys are the ones the first run and
+ * the transcription's own budget resume use, so nothing runs twice.
+ */
+async function resumePageWork(stage: Stage, documentId: string, payload: IngestPayload): Promise<void> {
+  const { rows } = await stage.sql.query<{ page_number: number; image_path: string | null; text_source: string }>(
+    `select page_number, image_path, text_source from public.document_pages where document_id = $1 order by page_number`,
+    [documentId],
+  );
+  if (rows.some((r) => r.image_path === null)) {
+    await stage.ctx.execute('ingest.render_pages', { document_id: documentId, user_id: payload.userId, ai_job_id: payload.aiJobId }, { singletonKey: `render:${documentId}`, startAfter: 0 });
+  }
+  const unread = rows.filter((r) => r.text_source !== 'ai_transcription').map((r) => r.page_number);
+  if (unread.length > 0) {
+    await stage.ctx.execute('ingest.transcribe_pages', { document_id: documentId, pages: unread, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
+      singletonKey: `transcribe:${documentId}:resume`,
+      startAfter: 0,
+    });
+  }
 }
 
 /** ingest.render_pages: page images and thumbnails (ING-02.4). Independent of S1, so it does not block the outline. */
@@ -379,6 +413,8 @@ export async function runTranscription(ctx: OperationContext, store: ObjectStore
 
 export interface TopicContentPayload {
   stage: 'S2' | 'S4';
+  /** Extras written after the material is ready: topic statuses, the material's progress and its settling stay as they are. */
+  secondary?: boolean;
   subjectId: string;
   documentId: string | null;
   userId: string | null;
@@ -494,9 +530,10 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
     if (wanted.length === 0) return;
     const refs = await topicSliceRefs(env, bundle.sources);
     if (refs.length === 0) return;
-    await setContentStatus(sql, [bundle.topicId], 'generating');
+    if (!payload.secondary) await setContentStatus(sql, [bundle.topicId], 'generating');
     const built = await Promise.all(wanted.map((kind) => topicItem(env, bundle, kind, refs, optsOf(bundle))));
     const outcomes = await Promise.all(built.map((b) => run(index, b)));
+    if (payload.secondary) return;
     // A topic is ready when all of its items were written; one cut short by the budget waits for the resume.
     const status = outcomes.every((o) => o === 'written') ? 'ready' : outcomes.some((o) => o === 'budget' || o === 'skipped') ? 'pending' : 'failed';
     await setContentStatus(sql, [bundle.topicId], status);
@@ -511,7 +548,8 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
     if (conceptsLeft === 0) await report({ items_total: total, items_done: topicsDone });
   });
   await progress;
-  await settleDocument(stage, payload, budgetExceeded);
+  // Extras never park or finalize the material: one cut short by the budget is written by a later run.
+  if (!payload.secondary) await settleDocument(stage, payload, budgetExceeded);
 }
 
 async function runConcepts(stage: Stage, payload: TopicContentPayload, genBatchId: string): Promise<void> {
@@ -578,7 +616,48 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
   }, { singletonKey: `topic-content:S4:${payload.documentId ?? payload.nodeIds.join(',')}` });
 }
 
-/** S3 prerequisites and the material check, which read the written concepts of the whole material. */
+/**
+ * The Trilha's lessons, re-explanations and chapter-test questions for the material's ready topics
+ * (lib/trail-content.ts, ADR 0011). They start in the background once the material is ready: they are charged to the
+ * same budget as its notes and cards, so they only spend what the material's own content left, and never park it.
+ * A student who opens the Trilha before then gets the chapter they are on written by trail-open.
+ */
+async function prepareTrailContent(stage: Stage, doc: DocumentRecord, userId: string | null): Promise<void> {
+  const { rows } = await stage.sql.query<{ id: string }>(
+    `select n.id from public.knowledge_nodes n
+      where n.kind = 'topic' and n.deleted_at is null and n.content_status = 'ready'
+        and n.id in (select node_id from public.node_sources where document_id = $1 and deleted_at is null)
+      order by n.position, n.id`,
+    [doc.id],
+  );
+  for (const { id } of rows) {
+    await stage.ctx.execute('trail.prepare_topic', { topic_id: id, user_id: userId }, { singletonKey: id, startAfter: 0 });
+  }
+  // The extras of the same topics (EXTRA_KINDS), one run for the material; it skips what a topic already has.
+  if (rows.length > 0) {
+    await stage.ctx.execute('ingest.topic_extras', { subject_id: doc.subjectId, document_id: doc.id, user_id: userId, node_ids: rows.map((r) => r.id) }, {
+      singletonKey: doc.id,
+      startAfter: 0,
+    });
+  }
+}
+
+/** ingest.topic_extras: the practice extras of a ready material, always as standard calls (never a Batch wave). */
+export async function runTopicExtras(ctx: OperationContext, store: ObjectStore, input: { subjectId: string; documentId: string | null; userId: string | null; nodeIds: string[] }): Promise<void> {
+  const stage = stageOf(ctx, store);
+  try {
+    await runTopicsNow(stage, { stage: 'S4', secondary: true, subjectId: input.subjectId, documentId: input.documentId, userId: input.userId, nodeIds: input.nodeIds, kinds: EXTRA_KINDS, force: false, aiJobId: null }, uuidV7());
+  } catch (err) {
+    // Extras wait for a later run when the budget is out; they never park the material.
+    if (!(err instanceof BudgetExceededError)) throw err;
+  }
+}
+
+/**
+ * S3 prerequisites and the material check, which read the written concepts of the whole material. Both start in the
+ * background (a calendar trigger due now, ADR 0011): run inline, they held the last topic's content and the
+ * "material pronto" for as long as their own calls took.
+ */
 async function enqueueAfterConcepts(ctx: OperationContext, payload: TopicContentPayload): Promise<void> {
   if (payload.documentId) {
     await ctx.execute('ingest.prerequisites', {
@@ -586,11 +665,11 @@ async function enqueueAfterConcepts(ctx: OperationContext, payload: TopicContent
       document_id: payload.documentId,
       user_id: payload.userId,
       ai_job_id: payload.aiJobId,
-    }, { singletonKey: `prereq:${payload.subjectId}:${payload.documentId}` });
+    }, { singletonKey: `prereq:${payload.subjectId}:${payload.documentId}`, startAfter: 0 });
   }
   // ING-06: the material checker runs once per document after S2; it never blocks generation (ING-06.4).
   if (payload.documentId) {
-    await ctx.execute('ingest.material_check', { document_id: payload.documentId, user_id: payload.userId }, { singletonKey: `material-check:${payload.documentId}` });
+    await ctx.execute('ingest.material_check', { document_id: payload.documentId, user_id: payload.userId }, { singletonKey: `material-check:${payload.documentId}`, startAfter: 0 });
   }
 }
 
@@ -784,6 +863,7 @@ async function finalizeDocument(stage: Stage, doc: DocumentRecord, payload: Inge
   await patchDocument(sql, doc.id, { status: 'ready' });
   if (payload.aiJobId) await applyProgress(sql, payload.aiJobId, { status: 'succeeded', stage: 'S4', items_total: total, items_done: total });
   await notifyDocument(stage, doc, payload.userId, 'ready');
+  await prepareTrailContent(stage, doc, payload.userId ?? doc.uploadedBy);
 }
 
 // ---------------------------------------------------------------------------
@@ -806,13 +886,12 @@ export async function runPrereqJob(ctx: OperationContext, payload: { subjectId: 
     });
     ctx.log.info({ status: result.status, written: result.written, dropped: result.dropped }, 'prerequisites stage');
   } catch (err) {
-    if (err instanceof BudgetExceededError) {
-      // Prerequisites are optional (ING-03.5): the rest of the pipeline proceeds without them.
-      ctx.log.warn('prerequisites skipped: budget exhausted');
-      return;
-    }
-    throw err;
+    if (!(err instanceof BudgetExceededError)) throw err;
+    // Prerequisites are optional (ING-03.5): the rest of the pipeline proceeds without them.
+    ctx.log.warn('prerequisites skipped: budget exhausted');
   }
+  // The Trilha's path order (TRL-01.2) reads the whole map and its prerequisites: planned once for the subject.
+  await ctx.execute('trail.plan_subject', { subject_id: subject.id, user_id: payload.userId }, { singletonKey: subject.id, startAfter: 0 });
 }
 
 export async function runRegenerate(ctx: OperationContext, payload: { nodeId: string; kinds: string[]; userId: string | null }): Promise<void> {

@@ -325,6 +325,7 @@ const TRAIL_CASES: SchemaCase[] = [
   { name: 'TrailLessonBody', schema: S.TrailLessonBody, valid: trailLesson, invalid: { ...trailLesson, source_pages: [] } },
   { name: 'TrailQuestion', schema: S.TrailQuestion, valid: trailQuestion, invalid: { ...trailQuestion, options: trailQuestion.options.slice(0, 3) } },
   { name: 'TrailLesson', schema: S.TrailLesson, valid: { lesson: trailLesson, questions: [trailQuestion, trailQuestion, trailQuestion] }, invalid: { lesson: trailLesson, questions: [trailQuestion] } },
+  { name: 'TrailReinforcement', schema: S.TrailReinforcement, valid: { lesson: trailLesson, remedial_questions: [trailQuestion, trailQuestion, trailQuestion], test_questions: [trailQuestion, trailQuestion, trailQuestion, trailQuestion] }, invalid: { lesson: trailLesson, remedial_questions: [trailQuestion, trailQuestion, trailQuestion], test_questions: [trailQuestion] } },
   { name: 'TrailRemediation', schema: S.TrailRemediation, valid: { lesson: trailLesson, question: trailQuestion }, invalid: { lesson: trailLesson, question: { ...trailQuestion, options: [trailQuestion.options[0], trailQuestion.options[0], trailQuestion.options[1], trailQuestion.options[2]] } } },
   { name: 'TrailCheckpoint', schema: S.TrailCheckpoint, valid: { questions: [{ ...trailQuestion, concept_key: 'c1' }] }, invalid: { questions: [{ ...trailQuestion, concept_key: 'c1', options: trailQuestion.options.slice(0, 3) }] } },
 ];

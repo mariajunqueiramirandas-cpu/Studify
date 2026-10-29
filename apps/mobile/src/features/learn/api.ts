@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
-import { callFunction, streamFunction } from '../../api/functions';
+import { ApiError, callFunction, streamFunction } from '../../api/functions';
 import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
 import { row, rows } from '../common/query';
@@ -62,8 +62,9 @@ export function useNotes(nodeId: string | undefined) {
     queryKey: ['node', nodeId, 'notes'],
     enabled: !!nodeId,
     queryFn: () =>
-      rows<Note>(supabase.from('notes').select('*').eq('node_id', nodeId!).in('status', ['pending', 'generating', 'ready']).is('deleted_at', null)),
-    refetchInterval: (q) => ((q.state.data ?? []).some((n) => n.status !== 'ready') ? 6000 : false),
+      // Failed notes too: the topic screen offers to write them again instead of waiting forever.
+      rows<Note>(supabase.from('notes').select('*').eq('node_id', nodeId!).in('status', ['pending', 'generating', 'ready', 'failed']).is('deleted_at', null)),
+    refetchInterval: (q) => ((q.state.data ?? []).some((n) => n.status === 'pending' || n.status === 'generating') ? 5000 : false),
   });
 }
 
@@ -95,10 +96,12 @@ export interface StreamHandlers {
   onMeta?: (data: Record<string, unknown>) => void;
   onDelta?: (text: string) => void;
   onCitation?: (c: Citation) => void;
-  onStatus?: (key: string) => void;
+  /** Progress the server reports while it works (`operation.progress`, `tutor.searching_pages`…), with its params. */
+  onStatus?: (key: string, params?: Record<string, unknown>) => void;
   onTool?: (name: string, payload: unknown) => void;
   onDone?: (data: { stop_reason?: string; usage_pct_today?: number; result?: unknown }) => void;
-  onError?: (err: { code: string; message?: string }) => void;
+  /** The failure, whatever ended the stream: the server's error, or the network/deadline (transport.ts). */
+  onError?: (err: ApiError) => void;
 }
 
 export function toEventHandler(h: StreamHandlers) {
@@ -115,7 +118,7 @@ export function toEventHandler(h: StreamHandlers) {
         h.onCitation?.(d as unknown as Citation);
         break;
       case 'status':
-        h.onStatus?.(String(d.key ?? ''));
+        h.onStatus?.(String(d.key ?? ''), (d.params as Record<string, unknown> | undefined) ?? undefined);
         break;
       case 'tool':
         h.onTool?.(String(d.name ?? ''), d.payload);
@@ -123,9 +126,12 @@ export function toEventHandler(h: StreamHandlers) {
       case 'done':
         h.onDone?.(d as { stop_reason?: string; usage_pct_today?: number; result?: unknown });
         break;
-      case 'error':
-        h.onError?.(d as { code: string; message?: string });
+      case 'error': {
+        // An ApiError, so screens show what happened (messageFor) instead of the generic copy.
+        const e = d as { code?: string; message?: string; status?: number; resets_at?: string; retry_after_s?: number; details?: Record<string, unknown> };
+        h.onError?.(new ApiError(String(e.code ?? 'unknown'), Number(e.status ?? 0), String(e.message ?? ''), { resetsAt: e.resets_at, retryAfterS: e.retry_after_s, details: e.details }));
         break;
+      }
     }
   };
 }

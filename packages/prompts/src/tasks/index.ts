@@ -123,6 +123,7 @@ export const TASKS: readonly AnyTaskDef[] = [
   // Trilha (TRL-01)
   trail.trailPlan,
   trail.trailLesson,
+  trail.trailReinforce,
   trail.trailRemediate,
   trail.trailCheckpoint,
 ];

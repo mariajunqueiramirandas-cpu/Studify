@@ -10,7 +10,7 @@ Related: [PRD](../product/PRD.md#515-trilha-trl) · [01 — Ingestion & knowledg
 
 ## 1. Summary
 
-A Duolingo-style path through one subject. The app decides the order in which the whole course should be learned, then teaches it one concept at a time: a short explanation, questions right after it, feedback that teaches, a different explanation when the student misses, and a chapter test at the end of each topic that must be passed — then the student teaches the topic to Lucas to close the chapter. The path ties the rest of the app together: the tutor and "Explica de outro jeito" on every step, misses in the Caderno de Erros, what was learned first in the flashcard reviews, and the unit's Chefão when a unit is done. Key terms are underlined and explained on tap. The path is persistent: the student can leave at any step and resume exactly there. Content is written on demand, one concept ahead, not all at once.
+A Duolingo-style path through one subject. The app decides the order in which the whole course should be learned, then teaches it one concept at a time: a short explanation, questions right after it, feedback that teaches, a different explanation when the student misses, and a chapter test at the end of each topic that must be passed — then the student teaches the topic to Lucas to close the chapter. The path ties the rest of the app together: the tutor and "Explica de outro jeito" on every step, misses in the Caderno de Erros, what was learned first in the flashcard reviews, and the unit's Chefão when a unit is done. Key terms are underlined and explained on tap. The path is persistent: the student can leave at any step and resume exactly there. Its content is written ahead, once per subject, while the material is processed, and shared by every student of the subject ([ADR 0011](../engineering/adr/0011-write-ahead-and-background-work.md)): the student never waits on a model call to move on.
 
 ## 2. Goals and non-goals
 
@@ -18,7 +18,7 @@ A Duolingo-style path through one subject. The app decides the order in which th
 - One obvious thing to do in a subject: "Continuar a trilha".
 - Order matters: fundamentals before what depends on them, across the whole subject.
 - Retrieval right after teaching, and re-teaching on mistakes, so a chapter is marked done only when it was understood.
-- Pay only for what the student reaches: generate a concept when it is about to be needed, with a small buffer so the student rarely waits.
+- No waiting: every step is written before the student reaches it, and a Turma pays for it once.
 
 **Non-goals (v1)**
 - Offline. The Trilha needs a connection; everything already generated stays on the server and the student resumes where they left off.
@@ -40,13 +40,13 @@ A Duolingo-style path through one subject. The app decides the order in which th
 ## 4. Functional requirements
 
 - **TRL-01.1** Entry: a Trilha card is the first block of the subject home (S-MAT-03), above the shortcuts: "Começar a trilha" before the first open, then "Continuar a trilha · Capítulo i de n", and "Trilha concluída ✓" at the end. The card reads the student's own `trails` row (no trail is created until they open it).
-- **TRL-01.2** Path: on first open, `trail.plan` reads the subject outline (units, topics, objectives, concepts) and the prerequisites and returns the chapter order (one chapter per topic) and the concept order inside each, with a "por que agora" per chapter and a one-line goal. The server repairs the proposal (§8.1). If the call fails, the outline order is used. Excluded topics ("não cai na prova"), placeholders and topics without pages are left out.
+- **TRL-01.2** Path: once a material's map and prerequisites are written, `trail.plan` reads the subject outline (units, topics, objectives, concepts) and the prerequisites and returns the chapter order (one chapter per topic) and the concept order inside each, with a "por que agora" per chapter and a one-line goal, stored for the subject. Each student's path is that order repaired for their map (§8.1): excluded topics ("não cai na prova"), placeholders and topics without pages are left out. Until the subject's path exists (or when the call failed), the outline order is used, and a trail that started that way takes the subject's path for the chapters it has not started once it exists. Opening never waits on a model call.
 - **TRL-01.3** Outline changes: when the outline the plan was built from changed (new material, outline edits, exclusions), the next open keeps the finished chapters and the one in progress in place (with their concept lists refreshed) and plans the rest again.
 - **TRL-01.4** Lesson: each concept starts with a lesson — a title and 60–160 words of Markdown with the central idea first, 2–4 bullet points, a concrete example, formulas in LaTeX and page chips (📄). "Entendi, bora praticar" moves on.
 - **TRL-01.5** Questions: multiple choice, 4 options, select then "Verificar". Feedback in place: right/wrong, why the chosen option is wrong, why the right one is right, the explanation, an optional tip, 📄. A concept is cleared after **2 correct answers**. Answers are mastery evidence (source `trail`, weight 1.0).
 - **TRL-01.6** Re-teaching: after a wrong answer the next step is a new explanation from another angle, aimed at the confusion the chosen option reveals, followed by a fresh question on the same point. After **5 answers** without clearing, the concept is marked "pra revisar" and the path moves on (the chapter test still gates).
 - **TRL-01.7** Chapter test: once every concept of the chapter is cleared or "pra revisar", a test of 2 questions per concept (4–10), weighted toward the weak concepts, mixed. Pass at **70%** (the Chefão bar). A failed round re-teaches up to 3 missed concepts (explanation + question each), then runs a new round with new questions. Passing finishes the chapter; the last chapter finishes the Trilha.
-- **TRL-01.8** On-demand generation: content is generated one concept at a time (a lesson with 3 questions — 2 asked, 1 spare), the re-teaching when a miss happens, the chapter test when the last concept starts. The buffer keeps up to two lessons ahead within the chapter (`TRAIL.lookahead`: the next concepts' lessons), the chapter test while on the last concept, the next chapter's first lesson during the test. The app prefetches in the background, asking again while the buffer still wants more; it shows "Preparando o próximo passo…" only when the step it needs isn't ready. On a lesson, the state also carries the step after it when that step is already written (`next_step`): "Entendi, bora praticar" shows it at once and records the lesson behind it, so the student never waits on the server to move on.
+- **TRL-01.8** Content written ahead: as soon as a material is ready, each concept of its topics gets a lesson with 3 questions (2 asked, 1 spare), a re-explanation from another angle with 3 fresh questions for after a miss, and 4 chapter-test questions, stored once for the subject and shared by every student. A trail copies the steps it needs from there the moment it needs them: the lesson and its questions, the re-explanation and a fresh question after a miss (a later miss on the same concept gets the next fresh question alone), the chapter test by the blueprint (§8.2). What that content does not cover (a subject processed before it existed, a fourth miss on one concept, a chapter-test round after its questions are used up) is written on demand as before; a lesson written that way joins the shared content, and opening a subject whose current or next chapter is incomplete starts writing the rest in the background. The buffer (`TRAIL.lookahead`) and the app's background prefetch apply only to those on-demand cases; the app shows "Preparando o próximo passo…" only when the step it needs isn't ready. On a lesson, the state also carries the step after it (`next_step`): "Entendi, bora praticar" shows it at once and records the lesson behind it, so the student never waits on the server to move on.
 - **TRL-01.9** Key terms: each lesson and question carries up to 6 key terms with one-sentence definitions; the first occurrence is underlined (dotted, ux §7.3) and opens a sheet with the definition.
 - **TRL-01.10** Resume: the step on screen is stored as served; leaving and opening again shows the same step. Answering a step twice never grades it twice.
 - **TRL-01.11** Path view: "Ver a trilha" lists the chapters (done, now, later) with their "por que agora", and the concepts of the current chapter with their state.
@@ -80,6 +80,8 @@ A Duolingo-style path through one subject. The app decides the order in which th
 | Table | Purpose |
 |---|---|
 | **`trails`** (new) [svc] | One per `(user_id, subject_id)`: `plan jsonb` (`TrailChapter[]`: `{topicId, why, conceptIds}` in path order), `goal`, `outline_hash`, `chapter_index`, `status` (`active` · `completed`), `prompt_version` (null = outline fallback), `preparing_until` (generation lease), `completed_at`. |
+| **`trail_concept_content`** [svc] | One per concept (the topic itself when it has no concepts), shared by the subject: `lesson`, `practice` (3), `remedial_lesson`, `remedial_questions` (3), `test_questions` (4), each with its `source_pages`; `prompt_version` (trail.lesson), `reinforce_prompt_version` (trail.reinforce, null until written). Service only. |
+| **`trail_subject_plans`** [svc] | One per subject: `chapters` (`ProposedChapter[]`), `goal`, `outline_hash` (of the subject's map before any exclusion), `prompt_version`. Service only. |
 | **`trail_steps`** (new) [svc] | Every generated step: `topic_id`, `concept_id` (the topic itself when it has no concepts), `purpose` (`lesson` · `practice` · `remedial_lesson` · `remedial_question` · `checkpoint`), `round` (test round; 0 while learning), `for_step_id` (the wrong answer a remedial step repairs), `created_seq`, `served_seq`, `status` (`ready` · `done` · `discarded`), `content jsonb` (lesson `{title, body, terms}` or question `{stem, options[{id,text,rationale}], correct, explanation, tip, terms}`), `source_pages`, `response`, `correct`, `answered_at`, `prompt_version`. |
 | `trails.quiz_attempt_id` | The implicit attempt (`quizzes.kind = trail`, status `submitted`) that holds the answers sent to the Caderno. |
 | `trail_steps.question_id` | The bank question a missed step was saved as. |
@@ -95,12 +97,13 @@ All calls: the default model and effort ([ai-pipeline §2](../engineering/ai-pip
 
 | Task | Runs | Input | Output |
 |---|---|---|---|
-| `trail.plan` | Edge (trail-open) | Outline as data (units → topics with summary, objectives, concepts as short keys T1/C1), prerequisites, finished chapters | `{goal, chapters: [{topic_key, why, concept_keys[]}]}` (keys are schema enums) |
-| `trail.lesson` | Edge (trail-prepare) | Topic pages (cached, 1 h), topic JSON, the concept, concepts already taught | `{lesson: {title, body, terms[], source_pages}, questions: [3 × {stem, options[4], correct, explanation, tip, terms[], source_pages}]}` |
-| `trail.remediate` | Edge (trail-prepare) | Same + the missed question, the chosen option (untrusted data), stems already used | `{lesson, question}` |
-| `trail.checkpoint` | Edge (trail-prepare) | Same + blueprint (concept key, count, weak), stems already used, round | `{questions: [{…question, concept_key}]}` |
+| `trail.plan` | Worker (`trail.plan_subject`, after the prerequisites; `content` budget) | Outline as data (units → topics with summary, objectives, concepts as short keys T1/C1), prerequisites | `{goal, chapters: [{topic_key, why, concept_keys[]}]}` (keys are schema enums) |
+| `trail.lesson` | Worker (`trail.prepare_topic`, once the material is ready; `content` budget); Edge (trail-prepare) for a concept not written yet | Topic pages, topic JSON, the concept, concepts taught before it in the path | `{lesson: {title, body, terms[], source_pages}, questions: [3 × {stem, options[4], correct, explanation, tip, terms[], source_pages}]}` |
+| `trail.reinforce` | Worker (`trail.prepare_topic`, right after the concept's lesson) | Same + the lesson already written, its question stems | `{lesson, remedial_questions: [3 × question], test_questions: [4 × question]}` |
+| `trail.remediate` | Edge (trail-prepare), when the concept's fresh questions are used up | Same + the missed question, the chosen option (untrusted data), stems already used | `{lesson, question}` |
+| `trail.checkpoint` | Edge (trail-prepare), when the shared test questions cannot fill a round | Same + blueprint (concept key, count, weak), stems already used, round | `{questions: [{…question, concept_key}]}` |
 
-The topic's pages are the cached prefix of every step of a chapter, so a chapter pays the document tokens once per hour.
+The topic's pages are the cached prefix of every call of a topic: the concept calls written ahead run within minutes of each other and read the same cache.
 
 ## 8. Rules and algorithms
 
@@ -116,8 +119,10 @@ Unknown and repeated topics/concepts are dropped, missing ones appended in outli
 4. Round finished: ≥ 70% → test passed; else re-teach up to 3 missed concepts (one pair each), then round r + 1.
 5. Test passed → the chapter waits for Ensine o Lucas on the topic (best finished score ≥ `TRAIL.teachPassScore` = 70), then the path moves to the next chapter.
 
-### 8.3 Buffer (`trailNeeds`)
-At most one blocking need, then `TRAIL.lookahead` (2) lookaheads within the chapter (§4 TRL-01.8). `trail-prepare` generates one need per call under a 150 s lease, so two devices never generate the same step.
+A chapter test written ahead (the buffer writes it while the student is on the last concept) waits until every concept is cleared or shaky: its questions never cut a concept's practice short.
+
+### 8.3 Shared content and buffer (`trailNeeds`)
+Every Trilha call first copies the next move's steps from the shared content (`bankStepsFor`), so the state is `preparing` only when that content does not cover the move. For those cases, at most one blocking need, then `TRAIL.lookahead` (2) lookaheads within the chapter (§4 TRL-01.8); `prefetch` is set only for lookaheads the shared content does not cover. `trail-prepare` generates one need per call under a 150 s lease, so two devices never generate the same step; two requests copying the same step collide on the creation number and the second re-reads, so a step is never stored twice.
 
 ## 9. Edge cases and errors
 
@@ -126,7 +131,8 @@ At most one blocking need, then `TRAIL.lookahead` (2) lookaheads within the chap
 | Subject without ready topics | trail-open → 404 "Essa matéria ainda não tem conteúdo pronto pra trilha…"; the card is hidden while the outline is empty. |
 | `trail.plan` fails or is refused | Outline order, no goal line. |
 | Generation fails for the step on screen | Error state with "Tentar de novo"; lookahead failures are silent. |
-| Budget reached | Steps already generated keep working; the next new step shows the limit message (PLT-04.3). |
+| Subject processed before content was written ahead | The first concept is written on demand (into the shared content); opening starts writing the rest of the current and next chapter in the background. |
+| Budget reached | Steps already written (shared content included) keep working; a step that still needs a call shows the limit message (PLT-04.3). Content written ahead stops for the material and is written on demand later. |
 | Two devices at once | Unique trail per subject; the lease serializes generation; answers are idempotent per step. |
 | Topic removed while in progress | Its chapter leaves the path at the next open; its steps stay in history. |
 

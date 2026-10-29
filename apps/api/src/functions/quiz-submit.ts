@@ -15,6 +15,7 @@ import {
 } from '@studify/shared';
 import type { QuizSubmitRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 import { gradeOffline } from '../shared/grading.ts';
 import { recordMistake } from '../shared/mistakes.ts';
 import { letterOf, simuladoAreaResults, type SimuladoAnswer } from '../shared-p4/enem.ts';
@@ -227,9 +228,8 @@ export const handler = defineFunction<Req>({
       }
     }
 
-    for (const g of pending) {
-      await deps.execute('grading.answer', { attempt_answer_id: g.answerId }, { singletonKey: g.answerId, });
-    }
+    // AI grading runs after the answer (ADR 0011): the result screen polls the pending answers.
+    await Promise.all(pending.map((g) => inBackground(deps, 'grading.answer', { attempt_answer_id: g.answerId }, g.answerId)));
 
     const body: QuizSubmitRes = {
       attempt: { id: input.attempt_id, status: 'submitted', score, grade, ...(areaResults ? { area_results: areaResults } : {}) },

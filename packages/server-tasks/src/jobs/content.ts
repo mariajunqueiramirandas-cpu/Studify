@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { OperationDefinition } from '../framework/types.ts';
 import { parsePayload } from '../framework/errors.ts';
 import { supabaseStore } from '../ingest/store.ts';
-import { runPrereqJob, runRegenerate, runTopicContent } from '../ingest/pipeline.ts';
+import { runPrereqJob, runRegenerate, runTopicContent, runTopicExtras } from '../ingest/pipeline.ts';
 
 const uuid = z.uuid();
 const optionalUuid = uuid.nullable().default(null);
@@ -20,6 +20,13 @@ export const TopicContentPayload = z.object({
   kinds: z.array(z.enum(['concepts', 'notes', 'deep', 'glossary', 'cards', 'questions', 'feed', 'find_error', 'problems'])).default([]),
   force: z.boolean().default(false),
   ai_job_id: aiJobId,
+});
+
+const ExtrasPayload = z.object({
+  subject_id: uuid,
+  document_id: optionalUuid,
+  user_id: optionalUuid,
+  node_ids: z.array(uuid).min(1).max(300),
 });
 
 const PrereqPayload = z.object({
@@ -54,7 +61,21 @@ export const jobs: OperationDefinition<any>[] = [
     },
   },
   {
+    // The practice extras of a ready material (pipeline.ts EXTRA_KINDS), in the background (ADR 0011). A side job: no
+    // progress row of its own, and the topics' statuses and the material's own job stay as they are.
+    name: 'ingest.topic_extras',
+    tracksProgress: false,
+    concurrency: 4,
+    handler: async (ctx, data) => {
+      const p = parsePayload(ExtrasPayload, data, 'ingest.topic_extras');
+      await runTopicExtras(ctx, supabaseStore(ctx.supabase), { subjectId: p.subject_id, documentId: p.document_id, userId: p.user_id, nodeIds: p.node_ids });
+    },
+  },
+  {
     name: 'ingest.prerequisites',
+    // A side job of the material (it runs in the background, ADR 0011): its ai_job_id only attributes the usage, so it
+    // never moves a material that is already "pronto" back to running.
+    tracksProgress: false,
     handler: async (ctx, data, meta) => {
       const p = parsePayload(PrereqPayload, data, 'ingest.prerequisites');
       await runPrereqJob(ctx, {

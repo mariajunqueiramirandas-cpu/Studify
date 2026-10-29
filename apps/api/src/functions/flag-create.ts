@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ApiFailure, FlagCreateReqSchema } from '@studify/shared';
 import type { FlagCreateRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 import { requireSubject } from '../shared/access.ts';
 import { FLAG_TABLES } from '../shared/flags.ts';
 
@@ -56,7 +57,7 @@ export const handler = defineFunction<Req>({
       status: 'open',
     });
     if (inserted.error) throw inserted.error;
-    await deps.execute('flag.triage', { flag_id: flagId }, { singletonKey: flagId, });
+    await inBackground(deps, 'flag.triage', { flag_id: flagId }, flagId);
 
     const body: FlagCreateRes = { flag_id: flagId, status: 'open', hidden_for_you: false };
     return ctx.json(body);

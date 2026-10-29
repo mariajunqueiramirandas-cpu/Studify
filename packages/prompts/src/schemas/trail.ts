@@ -63,6 +63,17 @@ export const TrailLesson = z.strictObject({
   questions: z.array(TrailQuestion).length(3),
 });
 
+/**
+ * trail.reinforce output: what a concept's lesson needs after it, written ahead with the lesson (ADR 0011) — a
+ * re-explanation from another angle with fresh questions for after a miss, and test-level questions for the chapter
+ * test. Shared by every student of the subject.
+ */
+export const TrailReinforcement = z.strictObject({
+  lesson: TrailLessonBody,
+  remedial_questions: z.array(TrailQuestion).length(3),
+  test_questions: z.array(TrailQuestion).length(4),
+});
+
 /** trail.remediate output: a re-explanation aimed at the mistake and a fresh question on the same point. */
 export const TrailRemediation = z.strictObject({
   lesson: TrailLessonBody,

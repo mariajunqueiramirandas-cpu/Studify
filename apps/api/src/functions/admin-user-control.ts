@@ -5,6 +5,7 @@
 // admin must lose the role before they can be suspended.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AdminUserControlReqSchema, ApiFailure, type AdminUserControlReq } from '@studify/shared';
+import { forgetUser } from '../shared/auth.ts';
 import { defineFunction } from '../shared/http.ts';
 import { requireAppAdmin } from '../shared/access.ts';
 import { audit, loadAdminUserDetail } from '../shared/dashboard.ts';
@@ -59,6 +60,8 @@ export const handler = defineFunction<AdminUserControlReq>({
         if (role === 'app_admin') throw new ApiFailure('forbidden', { message: 'Tire o acesso de admin antes de suspender essa conta.' });
         const { error } = await db.auth.admin.updateUserById(input.user_id, { ban_duration: input.days ? `${input.days * 24}h` : INDEFINITE_BAN });
         if (error) throw error;
+        // Tokens this API remembered as verified are checked again on the next call, and refused.
+        forgetUser(db, input.user_id);
         await recordModeration(db, { actor_id: actor, action: 'ban', target_id: input.user_id, reason: input.reason });
         await audit(db, actor, 'user.suspend', 'profile', input.user_id, { days: input.days, reason: input.reason });
         break;
