@@ -6,8 +6,25 @@ import type { P2Deps } from './shared-p2/deps.ts';
 import { handler as accountDelete } from './functions/account-delete.ts';
 import { handler as accountReset } from './functions/account-reset.ts';
 import { handler as accountExport } from './functions/account-export.ts';
+import { handler as accountDeviceRemove } from './functions/account-device-remove.ts';
+import { handler as accountExportLink } from './functions/account-export-link.ts';
+import { handler as accountMembership } from './functions/account-membership.ts';
+import { handler as accountOverview } from './functions/account-overview.ts';
+import { handler as accountUpdate } from './functions/account-update.ts';
 import { handler as adminAtualidadesPublish } from './functions/admin-atualidades-publish.ts';
 import { handler as adminEnemImport } from './functions/admin-enem-import.ts';
+import { handler as adminAiUsage } from './functions/admin-ai-usage.ts';
+import { handler as adminAudit } from './functions/admin-audit.ts';
+import { handler as adminClassGroupControl } from './functions/admin-class-group-control.ts';
+import { handler as adminClassGroups } from './functions/admin-class-groups.ts';
+import { handler as adminModeration } from './functions/admin-moderation.ts';
+import { handler as adminModerationControl } from './functions/admin-moderation-control.ts';
+import { handler as adminOverview } from './functions/admin-overview.ts';
+import { handler as adminSettings } from './functions/admin-settings.ts';
+import { handler as adminSettingsControl } from './functions/admin-settings-control.ts';
+import { handler as adminUser } from './functions/admin-user.ts';
+import { handler as adminUserControl } from './functions/admin-user-control.ts';
+import { handler as adminUsers } from './functions/admin-users.ts';
 import { handler as argumentFinish } from './functions/argument-finish.ts';
 import { handler as argumentStart } from './functions/argument-start.ts';
 import { handler as argumentThemes } from './functions/argument-themes.ts';
@@ -75,8 +92,25 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['account-delete', accountDelete],
   ['account-reset', accountReset],
   ['account-export', accountExport],
+  ['account-device-remove', accountDeviceRemove],
+  ['account-export-link', accountExportLink],
+  ['account-membership', accountMembership],
+  ['account-overview', accountOverview],
+  ['account-update', accountUpdate],
   ['admin-atualidades-publish', adminAtualidadesPublish],
   ['admin-enem-import', adminEnemImport],
+  ['admin-ai-usage', adminAiUsage],
+  ['admin-audit', adminAudit],
+  ['admin-class-group-control', adminClassGroupControl],
+  ['admin-class-groups', adminClassGroups],
+  ['admin-moderation', adminModeration],
+  ['admin-moderation-control', adminModerationControl],
+  ['admin-overview', adminOverview],
+  ['admin-settings', adminSettings],
+  ['admin-settings-control', adminSettingsControl],
+  ['admin-user', adminUser],
+  ['admin-user-control', adminUserControl],
+  ['admin-users', adminUsers],
   ['argument-finish', argumentFinish],
   ['argument-start', argumentStart],
   ['argument-themes', argumentThemes],
