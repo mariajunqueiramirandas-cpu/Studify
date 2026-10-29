@@ -1,4 +1,4 @@
-// Trilha content written ahead (TRL-01, spec 14 §7, ADR 0011). While a material is processed, each topic's concepts
+// Trilha content written ahead (TRL-01, spec 14 §7, ADR 0011). Once a material is ready, each topic's concepts
 // get their lesson with its practice questions (trail.lesson) and what comes after it (trail.reinforce: a
 // re-explanation from another angle, fresh questions for after a miss, chapter-test questions), and the subject gets
 // its path order (trail.plan). All of it is subject content, charged like notes and cards and shared by every student

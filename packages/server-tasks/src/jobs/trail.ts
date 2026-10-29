@@ -1,6 +1,6 @@
 // Trilha content written ahead (TRL-01, ADR 0011): the subject's path order and each topic's concept content. Both
-// start in the background — after a topic's content is written, after the prerequisites of a material, and when a
-// student opens a subject whose content predates them — and only write what is still missing.
+// start in the background — once a material is ready (its topics' content) or its prerequisites are written (the
+// path), and when a student opens a subject whose content predates them — and only write what is still missing.
 import { z } from 'zod';
 import type { OperationDefinition } from '../framework/types.ts';
 import { parsePayload } from '../framework/errors.ts';

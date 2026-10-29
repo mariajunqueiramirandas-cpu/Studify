@@ -500,7 +500,6 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
     // A topic is ready when all of its items were written; one cut short by the budget waits for the resume.
     const status = outcomes.every((o) => o === 'written') ? 'ready' : outcomes.some((o) => o === 'budget' || o === 'skipped') ? 'pending' : 'failed';
     await setContentStatus(sql, [bundle.topicId], status);
-    if (status === 'ready') await prepareTrailContent(ctx, [bundle.topicId], payload.userId);
   };
 
   await mapLimit(payload.nodeIds, size, async (topicId, index) => {
@@ -580,13 +579,21 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
 }
 
 /**
- * The Trilha's lessons, re-explanations and chapter-test questions for topics whose content was just written
- * (lib/trail-content.ts). They start in the background, so the topic is ready for notes and cards right away, and
- * by the time a student reaches it in the path its steps are already written (ADR 0011).
+ * The Trilha's lessons, re-explanations and chapter-test questions for the material's ready topics
+ * (lib/trail-content.ts, ADR 0011). They start in the background once the material is ready: they are charged to the
+ * same budget as its notes and cards, so they only spend what the material's own content left, and never park it.
+ * A student who opens the Trilha before then gets the chapter they are on written by trail-open.
  */
-async function prepareTrailContent(ctx: OperationContext, topicIds: readonly string[], userId: string | null): Promise<void> {
-  for (const topicId of topicIds) {
-    await ctx.execute('trail.prepare_topic', { topic_id: topicId, user_id: userId }, { singletonKey: topicId, startAfter: 0 });
+async function prepareTrailContent(stage: Stage, documentId: string, userId: string | null): Promise<void> {
+  const { rows } = await stage.sql.query<{ id: string }>(
+    `select n.id from public.knowledge_nodes n
+      where n.kind = 'topic' and n.deleted_at is null and n.content_status = 'ready'
+        and n.id in (select node_id from public.node_sources where document_id = $1 and deleted_at is null)
+      order by n.position, n.id`,
+    [documentId],
+  );
+  for (const { id } of rows) {
+    await stage.ctx.execute('trail.prepare_topic', { topic_id: id, user_id: userId }, { singletonKey: id, startAfter: 0 });
   }
 }
 
@@ -748,7 +755,6 @@ async function finishTopics(
   const failIds = topicIds.filter((id) => failed.has(id) || (!ok.has(id)));
   await setContentStatus(sql, okIds, 'ready');
   await setContentStatus(sql, failIds, budgetExceeded ? 'pending' : 'failed');
-  await prepareTrailContent(stage.ctx, okIds, payload.userId);
   if (payload.aiJobId) {
     await applyProgress(sql, payload.aiJobId, {
       stage: 'S4',
@@ -801,6 +807,7 @@ async function finalizeDocument(stage: Stage, doc: DocumentRecord, payload: Inge
   await patchDocument(sql, doc.id, { status: 'ready' });
   if (payload.aiJobId) await applyProgress(sql, payload.aiJobId, { status: 'succeeded', stage: 'S4', items_total: total, items_done: total });
   await notifyDocument(stage, doc, payload.userId, 'ready');
+  await prepareTrailContent(stage, doc.id, payload.userId ?? doc.uploadedBy);
 }
 
 // ---------------------------------------------------------------------------
