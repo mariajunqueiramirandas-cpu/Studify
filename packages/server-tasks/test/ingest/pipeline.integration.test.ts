@@ -239,7 +239,7 @@ function captureExpo(): ExpoLike & { sent: ExpoPushMessage[] } {
 }
 
 // ING-06 runs as its own job after S2; these tests cover S0–S4 only, so the checker is a no-op here.
-const materialCheckStub = [{ name: 'ingest.material_check', handler: async () => undefined }];
+const materialCheckStub = [{ name: 'ingest.material_check', tracksProgress: false, handler: async () => undefined }];
 
 describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)', () => {
   let pool: pg.Pool;
@@ -451,6 +451,10 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     expect(usage.rows.filter((r) => r.task.startsWith('trail.')).map((r) => r.task).sort()).toEqual(['trail.lesson', 'trail.plan', 'trail.reinforce']);
     const trailPlan = await pool.query<{ goal: string; n: number }>(`select goal, jsonb_array_length(chapters) as n from public.trail_subject_plans where subject_id = $1`, [subjectId]);
     expect(trailPlan.rows[0]).toEqual({ goal: 'Entender a célula.', n: 2 });
+    // The background work (page reading, prerequisites, extras, the Trilha) never shows up as a job of its own: the app
+    // would list the material as processing again after "material pronto".
+    const jobs = await pool.query<{ type: string; status: string }>(`select type, status from public.ai_jobs where subject_id = $1 or document_id = $2`, [subjectId, docId]);
+    expect(jobs.rows).toEqual([{ type: 'ingest.document', status: 'succeeded' }]);
 
     const job = await pool.query<{ status: string; stage: string; items_total: number; items_done: number; batch_id: string | null }>(
       `select status, stage, items_total, items_done, batch_id from public.ai_jobs where document_id = $1 and type = 'ingest.document'`,

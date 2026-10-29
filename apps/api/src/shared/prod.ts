@@ -110,6 +110,17 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
       if (!lease.rows[0]?.acquired) throw new Error('Another Studify API instance is active; deploy with one replica and stop-first ordering.');
       await ownership.query('select operation_id from public.ai_jobs limit 0');
       await ownership.query('select id from private.scheduled_actions limit 0');
+      // A material the restart cut off resumes where it stopped (each stage reads what is already written, ADR 0011)
+      // instead of failing: its progress row stays running and a calendar trigger starts it again in a few seconds.
+      await ownership.query(`insert into private.scheduled_actions (id, name, data, due_at, singleton_key)
+        select gen_random_uuid(), 'ingest.document',
+               jsonb_build_object('document_id', d.id, 'mode', 'resume', 'user_id', j.user_id, 'ai_job_id', j.id),
+               now() + interval '5 seconds', 'ingest.document:resume:' || d.id
+          from public.ai_jobs j join public.documents d on d.id = j.document_id
+         where j.status in ('queued', 'running') and j.type in ('ingest.document', 'ingest.merge')
+           and d.status = 'processing' and d.deleted_at is null
+           and not exists (select 1 from private.scheduled_actions a where a.data->>'ai_job_id' = j.id::text)
+        on conflict (singleton_key) do nothing`);
       const interrupted = JSON.stringify({ error: { code: 'ai_unavailable', message: 'O servidor reiniciou antes de concluir. Tente novamente.' } });
       await ownership.query(`update private.idempotency_keys set status_code = 503,
         response = jsonb_build_object('status', 503, 'contentType', 'application/json', 'body', $1::text)
