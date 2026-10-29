@@ -8,7 +8,7 @@ import { ApiFailure, SignupCompleteReqSchema, type SignupCompleteRes, DEFAULT_TI
 import { defineFunction } from '../shared/http.ts';
 
 /** Display names with a blocklist hit are rejected before any row is written (SP-11, owner list pending). */
-const BLOCKED_NAME_FRAGMENTS = ['studify', 'admin', 'suporte', 'moderador'];
+export const BLOCKED_NAME_FRAGMENTS = ['studify', 'admin', 'suporte', 'moderador'];
 const MIN_AGE = 12;
 
 /**

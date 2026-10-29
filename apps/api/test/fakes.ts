@@ -27,7 +27,8 @@ const UNIQUE: Record<string, string[][]> = {
   trails: [['id'], ['user_id', 'subject_id']],
   trail_steps: [['id'], ['trail_id', 'created_seq']],
   exam_scope_nodes: [['exam_id', 'node_id']],
-  invites: [['id']],
+  invites: [['id'], ['code']],
+  feature_flags: [['key']],
   profiles: [['id']],
   study_preferences: [['user_id']],
   visuals: [['id'], ['node_id', 'type']],
@@ -59,9 +60,10 @@ export class FakeDb {
   readonly tables = new Map<string, Row[]>();
   readonly rpcs = new Map<string, RpcFn>();
   readonly objects = new Map<string, Uint8Array>();
-  readonly users = new Map<string, { id: string; email: string | null }>();
+  readonly users = new Map<string, { id: string; email: string | null; banned_until?: string | null }>();
   readonly deletedUsers: string[] = [];
   readonly signedOut: string[] = [];
+  readonly userUpdates: Array<{ id: string; attributes: Record<string, unknown> }> = [];
   otpCode: string | null = null;
   readonly rpcCalls: Array<{ name: string; args: Record<string, unknown>; schema: string }> = [];
 
@@ -112,12 +114,16 @@ export class FakeDb {
       getUser: async (jwt: string) => {
         const user = db.users.get(jwt);
         if (!user) return { data: { user: null }, error: { message: 'invalid jwt' } };
-        return { data: { user: { id: user.id, email: user.email } }, error: null };
+        return { data: { user: { id: user.id, email: user.email, banned_until: user.banned_until ?? undefined } }, error: null };
       },
       admin: {
         signOut: async (jwt: string, scope: string) => {
           db.signedOut.push(`${jwt}:${scope}`);
           return { error: null };
+        },
+        updateUserById: async (id: string, attributes: Record<string, unknown>) => {
+          db.userUpdates.push({ id, attributes });
+          return { data: { user: { id } }, error: null };
         },
         deleteUser: async (id: string) => {
           db.deletedUsers.push(id);

@@ -9,6 +9,7 @@ export * from './edge-phase3.ts';
 export * from './edge-phase4.ts';
 export * from './edge-phase5.ts';
 export * from './edge-trail.ts';
+export * from './edge-dashboard.ts';
 export * from './rpc.ts';
 export * from './sse.ts';
 export * from './rows.ts';

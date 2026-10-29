@@ -70,6 +70,7 @@ no `container_name`. Do not add published ports: Traefik reaches the API through
 - SSE sends a heartbeat every 15 seconds. Verify Traefik forwards each frame immediately; disable buffering/compression middleware for `/api/*`, permit at least 45 seconds of network silence, and avoid absolute response timeouts below the operation duration. `X-Accel-Buffering: no` is also sent for proxies that honor it.
 - SIGTERM drains connected and detached operations, then stops the scheduler and closes Postgres. Compose allows 60 seconds; the process forces exit at 50 seconds. Startup marks orphaned work interrupted so a student can retry from saved domain state.
 - Only future calendar triggers are persisted in `private.scheduled_actions`; immediate work bypasses it. Unclaimed deadlines survive restarts. A trigger interrupted after claim is at most once and may require manual recovery; failures are logged, without automatic paid retries.
+- The same container serves the web dashboard at `/painel` (`apps/dashboard`, built by the image's `dashboard` stage into `/app/dashboard`, `DASHBOARD_DIR`). It reuses `SUPABASE_URL` and `SUPABASE_ANON_KEY` (written into the page at serve time) and needs no extra variable or Auth setting: sign-in uses the 6-digit code already in the e-mail template. Apply `20261029120000_admin_dashboard.sql` before deploying it.
 - Watch API event-loop delay, memory, active SSE connections and PDF processing load. See [ADR 0010](adr/0010-direct-sse-api.md) for transport limits and scaling constraints.
 
 ## 5. Logs and health
@@ -107,10 +108,12 @@ pnpm api:test                   # bun test for apps/api
   (`cd packages/ai && npx tsx src/mock/cli.ts --port 4010 --fixtures test/fixtures/claude`) and set
   `ANTHROPIC_BASE_URL=http://127.0.0.1:4010`.
 - The mobile app on the Android emulator reaches the local API at `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api`.
+- The web dashboard: `pnpm --filter @studify/dashboard dev` with `SUPABASE_URL` and `SUPABASE_ANON_KEY` set; `/api` is proxied to the local API on port 3000. `pnpm --filter @studify/dashboard build` writes `apps/dashboard/dist`, which `pnpm api:dev` serves at `/painel`.
 - The images build with `docker compose build` from the repository root. A Docker daemon is needed.
 
 ## 8. Not yet verified
 
+- The web dashboard: its image stage has not been built (no Docker daemon where it was written). The Vite build was served by the real API app (`createApp` with `mountDashboard`, real handlers, the `private.admin_*` functions on a seeded local Postgres) and driven in Chromium through every page, in light, dark and at phone width, with no console or CSP errors. Sign-in against the real Supabase project and the e-mail code from a browser are still to be tried once deployed.
 - The images have not been built or deployed. The image layout (install with `--frozen-lockfile --prod`, then run
   from `/app`) was reproduced in a scratch copy and the previous servers started from it; the new single-service image still needs a deployment smoke test. The Dokploy domain and TLS steps
   follow Dokploy's documentation and have not run on the VPS.

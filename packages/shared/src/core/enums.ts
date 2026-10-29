@@ -968,6 +968,7 @@ export const ENUMS: Readonly<Record<string, readonly string[]>> = {
   'nudge_events.action': NUDGE_ACTION,
   'ai_budgets.scope_type': BUDGET_SCOPE_TYPE,
   'ai_budgets.period_type': BUDGET_PERIOD,
+  'ai_budget_limits.scope_type': BUDGET_SCOPE_TYPE,
   'ai_jobs.status': AI_JOB_STATUS,
   'data_exports.status': EXPORT_STATUS,
   'account_deletions.requested_by': DELETION_REQUESTER,
