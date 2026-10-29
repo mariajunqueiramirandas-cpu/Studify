@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetch } from 'expo/fetch';
+import { data } from './data';
 import { authHeaders, callFunction } from './functions';
 import { getApiUrl } from './env';
 import { queryClient, queryKeys } from './queryClient';
@@ -55,9 +56,9 @@ export function subscribeJobProgress(jobId: string, onUpdate?: (row: AiJobRow) =
 }
 
 async function fetchJob(jobId: string): Promise<AiJobRow> {
-  const { data, error } = await supabase.from('ai_jobs').select('*').eq('id', jobId).single();
-  if (error) throw error;
-  return data as AiJobRow;
+  const row = await data<AiJobRow | null>('jobs-get', { job_id: jobId });
+  if (!row) throw new Error('job not found');
+  return row;
 }
 
 /** The ai_jobs row for a job, kept fresh by Realtime. `data` is the row once loaded. */
