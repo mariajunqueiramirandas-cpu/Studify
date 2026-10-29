@@ -19,6 +19,13 @@ describe('topic custom_id', () => {
     expect(expandKinds(['deep'])).toEqual(['deep']);
   });
 
+  it('carries the part of a question bank, so the parts of one topic are separate requests', () => {
+    const ids = [0, 1, 2].map((part) => buildTopicCustomId(NODE, 'questions', part));
+    expect(new Set(ids).size).toBe(3);
+    expect(parseTopicCustomId(ids[2]!)).toEqual({ nodeId: NODE, kind: 'questions', part: 2 });
+    expect(() => buildTopicCustomId(NODE, 'questions', 10)).toThrow(/part/);
+  });
+
   it('rejects non-UUID node ids and unknown codes', () => {
     expect(() => buildTopicCustomId('topic-1', 'cards')).toThrow(/UUID/);
     expect(parseTopicCustomId('0190f3a27b1c7d3e8f00000000abcd-z')).toBeNull();

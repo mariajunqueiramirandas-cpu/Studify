@@ -13,6 +13,7 @@ import {
   buildKindCall,
   featureOf,
   loadTopicBundle,
+  topicQuestionParts,
   writeCards,
   writeConcepts,
   writeFeed,
@@ -56,6 +57,8 @@ export interface PlanItem {
   force: boolean;
   /** Transcription runs: the original page range (inclusive). */
   pages: { start: number; end: number } | null;
+  /** Questions: the part of the topic's bank this request writes (topicQuestionParts). */
+  part?: number;
 }
 
 export type PlanPurpose = 'concepts' | 'content' | 'transcription';
@@ -260,7 +263,8 @@ export async function topicItem(
   bundle: TopicBundle,
   kind: TopicKind,
   refs: SliceRef[],
-  opts: { jobId: string | null; userId: string | null; documentId: string | null; genBatchId: string; force: boolean; language: string },
+  opts: TopicItemOptions,
+  part?: number,
 ): Promise<{ item: PlanItem; call: TaskCall<unknown> }> {
   const budget = {
     userId: opts.userId,
@@ -272,9 +276,9 @@ export async function topicItem(
     feature: featureOf(kind),
     budgetClass: 'content' as const,
   };
-  const built = await buildKindCall(env, bundle, kind, refs, budget, opts.language);
+  const built = await buildKindCall(env, bundle, kind, refs, budget, opts.language, part);
   const item: PlanItem = {
-    customId: buildTopicCustomId(bundle.topicId, kind),
+    customId: buildTopicCustomId(bundle.topicId, kind, part),
     kind,
     topicId: bundle.topicId,
     taskId: built.taskId,
@@ -285,8 +289,37 @@ export async function topicItem(
     genBatchId: opts.genBatchId,
     force: opts.force,
     pages: null,
+    ...(part !== undefined ? { part } : {}),
   };
   return { item, call: built.call };
+}
+
+export interface TopicItemOptions {
+  jobId: string | null;
+  userId: string | null;
+  documentId: string | null;
+  genBatchId: string;
+  force: boolean;
+  language: string;
+}
+
+/**
+ * The requests of one topic kind: one, or one per part of the question bank (all parts, or `parts` when only some are
+ * missing). The parts run at the same time, so the bank takes about as long as its largest part.
+ */
+export async function topicItems(
+  env: PipelineEnv,
+  bundle: TopicBundle,
+  kind: TopicKind,
+  refs: SliceRef[],
+  opts: TopicItemOptions,
+  parts?: readonly number[],
+): Promise<Array<{ item: PlanItem; call: TaskCall<unknown> }>> {
+  if (kind !== 'questions') return [await topicItem(env, bundle, kind, refs, opts)];
+  const all = topicQuestionParts(bundle);
+  const wanted = parts ?? all.map((p) => p.index);
+  if (all.length === 1) return wanted.length ? [await topicItem(env, bundle, kind, refs, opts)] : [];
+  return Promise.all(wanted.map((index) => topicItem(env, bundle, kind, refs, opts, index)));
 }
 
 /** Transcription run (ingest.transcribePages, ai-pipeline T4): consecutive scanned pages, ≤ 20 per request. */
@@ -358,7 +391,7 @@ async function rerunStandard(env: PipelineEnv, item: PlanItem): Promise<CallResu
   }
   const bundle = await loadTopicBundle(env.ctx.db, item.topicId as string);
   if (!bundle) throw new Error(`topic ${item.topicId} disappeared before rerun`);
-  const built = await buildKindCall(env, bundle, item.kind, refs, item.budget, item.language);
+  const built = await buildKindCall(env, bundle, item.kind, refs, item.budget, item.language, item.part);
   return callClaude(env.ctx.ai, withShortCache(built.call));
 }
 

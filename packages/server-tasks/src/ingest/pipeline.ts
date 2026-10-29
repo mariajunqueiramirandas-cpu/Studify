@@ -18,8 +18,8 @@ import { renderPages } from './pdf-render.ts';
 import { spansFile } from './pdf-spans.ts';
 import { writeOutline, runOutlineCalls } from './outline.ts';
 import { runPrerequisites } from './prereq.ts';
-import { topicItem, runItemNow, runWaveNow, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type SubmitInput, type WavePlan } from './waves.ts';
-import { loadTopicBundle, sourcesOf, topicSliceRefs, contentLanguageOf, isQuantitativeTopic, type TopicBundle } from './topics.ts';
+import { topicItem, topicItems, runItemNow, runWaveNow, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type SubmitInput, type WavePlan } from './waves.ts';
+import { loadTopicBundle, missingQuestionParts, sourcesOf, topicSliceRefs, contentLanguageOf, isQuantitativeTopic, type TopicBundle } from './topics.ts';
 import { expandKinds, type TopicKind } from './custom-id.ts';
 import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
@@ -524,14 +524,12 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
   const content = async (bundle: TopicBundle, index: number): Promise<void> => {
     // After a budget refusal the topics not started keep their status for the resume.
     if (budgetExceeded) return;
-    const present = payload.force ? new Set<TopicKind>() : await existingKinds(sql, bundle.topicId);
-    // PRA-08.1: problem sets only for quantitative topics.
-    const wanted = kinds.filter((k) => !present.has(k) && (k !== 'feed' || feedEnabled) && (k !== 'problems' || isQuantitativeTopic(bundle)));
-    if (wanted.length === 0) return;
+    const plan = await contentPlan(sql, bundle, kinds, payload.force, feedEnabled);
+    if (plan.kinds.length === 0) return;
     const refs = await topicSliceRefs(env, bundle.sources);
     if (refs.length === 0) return;
     if (!payload.secondary) await setContentStatus(sql, [bundle.topicId], 'generating');
-    const built = await Promise.all(wanted.map((kind) => topicItem(env, bundle, kind, refs, optsOf(bundle))));
+    const built = (await Promise.all(plan.kinds.map((kind) => topicItems(env, bundle, kind, refs, optsOf(bundle), kind === 'questions' ? plan.questionParts : undefined)))).flat();
     const outcomes = await Promise.all(built.map((b) => run(index, b)));
     if (payload.secondary) return;
     // A topic is ready when all of its items were written; one cut short by the budget waits for the resume.
@@ -674,6 +672,24 @@ async function enqueueAfterConcepts(ctx: OperationContext, payload: TopicContent
 }
 
 /** Kinds that already have output for a topic (idempotency; ai-pipeline §10.3). */
+/**
+ * What a topic still needs among `kinds`: the kinds with nothing written yet and, for the question bank, the parts
+ * still missing (a resumed topic writes only those). PRA-08.1: problem sets only for quantitative topics.
+ */
+async function contentPlan(
+  sql: Sql,
+  bundle: TopicBundle,
+  kinds: readonly TopicKind[],
+  force: boolean,
+  feedEnabled: boolean,
+): Promise<{ kinds: TopicKind[]; questionParts?: number[] }> {
+  const present = force ? new Set<TopicKind>() : await existingKinds(sql, bundle.topicId);
+  const wanted = kinds.filter((k) => (k === 'questions' || !present.has(k)) && (k !== 'feed' || feedEnabled) && (k !== 'problems' || isQuantitativeTopic(bundle)));
+  if (!wanted.includes('questions') || force) return { kinds: wanted };
+  const questionParts = await missingQuestionParts(sql, bundle);
+  return questionParts.length ? { kinds: wanted, questionParts } : { kinds: wanted.filter((k) => k !== 'questions') };
+}
+
 async function existingKinds(sql: Sql, topicId: string): Promise<Set<TopicKind>> {
   const found = new Set<TopicKind>();
   if (await tableExists(sql, 'public.notes')) {
@@ -721,25 +737,20 @@ async function runContent(stage: Stage, payload: TopicContentPayload, genBatchId
   const prepared = await mapLimit(payload.nodeIds, PREPARE_CONCURRENCY, async (topicId) => {
     const bundle = await loadTopicBundle(sql, topicId);
     if (!bundle) return null;
-    const present = payload.force ? new Set<TopicKind>() : await existingKinds(sql, topicId);
-    // PRA-08.1: problem sets only for quantitative topics.
-    const wanted = kinds.filter((k) => !present.has(k) && (k !== 'feed' || feedEnabled) && (k !== 'problems' || isQuantitativeTopic(bundle)));
-    if (wanted.length === 0) return null;
+    const plan = await contentPlan(sql, bundle, kinds, payload.force, feedEnabled);
+    if (plan.kinds.length === 0) return null;
     const refs = await topicSliceRefs(env, bundle.sources);
     if (refs.length === 0) return null;
-    const topicItems = await Promise.all(
-      wanted.map((kind) =>
-        topicItem(env, bundle, kind, refs, {
-          jobId: payload.aiJobId,
-          userId: payload.userId,
-          documentId: payload.documentId,
-          genBatchId,
-          force: payload.force,
-          language: contentLanguageOf(bundle, docLanguage),
-        }),
-      ),
-    );
-    return { topicId, items: topicItems };
+    const opts = {
+      jobId: payload.aiJobId,
+      userId: payload.userId,
+      documentId: payload.documentId,
+      genBatchId,
+      force: payload.force,
+      language: contentLanguageOf(bundle, docLanguage),
+    };
+    const built = await Promise.all(plan.kinds.map((kind) => topicItems(env, bundle, kind, refs, opts, kind === 'questions' ? plan.questionParts : undefined)));
+    return { topicId, items: built.flat() };
   });
   const topicIds: string[] = [];
   const items = [];
