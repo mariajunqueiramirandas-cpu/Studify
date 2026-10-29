@@ -397,6 +397,31 @@ export async function endDesperate(id: string) {
   return rpc<{ ok: boolean }>('end_desperate_mode', { desperate_mode_id: id });
 }
 
+/** The Modo Véspera sheet (GOL-07) as vespera.prepare stores it, on the exam's véspera plan item. */
+export interface VesperaSheet {
+  title: string;
+  sections: Array<{ node_key: string; heading: string; bullets: Array<{ text: string }>; formula: string | null }>;
+  watch_out: Array<{ text: string; from_mistake_id: string | null }>;
+}
+
+/**
+ * The sheet for an exam, read from the student's own véspera plan item. While `waiting`, it is read again every few
+ * seconds, so the sheet appears the moment the server writes it.
+ */
+export function useVesperaSheet(examId: string | undefined, waiting: boolean) {
+  return useQuery({
+    queryKey: ['vesperaSheet', examId],
+    enabled: !!examId,
+    queryFn: async (): Promise<VesperaSheet | null> => {
+      const item = await row<{ reason_params: { cheatsheet?: VesperaSheet } | null }>(
+        supabase.from('plan_items').select('reason_params').eq('exam_id', examId!).eq('unit_type', 'vespera').is('deleted_at', null).order('local_date', { ascending: false }).limit(1).maybeSingle(),
+      );
+      return item?.reason_params?.cheatsheet ?? null;
+    },
+    refetchInterval: (q) => (waiting && !q.state.data ? 3000 : false),
+  });
+}
+
 export async function prepareVespera(examId: string) {
   return callFunction<{ exam_id: string }, { status: 'ready'; sheet_note_id: string } | { status: 'preparing'; job_id: string }>('vespera-prepare', { exam_id: examId }, { idempotencyKey: uuidv7() });
 }

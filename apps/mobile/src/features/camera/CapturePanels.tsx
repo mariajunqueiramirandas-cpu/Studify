@@ -4,8 +4,9 @@ import { HEAVY_EDIT_RATIO, editRatio, parseTranscriptionMarkers, type CaptureAct
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { AiBadge, Banner, Button, Card, Chip, ChipGroup, ListItem, PageChips, RichContent, Row, Skeleton, SubjectBadge, Text, TextField, useOnline, useOverlay } from '../../components';
+import { AiBadge, Banner, Button, Card, Chip, ChipGroup, GenerationStatus, ListItem, PageChips, RichContent, Row, SubjectBadge, Text, TextField, useOnline, useOverlay } from '../../components';
 import type { StreamHandle } from '../../api/functions';
+import { messageFor } from '../../api/messages';
 import { t, options } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
 import { useSession } from '../auth/session';
@@ -17,10 +18,11 @@ import { MicButton } from '../voice/VoiceButtons';
 import { appendTranscript } from '../voice/speech-text';
 import { captureAct, gradeEssay, streamCaptureExplain, streamCaptureSolution, type CaptureRow, type SolveRes } from './api';
 
-function errorMessage(code: string | undefined): string {
-  if (code === 'budget_exhausted' || code === 'rate_limited') return t('budget.user_daily');
+/** What went wrong, in PT-BR: the server's own message (the budget, a limit, the photo) when it sent one. */
+export function errorMessage(e: unknown): string {
+  const code = (e as { code?: string } | null)?.code;
   if (code === 'offline') return t('cam.offline');
-  return t('error.generation');
+  return messageFor(e, code === 'budget_exhausted' ? t('budget.user_daily') : t('error.generation'));
 }
 
 /** "Biologia › Genética › 1ª Lei de Mendel", or the not-in-material label (CAM-01.3, CAM-02.3). */
@@ -64,7 +66,7 @@ function AfterActions({ capture, text, citations, canSaveQuestion }: { capture: 
               setSavedQuestion(true);
               overlay.snack(t('cam.question_saved'));
             } catch (e) {
-              overlay.snack(errorMessage((e as { code?: string }).code));
+              overlay.snack(errorMessage(e));
             }
           }}
         />
@@ -98,10 +100,13 @@ export function ExplainPanel({ capture }: { capture: CaptureRow }) {
     handle.current = streamCaptureExplain(capture.id, focusText, {
       onDelta: (d) => setText((x) => x + d),
       onCitation: (c) => setCitations((x) => [...x, c]),
-      onDone: (d) => setState(d.stop_reason === 'refusal' ? 'error' : 'done'),
+      onDone: (d) => {
+        if (d.stop_reason === 'refusal') setError(t('ai.refusal'));
+        setState(d.stop_reason === 'refusal' ? 'error' : 'done');
+      },
       onError: (e) => {
         setState('error');
-        setError(errorMessage(e.code));
+        setError(errorMessage(e));
       },
     });
   };
@@ -131,8 +136,8 @@ export function ExplainPanel({ capture }: { capture: CaptureRow }) {
         </Card>
       ) : null}
       <Card>
-        {text ? <RichContent variant="reading" text={text} /> : state === 'streaming' ? <Skeleton height={60} /> : null}
-        {error ? <Banner kind="warning" message={error} action={{ label: t('global.retry'), onPress: () => run(focus) }} /> : null}
+        {text ? <RichContent variant="reading" text={text} /> : state === 'streaming' ? <GenerationStatus compact title={t('cam.explaining')} slowAfterS={20} /> : null}
+        {error ? <GenerationStatus compact title={t('cam.explaining')} error={error} onRetry={() => run(focus)} /> : null}
         <PageChips sources={citations} subjectId={capture.match?.subject_id} max={6} />
         {state === 'done' ? <AiBadge general={!capture.match} /> : null}
       </Card>
@@ -165,7 +170,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
       setLadder(res);
       if (res.final) setFinal(res.final);
     } catch (e) {
-      overlay.snack(errorMessage((e as { code?: string }).code));
+      overlay.snack(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -178,7 +183,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
       const res = await captureAct<Extract<CaptureActRes, { intent: 'check_answer' }>>({ capture_id: capture.id, intent: 'check_answer', answer: answer.trim() });
       setVerdict({ correct: res.correct, message: res.correct ? t('cam.correct') : t('cam.not_yet') });
     } catch (e) {
-      overlay.snack(errorMessage((e as { code?: string }).code));
+      overlay.snack(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -198,7 +203,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
       // Every failure ends here once (the transport reports network failures as errors too); leaving is not one.
       onError: (e) => {
         setSolution(null);
-        overlay.snack(errorMessage(e.code));
+        overlay.snack(errorMessage(e));
       },
     });
   };
@@ -253,7 +258,7 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
       ) : null}
       {solution ? (
         <Card>
-          {solution.text ? <RichContent variant="reading" text={solution.text} /> : <Skeleton height={60} />}
+          {solution.text ? <RichContent variant="reading" text={solution.text} /> : <GenerationStatus compact title={t('cam.solving')} slowAfterS={20} />}
           <PageChips sources={solution.citations} subjectId={capture.match?.subject_id} max={6} />
           {!solution.streaming ? <AiBadge general={!capture.match} /> : null}
         </Card>
@@ -295,7 +300,7 @@ export function AddToSubjectPanel({ capture }: { capture: CaptureRow }) {
       router.replace({ pathname: '/subjects/[subjectId]/processing', params: { subjectId: picked } });
     } catch (e) {
       const code = (e as { code?: string }).code;
-      overlay.snack(code === 'forbidden' ? t('cam.faces_required') : code === 'duplicate_document' ? t('cam.duplicate') : errorMessage(code));
+      overlay.snack(code === 'forbidden' ? t('cam.faces_required') : code === 'duplicate_document' ? t('cam.duplicate') : errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -343,7 +348,7 @@ export function TranscriptionReview({ capture, questionId, themeId, onGraded }: 
       const graded = await gradeEssay(res.essay_id);
       onGraded(res.essay_id, graded.mode === 'sync' ? graded.essay.feedback : null);
     } catch (e) {
-      overlay.snack(errorMessage((e as { code?: string }).code));
+      overlay.snack(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -368,6 +373,8 @@ export function TranscriptionReview({ capture, questionId, themeId, onGraded }: 
           <TextField label={t('essay.max_points')} value={maxPoints} onChangeText={setMaxPoints} keyboardType="decimal-pad" />
         </Card>
       ) : null}
+      {/* A school answer is graded in the request (about half a minute): the wait shows here. */}
+      {busy && capture.intent === 'grade_answer' ? <GenerationStatus compact title={t('essay.grading_title')} detail={t('essay.grading_detail')} slowAfterS={45} /> : null}
       <Button label={t('cam.transcription.confirm')} loading={busy} disabled={!text.trim() || !online || (!questionId && capture.intent === 'grade_answer' && !questionText.trim())} onPress={() => void confirm()} />
     </View>
   );

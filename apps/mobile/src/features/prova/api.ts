@@ -27,12 +27,13 @@ export function useTeacherProfiles(subjectId: string | undefined) {
   });
 }
 
-export function usePredictedQuiz(examId: string | undefined) {
+/** The exam's Prova Provável quiz; read again every few seconds only while one is being generated (`waiting`). */
+export function usePredictedQuiz(examId: string | undefined, waiting = false) {
   const { userId } = useSession();
   return useQuery({
     queryKey: ['exam', examId, 'predicted'],
     enabled: !!examId && !!userId,
-    refetchInterval: (q) => (q.state.data ? false : 8000),
+    refetchInterval: (q) => (waiting && !q.state.data ? 4000 : false),
     queryFn: () =>
       row<{ id: string; question_ids: string[]; created_at: string }>(
         supabase.from('quizzes').select('id,question_ids,created_at').eq('owner_id', userId!).eq('exam_id', examId!).eq('kind', 'predicted_test').order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -60,11 +61,13 @@ export interface ScheduleImport {
   extracted: { subject_name: string; title: string; local_date: string; starts_at?: string | null; content_items?: string[] }[] | null;
 }
 
-export function useScheduleImport(id: string | null) {
+/** The import row; read again every few seconds only while its job is still reading the photo (`waiting`). */
+export function useScheduleImport(id: string | null, waiting = false) {
   return useQuery({
     queryKey: ['scheduleImport', id],
     enabled: !!id,
-    refetchInterval: (q) => (q.state.data?.extracted ? false : 4000),
+    // `extracted` starts as [] (truthy): the job, not the row, says when reading is over.
+    refetchInterval: waiting ? 4000 : false,
     queryFn: () => row<ScheduleImport>(supabase.from('schedule_imports').select('*').eq('id', id!).maybeSingle()),
   });
 }

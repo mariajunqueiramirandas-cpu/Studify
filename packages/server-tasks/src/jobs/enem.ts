@@ -419,7 +419,19 @@ export async function handleRetaFinal(ctx: OperationContext): Promise<{ sent: nu
 }
 
 export const jobs: OperationDefinition<any>[] = [
-  { name: 'essay.grade', handler: async (ctx, data, meta) => void (await handleEssayGrade(ctx, data, meta)) },
+  {
+    name: 'essay.grade',
+    handler: async (ctx, data, meta) => {
+      try {
+        await handleEssayGrade(ctx, data, meta);
+      } catch (err) {
+        // A failure the handler did not settle leaves the redação gradable again instead of "sendo corrigida" for ever.
+        const id = (data as { essay_id?: unknown } | null)?.essay_id;
+        if (typeof id === 'string') await ctx.supabase.from('essays').update({ status: 'failed' }).eq('id', id).eq('status', 'grading');
+        throw err;
+      }
+    },
+  },
   { name: 'enem.tag_nodes', handler: async (ctx, data) => void (await handleTagNodes(ctx, data)) },
   { name: 'enem.topic_stats', schedule: '15 8 1 * *', handler: async (ctx) => void (await handleTopicStats(ctx)) },
   { name: 'enem.themes.predict', schedule: '40 10 * * 1', handler: async (ctx, data) => void (await handleThemesPredict(ctx, data ?? {})) },

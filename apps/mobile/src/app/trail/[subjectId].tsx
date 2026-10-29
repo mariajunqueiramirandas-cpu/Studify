@@ -8,6 +8,7 @@ import {
   BottomSheet,
   Button,
   Capi,
+  GenerationStatus,
   Celebrate,
   EmptyState,
   ErrorState,
@@ -19,7 +20,6 @@ import {
   RichContent,
   RichText,
   Screen,
-  Skeleton,
   Text,
   useOverlay,
 } from '../../components';
@@ -80,7 +80,6 @@ export default function TrailScreen() {
   const [state, setState] = useState<TrailState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
-  const [slow, setSlow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [answer, setAnswer] = useState<Answered | null>(null);
@@ -113,12 +112,9 @@ export default function TrailScreen() {
   /** Shows `s`, first waiting for its content when the next step is still being written. */
   const land = useCallback(
     async (s: TrailState | Promise<TrailState>, writing = false) => {
-      // `writing`: the next step is already being written, so the wait shows at once, not when it lands.
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const wait = () => {
-        setWaiting(true);
-        timer = setTimeout(() => setSlow(true), 12_000);
-      };
+      // `writing`: the next step is already being written, so the wait shows at once, not when it lands. The wait
+      // itself (elapsed time, "slower than usual") is GenerationStatus's.
+      const wait = () => setWaiting(true);
       if (writing) wait();
       try {
         let cur = await s;
@@ -128,9 +124,7 @@ export default function TrailScreen() {
         }
         show(cur);
       } finally {
-        clearTimeout(timer);
         setWaiting(false);
-        setSlow(false);
       }
     },
     [show],
@@ -375,7 +369,7 @@ export default function TrailScreen() {
       footer={footer}
     >
       {!state || waiting ? (
-        <Preparing first={!state} slow={slow} capiStage={capi.visible ? capi.stage : null} />
+        <Preparing first={!state} capiStage={capi.visible ? capi.stage : null} />
       ) : milestone ? (
         <MilestoneView milestone={milestone} capiStage={capi.visible ? capi.stage : null} />
       ) : state.status === 'completed' ? (
@@ -450,23 +444,12 @@ export default function TrailScreen() {
   );
 }
 
-function Preparing({ first, slow, capiStage }: { first: boolean; slow: boolean; capiStage: ReturnType<typeof useCapi>['stage'] | null }) {
+function Preparing({ first, capiStage }: { first: boolean; capiStage: ReturnType<typeof useCapi>['stage'] | null }) {
   return (
-    <View style={{ gap: space.lg, alignItems: 'center', paddingTop: space.xl }} accessibilityLiveRegion="polite">
+    <View style={{ gap: space.lg, alignItems: 'center', paddingTop: space.xl }}>
       {capiStage ? <Capi stage={capiStage} mood="curious" size={120} /> : null}
-      <Text variant="heading" align="center">
-        {first ? t('trail.preparing_first') : t('trail.preparing')}
-      </Text>
-      {slow ? (
-        <Text tone="secondary" align="center">
-          {t('trail.preparing_slow')}
-        </Text>
-      ) : null}
-      <View style={{ alignSelf: 'stretch', gap: space.sm }}>
-        <Skeleton height={22} width="70%" />
-        <Skeleton height={16} />
-        <Skeleton height={16} />
-        <Skeleton height={16} width="85%" />
+      <View style={{ alignSelf: 'stretch' }}>
+        <GenerationStatus title={first ? t('trail.preparing_first') : t('trail.preparing')} detail={t('trail.preparing_detail')} slowAfterS={12} />
       </View>
     </View>
   );

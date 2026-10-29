@@ -2,7 +2,7 @@ import type { MnemonicOption, MnemonicType } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { AiBadge, Banner, Button, Card, Chip, ChipGroup, EmptyState, Screen, SkeletonList, Text, TextField, useOnline, useOverlay } from '../../components';
+import { AiBadge, Banner, Button, Card, Chip, ChipGroup, EmptyState, GenerationStatus, Screen, Text, TextField, useOnline, useOverlay } from '../../components';
 import { useSession } from '../../features/auth/session';
 import { saveMnemonic, suggestMnemonics, useCardText, usePalaces } from '../../features/mnemonics/api';
 import { useDb } from '../../db/DatabaseProvider';
@@ -51,7 +51,7 @@ export default function MnemonicStudio() {
       setOptions(res.options);
       setShown((s) => [...s, ...res.options.map((o) => o.title)].slice(-12));
     } catch (e) {
-      overlay.snack((e as { message?: string }).message ?? t('error.generation'));
+      overlay.snack(messageFor(e, t('error.generation')));
     } finally {
       setBusy(null);
     }
@@ -104,7 +104,7 @@ export default function MnemonicStudio() {
         </View>
       ) : null}
       <Button icon="sparkles-outline" label={options.length ? t('mnemonic.more') : t('mnemonic.suggest')} loading={busy === 'suggest'} disabled={!online} onPress={() => void suggest(options.length > 0)} />
-      {busy === 'suggest' ? <SkeletonList rows={3} height={90} /> : null}
+      {busy === 'suggest' ? <GenerationStatus title={t('mnemonic.suggesting')} slowAfterS={20} /> : null}
       {!busy && options.length === 0 ? <EmptyState icon="bulb-outline" message={t('mnemonic.empty')} /> : null}
       {options.map((o) => (
         <Card key={o.title} tone={chosen?.title === o.title ? 'soft' : 'default'} onPress={() => (setChosen(o), setText(o.content.text))}>

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ApiFailure } from '@studify/shared';
 import { defineP2 } from '../shared-p2/http.ts';
 import { inBackground } from '../shared/deps.ts';
+import { createAiJob } from '../shared/jobs.ts';
 
 export const ProvaProvavelInput = z.object({ exam_id: z.uuid(), regenerate: z.boolean().optional() });
 export type ProvaProvavelInput = z.infer<typeof ProvaProvavelInput>;
@@ -20,7 +21,7 @@ export const handler = defineP2<ProvaProvavelInput>({
     const db = p2.db;
     const me = ctx.user.userId;
 
-    const exam = await db.from('exams').select('id, user_id').eq('id', i.exam_id).is('deleted_at', null).maybeSingle();
+    const exam = await db.from('exams').select('id, user_id, subject_id').eq('id', i.exam_id).is('deleted_at', null).maybeSingle();
     if (exam.error) throw exam.error;
     if (!exam.data || exam.data.user_id !== me) throw new ApiFailure('not_found');
 
@@ -39,9 +40,13 @@ export const handler = defineP2<ProvaProvavelInput>({
     }
     if (generations >= PP_MAX_GENERATIONS) throw new ApiFailure('regenerate_limit');
 
-    // Minutes of AI work: it runs in the background (ADR 0011) and the screen follows the quiz until it exists.
-    const jobId = await inBackground(p2, 'pp.generate', { exam_id: i.exam_id, user_id: me }, `pp-generate:${me}:${i.exam_id}`);
-    if (!jobId) {
+    // Minutes of AI work: it runs in the background (ADR 0011). The app follows the job row it is given (its steps,
+    // a failure) and the quiz once it exists.
+    const jobId = await createAiJob(p2, { type: 'pp.generate', userId: me, subjectId: (exam.data.subject_id as string | null) ?? null, stage: 'generate' });
+    const started = await inBackground(p2, 'pp.generate', { exam_id: i.exam_id, user_id: me, ai_job_id: jobId }, `pp-generate:${me}:${i.exam_id}`);
+    if (!started) {
+      // The same generation is already waiting to start: the new row would never run.
+      await db.from('ai_jobs').delete().eq('id', jobId);
       throw new ApiFailure('already_exists', {
         message: 'Já estou gerando essa prova. Espera um pouquinho.',
       });

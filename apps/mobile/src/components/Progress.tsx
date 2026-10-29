@@ -20,6 +20,35 @@ export function ProgressBar({ value, color, height = 8, label }: { value: number
 }
 
 /**
+ * A bar for work whose share is not known yet: a segment glides across instead of a fill, so the wait always looks
+ * alive. Still (a third filled) when the student turned motion off.
+ */
+export function IndeterminateBar({ color, height = 8, label }: { color?: string; height?: number; label?: string }) {
+  const { colors: c, reduceMotion } = useTheme();
+  const [anim] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+    const loop = Animated.loop(Animated.timing(anim, { toValue: 1, duration: 1400, useNativeDriver: false }));
+    loop.start();
+    return () => loop.stop();
+  }, [anim, reduceMotion]);
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel={label} style={[styles.track, { height, backgroundColor: c.surface2, borderRadius: radius.xs }]}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          height,
+          width: '35%',
+          borderRadius: radius.xs,
+          backgroundColor: color ?? c.primary,
+          left: reduceMotion ? '0%' : anim.interpolate({ inputRange: [0, 1], outputRange: ['-35%', '100%'] }),
+        }}
+      />
+    </View>
+  );
+}
+
+/**
  * The session bar (review, quiz): thick, rounded, and it glides forward after each answer, with a soft shine on
  * top of the fill.
  */

@@ -2,14 +2,24 @@ import { sleepStopTime } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { ActionBar, Banner, Button, Card, Chip, ChipGroup, ListItem, MarkdownView, ProgressBar, Screen, Skeleton, Text } from '../../../../components';
-import { prepareVespera, useExam, useStudyPreferences } from '../../../../features/goals/api';
-import { useNote } from '../../../../features/learn/api';
+import { ActionBar, Banner, Button, Card, Chip, ChipGroup, GenerationStatus, ListItem, MarkdownView, ProgressBar, Screen, Text } from '../../../../components';
+import { prepareVespera, useExam, useStudyPreferences, useVesperaSheet, type VesperaSheet } from '../../../../features/goals/api';
+import { useElapsed } from '../../../../features/progress/time';
+import { messageFor } from '../../../../api/messages';
 import { useMistakes } from '../../../../features/practice/api';
 import { options, t } from '../../../../i18n';
 import { space } from '../../../../theme';
 
 const STEPS = 5;
+/** How long the sheet is waited for: it is usually written ahead (D−1 04:00) or within a minute of the request. */
+const SHEET_WAIT_S = 150;
+
+/** The sheet as one page of Markdown: a section per topic, its formula, and what to watch out for. */
+function sheetMarkdown(sheet: VesperaSheet): string {
+  const sections = sheet.sections.map((s) => [`## ${s.heading}`, ...s.bullets.map((b) => `- ${b.text}`), s.formula ? `\n$$${s.formula}$$` : ''].filter(Boolean).join('\n'));
+  const watch = sheet.watch_out.length ? [`## ${t('vespera.watch_out')}`, ...sheet.watch_out.map((w) => `- ${w.text}`)].join('\n') : '';
+  return [`# ${sheet.title}`, ...sections, watch].filter(Boolean).join('\n\n');
+}
 
 /** S-OBJ-15 Modo Véspera (GOL-07): calm style, no XP/streak prompts, no new material. */
 export default function Vespera() {
@@ -18,17 +28,18 @@ export default function Vespera() {
   const prefs = useStudyPreferences();
   const mistakes = useMistakes('open');
   const [step, setStep] = useState(0);
-  const [sheet, setSheet] = useState<{ noteId: string | null; preparing: boolean }>({ noteId: null, preparing: true });
+  const [requestError, setRequestError] = useState<unknown>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
-  const note = useNote(sheet.noteId ?? undefined);
+  const waited = useElapsed();
+  const waiting = !requestError && waited < SHEET_WAIT_S;
+  const sheet = useVesperaSheet(examId, waiting);
   const stepLabels = options('vespera.steps');
   const checklist = options('vespera.checklist_items');
   const subjectId = exam.data?.subject_id ?? undefined;
 
+  // The sheet is written in the background (usually it already is); the screen follows it until it exists.
   useEffect(() => {
-    void prepareVespera(examId)
-      .then((r) => setSheet(r.status === 'ready' ? { noteId: r.sheet_note_id, preparing: false } : { noteId: null, preparing: true }))
-      .catch(() => setSheet({ noteId: null, preparing: false }));
+    void prepareVespera(examId).catch((e: unknown) => setRequestError(e));
   }, [examId]);
 
   const stop = sleepStopTime(exam.data?.starts_at ? new Date(exam.data.starts_at).toTimeString().slice(0, 5) : null);
@@ -57,7 +68,15 @@ export default function Vespera() {
       {step === 1 ? (
         <>
           <Text variant="heading">{stepLabels[0]}</Text>
-          {sheet.preparing && !note.data ? <Skeleton height={240} /> : note.data ? <MarkdownView markdown={note.data.body} /> : <Banner kind="neutral" message={t('vespera.not_studied')} />}
+          {sheet.data ? (
+            <MarkdownView markdown={sheetMarkdown(sheet.data)} />
+          ) : requestError ? (
+            <Banner kind="neutral" message={messageFor(requestError, t('vespera.not_studied'))} />
+          ) : waiting ? (
+            <GenerationStatus title={t('vespera.preparing')} detail={t('vespera.preparing_detail')} slowAfterS={45} />
+          ) : (
+            <Banner kind="neutral" message={t('vespera.not_studied')} />
+          )}
         </>
       ) : null}
       {step === 2 || step === 3 ? (

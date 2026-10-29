@@ -246,7 +246,11 @@
     "generate_more_questions": "Gerar mais questões",
     "new_card": "Criar cartão",
     "prerequisites": "Antes, vale saber",
-    "interactive": "Estudar de outro jeito"
+    "interactive": "Estudar de outro jeito",
+    "writing_questions": "Escrevendo questões novas deste tópico",
+    "writing_cards": "Escrevendo cartões novos deste tópico",
+    "more_questions_done": "{n} questões novas prontas.",
+    "more_cards_done": "{n} cartões novos prontos."
   },
   "notes": {
     "depths": "Resumo rápido · Resumo · Aprofundado",
@@ -259,7 +263,14 @@
     "regenerate": "Refazer resumo",
     "regenerate_confirm": "Refazer esse resumo? O atual fica no histórico.",
     "explain_helped": "Ajudou?",
-    "thanks": "Valeu pelo retorno!"
+    "thanks": "Valeu pelo retorno!",
+    "writing": "Escrevendo o resumo deste tópico",
+    "topics_ready": "{done} de {total} tópicos do material prontos",
+    "failed": "Não consegui escrever esse resumo. Tenta de novo?",
+    "deep_generate": "Gerar versão aprofundada",
+    "deep_writing": "Escrevendo a versão aprofundada",
+    "deep_reading": "Lendo as páginas do tópico",
+    "explain_writing": "Escrevendo outra explicação"
   },
   "glossary": {
     "title": "Glossário",
@@ -575,7 +586,9 @@
     "voice_mode_off": "Desativar conversa por voz",
     "voice_mode_hint": "Conversa por voz: fale quando eu terminar de responder.",
     "voice_no_quiz": "O modo Me testa é só por texto.",
-    "tap_to_stop": "Toque para parar"
+    "tap_to_stop": "Toque para parar",
+    "reading_pages_one": "Lendo 1 página do seu material…",
+    "reading_pages_other": "Lendo {count} páginas do seu material…"
   },
   "ai": {
     "refusal": "Não consigo ajudar com isso aqui. Quer perguntar de outro jeito?"
@@ -829,7 +842,10 @@
     "checklist_items": "Documento · Lápis e borracha · Caneta · Calculadora (se pode) · Água",
     "finish": "Terminar por hoje",
     "nothing": "Nada aqui — você está em dia nessa parte.",
-    "intro": "Sem matéria nova hoje. Só o essencial, com calma."
+    "intro": "Sem matéria nova hoje. Só o essencial, com calma.",
+    "preparing": "Montando sua revisão de véspera",
+    "preparing_detail": "Juntando o essencial de cada tópico e os seus erros",
+    "watch_out": "Cuidado com"
   },
   "desperate": {
     "offer": {
@@ -1076,7 +1092,8 @@
     "need_tests": "Preciso de pelo menos 1 prova antiga desse professor(a).",
     "what_fell": "O que caiu?",
     "what_fell_body": "Marque os tópicos que caíram na prova. Isso me ajuda a prever as próximas.",
-    "what_fell_saved": "Valeu! Vou usar isso nas próximas previsões."
+    "what_fell_saved": "Valeu! Vou usar isso nas próximas previsões.",
+    "not_generated": "Não consegui montar a prova com as provas antigas que tem. Tenta de novo."
   },
   "schedule_import": {
     "title": "Importar calendário de provas",
@@ -1421,7 +1438,10 @@
     "legibility": "{n} trechos ficaram difíceis de ler — na prova, letra legível evita perder pontos.",
     "entry_hint": "Fotografe um exercício ou página desse tópico",
     "add_photos_hint": "Fotos de páginas viram material",
-    "practice_hint": "Explica, resolve ou corrige a partir de uma foto"
+    "practice_hint": "Explica, resolve ou corrige a partir de uma foto",
+    "reading_title": "Lendo sua foto",
+    "explaining": "Escrevendo a explicação",
+    "solving": "Escrevendo a resolução"
   },
   "essay": {
     "title": "Correção",
@@ -1444,7 +1464,10 @@
     "misconceptions": "Ideias que precisam de ajuste",
     "model_answer": "Como ficaria a nota máxima",
     "rewrite": "Reescrever resposta",
-    "open_enem": "Ver correção da redação"
+    "open_enem": "Ver correção da redação",
+    "grading_title": "Corrigindo sua resposta",
+    "grading_detail": "Critério por critério, com o que faltou e uma resposta modelo",
+    "not_graded": "Essa resposta ainda não foi corrigida."
   },
   "find_error": {
     "hint": "Toque no trecho que tem um erro. Se estiver tudo certo, escolha \"Não tem erro\".",
@@ -1558,7 +1581,8 @@
     "hosts_thinking": "Bia e Caio estão pensando…",
     "recording_answer": "Gravando a resposta…",
     "hand_cap": "Você já fez 10 perguntas nesse episódio hoje. Pergunta pro tutor!",
-    "ask_tutor": "Perguntar ao tutor"
+    "ask_tutor": "Perguntar ao tutor",
+    "recording_title": "Gravando seu episódio"
   },
   "lucas": {
     "title": "Ensine o Lucas",
@@ -1852,7 +1876,8 @@
     "history": "Suas redações",
     "most_improved": "Competência que mais evoluiu: C{n}",
     "weekly_left": "{n} de 3 correções disponíveis nesta semana",
-    "new_version": "Reescrever esta redação"
+    "new_version": "Reescrever esta redação",
+    "grading_title": "Corrigindo sua redação"
   },
   "sisu": {
     "title": "Meta SISU",
@@ -2006,7 +2031,8 @@
     "hint": "Toque num quadro para ver o detalhe e a página do material. Use dois dedos para dar zoom.",
     "try_type": "Tentar um fluxograma mesmo assim",
     "offline": "Sem internet: os diagramas que você já abriu continuam aqui; para gerar um novo, conecte-se.",
-    "criterion": "Critério"
+    "criterion": "Critério",
+    "drawing_title": "Desenhando o diagrama"
   },
   "findings": {
     "title": "Possíveis erros no material",
@@ -2054,7 +2080,8 @@
     "offline": "As sugestões precisam de internet. Os mnemônicos salvos funcionam offline.",
     "palaces": "Meus palácios",
     "pick_palace": "Escolha um palácio da memória primeiro (ou crie um).",
-    "show_hint": "Ver dica"
+    "show_hint": "Ver dica",
+    "suggesting": "Pensando em opções para decorar"
   },
   "palace": {
     "title": "Palácios da memória",
@@ -2511,6 +2538,18 @@
     "review_cards": "Revisar os cartões",
     "ask_tutor": "Perguntar ao tutor",
     "tutor_prefill": "Não entendi essa pergunta da trilha: {stem}",
-    "saved_to_caderno": "Guardei essa no seu Caderno de Erros pra você revisar depois."
+    "saved_to_caderno": "Guardei essa no seu Caderno de Erros pra você revisar depois.",
+    "preparing_detail": "Escrevendo a aula e as perguntas a partir do seu material"
+  },
+  "wait": {
+    "elapsed": "há {time}",
+    "eta": "faltam uns {time}",
+    "queued": "Na fila: começa em instantes.",
+    "slow": "Tá demorando mais que o normal, mas segue trabalhando.",
+    "leave": "Pode sair desta tela: eu te aviso quando ficar pronto.",
+    "seconds": "{n} s",
+    "minutes": "{n} min",
+    "minutes_seconds": "{m} min {s} s",
+    "interrupted": "O servidor reiniciou no meio. Tenta de novo."
   }
 }

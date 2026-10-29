@@ -16,3 +16,4 @@ export * from './Practice';
 export * from './OcclusionImage';
 export * from './Capi';
 export * from './Tactile';
+export * from './GenerationStatus';

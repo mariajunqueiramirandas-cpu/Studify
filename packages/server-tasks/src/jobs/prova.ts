@@ -411,7 +411,21 @@ export async function handleScheduleImport(ctx: OperationContext, raw: Record<st
 
 export const jobs: OperationDefinition[] = [
   { name: 'pp.analyze_past_test', handler: async (ctx, data) => void (await handleAnalyzePastTest(ctx, data)) },
-  { name: 'pp.generate', handler: async (ctx, data) => void (await handleGeneratePredicted(ctx, data)) },
-  { name: 'schedule.import', handler: async (ctx, data) => void (await handleScheduleImport(ctx, data)) },
+  {
+    name: 'pp.generate',
+    handler: async (ctx, data) => {
+      await handleGeneratePredicted(ctx, data);
+      // The API hands in the row the app follows (prova-provavel-generate): finished here, failed by the runner.
+      await ctx.progress({ stage: 'done', status: 'succeeded', progress: 1 });
+    },
+  },
+  {
+    name: 'schedule.import',
+    handler: async (ctx, data) => {
+      const outcome = await handleScheduleImport(ctx, data);
+      // The row the app follows (schedule-import): how many tests were found, so an empty photo reads as such.
+      await ctx.progress({ stage: 'done', status: 'succeeded', progress: 1, items_total: outcome.exams ?? 0, items_done: outcome.exams ?? 0 });
+    },
+  },
 ];
 

@@ -3,8 +3,11 @@
 // answer are graded by grade-essay (PRA-07, CAM-03).
 import type { CaptureActReq, CaptureActRes, CaptureAnalyzeRes, CaptureIntent, GradeEssayRes, SchoolEssayFeedback } from '@studify/shared';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { uuidv7 } from 'uuidv7';
 import { callFunction, streamFunction } from '../../api/functions';
+import { messageFor } from '../../api/messages';
+import { t } from '../../i18n';
 import { uploadFile } from '../../api/storage';
 import { supabase } from '../../api/supabase';
 import { row } from '../common/query';
@@ -119,6 +122,8 @@ export interface EssayRow {
   total: number | null;
   parent_essay_id: string | null;
   created_at: string;
+  /** When it was last changed: for an essay being graded, when the grading started. */
+  updated_at: string;
 }
 
 /** The essay row; refetched every 4 s while it is being graded (ENEM grading runs in the worker). */
@@ -133,6 +138,43 @@ export function useEssay(essayId: string | undefined) {
 
 export function gradeEssay(essayId: string) {
   return callFunction<{ essay_id: string }, GradeEssayRes>('grade-essay', { essay_id: essayId }, { idempotencyKey: uuidv7() });
+}
+
+/** A grading marked as started this long ago was lost (the server restarted mid-way): it can be sent again. */
+export const LOST_GRADING_MS = 15 * 60_000;
+
+/** Why an essay that is not being graded has no grade, in PT-BR, or null when it is graded or being graded. */
+export function essayGradeFailure(e: { status: string; updated_at: string }, jobFailed = false): string | null {
+  if (e.status === 'failed') return t('error.generation');
+  if (e.status === 'draft') return t('essay.not_graded');
+  if (e.status === 'grading' && (jobFailed || Date.now() - Date.parse(e.updated_at) > LOST_GRADING_MS)) return t('wait.interrupted');
+  return null;
+}
+
+/**
+ * "Tentar de novo" on a result screen: the call's own wait and its failure (in PT-BR) until the essay row catches
+ * up, and the grading job when the redação is graded in the background.
+ */
+export function useRegrade(essayId: string | undefined, refetch: () => Promise<unknown>) {
+  const [run, setRun] = useState<{ startedAt: number; error: string | null } | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const start = () => {
+    if (!essayId) return;
+    const startedAt = Date.now();
+    setRun({ startedAt, error: null });
+    gradeEssay(essayId).then(
+      async (res) => {
+        if (res.mode === 'async') setJobId(res.job_id);
+        await refetch();
+        setRun(null);
+      },
+      (err: unknown) => {
+        setRun({ startedAt, error: messageFor(err, t('error.generation')) });
+        void refetch();
+      },
+    );
+  };
+  return { run, jobId, start };
 }
 
 /**

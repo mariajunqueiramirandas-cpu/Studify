@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppBar, Banner, Button, Card, Chip, ChipGroup, ErrorState, IconButton, PageChips, ProgressBar, Row, SkeletonList, SubjectBadge, Text, useOverlay } from '../../components';
+import { AppBar, Banner, Button, Card, Chip, ChipGroup, ErrorState, GenerationStatus, IconButton, PageChips, ProgressBar, Row, SkeletonList, SubjectBadge, Text, useOverlay } from '../../components';
 import { useDb } from '../../db/DatabaseProvider';
 import { useSession } from '../../features/auth/session';
 import { formatClock } from '../../features/common/format';
@@ -11,6 +11,7 @@ import { downloadEpisode, downloadedFile, playableUri, removeDownload, resumePos
 import { HandSheet } from '../../features/podcast/HandSheet';
 import { PODCAST_RATES, loadTrack, pause, play, seek, setRate, skip, usePodcastPlayer } from '../../features/podcast/player';
 import { episodeSources, flattenTimeline, lineAt, thinkCountdown } from '../../features/podcast/timeline';
+import { jobErrorText, jobView, useLatestJob } from '../../features/progress/jobs';
 import { useSubject } from '../../features/subjects/api';
 import { t } from '../../i18n';
 import { radius, space, useTheme } from '../../theme';
@@ -42,6 +43,8 @@ export default function PodcastPlayer() {
   const lines = useMemo(() => (script ? flattenTimeline(script, timings) : []), [script, timings]);
   const ready = e?.status === 'ready' && !!e.script;
   const mine = player.track?.episodeId === podcastId;
+  // Recording runs in the background (podcast.generate): its row has the step, and the lines recorded so far.
+  const job = jobView(useLatestJob(!ready && e?.status !== 'failed' ? e?.subject_id : undefined, 'podcast.generate', e?.created_at));
 
   useEffect(() => {
     if (!ready || !e || !userId || mine) return;
@@ -98,14 +101,23 @@ export default function PodcastPlayer() {
         <SkeletonList rows={3} />
       ) : e.status === 'failed' ? (
         <View style={{ padding: space.lg, gap: space.md }}>
-          <Banner kind="danger" message={t('podcast.failed')} action={{ label: t('global.retry'), onPress: () => router.replace({ pathname: '/podcast/new', params: { subjectId: e.subject_id, nodeIds: e.node_ids.join(','), style: e.style } }) }} />
+          <GenerationStatus
+            title={t('podcast.failed')}
+            error={jobErrorText({ error_code: e.error_code ?? null })}
+            onRetry={() => router.replace({ pathname: '/podcast/new', params: { subjectId: e.subject_id, nodeIds: e.node_ids.join(','), style: e.style } })}
+          />
         </View>
       ) : !ready ? (
         <View style={{ padding: space.lg, gap: space.md }}>
-          <Card>
-            <Text variant="heading">{t('podcast.recording')}</Text>
-            <ProgressBar value={e.status === 'queued' ? 0.1 : e.status === 'scripting' ? 0.4 : 0.8} label={t(`podcast.stage.${e.status}`)} />
-          </Card>
+          <GenerationStatus
+            title={t('podcast.recording_title')}
+            detail={job?.detail ?? t(`podcast.stage.${e.status}`)}
+            fraction={job?.fraction}
+            startedAt={job?.startedAt ?? e.created_at}
+            queued={e.status === 'queued' || job?.queued}
+            slowAfterS={150}
+            canLeave
+          />
           <Button variant="text" label={t('global.back')} onPress={() => router.back()} />
         </View>
       ) : (

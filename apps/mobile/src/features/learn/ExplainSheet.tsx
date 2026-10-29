@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { AiBadge, BottomSheet, Button, Chip, ChipGroup, PageChips, RichContent, Text, useOnline } from '../../components';
+import { AiBadge, BottomSheet, Button, Chip, ChipGroup, GenerationStatus, PageChips, RichContent, Text, useOnline } from '../../components';
+import { messageFor } from '../../api/messages';
 import { useSession } from '../auth/session';
 import { options, t } from '../../i18n';
 import { space } from '../../theme';
@@ -16,6 +17,7 @@ export function ExplainSheet({ visible, onClose, target, subjectId }: { visible:
   const [text, setText] = useState('');
   const [cites, setCites] = useState<Citation[]>([]);
   const [status, setStatus] = useState<'idle' | 'streaming' | 'done' | 'error'>('idle');
+  const [failure, setFailure] = useState<string | null>(null);
   const [explanationId, setExplanationId] = useState<string | null>(null);
   const [rated, setRated] = useState(false);
   const handle = useRef<{ cancel: () => void } | null>(null);
@@ -39,6 +41,7 @@ export function ExplainSheet({ visible, onClose, target, subjectId }: { visible:
     setText('');
     setCites([]);
     setRated(false);
+    setFailure(null);
     setStatus('streaming');
     handle.current = streamExplain(
       target,
@@ -47,8 +50,15 @@ export function ExplainSheet({ visible, onClose, target, subjectId }: { visible:
         onMeta: (m) => setExplanationId((m.explanation_id as string) ?? null),
         onDelta: (d) => setText((x) => x + d),
         onCitation: (c) => setCites((x) => [...x, c]),
-        onDone: (d) => setStatus(d.stop_reason === 'refusal' ? 'error' : 'done'),
-        onError: () => setStatus('error'),
+        onDone: (d) => {
+          if (d.stop_reason === 'refusal') setFailure(t('ai.refusal'));
+          setStatus(d.stop_reason === 'refusal' ? 'error' : 'done');
+        },
+        // What happened (the budget, the network, the server) instead of always "I can't answer that".
+        onError: (e) => {
+          setFailure(messageFor(e, t('error.generation')));
+          setStatus('error');
+        },
       },
       forceNew,
     );
@@ -62,7 +72,7 @@ export function ExplainSheet({ visible, onClose, target, subjectId }: { visible:
         ))}
       </ChipGroup>
       {!online ? <Text tone="secondary">{t('offline.ai_disabled')}</Text> : null}
-      {status === 'streaming' && !text ? <Text tone="secondary">{t('tutor.thinking')}</Text> : null}
+      {status === 'streaming' && !text ? <GenerationStatus compact title={t('notes.explain_writing')} slowAfterS={20} /> : null}
       {text ? (
         <View style={{ gap: space.sm }}>
           <RichContent variant="reading" text={text} />
@@ -70,7 +80,7 @@ export function ExplainSheet({ visible, onClose, target, subjectId }: { visible:
           <AiBadge />
         </View>
       ) : null}
-      {status === 'error' ? <Text tone="danger">{t('ai.refusal')}</Text> : null}
+      {status === 'error' ? <GenerationStatus compact title={t('notes.explain')} error={failure ?? t('ai.refusal')} onRetry={style && online ? () => run(style) : undefined} /> : null}
       {status === 'done' && !rated ? (
         <View style={{ gap: space.sm }}>
           <Text variant="label">{t('notes.explain_helped')}</Text>

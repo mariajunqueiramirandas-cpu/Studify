@@ -115,11 +115,12 @@ async function fail(ctx: OperationContext, episodeId: string, code: string): Pro
   return { status: 'failed', audio: false, reason: code };
 }
 
-/** Synthesizes every line (bounded concurrency) or returns null when one line fails. */
-async function synthesizeLines(tts: TtsProvider, script: PodcastScriptDoc): Promise<SynthesisResult[] | null> {
+/** Synthesizes every line (bounded concurrency) or returns null when one line fails; `onLine` counts the lines done. */
+async function synthesizeLines(tts: TtsProvider, script: PodcastScriptDoc, onLine?: (done: number, total: number) => void): Promise<SynthesisResult[] | null> {
   const lines = script.segments.flatMap((s) => s.lines);
   const out: SynthesisResult[] = new Array(lines.length);
   let next = 0;
+  let done = 0;
   let failed = false;
   const worker = async () => {
     while (!failed && next < lines.length) {
@@ -127,6 +128,7 @@ async function synthesizeLines(tts: TtsProvider, script: PodcastScriptDoc): Prom
       const line = lines[index]!;
       try {
         out[index] = await tts.synthesize({ text: speakableText(line.text), voice: line.speaker, pauseAfterMs: line.pause_after_ms ?? 0 });
+        onLine?.(++done, lines.length);
       } catch {
         failed = true;
       }
@@ -148,8 +150,17 @@ async function audioFor(ctx: OperationContext, episode: EpisodeRow, requester: s
     return null;
   }
   let spent = 0;
+  // The voices fill 0.6–0.95 of the bar as lines are recorded, written at most every tenth of the lines and one
+  // after the other, so a late write never lands after the episode is ready.
+  let reported = 0;
+  let writes: Promise<void> = Promise.resolve();
+  const onLine = (done: number, total: number) => {
+    if (done - reported < Math.max(1, Math.ceil(total / 10)) && done < total) return;
+    reported = done;
+    writes = writes.then(() => ctx.progress({ stage: 'audio', progress: 0.6 + (0.35 * done) / total, items_done: done, items_total: total })).catch(() => undefined);
+  };
   try {
-    const results = await synthesizeLines(tts, script);
+    const results = await synthesizeLines(tts, script, onLine).finally(() => writes);
     if (!results) return null;
     const billed = results.reduce((n, r) => n + r.billedChars, 0);
     spent = ttsCostMicroUsd(tts, billed);

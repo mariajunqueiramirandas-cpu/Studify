@@ -62,8 +62,9 @@ export function useNotes(nodeId: string | undefined) {
     queryKey: ['node', nodeId, 'notes'],
     enabled: !!nodeId,
     queryFn: () =>
-      rows<Note>(supabase.from('notes').select('*').eq('node_id', nodeId!).in('status', ['pending', 'generating', 'ready']).is('deleted_at', null)),
-    refetchInterval: (q) => ((q.state.data ?? []).some((n) => n.status !== 'ready') ? 6000 : false),
+      // Failed notes too: the topic screen offers to write them again instead of waiting forever.
+      rows<Note>(supabase.from('notes').select('*').eq('node_id', nodeId!).in('status', ['pending', 'generating', 'ready', 'failed']).is('deleted_at', null)),
+    refetchInterval: (q) => ((q.state.data ?? []).some((n) => n.status === 'pending' || n.status === 'generating') ? 5000 : false),
   });
 }
 

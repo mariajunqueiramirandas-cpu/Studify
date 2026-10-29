@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Banner, Button, Card, ErrorState, RichContent, Screen, SkeletonList, Text, TextField, useOverlay } from '../../components';
+import { Banner, Button, Card, ErrorState, GenerationStatus, RichContent, Screen, Text, TextField, useOverlay } from '../../components';
 import { analyzeCapture, discardCapture, useCapture } from '../../features/camera/api';
-import { AddToSubjectPanel, ExplainPanel, SolvePanel, TranscriptionReview } from '../../features/camera/CapturePanels';
+import { AddToSubjectPanel, ExplainPanel, SolvePanel, TranscriptionReview, errorMessage } from '../../features/camera/CapturePanels';
 import { appendToContribution } from '../../features/class/turma5';
 import { t } from '../../i18n';
 import { space } from '../../theme';
@@ -20,7 +20,7 @@ export default function CaptureResult() {
   const { captureId, questionId, themeId, purpose, contributionId } = useLocalSearchParams<{ captureId: string; questionId?: string; themeId?: string; purpose?: 'contribution'; contributionId?: string }>();
   const capture = useCapture(captureId);
   const [analysis, setAnalysis] = useState<{ issues: string[] } | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ code: string; message: string } | null>(null);
   const [showText, setShowText] = useState(false);
   const started = useRef(false);
 
@@ -30,7 +30,7 @@ export default function CaptureResult() {
       setAnalysis({ issues: res.quality.issues });
       await capture.refetch();
     } catch (e) {
-      setFailure((e as { code?: string }).code ?? 'error');
+      setFailure({ code: (e as { code?: string }).code ?? 'error', message: errorMessage(e) });
     }
   };
 
@@ -57,14 +57,16 @@ export default function CaptureResult() {
   const c = capture.data;
 
   if (failure) {
-    const unreadable = failure === 'photo_unreadable';
+    const unreadable = failure.code === 'photo_unreadable';
     return (
       <Screen title={t('cam.title')} closeIcon onBack={() => router.back()}>
-        <Banner kind={unreadable ? 'warning' : 'danger'} message={unreadable ? t('cam.no_content') : failure === 'budget_exhausted' || failure === 'rate_limited' ? t('budget.user_daily') : failure === 'offline' ? t('cam.offline') : t('error.generation')} />
         {unreadable ? (
-          <Button label={t('cam.retake')} icon="camera" onPress={() => router.replace({ pathname: '/camera', params: c ? { intent: c.intent, ...(themeId ? { themeId } : {}) } : {} })} />
+          <>
+            <Banner kind="warning" message={t('cam.no_content')} />
+            <Button label={t('cam.retake')} icon="camera" onPress={() => router.replace({ pathname: '/camera', params: c ? { intent: c.intent, ...(themeId ? { themeId } : {}) } : {} })} />
+          </>
         ) : (
-          <Button label={t('global.retry')} onPress={retry} />
+          <GenerationStatus title={t('cam.reading_title')} error={failure.message} onRetry={retry} />
         )}
       </Screen>
     );
@@ -74,8 +76,7 @@ export default function CaptureResult() {
   if (!c || !result || c.status !== 'ready') {
     return (
       <Screen title={t('cam.title')} closeIcon onBack={() => router.back()}>
-        <Text tone="secondary">{c?.intent === 'grade_answer' || c?.intent === 'grade_essay' ? t('cam.reading_handwriting') : t('cam.reading')}</Text>
-        <SkeletonList rows={3} height={72} />
+        <GenerationStatus title={t('cam.reading_title')} detail={c?.intent === 'grade_answer' || c?.intent === 'grade_essay' ? t('cam.reading_handwriting') : t('cam.reading')} slowAfterS={20} />
       </Screen>
     );
   }

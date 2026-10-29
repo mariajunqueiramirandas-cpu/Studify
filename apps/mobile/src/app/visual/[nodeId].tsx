@@ -2,7 +2,7 @@ import type { VisualGenerateRes } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { AiBadge, Banner, Button, Chip, ChipGroup, EmptyState, PageChips, Screen, SkeletonList, Text, ZoomableView, useOnline } from '../../components';
+import { AiBadge, Banner, Button, Chip, ChipGroup, EmptyState, GenerationStatus, PageChips, Screen, Text, ZoomableView, useOnline } from '../../components';
 import { generateVisual, VISUAL_KINDS, type VisualKind } from '../../features/visuals/api';
 import { VisualView } from '../../features/visuals/VisualView';
 import { t } from '../../i18n';
@@ -14,20 +14,20 @@ export default function VisualScreen() {
   const { nodeId, subjectId, title } = useLocalSearchParams<{ nodeId: string; subjectId?: string; title?: string }>();
   const online = useOnline();
   const [kind, setKind] = useState<VisualKind | null>(null);
-  const [state, setState] = useState<{ loading: boolean; res: VisualGenerateRes | null; error: string | null }>({ loading: true, res: null, error: null });
+  const [state, setState] = useState<{ loading: boolean; res: VisualGenerateRes | null; error: string | null; startedAt: number }>(() => ({ loading: true, res: null, error: null, startedAt: Date.now() }));
 
   useEffect(() => {
     let alive = true;
     generateVisual(nodeId, kind ?? undefined)
-      .then((res) => alive && setState({ loading: false, res, error: null }))
-      .catch((e: unknown) => alive && setState({ loading: false, res: null, error: messageFor(e, t('error.generation')) }));
+      .then((res) => alive && setState((s) => ({ ...s, loading: false, res, error: null })))
+      .catch((e: unknown) => alive && setState((s) => ({ ...s, loading: false, res: null, error: messageFor(e, t('error.generation')) })));
     return () => {
       alive = false;
     };
   }, [nodeId, kind]);
 
   const pick = (k: VisualKind | null) => {
-    setState({ loading: true, res: null, error: null });
+    setState({ loading: true, res: null, error: null, startedAt: Date.now() });
     setKind(k);
   };
   const res = state.res;
@@ -40,13 +40,8 @@ export default function VisualScreen() {
           <Chip key={k} label={t(`visual.kind.${k}`)} selected={kind === k} onPress={() => pick(k)} />
         ))}
       </ChipGroup>
-      {state.loading ? (
-        <View style={{ gap: space.sm }}>
-          <Text tone="secondary">{t('visual.drawing')}</Text>
-          <SkeletonList rows={3} height={80} />
-        </View>
-      ) : null}
-      {state.error ? <Banner kind="danger" message={state.error} action={{ label: t('global.retry'), onPress: () => pick(kind) }} /> : null}
+      {state.loading ? <GenerationStatus title={t('visual.drawing_title')} detail={kind ? t(`visual.kind.${kind}`) : null} startedAt={state.startedAt} slowAfterS={25} /> : null}
+      {state.error ? <GenerationStatus title={t('visual.drawing_title')} error={state.error} onRetry={online ? () => pick(kind) : undefined} /> : null}
       {res && !res.fits ? <EmptyState icon="shapes-outline" message={res.reason} /> : null}
       {res && res.fits ? (
         <View style={{ gap: space.md }} accessible accessibilityLabel={res.visual.alt_text}>

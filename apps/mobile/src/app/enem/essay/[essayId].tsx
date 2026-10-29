@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
-import { AiBadge, Banner, Button, Card, ErrorState, Row, Screen, SkeletonList, Text } from '../../../components';
-import { gradeEssay } from '../../../features/camera/api';
+import { AiBadge, Banner, Button, Card, ErrorState, GenerationStatus, Row, Screen, SkeletonList, Text } from '../../../components';
+import { essayGradeFailure, useRegrade } from '../../../features/camera/api';
+import { jobView, useOwnJob } from '../../../features/progress/jobs';
 import { useEnemEssay, useEnemEssays } from '../../../features/enem/api';
 import { PropostaChecklist, RepertorioChecks } from '../../../features/enem/components';
 import { t } from '../../../i18n';
@@ -14,26 +15,37 @@ const ZERO_KEYS = new Set(['fuga_tema', 'tipo_textual', 'em_branco', 'texto_insu
  * quotes and fixes, the proposta checklist, repertório checks, rewrites of the weakest paragraphs and progress.
  */
 export default function EnemEssayResult() {
-  const { essayId } = useLocalSearchParams<{ essayId: string }>();
+  const { essayId, jobId } = useLocalSearchParams<{ essayId: string; jobId?: string }>();
   const essay = useEnemEssay(essayId);
   const history = useEnemEssays();
+  const regrade = useRegrade(essayId, essay.refetch);
   const { colors: c } = useTheme();
   const e = essay.data;
+  // The grading runs in the background (essay.grade); its row says the step it is on, or that it failed.
+  const job = jobView(useOwnJob('essay.grade', e?.status === 'grading' ? e.updated_at : null, regrade.jobId ?? jobId));
 
   if (essay.isError) return <Screen title={t('red.title')}><ErrorState onRetry={essay.refetch} /></Screen>;
   if (!e) return <Screen title={t('red.title')}><SkeletonList rows={4} /></Screen>;
-  if (e.status === 'grading' || e.status === 'draft') {
+  const failure = regrade.run ? regrade.run.error : e.status === 'grading' && job?.failed ? job.error : essayGradeFailure(e);
+  if (failure) {
     return (
-      <Screen title={t('red.title')} closeIcon onBack={() => router.replace('/enem')}>
-        <Text tone="secondary">{t('red.grading')}</Text>
-        <SkeletonList rows={3} />
+      <Screen title={t('red.title')} closeIcon onBack={() => router.back()}>
+        <GenerationStatus title={t('red.grading_title')} error={failure} onRetry={regrade.start} />
       </Screen>
     );
   }
-  if (e.status === 'failed') {
+  if (regrade.run || e.status === 'grading') {
     return (
-      <Screen title={t('red.title')} closeIcon onBack={() => router.back()}>
-        <Banner kind="danger" message={t('error.generation')} action={{ label: t('global.retry'), onPress: () => void gradeEssay(e.id).then(() => essay.refetch()) }} />
+      <Screen title={t('red.title')} closeIcon onBack={() => router.replace('/enem')}>
+        <GenerationStatus
+          title={t('red.grading_title')}
+          detail={job?.detail}
+          fraction={job?.fraction}
+          startedAt={job?.startedAt ?? regrade.run?.startedAt ?? e.updated_at}
+          queued={job?.queued}
+          slowAfterS={150}
+          canLeave
+        />
       </Screen>
     );
   }
