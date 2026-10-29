@@ -1,4 +1,4 @@
-// Data endpoints (ADR 0012, api.md §10): the reads and writes the app used to send straight to Supabase's table API,
+// Data endpoints (ADR 0012, api.md §3): the reads and writes the app used to send straight to Supabase's table API,
 // each as a named API call. Every endpoint runs its queries as the signed-in student (`ctx.db` is db.asUser), so
 // the row level security policies that guarded the app's direct queries still decide what it may read and write;
 // an endpoint never widens that. Answers go over SSE like every call (meta, then done.result): reads are read-only

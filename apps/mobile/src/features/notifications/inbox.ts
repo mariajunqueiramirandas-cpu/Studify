@@ -4,11 +4,11 @@
 import { RICH_CHANNELS, parseRichNotification, type RichNotification } from '@studify/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { data } from '../../api/data';
 import { supabase } from '../../api/supabase';
 import { realtime, rowTopic, type RealtimeChannel } from '../../api/realtime';
 import { logger } from '../../lib/logger';
 import { useSession } from '../auth/session';
-import { rows } from '../common/query';
 
 export type InboxChannel = Exclude<(typeof RICH_CHANNELS)[number], 'live'>;
 
@@ -62,15 +62,8 @@ export function useInbox() {
     enabled: !!userId,
     staleTime: 30_000,
     queryFn: async (): Promise<InboxItem[]> => {
-      const data = await rows<InboxRow>(
-        supabase
-          .from('notification_inbox')
-          .select('id,key,type,channel,title,body,deep_link,rich,read_at,created_at,updated_at')
-          .eq('user_id', userId!)
-          .order('created_at', { ascending: false })
-          .limit(100),
-      );
-      return data.map(toInboxItem);
+      const list = await data<InboxRow[]>('notifications-list');
+      return list.map(toInboxItem);
     },
   });
 }
@@ -83,9 +76,12 @@ export function useUnreadCount(): number {
     enabled: !!userId,
     staleTime: 60_000,
     queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase.from('notification_inbox').select('id', { count: 'exact', head: true }).eq('user_id', userId!).is('read_at', null);
-      if (error) return 0; // table not deployed yet: no badge
-      return count ?? 0;
+      try {
+        const res = await data<{ count: number }>('notifications-unread-count');
+        return res?.count ?? 0;
+      } catch {
+        return 0; // not reachable: no badge
+      }
     },
   });
   return q.data ?? 0;
@@ -120,6 +116,15 @@ function useInboxRealtime() {
   }, [userId, qc]);
 }
 
+/** The inbox writes never throw (callers fire and forget); a failure is undone by the refresh that follows. */
+async function quietly(write: Promise<unknown>): Promise<void> {
+  try {
+    await write;
+  } catch (e) {
+    logger.warn('inbox.write_failed', { error: String(e) });
+  }
+}
+
 function refresh(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ['inbox'] });
   void qc.invalidateQueries({ queryKey: ['inboxUnread'] });
@@ -132,19 +137,19 @@ export function useInboxActions() {
   return {
     async markRead(id: string) {
       qc.setQueryData<InboxItem[]>(inboxKey(userId), (prev) => prev?.map((i) => (i.id === id && !i.read_at ? { ...i, read_at: now() } : i)));
-      await supabase.from('notification_inbox').update({ read_at: now() }).eq('id', id).is('read_at', null);
+      await quietly(data('notifications-mark-read', { id }));
       refresh(qc);
     },
     async markAllRead() {
       if (!userId) return;
       qc.setQueryData<InboxItem[]>(inboxKey(userId), (prev) => prev?.map((i) => (i.read_at ? i : { ...i, read_at: now() })));
       qc.setQueryData<number>(unreadKey(userId), 0);
-      await supabase.from('notification_inbox').update({ read_at: now() }).eq('user_id', userId).is('read_at', null);
+      await quietly(data('notifications-mark-all-read'));
       refresh(qc);
     },
     async remove(id: string) {
       qc.setQueryData<InboxItem[]>(inboxKey(userId), (prev) => prev?.filter((i) => i.id !== id));
-      await supabase.from('notification_inbox').delete().eq('id', id);
+      await quietly(data('notifications-delete', { id }));
       refresh(qc);
     },
   };
@@ -153,10 +158,9 @@ export function useInboxActions() {
 /** Opening a notification from the shade marks its inbox row read (the key travels as `notif`). */
 export async function markReadByKey(key: string): Promise<void> {
   try {
-    const { data } = await supabase.auth.getSession();
-    const uid = data.session?.user.id;
-    if (!uid) return;
-    await supabase.from('notification_inbox').update({ read_at: new Date().toISOString() }).eq('user_id', uid).eq('key', key).is('read_at', null);
+    const { data: auth } = await supabase.auth.getSession();
+    if (!auth.session?.user.id) return;
+    await data('notifications-mark-read-key', { key });
   } catch (e) {
     logger.warn('inbox.mark_read_failed', { error: String(e) });
   }

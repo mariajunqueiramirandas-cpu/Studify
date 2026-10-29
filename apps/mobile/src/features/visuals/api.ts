@@ -3,9 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { VisualGenerateReq, VisualGenerateRes, VisualRow } from '@studify/shared';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
-import { row } from '../common/query';
 
 export type VisualKind = NonNullable<VisualGenerateReq['type']>;
 export const VISUAL_KINDS: VisualKind[] = ['flowchart', 'cycle', 'timeline', 'comparison_table', 'hierarchy'];
@@ -19,6 +18,6 @@ export function useVisual(visualId: string | undefined) {
     queryKey: ['visual', visualId],
     enabled: !!visualId,
     staleTime: Infinity,
-    queryFn: () => row<VisualRow>(supabase.from('visuals').select('id,node_id,type,title,spec,alt_text,source_pages').eq('id', visualId!).maybeSingle()),
+    queryFn: () => data<VisualRow | null>('visuals-get', { visual_id: visualId }),
   });
 }

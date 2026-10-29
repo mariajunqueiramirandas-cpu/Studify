@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows } from '../common/query';
 
 export interface TeacherProfile {
   id: string;
@@ -23,7 +22,7 @@ export function useTeacherProfiles(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['subject', subjectId, 'teachers'],
     enabled: !!subjectId,
-    queryFn: () => rows<TeacherProfile>(supabase.from('teacher_profiles').select('*').eq('subject_id', subjectId!).order('n_tests', { ascending: false })),
+    queryFn: () => data<TeacherProfile[]>('prova-teacher-profiles', { subject_id: subjectId }),
   });
 }
 
@@ -34,10 +33,7 @@ export function usePredictedQuiz(examId: string | undefined, waiting = false) {
     queryKey: ['exam', examId, 'predicted'],
     enabled: !!examId && !!userId,
     refetchInterval: (q) => (waiting && !q.state.data ? 4000 : false),
-    queryFn: () =>
-      row<{ id: string; question_ids: string[]; created_at: string }>(
-        supabase.from('quizzes').select('id,question_ids,created_at').eq('owner_id', userId!).eq('exam_id', examId!).eq('kind', 'predicted_test').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      ),
+    queryFn: () => data<{ id: string; question_ids: string[]; created_at: string } | null>('prova-predicted-quiz', { exam_id: examId }),
   });
 }
 
@@ -46,13 +42,9 @@ export const generatePredicted = (examId: string, regenerate = false) =>
   callFunction<{ exam_id: string; regenerate: boolean }, { job_id: string }>('prova-provavel-generate', { exam_id: examId, regenerate }, { idempotencyKey: uuidv7() });
 
 /** PRA-09.11 "O que caiu?" — topics that actually fell (optional, skippable; D-16). */
-export async function saveExamOutcome(userId: string, examId: string, nodeIds: string[]) {
+export async function saveExamOutcome(_userId: string, examId: string, nodeIds: string[]) {
   if (!nodeIds.length) return;
-  const { error } = await supabase.from('exam_outcome_topics').upsert(
-    nodeIds.map((node_id) => ({ exam_id: examId, user_id: userId, node_id })),
-    { onConflict: 'exam_id,user_id,node_id' },
-  );
-  if (error) throw error;
+  await data('prova-exam-outcome-save', { exam_id: examId, node_ids: nodeIds });
 }
 
 export interface ScheduleImport {
@@ -68,7 +60,7 @@ export function useScheduleImport(id: string | null, waiting = false) {
     enabled: !!id,
     // `extracted` starts as [] (truthy): the job, not the row, says when reading is over.
     refetchInterval: waiting ? 4000 : false,
-    queryFn: () => row<ScheduleImport>(supabase.from('schedule_imports').select('*').eq('id', id!).maybeSingle()),
+    queryFn: () => data<ScheduleImport | null>('prova-schedule-import', { schedule_import_id: id }),
   });
 }
 

@@ -1,4 +1,4 @@
-// Files over HTTP (ADR 0012, api.md §8.3). The bytes are on the API's disk (FileStore); these routes are the
+// Files over HTTP (ADR 0012, api.md §3.3). The bytes are on the API's disk (FileStore); these routes are the
 // student's side of it, with the request/response shapes the app's upload code already spoke to Supabase Storage:
 //   GET   /api/storage/object/<bucket>/<name>?token=…   a signed link (signed by storage-sign or the server); Range
 //   POST  /api/storage/object/<bucket>/<name>           an upload up to 6 MB (Authorization, x-upsert)

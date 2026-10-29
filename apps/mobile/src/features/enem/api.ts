@@ -19,12 +19,12 @@ import {
 } from '@studify/shared';
 import { useQuery } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction, streamFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows } from '../common/query';
 import { useGoals, type Goal } from '../goals/api';
 import { toEventHandler, type StreamHandlers } from '../learn/api';
+import { signedUrls } from '../subjects/api';
 
 export const AREAS: readonly EnemArea[] = ['LC', 'CH', 'CN', 'MT'];
 
@@ -60,7 +60,7 @@ export interface Edition {
 }
 
 export function useEditions() {
-  return useQuery({ queryKey: ['enem', 'editions'], staleTime: 60 * 60 * 1000, queryFn: () => rows<Edition>(supabase.from('enem_editions').select('*').order('year')) });
+  return useQuery({ queryKey: ['enem', 'editions'], staleTime: 60 * 60 * 1000, queryFn: () => data<Edition[]>('enem-editions') });
 }
 
 export interface EnemDates {
@@ -94,10 +94,7 @@ export function useSimuladoHistory() {
   return useQuery({
     queryKey: ['enem', 'simulados', userId],
     enabled: !!userId,
-    queryFn: () =>
-      rows<SimuladoAttempt>(
-        supabase.from('quiz_attempts').select('id,quiz_id,status,finished_at,paused_seconds,area_results').eq('user_id', userId!).eq('status', 'submitted').not('area_results', 'is', null).order('finished_at', { ascending: false }).limit(30),
-      ),
+    queryFn: () => data<SimuladoAttempt[]>('enem-simulados'),
   });
 }
 
@@ -135,7 +132,7 @@ export function useEnemEssays() {
   return useQuery({
     queryKey: ['enem', 'essays', userId],
     enabled: !!userId,
-    queryFn: () => rows<EnemEssayRow>(supabase.from('essays').select('*').eq('user_id', userId!).eq('kind', 'enem_redacao').is('deleted_at', null).order('updated_at', { ascending: false }).limit(50)),
+    queryFn: () => data<EnemEssayRow[]>('enem-essays'),
   });
 }
 
@@ -143,7 +140,7 @@ export function useEnemEssay(essayId: string | undefined) {
   return useQuery({
     queryKey: ['essay', essayId],
     enabled: !!essayId,
-    queryFn: () => row<EnemEssayRow>(supabase.from('essays').select('*').eq('id', essayId!).maybeSingle()),
+    queryFn: () => data<EnemEssayRow | null>('enem-essay-get', { essay_id: essayId }),
     refetchInterval: (q) => (q.state.data?.status === 'grading' ? 5000 : false),
   });
 }
@@ -182,7 +179,7 @@ export function useSisuOffers(q: string) {
   return useQuery({
     queryKey: ['enem', 'sisu_offers', term],
     enabled: term.length >= 3,
-    queryFn: () => rows<SisuOffer>(supabase.from('sisu_offers').select('*').or(`course.ilike.%${term.replace(/[%,]/g, '')}%,institution.ilike.%${term.replace(/[%,]/g, '')}%`).limit(30)),
+    queryFn: () => data<SisuOffer[]>('enem-sisu-offers', { q: term }),
   });
 }
 
@@ -203,7 +200,7 @@ export function useSisuTargets(goalId: string | undefined) {
   return useQuery({
     queryKey: ['enem', 'sisu_targets', goalId],
     enabled: !!goalId,
-    queryFn: () => rows<SisuTargetRow>(supabase.from('sisu_targets').select('*').eq('goal_id', goalId!).is('deleted_at', null).order('priority')),
+    queryFn: () => data<SisuTargetRow[]>('enem-sisu-targets', { goal_id: goalId }),
   });
 }
 
@@ -216,7 +213,7 @@ export function computeTargets(weights: SisuScores, estimates: Partial<SisuScore
 }
 
 export async function saveSisuTarget(
-  userId: string,
+  _userId: string,
   input: { goalId: string; existingId?: string | null; offer: SisuOffer | null; manual: SisuManual | null; cutoff: number; margin: number; modalityLabel: string | null; priority: number; targets: SisuTargetsJson },
 ) {
   const values = {
@@ -230,22 +227,15 @@ export async function saveSisuTarget(
     margin: input.margin,
     priority: input.priority,
     targets: input.targets,
-    computed_at: new Date().toISOString(),
   };
-  if (input.existingId) {
-    const { error } = await supabase.from('sisu_targets').update(values).eq('id', input.existingId);
-    if (error) throw error;
-    return input.existingId;
-  }
-  const id = uuidv7();
-  const { error } = await supabase.from('sisu_targets').insert({ id, user_id: userId, goal_id: input.goalId, ...values });
-  if (error) throw error;
+  // computed_at is the server's clock.
+  const id = input.existingId ?? uuidv7();
+  await data('enem-sisu-target-save', { id, existing: !!input.existingId, goal_id: input.goalId, ...values }, input.existingId ? {} : { idempotencyKey: id });
   return id;
 }
 
 export async function deleteSisuTarget(id: string) {
-  const { error } = await supabase.from('sisu_targets').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-  if (error) throw error;
+  await data('enem-sisu-target-delete', { id });
 }
 
 // ---------------------------------------------------------------- Matriz, topics, Prova Provável ENEM
@@ -259,7 +249,7 @@ export interface Skill {
 }
 
 export function useSkills(area: EnemArea) {
-  return useQuery({ queryKey: ['enem', 'skills', area], staleTime: 24 * 60 * 60 * 1000, queryFn: () => rows<Skill>(supabase.from('enem_skills').select('*').eq('area', area).order('skill_no')) });
+  return useQuery({ queryKey: ['enem', 'skills', area], staleTime: 24 * 60 * 60 * 1000, queryFn: () => data<Skill[]>('enem-skills', { area }) });
 }
 
 /** Per-skill accuracy from the student's answers to bank and ENEM-style questions of the area (ENM-01.5 grid). */
@@ -269,12 +259,10 @@ export function useSkillAccuracy(area: EnemArea) {
     queryKey: ['enem', 'skill_accuracy', userId, area],
     enabled: !!userId,
     queryFn: async () => {
-      const answers = await rows<{ correct: boolean | null; questions: { enem_skill_code: string | null } | null }>(
-        supabase.from('attempt_answers').select('correct, questions!inner(enem_skill_code)').eq('user_id', userId!).like('questions.enem_skill_code', `${area}-H%`).limit(2000),
-      );
+      const answers = await data<Array<{ correct: boolean | null; enem_skill_code: string | null }>>('enem-skill-accuracy', { area });
       const out = new Map<string, { n: number; correct: number }>();
       for (const a of answers) {
-        const code = a.questions?.enem_skill_code;
+        const code = a.enem_skill_code;
         if (!code || a.correct === null) continue;
         const s = out.get(code) ?? { n: 0, correct: 0 };
         s.n += 1;
@@ -300,8 +288,7 @@ export function useTopicTrends(area: EnemArea) {
   return useQuery({
     queryKey: ['enem', 'trends', area],
     staleTime: 60 * 60 * 1000,
-    queryFn: () =>
-      rows<TopicTrendRow>(supabase.from('enem_topic_trends').select('*, enem_topics!inner(title, subject, area)').eq('enem_topics.area', area).order('predicted_share', { ascending: false }).limit(80)),
+    queryFn: () => data<TopicTrendRow[]>('enem-trends', { area }),
   });
 }
 
@@ -309,7 +296,7 @@ export function useTopicStats(topicIds: string[]) {
   return useQuery({
     queryKey: ['enem', 'topic_stats', topicIds.join(',')],
     enabled: topicIds.length > 0,
-    queryFn: () => rows<{ enem_topic_id: string; edition_year: number; item_count: number }>(supabase.from('enem_topic_stats').select('enem_topic_id,edition_year,item_count').in('enem_topic_id', topicIds)),
+    queryFn: () => data<Array<{ enem_topic_id: string; edition_year: number; item_count: number }>>('enem-topic-stats', { topic_ids: topicIds }),
   });
 }
 
@@ -347,16 +334,16 @@ export interface BankFilters {
 export function useBankItems(f: BankFilters) {
   return useQuery({
     queryKey: ['enem', 'bank', f],
-    queryFn: () => {
-      let q = supabase.from('enem_items').select('*, questions!inner(stem, difficulty_band)').eq('area', f.area).eq('application', 'regular');
-      if (f.edition) q = q.eq('edition_year', f.edition);
-      if (f.skill) q = q.eq('skill_code', f.skill);
-      if (f.band) q = q.eq('questions.difficulty_band', f.band);
-      if (f.subject) q = q.eq('subject', f.subject);
-      if (f.topicId) q = q.contains('enem_topic_ids', [f.topicId]);
-      if (f.area === 'LC' && f.language) q = q.or(`language.is.null,language.eq.${f.language}`);
-      return rows<BankItem>(q.order('edition_year', { ascending: false }).limit(300));
-    },
+    queryFn: () =>
+      data<BankItem[]>('enem-bank-items', {
+        area: f.area,
+        edition: f.edition ?? null,
+        skill: f.skill ?? null,
+        band: f.band ?? null,
+        subject: f.subject ?? null,
+        topic_id: f.topicId ?? null,
+        ...(f.language ? { language: f.language } : {}),
+      }),
   });
 }
 
@@ -364,9 +351,11 @@ export function useBankItem(itemId: string | undefined) {
   return useQuery({
     queryKey: ['enem', 'item', itemId],
     enabled: !!itemId,
-    queryFn: () => row<BankItem & { questions: { stem: string; payload: { options: Array<{ id: string; text: string; rationale?: string }>; correct: string }; explanation: string | null; difficulty_band: string | null } }>(
-      supabase.from('enem_items').select('*, questions!inner(stem, payload, explanation, difficulty_band)').eq('id', itemId!).maybeSingle(),
-    ),
+    queryFn: () =>
+      data<(BankItem & { questions: { stem: string; payload: { options: Array<{ id: string; text: string; rationale?: string }>; correct: string }; explanation: string | null; difficulty_band: string | null } }) | null>(
+        'enem-bank-item',
+        { item_id: itemId },
+      ),
   });
 }
 
@@ -378,30 +367,17 @@ export function useAnswered(questionIds: string[]) {
     enabled: !!userId && questionIds.length > 0,
     queryFn: async () => {
       const out = new Map<string, boolean>();
-      for (let i = 0; i < questionIds.length; i += 200) {
-        const part = await rows<{ question_id: string; correct: boolean | null }>(supabase.from('attempt_answers').select('question_id,correct').eq('user_id', userId!).in('question_id', questionIds.slice(i, i + 200)));
-        for (const a of part) out.set(a.question_id, (out.get(a.question_id) ?? false) || a.correct === true);
-      }
+      const answers = await data<Array<{ question_id: string; correct: boolean | null }>>('enem-answered', { question_ids: questionIds });
+      for (const a of answers) out.set(a.question_id, (out.get(a.question_id) ?? false) || a.correct === true);
       return out;
     },
   });
 }
 
 /** Bank practice (ENM-02.4): a practice quiz over the chosen official items, untimed or at 3 min/item. */
-export async function startBankPractice(userId: string, questionIds: string[], timed: boolean, title: string): Promise<string> {
+export async function startBankPractice(_userId: string, questionIds: string[], timed: boolean, title: string): Promise<string> {
   const id = uuidv7();
-  const { error } = await supabase.from('quizzes').insert({
-    id,
-    owner_id: userId,
-    kind: 'practice',
-    mode: timed ? 'exam_conditions' : 'practice',
-    title,
-    question_ids: questionIds,
-    time_limit_s: timed ? questionIds.length * 180 : null,
-    scope: { enem: true },
-    config: {},
-  });
-  if (error) throw error;
+  await data('enem-practice-start', { id, question_ids: questionIds, timed, title }, { idempotencyKey: id });
   return id;
 }
 
@@ -411,11 +387,7 @@ export function useCropUrls(paths: string[] | undefined) {
     queryKey: ['enem', 'crops', paths?.join('|')],
     enabled: !!paths && paths.length > 0,
     staleTime: 50 * 60 * 1000,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage.from('enem').createSignedUrls(paths!, 3600);
-      if (error) throw error;
-      return (data ?? []).map((d) => d.signedUrl).filter((u): u is string => !!u);
-    },
+    queryFn: async () => (await signedUrls('enem', paths!)).filter((u): u is string => !!u),
   });
 }
 
@@ -441,7 +413,7 @@ export interface EssayTheme {
 export function usePredictedThemes() {
   return useQuery({
     queryKey: ['enem', 'themes', 'predicted'],
-    queryFn: () => rows<EssayTheme>(supabase.from('essay_themes').select('*').eq('source', 'predicted').is('deleted_at', null).order('created_at', { ascending: false }).limit(12)),
+    queryFn: () => data<EssayTheme[]>('enem-themes-predicted'),
   });
 }
 
@@ -449,37 +421,27 @@ export function usePastThemes() {
   return useQuery({
     queryKey: ['enem', 'themes', 'past'],
     staleTime: 24 * 60 * 60 * 1000,
-    queryFn: () => rows<{ edition_year: number; theme: string }>(supabase.from('enem_redacao_themes').select('edition_year,theme').eq('application', 'regular').order('edition_year', { ascending: false })),
+    queryFn: () => data<Array<{ edition_year: number; theme: string }>>('enem-themes-past'),
   });
 }
 
 export function useEssayTheme(themeId: string | undefined) {
-  return useQuery({ queryKey: ['enem', 'theme', themeId], enabled: !!themeId, queryFn: () => row<EssayTheme>(supabase.from('essay_themes').select('*').eq('id', themeId!).maybeSingle()) });
+  return useQuery({ queryKey: ['enem', 'theme', themeId], enabled: !!themeId, queryFn: () => data<EssayTheme | null>('enem-theme-get', { theme_id: themeId }) });
 }
 
 export function generateTheme(req: EssayThemeGenerateReq) {
   return callFunction<EssayThemeGenerateReq, EssayThemeGenerateRes>('essay-theme-generate', req, { idempotencyKey: uuidv7() });
 }
 
-export async function createEnemEssay(userId: string, input: { themeId: string | null; themeTitle: string | null; text: string; inputMode?: 'typed' | 'photo' }): Promise<string> {
+export async function createEnemEssay(_userId: string, input: { themeId: string | null; themeTitle: string | null; text: string; inputMode?: 'typed' | 'photo' }): Promise<string> {
   const id = uuidv7();
-  const { error } = await supabase.from('essays').insert({
-    id,
-    user_id: userId,
-    kind: 'enem_redacao',
-    theme_id: input.themeId,
-    // A theme without a row (typed offline) travels in prompt: the grader needs a theme (ENM-05.1).
-    prompt: input.themeId ? null : input.themeTitle ? { theme: input.themeTitle } : null,
-    text: input.text,
-    input_mode: input.inputMode ?? 'typed',
-  });
-  if (error) throw error;
+  // A theme without a row (typed offline) travels as its title: the server stores it in prompt (ENM-05.1).
+  await data('enem-essay-create', { id, theme_id: input.themeId, theme_title: input.themeTitle, text: input.text, input_mode: input.inputMode ?? 'typed' }, { idempotencyKey: id });
   return id;
 }
 
 export async function updateEssayText(essayId: string, text: string) {
-  const { error } = await supabase.from('essays').update({ text }).eq('id', essayId);
-  if (error) throw error;
+  await data('enem-essay-update-text', { essay_id: essayId, text });
 }
 
 // ---------------------------------------------------------------- Atualidades and Repertório (ENM-09, ENM-05.5)
@@ -507,14 +469,14 @@ export interface DigestItem {
 }
 
 export function useDigests() {
-  return useQuery({ queryKey: ['enem', 'digests'], queryFn: () => rows<Digest>(supabase.from('atualidades_digests').select('*').order('week_start', { ascending: false }).limit(30)) });
+  return useQuery({ queryKey: ['enem', 'digests'], queryFn: () => data<Digest[]>('enem-digests') });
 }
 
 export function useDigestItems(digestId: string | undefined) {
   return useQuery({
     queryKey: ['enem', 'digest', digestId],
     enabled: !!digestId,
-    queryFn: () => rows<DigestItem>(supabase.from('atualidades_items').select('*').eq('digest_id', digestId!).order('position')),
+    queryFn: () => data<DigestItem[]>('enem-digest-items', { digest_id: digestId }),
   });
 }
 
@@ -535,27 +497,29 @@ export function useRepertorio() {
   return useQuery({
     queryKey: ['enem', 'repertorio', userId],
     enabled: !!userId,
-    queryFn: () => rows<RepertorioItem>(supabase.from('repertorio_items').select('*').eq('user_id', userId!).is('deleted_at', null).order('created_at', { ascending: false })),
+    queryFn: () => data<RepertorioItem[]>('enem-repertorio'),
   });
 }
 
-export async function saveRepertorio(userId: string, input: { kind: RepertorioItem['kind']; text: string; sourceUrl?: string | null; sourceName?: string | null; atualidadesItemId?: string | null; tags?: string[] }) {
-  const { error } = await supabase.from('repertorio_items').insert({
-    id: uuidv7(),
-    user_id: userId,
-    kind: input.kind,
-    text: input.text.slice(0, 2000),
-    source_url: input.sourceUrl ?? null,
-    source_name: input.sourceName ?? null,
-    atualidades_item_id: input.atualidadesItemId ?? null,
-    tags: input.tags ?? [],
-  });
-  if (error) throw error;
+export async function saveRepertorio(_userId: string, input: { kind: RepertorioItem['kind']; text: string; sourceUrl?: string | null; sourceName?: string | null; atualidadesItemId?: string | null; tags?: string[] }) {
+  const id = uuidv7();
+  await data(
+    'enem-repertorio-save',
+    {
+      id,
+      kind: input.kind,
+      text: input.text.slice(0, 2000),
+      source_url: input.sourceUrl ?? null,
+      source_name: input.sourceName ?? null,
+      atualidades_item_id: input.atualidadesItemId ?? null,
+      tags: input.tags ?? [],
+    },
+    { idempotencyKey: id },
+  );
 }
 
 export async function deleteRepertorio(id: string) {
-  const { error } = await supabase.from('repertorio_items').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-  if (error) throw error;
+  await data('enem-repertorio-delete', { id });
 }
 
 // ---------------------------------------------------------------- Treino de Argumentação (INT-03)
@@ -598,13 +562,6 @@ export function useArgumentSession(sessionId: string | undefined) {
   return useQuery({
     queryKey: ['argument', sessionId],
     enabled: !!sessionId,
-    queryFn: () =>
-      row<ArgumentSessionRow>(
-        supabase
-          .from('argument_sessions')
-          .select('id,goal_mode,subject_id,theme,theme_id,mode,thesis,thesis_feedback,rounds,round_limit,rubric,summary,outline,essay_id,status')
-          .eq('id', sessionId!)
-          .maybeSingle(),
-      ),
+    queryFn: () => data<ArgumentSessionRow | null>('enem-argument-session', { session_id: sessionId }),
   });
 }

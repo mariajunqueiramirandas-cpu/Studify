@@ -4,9 +4,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailSettleReq, TrailState } from '@studify/shared';
 import { uuidv7 } from 'uuidv7';
+import { data as callData } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
-import { row } from '../common/query';
 
 export function openTrail(subjectId: string) {
   return callFunction<{ subject_id: string }, TrailState>('trail-open', { subject_id: subjectId }, { idempotencyKey: uuidv7() });
@@ -42,9 +41,7 @@ export function useTrailSummary(subjectId: string | undefined) {
     queryKey: ['trail', subjectId],
     enabled: !!subjectId,
     queryFn: async (): Promise<TrailSummary | null> => {
-      const data = await row<{ status: 'active' | 'completed'; chapter_index: number; plan: unknown[] }>(
-        supabase.from('trails').select('status, chapter_index, plan').eq('subject_id', subjectId!).maybeSingle(),
-      );
+      const data = await callData<{ status: 'active' | 'completed'; chapter_index: number; plan: unknown[] } | null>('trail-data-summary', { subject_id: subjectId });
       return data ? { status: data.status, chapterIndex: data.chapter_index, chapterCount: Array.isArray(data.plan) ? data.plan.length : 0 } : null;
     },
   });

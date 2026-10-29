@@ -7,7 +7,7 @@ import { parseDate, toLocalDate, weekdayDate } from '../../features/common/forma
 import { useEditions } from '../../features/enem/api';
 import { createGoal, recomputePlan, saveStudyPreferences, useInvalidateGoal } from '../../features/goals/api';
 import { TimeEditor, type WeekMinutes } from '../../features/goals/TimeEditor';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
 import { studyDateOf } from '../../lib/dates';
 import { t } from '../../i18n';
 import { space } from '../../theme';
@@ -40,8 +40,7 @@ export default function NewEnemGoal() {
     if (!userId || !day1 || !language) return;
     setBusy(true);
     try {
-      const profile = await supabase.from('profiles').update({ foreign_language: language }).eq('id', userId);
-      if (profile.error) throw profile.error;
+      await data('enem-set-language', { language });
       const goalId = await createGoal(userId, {
         name: t('enem.wizard.name', { ano: year }),
         start_date: today,

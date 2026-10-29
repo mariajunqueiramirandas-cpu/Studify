@@ -21,14 +21,13 @@ import {
   Text,
   useOverlay,
 } from '../../components';
-import { supabase } from '../../api/supabase';
 import { useDb } from '../../db/DatabaseProvider';
 import { useSession } from '../../features/auth/session';
 import { formatClock } from '../../features/common/format';
 import { EnemItemHeader, TextoBaseView } from '../../features/enem/components';
 import { awardXp } from '../../features/motivation/xp';
 import { ExplainSheet } from '../../features/learn/ExplainSheet';
-import { useQuizBundle } from '../../features/practice/api';
+import { bossDefeatedBefore, useQuizBundle } from '../../features/practice/api';
 import { usePickedCauses } from '../../features/practice/causes';
 import { isAnswered, type Confidence, type GradeResult, type MistakeCause, type QuestionResponse, type QuestionRow } from '../../features/practice/types';
 import { FlagSheet } from '../../features/trust/FlagSheet';
@@ -174,8 +173,9 @@ export default function QuizRunner() {
       bossWon = bossPassed(correct / questions.length);
       const unitId = (quiz?.scope as { unit_node_id?: string } | undefined)?.unit_node_id;
       if (bossWon && unitId) {
-        const before = await supabase.from('boss_attempts').select('id').eq('user_id', userId).eq('unit_node_id', unitId).eq('passed', true).limit(1);
-        awardXp(db, userId, { kind: 'boss_defeated', retry: (before.data ?? []).length > 0 }, { type: 'boss', id: id ?? attemptId ?? quizId, feature: 'MOT-02' });
+        // As before, a failed check counts as the first win.
+        const retry = await bossDefeatedBefore(unitId).catch(() => false);
+        awardXp(db, userId, { kind: 'boss_defeated', retry }, { type: 'boss', id: id ?? attemptId ?? quizId, feature: 'MOT-02' });
       }
     }
     // ENEM simulado: per-area TRI estimate instead of a single score (ENM-04.5).

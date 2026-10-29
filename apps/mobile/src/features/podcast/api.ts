@@ -6,12 +6,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Directory, File, Paths } from 'expo-file-system';
 import { useEffect } from 'react';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction, streamFunction } from '../../api/functions';
 import { queryClient } from '../../api/queryClient';
-import { supabase } from '../../api/supabase';
 import { realtime, rowTopic } from '../../api/realtime';
 import { useSession } from '../auth/session';
-import { row, rows } from '../common/query';
 import { toEventHandler, type StreamHandlers } from '../learn/api';
 import { signedUrl } from '../subjects/api';
 
@@ -46,13 +45,12 @@ export interface InteractionRow {
   created_at: string;
 }
 
-const LIST_COLUMNS = 'id, subject_id, node_ids, style, length_minutes, owner_user_id, title, duration_ms, status, error_code, superseded_by, created_at, audio_path';
-
 export function useSubjectEpisodes(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['podcasts', subjectId],
     enabled: !!subjectId,
-    queryFn: () => rows<EpisodeRow>(supabase.from('podcast_episodes').select(LIST_COLUMNS).eq('subject_id', subjectId!).neq('status', 'failed').order('created_at', { ascending: false }).limit(30)),
+    // List columns only (no script, chapters or line timings).
+    queryFn: () => data<EpisodeRow[]>('podcast-data-episodes', { subject_id: subjectId! }),
   });
 }
 
@@ -61,7 +59,7 @@ export function useEpisode(episodeId: string | undefined) {
   const query = useQuery({
     queryKey: ['podcast', episodeId],
     enabled: !!episodeId,
-    queryFn: () => row<EpisodeRow>(supabase.from('podcast_episodes').select('*').eq('id', episodeId!).maybeSingle()),
+    queryFn: async () => (await data<EpisodeRow | null>('podcast-data-episode', { episode_id: episodeId! })) ?? null,
     refetchInterval: (q) => (q.state.data && q.state.data.status !== 'ready' && q.state.data.status !== 'failed' ? 10_000 : false),
   });
   useEffect(() => {
@@ -80,13 +78,13 @@ export function useInteractions(episodeId: string | undefined) {
   return useQuery({
     queryKey: ['podcastInteractions', episodeId],
     enabled: !!episodeId && !!userId,
-    queryFn: () => rows<InteractionRow>(supabase.from('podcast_interactions').select('*').eq('episode_id', episodeId!).eq('user_id', userId!).order('created_at')),
+    queryFn: () => data<InteractionRow[]>('podcast-data-interactions', { episode_id: episodeId! }),
   });
 }
 
 /** Where the student stopped last time (podcast_plays), in ms. */
-export async function resumePosition(userId: string, episodeId: string): Promise<number> {
-  const play = await row<{ position_ms: number; completed_at: string | null }>(supabase.from('podcast_plays').select('position_ms, completed_at').eq('user_id', userId).eq('episode_id', episodeId).maybeSingle());
+export async function resumePosition(_userId: string, episodeId: string): Promise<number> {
+  const play = await data<{ position_ms: number; completed_at: string | null } | null>('podcast-data-resume', { episode_id: episodeId });
   return play && !play.completed_at ? play.position_ms : 0;
 }
 

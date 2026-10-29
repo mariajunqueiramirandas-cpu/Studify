@@ -206,7 +206,7 @@ sequenceDiagram
   participant UI as Review UI
   participant L as SQLite
   participant S as Sync engine
-  participant API as Edge: sync-push / PostgREST
+  participant API as API: sync-push / sync-pull
   participant PG as Postgres
   UI->>L: rate card → ts-fsrs schedules → update local card_state
   UI->>L: append outbox(review_log, client UUID)
@@ -330,7 +330,7 @@ Performance rules:
 - Capture: `expo-camera` with a document-frame guide; gallery import via `expo-image-picker` (Android Photo Picker — no storage permission).
 - Processing on device: `expo-image-manipulator` to crop/rotate and downscale to ≤ 2048 px long edge, JPEG quality 0.8 (≈ 300–600 KB) before upload.
 - Multi-photo capture builds a `documents` row of kind `photo` (pages = photos).
-- Uploads > 6 MB use resumable (TUS) uploads to Supabase Storage; smaller files use standard upload. Uploads continue if the user leaves the screen and resume on next launch (queued in `outbox` as kind `upload`).
+- Uploads > 6 MB use resumable (TUS) uploads to the API's file store (api.md §3.3); smaller files use standard upload. Uploads continue if the user leaves the screen and resume on next launch (queued in `outbox` as kind `upload`).
 - Photos are **personal by default** even inside a shared subject, unless the user explicitly adds them to the Turma's material (see security-privacy.md).
 
 ## 10. Audio (Phase 3 — INT-01 Podcast, WEL-04 read-aloud, TUT-06 voice)
@@ -451,7 +451,7 @@ Not requested: location, contacts, broad storage (`READ_EXTERNAL_STORAGE`/`READ_
 |---|---|
 | Node.js LTS + pnpm | `pnpm install` at the root |
 | Android Studio | Emulator (API 34+) or a physical phone with USB debugging |
-| Docker + Supabase CLI | `supabase start` runs Postgres, Auth, Storage and Realtime locally; `supabase db reset` applies migrations + `seed.sql` (includes fixture PDFs metadata and a demo user). The API runs separately with Bun: `pnpm api:dev` ([deployment.md §7](deployment.md)) |
+| Docker + Supabase CLI | A local Postgres for the data (the API migrates it on start) and `supabase start` for Auth only. The API runs with Bun: `pnpm api:dev` ([deployment.md §7](deployment.md)) |
 | Dev client | Build once (`eas build --profile development --platform android` or `npx expo run:android`); afterwards `pnpm --filter mobile start` + Metro |
 | Worker | `pnpm --filter worker dev` against local Supabase; uses a **dev** Claude key with a low spend cap |
 | Env files | `apps/mobile/.env.development` holds only **public** values (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_ENV`). Secrets never go in the app. |

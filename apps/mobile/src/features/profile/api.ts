@@ -1,21 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
 import type { Intent } from '../auth/onboarding';
 
 /** Merges keys into profiles.settings (ProfileSettings, data-model §5.1). */
 export async function updateSettings(patch: Record<string, unknown>) {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) throw new Error('not_signed_in');
-  const { data, error } = await supabase.from('profiles').select('settings').eq('id', uid).single();
-  if (error) throw error;
-  const settings = { ...((data?.settings as Record<string, unknown>) ?? {}), ...patch };
-  const { error: e2 } = await supabase.from('profiles').update({ settings }).eq('id', uid);
-  if (e2) throw e2;
-  return settings;
+  const res = await data<{ settings: Record<string, unknown> }>('profile-update', { settings: patch });
+  return res.settings;
 }
 
 /** S-AUTH-07 only decides which call to action Hoje shows (GOL-01). */
@@ -27,11 +20,7 @@ export function useUpdateProfile() {
   const qc = useQueryClient();
   const { userId } = useSession();
   return async (patch: Partial<{ display_name: string; school_year: string; avatar_preset: string }>, settings?: Record<string, unknown>) => {
-    if (Object.keys(patch).length) {
-      const { error } = await supabase.from('profiles').update(patch).eq('id', userId!);
-      if (error) throw error;
-    }
-    if (settings) await updateSettings(settings);
+    if (Object.keys(patch).length || settings) await data('profile-update', { ...patch, ...(settings ? { settings } : {}) });
     await qc.invalidateQueries({ queryKey: ['profile', userId] });
   };
 }
@@ -48,8 +37,12 @@ export function useAiUsage() {
     queryKey: ['aiUsage', userId],
     enabled: !!userId,
     queryFn: async (): Promise<AiUsageToday> => {
-      const { data, error } = await supabase.rpc('my_ai_usage_today');
-      if (!error && data) return data as AiUsageToday;
+      try {
+        const usage = await data<AiUsageToday | null>('profile-ai-usage');
+        if (usage) return usage;
+      } catch {
+        // no usage yet or not reachable: show zero, as before
+      }
       return { pct: 0, byFeature: [] };
     },
   });
@@ -68,7 +61,7 @@ export async function resetAccount(otpCode: string) {
   return callFunction<{ otp_code: string }, { reset: true }>('account-reset', { otp_code: otpCode }, { idempotencyKey: uuidv7() });
 }
 
-export async function sendFeedback(userId: string, body: string) {
-  const { error } = await supabase.from('app_feedback').insert({ id: uuidv7(), user_id: userId, body });
-  if (error) throw error;
+export async function sendFeedback(_userId: string, body: string) {
+  const id = uuidv7();
+  await data('profile-feedback', { id, body }, { idempotencyKey: id });
 }

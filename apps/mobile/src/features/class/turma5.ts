@@ -3,10 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ContributionFeedback, LeagueBoardRow, PeerQuestionCreateReq, PeerQuestionCreateRes } from '@studify/shared';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows } from '../common/query';
 
 // ---------------------------------------------------------------- SOC-06 Dividir e conquistar
 
@@ -45,7 +44,7 @@ export function useDividePlans(classGroupId: string | undefined) {
   return useQuery({
     queryKey: ['divide', classGroupId],
     enabled: !!classGroupId,
-    queryFn: () => rows<DividePlan>(supabase.from('divide_plans').select('*').eq('class_group_id', classGroupId!).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(30)),
+    queryFn: () => data<DividePlan[]>('turma-divide-plans', { class_group_id: classGroupId! }),
   });
 }
 
@@ -53,7 +52,7 @@ export function useDividePlan(planId: string | undefined) {
   return useQuery({
     queryKey: ['divide', 'plan', planId],
     enabled: !!planId,
-    queryFn: () => row<DividePlan>(supabase.from('divide_plans').select('*').eq('id', planId!).maybeSingle()),
+    queryFn: () => data<DividePlan | null>('turma-divide-plan', { plan_id: planId! }),
   });
 }
 
@@ -61,11 +60,7 @@ export function useDivideProgress(planId: string | undefined) {
   return useQuery({
     queryKey: ['divide', 'progress', planId],
     enabled: !!planId,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('divide_progress', { p_plan: planId });
-      if (error) throw error;
-      return (data ?? []) as DivideProgressRow[];
-    },
+    queryFn: () => data<DivideProgressRow[]>('turma-divide-progress', { plan_id: planId! }),
   });
 }
 
@@ -74,25 +69,27 @@ export function useSubjectTopics(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['subject-topics', subjectId],
     enabled: !!subjectId,
-    queryFn: () => rows<{ id: string; title: string; parent_id: string | null; position: number }>(supabase.from('knowledge_nodes').select('id,title,parent_id,position').eq('subject_id', subjectId!).eq('kind', 'topic').is('deleted_at', null).order('position')),
+    queryFn: () => data<{ id: string; title: string; parent_id: string | null; position: number }[]>('turma-subject-topics', { subject_id: subjectId! }),
   });
 }
 
-export async function createDividePlan(userId: string, input: { classGroupId: string; subjectId: string; title: string; nodeIds: string[]; maxClaims: number }): Promise<string> {
+/** The plan's author is the signed-in student (the server uses the token's user). */
+export async function createDividePlan(_userId: string, input: { classGroupId: string; subjectId: string; title: string; nodeIds: string[]; maxClaims: number }): Promise<string> {
   const id = uuidv7();
-  const { error } = await supabase.from('divide_plans').insert({ id, class_group_id: input.classGroupId, subject_id: input.subjectId, title: input.title, node_ids: input.nodeIds, max_claims: input.maxClaims, created_by: userId });
-  if (error) throw error;
+  await data(
+    'turma-divide-create',
+    { id, class_group_id: input.classGroupId, subject_id: input.subjectId, title: input.title, node_ids: input.nodeIds, max_claims: input.maxClaims },
+    { idempotencyKey: id },
+  );
   return id;
 }
 
 export async function claimTopic(planId: string, nodeId: string, claim: boolean) {
-  const { error } = await supabase.rpc('claim_divide_topic', { p_plan: planId, p_node: nodeId, p_claim: claim });
-  if (error) throw error;
+  await data('turma-divide-claim', { plan_id: planId, node_id: nodeId, claim });
 }
 
 export async function cancelDividePlan(planId: string) {
-  const { error } = await supabase.from('divide_plans').update({ status: 'cancelled' }).eq('id', planId);
-  if (error) throw error;
+  await data('turma-divide-cancel', { plan_id: planId });
 }
 
 export function useMyContribution(planId: string | undefined, nodeId: string | undefined) {
@@ -100,29 +97,24 @@ export function useMyContribution(planId: string | undefined, nodeId: string | u
   return useQuery({
     queryKey: ['contribution', planId, nodeId, userId],
     enabled: !!planId && !!nodeId && !!userId,
-    queryFn: () => row<Contribution>(supabase.from('contributions').select('*').eq('divide_plan_id', planId!).eq('node_id', nodeId!).eq('author_id', userId!).maybeSingle()),
+    queryFn: () => data<Contribution | null>('turma-contribution-mine', { plan_id: planId!, node_id: nodeId! }),
   });
 }
 
 /** Creates the draft on first save; later saves update it (drafts only, RLS). */
-export async function saveContribution(userId: string, input: { id: string | null; planId: string; nodeId: string; body: string }): Promise<string> {
+export async function saveContribution(_userId: string, input: { id: string | null; planId: string; nodeId: string; body: string }): Promise<string> {
   if (input.id) {
-    const { error } = await supabase.from('contributions').update({ body_md: input.body }).eq('id', input.id);
-    if (error) throw error;
+    await data('turma-contribution-update', { id: input.id, body: input.body });
     return input.id;
   }
   const id = uuidv7();
-  const { error } = await supabase.from('contributions').insert({ id, divide_plan_id: input.planId, node_id: input.nodeId, author_id: userId, body_md: input.body });
-  if (error) throw error;
+  await data('turma-contribution-create', { id, plan_id: input.planId, node_id: input.nodeId, body: input.body }, { idempotencyKey: id });
   return id;
 }
 
 /** SOC-06.2: the transcription of a photographed page is appended to the draft (drafts only, RLS). */
 export async function appendToContribution(contributionId: string, text: string) {
-  const current = await row<{ body_md: string }>(supabase.from('contributions').select('body_md').eq('id', contributionId).maybeSingle());
-  const body = [current?.body_md?.trim(), text].filter(Boolean).join('\n\n').slice(0, 20000);
-  const { error } = await supabase.from('contributions').update({ body_md: body }).eq('id', contributionId);
-  if (error) throw error;
+  await data('turma-contribution-append', { id: contributionId, text });
 }
 
 export function reviewContribution(contributionId: string) {
@@ -143,15 +135,12 @@ export function useClassSummary(nodeId: string | undefined, classGroupId: string
     queryKey: ['class-summary', nodeId],
     enabled: !!nodeId && !!classGroupId,
     queryFn: async () => {
-      const note = await row<{ id: string; body: string; citations: unknown; contributors: string[] }>(
-        supabase.from('notes').select('id,body,citations,contributors').eq('node_id', nodeId!).eq('depth', 'class_summary').eq('status', 'ready').is('deleted_at', null).maybeSingle(),
-      );
-      if (!note) return null;
-      const names = note.contributors.length
-        ? await rows<{ user_id: string; nickname: string | null; display_name: string | null }>(
-            supabase.from('class_group_members_public').select('user_id,nickname,display_name').eq('class_group_id', classGroupId!).in('user_id', note.contributors),
-          )
-        : [];
+      const found = await data<{
+        note: { id: string; body: string; citations: unknown; contributors: string[] };
+        names: { user_id: string; nickname: string | null; display_name: string | null }[];
+      } | null>('turma-class-summary', { node_id: nodeId!, class_group_id: classGroupId! });
+      if (!found) return null;
+      const { note, names } = found;
       return { ...note, credits: names.map((n) => n.nickname ?? n.display_name ?? '—') };
     },
   });
@@ -179,32 +168,18 @@ export function usePeerQuestions(classGroupId: string | undefined, subjectIds: s
     queryKey: ['peer-questions', classGroupId, subjectIds.join(','), userId],
     enabled: !!classGroupId && subjectIds.length > 0 && !!userId,
     queryFn: async () => {
-      const list = await rows<PeerQuestion>(
-        supabase
-          .from('questions')
-          .select('id,subject_id,node_id,type,stem,payload,explanation,author_id,author_anonymous,review_status,created_at')
-          .in('subject_id', subjectIds)
-          .eq('origin', 'peer')
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(100),
-      );
-      const votes = list.length ? await rows<{ question_id: string }>(supabase.from('question_votes').select('question_id').in('question_id', list.map((q) => q.id))) : [];
-      return { list, voted: new Set(votes.map((v) => v.question_id)) };
+      const { list, voted } = await data<{ list: PeerQuestion[]; voted: string[] }>('turma-peer-questions', { subject_ids: subjectIds });
+      return { list, voted: new Set(voted) };
     },
   });
 }
 
 export async function votePeerQuestion(questionId: string): Promise<string> {
-  const { data, error } = await supabase.rpc('vote_peer_question', { p_question: questionId });
-  if (error) throw error;
-  return data as string;
+  return (await data<{ result: string }>('turma-peer-vote', { question_id: questionId })).result;
 }
 
 export async function reviewPeerQuestion(questionId: string, approve: boolean): Promise<string> {
-  const { data, error } = await supabase.rpc('review_peer_question', { p_question: questionId, p_approve: approve });
-  if (error) throw error;
-  return data as string;
+  return (await data<{ result: string }>('turma-peer-review', { question_id: questionId, approve })).result;
 }
 
 export function createPeerQuestion(req: PeerQuestionCreateReq) {
@@ -217,11 +192,7 @@ export function useLeagueBoard(classGroupId: string | undefined, enabled: boolea
   return useQuery({
     queryKey: ['league', classGroupId, week ?? 'current'],
     enabled: !!classGroupId && enabled,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('league_board', { p_group: classGroupId, ...(week ? { p_week: week } : {}) });
-      if (error) throw error;
-      return (data ?? []) as LeagueBoardRow[];
-    },
+    queryFn: () => data<LeagueBoardRow[]>('turma-league-board', { class_group_id: classGroupId!, ...(week ? { week } : {}) }),
   });
 }
 
@@ -230,6 +201,6 @@ export function useMyLeagueWeeks(classGroupId: string | undefined) {
   return useQuery({
     queryKey: ['league-weeks', classGroupId, userId],
     enabled: !!classGroupId && !!userId,
-    queryFn: () => rows<{ week_start: string; league_xp: number; rank: number | null; badges: string[] }>(supabase.from('league_entries').select('week_start,league_xp,rank,badges').eq('class_group_id', classGroupId!).eq('user_id', userId!).order('week_start', { ascending: false }).limit(12)),
+    queryFn: () => data<{ week_start: string; league_xp: number; rank: number | null; badges: string[] }[]>('turma-league-weeks', { class_group_id: classGroupId! }),
   });
 }

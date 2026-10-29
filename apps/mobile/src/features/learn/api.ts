@@ -1,9 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { ApiError, callFunction, streamFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows } from '../common/query';
 import type { SourceRef } from '../../components';
 
 export type NoteDepth = 'tldr' | 'study' | 'deep' | 'class_summary';
@@ -63,7 +62,7 @@ export function useNotes(nodeId: string | undefined) {
     enabled: !!nodeId,
     queryFn: () =>
       // Failed notes too: the topic screen offers to write them again instead of waiting forever.
-      rows<Note>(supabase.from('notes').select('*').eq('node_id', nodeId!).in('status', ['pending', 'generating', 'ready', 'failed']).is('deleted_at', null)),
+      data<Note[]>('learn-notes', { node_id: nodeId }),
     refetchInterval: (q) => ((q.state.data ?? []).some((n) => n.status === 'pending' || n.status === 'generating') ? 5000 : false),
   });
 }
@@ -72,7 +71,7 @@ export function useNote(noteId: string | undefined) {
   return useQuery({
     queryKey: ['note', noteId],
     enabled: !!noteId,
-    queryFn: () => row<Note>(supabase.from('notes').select('*').eq('id', noteId!).maybeSingle()),
+    queryFn: () => data<Note | null>('learn-note', { note_id: noteId }),
   });
 }
 
@@ -146,20 +145,22 @@ export function streamExplain(
   return streamFunction('explain', { ...target, style, force_new: forceNew }, toEventHandler(handlers), { idempotencyKey: uuidv7() });
 }
 
-export async function sendExplanationFeedback(userId: string, explanationId: string, helpful: boolean) {
-  await supabase.from('explanation_feedback').insert({ user_id: userId, explanation_id: explanationId, helpful });
+/** Best effort, as before: a failed send is not shown. */
+export async function sendExplanationFeedback(_userId: string, explanationId: string, helpful: boolean) {
+  const id = uuidv7();
+  try {
+    await data('learn-explanation-feedback', { id, explanation_id: explanationId, helpful }, { idempotencyKey: id });
+  } catch {
+    // ignored
+  }
 }
 
 export function useGlossary(subjectId: string | undefined) {
-  const { userId } = useSession();
   return useQuery({
     queryKey: ['subject', subjectId, 'glossary'],
     enabled: !!subjectId,
     queryFn: async () => {
-      const [terms, overrides] = await Promise.all([
-        rows<GlossaryTerm>(supabase.from('glossary_terms').select('*').eq('subject_id', subjectId!).is('deleted_at', null).is('hidden_reason', null).order('normalized_term')),
-        rows<{ term_id: string; definition: string }>(supabase.from('glossary_term_overrides').select('term_id,definition').eq('user_id', userId!)),
-      ]);
+      const { terms, overrides } = await data<{ terms: GlossaryTerm[]; overrides: { term_id: string; definition: string }[] }>('learn-glossary', { subject_id: subjectId });
       const ov = new Map(overrides.map((o) => [o.term_id, o.definition]));
       return terms.map((t) => (ov.has(t.id) ? { ...t, definition: ov.get(t.id)! } : t));
     },
@@ -172,13 +173,11 @@ export function useSubjectCards(subjectId: string | undefined) {
     queryKey: ['subject', subjectId, 'cards'],
     enabled: !!subjectId && !!userId,
     queryFn: async () => {
-      const [cards, states, overrides] = await Promise.all([
-        rows<CardRow>(supabase.from('cards').select('*').eq('subject_id', subjectId!).is('deleted_at', null).eq('status', 'active')),
-        rows<{ card_id: string; due: string; state: number; suspended: boolean; hidden: boolean; is_leech: boolean }>(
-          supabase.from('card_states').select('card_id,due,state,suspended,hidden,is_leech').eq('user_id', userId!).eq('subject_id', subjectId!),
-        ),
-        rows<{ card_id: string; front: string | null; back: string | null }>(supabase.from('card_overrides').select('card_id,front,back').eq('user_id', userId!)),
-      ]);
+      const { cards, states, overrides } = await data<{
+        cards: CardRow[];
+        states: { card_id: string; due: string; state: number; suspended: boolean; hidden: boolean; is_leech: boolean }[];
+        overrides: { card_id: string; front: string | null; back: string | null }[];
+      }>('learn-subject-cards', { subject_id: subjectId });
       const st = new Map(states.map((s) => [s.card_id, s]));
       const ov = new Map(overrides.map((o) => [o.card_id, o]));
       return cards
@@ -195,53 +194,40 @@ export function useNodeCounts(nodeId: string | undefined) {
   return useQuery({
     queryKey: ['node', nodeId, 'counts'],
     enabled: !!nodeId,
-    queryFn: async () => {
-      const [cards, questions] = await Promise.all([
-        supabase.from('cards').select('id', { count: 'exact', head: true }).eq('node_id', nodeId!).is('deleted_at', null),
-        supabase.from('questions').select('id', { count: 'exact', head: true }).eq('node_id', nodeId!).is('deleted_at', null).eq('status', 'active'),
-      ]);
-      return { cards: cards.count ?? 0, questions: questions.count ?? 0 };
-    },
+    queryFn: () => data<{ cards: number; questions: number }>('learn-node-counts', { node_id: nodeId }),
   });
 }
 
 /** MEM-01: user card. In a shared subject it is private to the creator (R8). */
-export async function createUserCard(userId: string, input: { subjectId: string; nodeId: string; type: 'basic' | 'cloze' | 'reverse'; front: string; back: string; sourcePages?: SourceRef[]; origin?: CardRow['origin']; shared: boolean }) {
+export async function createUserCard(_userId: string, input: { subjectId: string; nodeId: string; type: 'basic' | 'cloze' | 'reverse'; front: string; back: string; sourcePages?: SourceRef[]; origin?: CardRow['origin']; shared: boolean }) {
   const id = uuidv7();
-  const { error } = await supabase.from('cards').insert({
-    id,
-    subject_id: input.subjectId,
-    node_id: input.nodeId,
-    type: input.type,
-    front: input.front,
-    back: input.back,
-    has_math: /\$[^$]+\$/.test(input.front + input.back),
-    source_pages: input.sourcePages ?? [],
-    origin: input.origin ?? 'user',
-    created_by: userId,
-    personal_for_user_id: input.shared ? userId : null,
-  });
-  if (error) throw error;
+  await data(
+    'learn-card-create',
+    {
+      id,
+      subject_id: input.subjectId,
+      node_id: input.nodeId,
+      type: input.type,
+      front: input.front,
+      back: input.back,
+      source_pages: input.sourcePages ?? [],
+      origin: input.origin ?? 'user',
+      // In a shared subject the card is personal to its creator (R8).
+      personal: input.shared,
+    },
+    { idempotencyKey: id },
+  );
   return id;
 }
 
 /** Edits to shared cards become per-user overrides, never silent changes for everyone (architecture §3.2). */
-export async function saveCardEdit(userId: string, card: CardRow, front: string, back: string) {
-  const own = card.origin === 'user' && (card.personal_for_user_id === userId || card.personal_for_user_id == null);
-  if (own) {
-    const { error } = await supabase.from('cards').update({ front, back, has_math: /\$[^$]+\$/.test(front + back) }).eq('id', card.id);
-    if (!error) return 'updated' as const;
-  }
-  const { error } = await supabase
-    .from('card_overrides')
-    .upsert({ user_id: userId, card_id: card.id, front, back, updated_at: new Date().toISOString() }, { onConflict: 'user_id,card_id' });
-  if (error) throw error;
-  return 'override' as const;
+export async function saveCardEdit(_userId: string, card: CardRow, front: string, back: string): Promise<'updated' | 'override'> {
+  const res = await data<{ result: 'updated' | 'override' }>('learn-card-edit', { card_id: card.id, front, back });
+  return res.result;
 }
 
-export async function setCardFlag(userId: string, cardId: string, patch: { suspended?: boolean; hidden?: boolean }) {
-  const { error } = await supabase.from('card_states').update(patch).eq('user_id', userId).eq('card_id', cardId);
-  if (error) throw error;
+export async function setCardFlag(_userId: string, cardId: string, patch: { suspended?: boolean; hidden?: boolean }) {
+  await data('learn-card-flag', { card_id: cardId, ...patch });
 }
 
 export async function draftCard(input: { subject_id: string; node_id?: string; selection: string; source: 'note' | 'pdf'; document_id?: string; page?: number }) {
@@ -256,8 +242,9 @@ export async function generateMoreQuestions(nodeId: string, count = 10) {
   return callFunction<{ node_id: string; count: number }, { question_ids: string[] }>('questions-generate-more', { node_id: nodeId, count }, { idempotencyKey: uuidv7() });
 }
 
-export async function recordTopicRead(userId: string, nodeId: string, depth: NoteDepth, seconds: number) {
-  await supabase.from('topic_reads').insert({ id: uuidv7(), user_id: userId, node_id: nodeId, depth, read_at: new Date().toISOString(), seconds });
+export async function recordTopicRead(_userId: string, nodeId: string, depth: NoteDepth, seconds: number) {
+  const id = uuidv7();
+  await data('learn-topic-read', { id, node_id: nodeId, depth, seconds }, { idempotencyKey: id });
 }
 
 export function useInvalidate() {

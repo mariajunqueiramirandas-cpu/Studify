@@ -2,13 +2,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../../api/data';
 import { callFunction } from '../../../api/functions';
 import { uploadFile } from '../../../api/storage';
 import { ActionBar, Banner, Button, Card, GenerationStatus, ListItem, Row, Screen, Text, useOnline, useOverlay } from '../../../components';
 import { useJob } from '../../../api/realtime';
 import { jobErrorText } from '../../../features/progress/jobs';
 import { useSession } from '../../../features/auth/session';
-import { rpc } from '../../../features/common/query';
 import { weekdayDate } from '../../../features/common/format';
 import { useInvalidateGoal } from '../../../features/goals/api';
 import { startScheduleImport, useScheduleImport } from '../../../features/prova/api';
@@ -69,7 +69,7 @@ export default function ImportSchedule() {
               onPress={async () => {
                 setBusy(true);
                 try {
-                  await rpc('apply_schedule_import', { schedule_import_id: importId, goal_id: goalId });
+                  await data('prova-schedule-import-apply', { schedule_import_id: importId, goal_id: goalId });
                   invalidate(goalId);
                   router.replace(`/goal/${goalId}/exams`);
                 } catch (e) {

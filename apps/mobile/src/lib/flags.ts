@@ -1,5 +1,5 @@
 // Feature flags: the union of `profiles.settings.flags` (opt-ins, local) and the server's
-// `my_feature_flags()` RPC (rollouts from the feature_flags table). Cached in MMKV so flags work
+// `my_feature_flags()` RPC via the flags-mine endpoint (rollouts from the feature_flags table). Cached in MMKV so flags work
 // offline and on the first frame.
 import { useSyncExternalStore } from 'react';
 import type { AppDb } from '../db/client';
@@ -55,11 +55,10 @@ export async function refreshFeatureFlags(db: AppDb, serverFlags?: string[]): Pr
 }
 
 async function fetchServerFlags(): Promise<string[]> {
-  // Imported lazily: the flags module must stay importable without Supabase configured.
-  const { supabase } = await import('../api/supabase');
-  const { data, error } = await supabase.rpc('my_feature_flags');
-  if (error) throw error;
-  return Array.isArray(data) ? (data as unknown[]).filter(isNotEmptyString) : [];
+  // Imported lazily: the flags module must stay importable without the API client configured.
+  const { data } = await import('../api/data');
+  const flags = await data<unknown>('flags-mine');
+  return Array.isArray(flags) ? (flags as unknown[]).filter(isNotEmptyString) : [];
 }
 
 /** Re-renders when the flag set changes. */

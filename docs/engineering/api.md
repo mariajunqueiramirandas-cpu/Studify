@@ -3,43 +3,47 @@
 | | |
 |---|---|
 | **Status** | Draft v1 |
-| **Scope** | Every server interface: direct table access under RLS, Postgres RPC functions, API functions, direct domain operations, Realtime channels, push notifications, deep links |
+| **Scope** | Every server interface: data endpoints under RLS, files, Postgres RPC functions, API functions, direct domain operations, realtime channels, push notifications, deep links |
 | **Consistent with** | [data-model.md](data-model.md) (all table/column names), [architecture.md](architecture.md), [security-privacy.md](security-privacy.md), [mobile-app.md](mobile-app.md), the specs in [docs/specs/](../specs/) |
 | **Schemas** | Request/response shapes are written as TypeScript types; each one is a Zod schema in `packages/shared/src/api/` with the same name, used by the app and the server. |
 
 ---
 
-> **Hosting note.** The synchronous API functions run on the API server (Bun + Hono, `apps/api`) at
-> `https://studify.vendua.com.br/api/<name>`, deployed on the owner's VPS. They were Supabase Edge Functions at
-> `/functions/v1/<name>`; the route names, bodies, responses and error envelopes did not change. See
-> [ADR 0008](adr/0008-vps-bun-hono-api.md) and [deployment.md](deployment.md).
+> **Hosting note.** Everything runs on the API server (Bun + Hono, `apps/api`) at
+> `https://studify.vendua.com.br/api/<name>`, on the owner's VPS, with its own Postgres and file store. Supabase is
+> used for accounts only. See [ADR 0008](adr/0008-vps-bun-hono-api.md), [ADR 0012](adr/0012-own-postgres-files-realtime.md)
+> and [deployment.md](deployment.md).
 
 
 ## 1. Interface types
 
 ```mermaid
 flowchart LR
-  App["Android app"] -- "supabase-js (RLS)" --> PG[("Postgres")]
-  App -- "rpc()" --> RPC["RPC functions<br/>security definer"]
-  RPC --> PG
-  App -- "HTTPS / SSE" --> Edge["API server (Bun + Hono)<br/>/api/name"]
-  Edge --> PG
-  Edge --> Claude["Claude API"]
-  Edge -- "direct operations" --> Tasks["server-tasks library"]
+  App["Android app"] -- "HTTPS, every answer over SSE" --> API["API server (Bun + Hono)<br/>/api/name"]
+  App -- "one SSE stream: broadcast / presence / change" --> API
+  App -- "sign-in only" --> Auth["Supabase Auth"]
+  API -- "as the student (RLS) or as the service" --> PG[("Postgres (own, VPS)")]
+  API --> Files[("Files (VPS disk)")]
+  API --> Claude["Claude API"]
+  API -- "direct operations" --> Tasks["server-tasks library"]
   Tasks --> Claude
   Tasks --> PG
   Tasks -- "Expo Push" --> Phone["Push"]
-  App <-- "postgres_changes / broadcast / presence" --> RT["Realtime"]
-  Edge -- "broadcast" --> RT
+  PG -- "row changes (LISTEN)" --> API
+  API -- "verify token" --> Auth
 ```
+
+The app reaches the backend through the API only (ADR 0012). Supabase is used for accounts: the app signs in with
+supabase-js and sends the session token on every call.
 
 | Type | Use it for | Never use it for |
 |---|---|---|
-| **Direct table access** (PostgREST via supabase-js, RLS) | Reading anything the user may see; writing the user's own simple rows (goals, exams, settings, overrides, highlights) | Anything that calls Claude, changes another user's data, needs server timing, or must validate cross-row invariants |
-| **RPC functions** (`supabase.rpc`) | Transactional, AI-free operations with invariants: join a Turma, edit the outline, log a grade, resolve a flag, anonymized insights | Long work; AI calls |
+| **Data endpoints** (`/api/<feature>-<verb>`, §3) | Reading anything the user may see; writing the user's own simple rows (goals, exams, settings, overrides, highlights). They run as the student, under RLS | Anything that calls Claude, changes another user's data, needs server timing, or must validate cross-row invariants |
+| **RPC functions** (called by data endpoints and API functions) | Transactional, AI-free operations with invariants: join a Turma, edit the outline, log a grade, resolve a flag, anonymized insights | Long work; AI calls |
 | **API functions** (`/api/<name>`) | All privileged and AI work, including ingestion and generation, running directly behind SSE | Unauthenticated service-role access |
+| **Files** (`/api/storage/*`, `storage-sign`) | Uploads (checked by the storage policies as the student) and signed download links | Anything not in a bucket |
 | **Calendar triggers** (same API process) | Future deadlines, quiet-hour delivery, budget resets, UTC recurring computations | Interactive request execution |
-| **Realtime** | Live progress, duels, battles, study rooms | Authoritative writes (clients only send presence) |
+| **Realtime** (`realtime-stream`, §8) | Live progress, duels, battles, study rooms | Authoritative writes (clients only send presence) |
 
 ---
 
@@ -47,7 +51,7 @@ flowchart LR
 
 ### 2.1 Authentication and headers
 
-- Every call carries the Supabase session JWT: `Authorization: Bearer <access_token>` (supabase-js does it). API functions verify it first (`supabase.auth.getUser(jwt)`, which refuses a suspended account with `403 banned`; a verified token is remembered for at most 60 s and never past its expiry, and a suspension forgets the account's tokens, ADR 0011) and authorize explicitly before any service-role query (security-privacy.md §3).
+- Every call carries the Supabase Auth session JWT: `Authorization: Bearer <access_token>`. API functions and data endpoints verify it first (`supabase.auth.getUser(jwt)`, which refuses a suspended account with `403 banned`; a verified token is remembered for at most 60 s and never past its expiry, and a suspension forgets the account's tokens, ADR 0011) and authorize explicitly before any service-role query (security-privacy.md §3).
 - Client headers on every API call: `x-studify-version: <android versionCode>`, `x-studify-schema: <sync schema version>`, `x-device-id: <stable per-install id>`.
 - A client below `min_supported_version_code` ([data-model §5.11](data-model.md#511-ai-operations-and-platform) `app_versions`) or with an unknown future schema gets **`426 Upgrade Required`** with code `app_update_required`.
 
@@ -133,35 +137,62 @@ Instants are ISO 8601 UTC (`2026-11-09T13:30:00Z`); student days are `YYYY-MM-DD
 
 ---
 
-## 3. Direct table access (supabase-js under RLS)
+## 3. Data endpoints (as the student, under RLS)
 
-### 3.1 What the app reads and writes directly
+The app has no direct database access (ADR 0012). What it used to read and write through supabase-js is a set of
+named endpoints in `apps/api/src/data/<feature>.ts`, one module per app feature, merged into the route table. Each:
 
-| Area | Reads | Direct writes (own rows) |
+- runs every statement as `authenticated` with the caller's claims (`db.asUser`), so the row level security policies
+  decide what it may read and write, exactly as they did for the direct queries. The user is always the token's
+  user, never a field of the request;
+- validates its input with Zod and has a fixed query shape (no table or column names from the client);
+- answers over SSE like every call (§2.6): `meta`, then `done` with `result`. Reads (`write: false`) stream without
+  an Idempotency-Key record and are simply asked again after a drop; writes (`write: true`) are idempotent by their
+  `Idempotency-Key` (§2.4);
+- maps database errors to the envelope (§2.2): `42501` → `forbidden`, `23505` → `already_exists`, not one row →
+  `not_found`, constraint and type errors → `invalid_request`, codes raised by RPCs → that code;
+- declares an `example` input; `apps/api/test/data-routes.integration.test.ts` runs every endpoint with it against
+  the migrated schema in CI.
+
+Names are `<feature>-<verb>` (`subjects-list`, `goals-exam-update`, `enem-bank-items`); the full list is the code
+(`apps/api/src/data`). The app calls them with `data(name, input)` (`apps/mobile/src/api/data.ts`).
+
+### 3.1 What the endpoints cover
+
+| Area | Reads | Writes (own rows) |
 |---|---|---|
 | Profile & settings | `profiles` (self), `profiles_public`, `study_preferences`, `app_versions`, `release_notes`, `feature_flags` via `my_feature_flags()` | `profiles` (display name, avatar preset, school year, settings), `study_preferences`, `push_tokens`, `app_feedback` |
-| Subjects & materials | `subjects`, `subject_user_settings`, `documents`, `document_pages` (text for search UI), `knowledge_nodes`, `node_sources`, `node_prerequisites`, `ai_jobs` | personal `subjects` insert/update; `subject_user_settings`; `documents` insert (row created **before** upload, `status = uploaded`), `node_user_settings` |
+| Subjects & materials | `subjects`, `subject_user_settings`, `documents`, `document_pages`, `knowledge_nodes`, `node_sources`, `node_prerequisites`, `ai_jobs` | personal `subjects` insert/update; `subject_user_settings`; `documents` rename/delete, `node_user_settings` |
 | Content | `notes`, `glossary_terms`, `cards`, `questions`, `feed_items`, `explanations`, `concept_contrasts`, `podcast_episodes` | user cards (`origin = user`), `card_overrides`, `glossary_term_overrides`, `note_highlights`, `item_hides`, `mnemonics`, `memory_palaces`, `repertorio_items` |
 | Learning state | `card_states`, `review_logs`, `mastery`, `mistakes`, `quiz_attempts`, `attempt_answers`, `calibration_stats`, `daily_activity`, `streaks`, `achievements` | practice `quizzes`/`quiz_attempts`/`attempt_answers` while `in_progress` (synced via `sync-push` when offline), `mistakes` (cause, note) |
 | Goals | `goals`, `exams`, `exam_scope_items`, `exam_scope_nodes`, `grading_rules`, `grade_components`, `plan_items`, `readiness_snapshots` | `goals`, `exams`, `exam_scope_nodes` (confirm/uncheck), `grading_rules`, `grade_components`, `plan_items` (`status`, `pinned`), `availability_exceptions` |
 | Tutor | `tutor_threads`, `tutor_messages` | `tutor_threads` (rename, archive, delete), `tutor_messages.feedback` |
 | Turma | `class_groups`, `class_group_members_public`, `duels`, `duel_participants_public`, `battles`, `battle_players`, `study_rooms` | own membership flags (`nickname`, `contribute_insights`, `league_opt_in`, `accepts_duels`), `user_blocks`, `quiz_shares` |
-| ENEM | all ENEM reference tables, `essay_themes`, `atualidades_*`, `sisu_offers` | custom `essay_themes`, `sisu_targets` (via RPC `set_sisu_target`) |
+| ENEM | all ENEM reference tables, `essay_themes`, `atualidades_*`, `sisu_offers` | custom `essay_themes`, `sisu_targets` |
 
-### 3.2 Sync pull
+### 3.2 Sync pull (`sync-pull`)
 
-The sync engine pulls each mirrored table ([data-model §9.1](data-model.md#91-mirrored-tables)) with a per-table cursor:
+The sync engine pulls each mirrored table ([data-model §9.1](data-model.md#91-mirrored-tables)) with a per-table
+keyset cursor. `sync-pull` takes `{ table, select, pk, cursor: { updatedAt, key }, filters, limit ≤ 1000 }`, only for
+the mirrored tables, and returns `{ rows }` in `(updated_at, ...pk)` order, as the student may read them:
 
 ```ts
-supabase.from("cards")
-  .select(CARD_COLUMNS)
-  .in("subject_id", activeSubjectIds)
-  .or(`updated_at.gt.${ts},and(updated_at.eq.${ts},id.gt.${id})`)
-  .order("updated_at").order("id")
-  .limit(500);
+data('sync-pull', { table: 'cards', select: CARD_COLUMNS, pk: ['id'],
+  cursor: { updatedAt: ts, key: [id] }, filters: [{ column: 'subject_id', op: 'in', value: activeSubjectIds }], limit: 500 });
 ```
 
-Rows with `deleted_at` set are tombstones. Pull runs **after** push ([§4.1 `sync-push`](#41-platform-account-and-sync)). Large initial loads (> 5,000 cards) use RPC `sync_snapshot(table, subject_ids)` which returns a gzip JSON export URL from Storage.
+Rows with `deleted_at` set are tombstones. Pull runs **after** push ([§4.1 `sync-push`](#41-platform-account-and-sync)).
+
+### 3.3 Files
+
+Files live on the API's disk, one folder per bucket, with a `storage.objects` row each (data-model §7):
+
+- `POST /api/storage/object/<bucket>/<path>` (≤ 6 MB, `x-upsert`) and TUS 1.0.0 at `/api/storage/upload/resumable`
+  (6 MB chunks) for larger files. The storage policies decide, run as the student; refused → `403 forbidden`.
+- `storage-sign` `{ bucket, paths, expires_in?, download? }` → `{ urls: [{ path, signedUrl | null, error }] }`, over
+  SSE. Only files the student may read (storage policies) are signed.
+- `GET /api/storage/object/<bucket>/<path>?token=…` serves a signed link until it expires (default 1 h), with Range
+  support.
 
 ---
 
@@ -555,7 +586,7 @@ Every Trilha call (`trail-open`, `trail-prepare`, `trail-answer`, `trail-settle`
 
 ### 4.12 Web dashboard (`/painel`)
 
-The API container also serves the web dashboard (`apps/dashboard`) at `/painel`. It signs in with the same e-mail code as the app (`shouldCreateUser: false`: the web never creates accounts) and calls only the functions below, with the same conventions (§2: Bearer JWT, `POST`, Idempotency-Key on mutating calls). Request schemas and response types: `packages/shared/src/core/schemas/edge-dashboard.ts`. The admin read models are `private.admin_*` SQL functions (migration `20261029120000_admin_dashboard.sql`, tested in `supabase/tests/admin_dashboard.test.sql`). Every admin change is written to `private.admin_audit`.
+The API container also serves the web dashboard (`apps/dashboard`) at `/painel`. It signs in with the same e-mail code as the app (`shouldCreateUser: false`: the web never creates accounts) and calls only the functions below, with the same conventions (§2: Bearer JWT, `POST`, Idempotency-Key on mutating calls). Request schemas and response types: `packages/shared/src/core/schemas/edge-dashboard.ts`. The admin read models are `private.admin_*` SQL functions (migration `20261029120000_admin_dashboard.sql`, tested in `packages/db/pgtap/admin_dashboard.test.sql`). Every admin change is written to `private.admin_audit`.
 
 **Minha conta** (any signed-in student with a profile; 404 with "Termine o cadastro no app" before sign-up is complete):
 
@@ -707,11 +738,34 @@ The operation catalog below keeps its existing payloads and progress identifiers
 
 ## 8. Realtime channels
 
-### 8.1 `postgres_changes`
+Realtime is the API's own (ADR 0012), over SSE. An app holds **one stream**, `POST /api/realtime-stream` (Accept:
+`text/event-stream`), which answers `ready { connection_id }` and then, for the channels joined on it:
 
-Subscribed tables and filters are in [data-model §8.1](data-model.md#81-postgres_changes-rls-filtered). The app treats them as **hints** and refetches the row (payloads may omit large columns).
+| Event | Data |
+|---|---|
+| `broadcast` | `{ topic, event, payload }` — sent by the server on a private channel |
+| `presence` | `{ topic, state }` — the whole state, `{ <key>: [{ ...payload, user_id, presence_ref }] }`, after each change |
+| `change` | `{ topic, table, op: INSERT/UPDATE/DELETE, new, old }` — a row of a row channel, read as the subscriber |
+| `reauth` | `{}` — the token expired; the app refreshes its session, reopens the stream and joins again |
+
+plus a `: ping` comment every 15 s. Channels are joined and left with SSE calls: `realtime-join { connection_id,
+topic }` → `{ topic, presence }`, `realtime-leave { connection_id, topic }`, `realtime-track { connection_id, topic,
+key, payload }` (presence; the server sets `user_id` to the caller). After a dropped stream the app reopens it, joins
+its channels again and re-sends its presence (`apps/mobile/src/api/realtime-client.ts`).
+
+### 8.1 Row channels
+
+`rows:<table>:<column>=<uuid>`, for the tables and columns in `apps/api/src/realtime/hub.ts` (`ROW_CHANNELS`):
+`ai_jobs` (id, user_id, document_id), `notification_inbox` (user_id), `podcast_episodes` (id), `documents`,
+`notes`, `essays`, `duels`, `camera_captures` (id), `class_group_members` (class_group_id). A `user_id` channel is only
+for that user. Triggers announce each change (`pg_notify('studify_row_changes', ...)`, keys only); the API re-reads
+the row as each subscriber, so row level security decides who sees it. The app treats changes as **hints** and
+refetches what it shows.
 
 ### 8.2 Broadcast and presence
+
+Private channels are authorized by the realtime policies on `realtime.messages` (data-model §8.2): joining needs the
+select policy, presence (`realtime-track`) the insert policy (battles, duels and rooms only).
 
 ```ts
 // battle:{battle_id}  — sent by battle-control / battle.tick

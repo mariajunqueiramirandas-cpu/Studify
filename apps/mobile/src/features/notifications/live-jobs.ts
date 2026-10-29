@@ -7,8 +7,8 @@ import { isLiveJobType, liveKeyOf, liveRich, materialDoneRich, type LiveJobRow }
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { eq } from 'drizzle-orm';
 import { useEffect, useRef } from 'react';
+import { data } from '../../api/data';
 import { realtime, rowTopic, type RowChange } from '../../api/realtime';
-import { supabase } from '../../api/supabase';
 import { useDb } from '../../db/DatabaseProvider';
 import { subjects } from '../../db/schema';
 import { richNotifier } from '../../platform/rich-notify';
@@ -40,16 +40,8 @@ export function useLiveJobs() {
     queryKey: ['liveJobs', userId],
     enabled: !!userId,
     queryFn: async (): Promise<LiveJobRow[]> => {
-      const since = new Date(Date.now() - 6 * 3600_000).toISOString();
-      const { data } = await supabase
-        .from('ai_jobs')
-        .select('id,type,stage,status,progress,user_id,subject_id,document_id,started_at,items_total,items_done')
-        .eq('user_id', userId!)
-        .is('parent_job_id', null)
-        .gte('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      return ((data ?? []) as LiveJobRow[]).filter((j) => isLiveJobType(j.type));
+      const rows = await data<LiveJobRow[]>('notifications-live-jobs').catch(() => [] as LiveJobRow[]);
+      return rows.filter((j) => isLiveJobType(j.type));
     },
     refetchInterval: (q) => ((q.state.data ?? []).some((j) => ACTIVE.includes(j.status)) || tracked.current.size > 0 ? 5000 : false),
   });

@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows } from '../common/query';
 import type { MistakeCause, QuestionRow, QuestionType } from './types';
 
 export type QuizKind = 'practice' | 'mock_exam' | 'mistake_retry' | 'predicted_test' | 'boss' | 'feed' | 'duel' | 'battle' | 'enem_simulado' | 'trail';
@@ -88,17 +87,15 @@ export function useQuizBundle(quizId: string | undefined) {
     enabled: !!quizId,
     staleTime: Infinity,
     queryFn: async () => {
-      const quiz = await row<Quiz>(supabase.from('quizzes').select('*').eq('id', quizId!).maybeSingle());
-      if (!quiz) return null;
-      const qs = await rows<QuestionRow>(supabase.from('questions').select('*').in('id', quiz.question_ids));
+      // Official ENEM items carry their printed crops, edition and position (ENM-02.7); the server reads them.
+      const bundle = await data<{
+        quiz: Quiz;
+        questions: QuestionRow[];
+        enem: (Omit<EnemQuestionMeta, 'item_id' | 'position'> & { id: string; question_id: string; positions: { position: number }[] })[];
+      } | null>('practice-quiz-bundle', { quiz_id: quizId });
+      if (!bundle) return null;
+      const { quiz, questions: qs, enem } = bundle;
       const byId = new Map(qs.map((q) => [q.id, q]));
-      // Official ENEM items carry their printed crops, edition and position (ENM-02.7).
-      const official = quiz.kind === 'enem_simulado' || qs.some((q) => q.origin === 'enem_official');
-      const enem = official
-        ? await rows<Omit<EnemQuestionMeta, 'item_id' | 'position'> & { id: string; question_id: string; positions: Array<{ position: number }> }>(
-            supabase.from('enem_items').select('id,question_id,edition_year,day,positions,annulled,crop_paths,alt_text').in('question_id', quiz.question_ids),
-          )
-        : [];
       const meta = new Map<string, EnemQuestionMeta>(enem.map((e) => [e.question_id, { item_id: e.id, edition_year: e.edition_year, day: e.day, position: e.positions[0]?.position ?? null, annulled: e.annulled, crop_paths: e.crop_paths, alt_text: e.alt_text }]));
       return { quiz, questions: quiz.question_ids.map((id) => byId.get(id)).filter((q): q is QuestionRow => !!q), enem: meta };
     },
@@ -110,9 +107,7 @@ export function useAttemptResult(attemptId: string | undefined) {
     queryKey: ['attempt', attemptId],
     enabled: !!attemptId,
     queryFn: async () => {
-      const attempt = await row<Attempt>(supabase.from('quiz_attempts').select('*').eq('id', attemptId!).maybeSingle());
-      const answers = await rows<AttemptAnswer>(supabase.from('attempt_answers').select('*').eq('attempt_id', attemptId!));
-      const qs = answers.length ? await rows<QuestionRow>(supabase.from('questions').select('*').in('id', answers.map((a) => a.question_id))) : [];
+      const { attempt, answers, questions: qs } = await data<{ attempt: Attempt | null; answers: AttemptAnswer[]; questions: QuestionRow[] }>('practice-attempt', { attempt_id: attemptId });
       return { attempt, answers, questions: new Map(qs.map((q) => [q.id, q])) };
     },
     // Poll while the attempt is still being finalized (sync + quiz-submit) or AI grading is pending; give up after ~5 min.
@@ -158,11 +153,7 @@ export function useMistakes(filter: 'open' | 'resolved' | 'all') {
     queryKey: ['mistakes', userId, filter],
     enabled: !!userId,
     queryFn: async () => {
-      let q = supabase.from('mistakes').select('*').eq('user_id', userId!).is('deleted_at', null).order('created_at', { ascending: false });
-      if (filter === 'open') q = q.is('resolved_at', null);
-      if (filter === 'resolved') q = q.not('resolved_at', 'is', null);
-      const list = await rows<MistakeRow>(q);
-      const qs = list.length ? await rows<QuestionRow>(supabase.from('questions').select('*').in('id', [...new Set(list.map((m) => m.question_id))])) : [];
+      const { mistakes: list, questions: qs } = await data<{ mistakes: MistakeRow[]; questions: QuestionRow[] }>('practice-mistakes', { filter });
       const byId = new Map(qs.map((x) => [x.id, x]));
       return list.map((m) => ({ ...m, question: byId.get(m.question_id) ?? null }));
     },
@@ -171,11 +162,7 @@ export function useMistakes(filter: 'open' | 'resolved' | 'all') {
 
 /** PRA-04 cause / "O que eu aprendi" — LWW fields on the user's own row. */
 export async function updateMistake(id: string, patch: Partial<Pick<MistakeRow, 'cause' | 'user_note'>>) {
-  const { error } = await supabase
-    .from('mistakes')
-    .update({ ...patch, ...(patch.cause ? { cause_source: 'user' } : {}) })
-    .eq('id', id);
-  if (error) throw error;
+  await data('practice-mistake-update', { mistake_id: id, ...patch });
 }
 
 export interface CalibrationRow {
@@ -190,7 +177,7 @@ export function useCalibration() {
   return useQuery({
     queryKey: ['calibration', userId],
     enabled: !!userId,
-    queryFn: () => rows<CalibrationRow>(supabase.from('calibration_stats').select('node_id,confidence,n,n_correct').eq('user_id', userId!)),
+    queryFn: () => data<CalibrationRow[]>('practice-calibration'),
   });
 }
 
@@ -201,4 +188,10 @@ export function checkProblemWork(questionId: string, working: string) {
     { question_id: questionId, working },
     { idempotencyKey: uuidv7() },
   );
+}
+
+/** MOT-02.4: whether the student already defeated this unit's boss (later wins are worth less XP). */
+export async function bossDefeatedBefore(unitNodeId: string): Promise<boolean> {
+  const res = await data<{ defeated: boolean }>('practice-boss-defeated', { unit_node_id: unitNodeId });
+  return res.defeated;
 }

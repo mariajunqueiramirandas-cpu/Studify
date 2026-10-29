@@ -275,7 +275,7 @@ This spec also owns **TRU-02**: the error flag on every generated item, AI triag
 | `room:{room_id}` | broadcast + presence | timer state, group goal progress, reactions | Private; active Turma members. Reactions go through an Edge Function for rate limiting. |
 | `turma:{class_group_id}` | broadcast | "battle started", "subject shared", review-queue count (mods) | Private; active members. |
 
-Duel updates use push notifications + `postgres_changes` on `duels` filtered by participant.
+Duel updates use push notifications + the `rows:duels:id=<duel_id>` realtime channel (api.md §8.1).
 
 ## 7. AI behavior
 

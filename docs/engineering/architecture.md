@@ -14,8 +14,9 @@
 flowchart LR
   App["Android app · Expo"] <-->|"SSE: progress, deltas, final results"| API["Bun + Hono API · one service"]
   App <--> LocalDB[(SQLite offline cache)]
-  App <--> Supabase["Supabase Auth · RLS · Storage · Realtime"]
-  API <--> Supabase
+  App -->|"sign-in"| Auth["Supabase Auth"]
+  API -->|"verify tokens"| Auth
+  API <--> PG[("Postgres · RLS · files (VPS)")]
   API --> Tasks["Direct domain operations · server-tasks library"]
   Tasks --> Claude["Claude API"]
   Tasks --> TTS["TTS provider"]
@@ -24,7 +25,7 @@ flowchart LR
   Calendar --> Tasks
 ```
 
-The Android app owns UI and offline study state. Supabase owns authentication, persistent data, RLS, Storage and social Realtime. One VPS API service owns privileged requests, model calls, ingestion, generation and timed operations. `packages/server-tasks` is a library loaded in that process; it has no standalone entry point or container.
+The Android app owns UI and offline study state. Supabase Auth owns accounts and sign-in. Everything else is on the VPS (ADR 0012): one API service owns the data (its own Postgres, with RLS deciding every student read and write), the files, realtime over SSE, privileged requests, model calls, ingestion, generation and timed operations. The app reaches the data only through the API's data endpoints. `packages/server-tasks` is a library loaded in that process; it has no standalone entry point or container.
 
 Every new mobile request asks for SSE. Streams open after authentication, validation and idempotency admission, before handler work or model tokens. Structured results arrive in `done.result`; conversational responses stream deltas. Reconnects attach to the live operation with `Last-Event-ID`; completed transcripts replay for 24 hours. Heartbeats, bounded buffers, cancellation deadlines, crash recovery, one-replica ownership and rollout are specified in [ADR 0010](adr/0010-direct-sse-api.md).
 
@@ -37,13 +38,13 @@ Content is written ahead, not when a student asks for it: a material's notes, gl
 | Layer | Choice | Notes |
 |---|---|---|
 | Language | **TypeScript** everywhere | Shared types package between app and API server. |
-| Monorepo | pnpm workspaces | `apps/mobile`, `packages/server-tasks`, `apps/api` (API server), `supabase/` (migrations), `packages/shared` (types, schemas, FSRS wrapper, grading rules), `packages/prompts`. |
+| Monorepo | pnpm workspaces | `apps/mobile`, `packages/server-tasks`, `apps/api` (API server), `packages/db` (migrations, pgTAP, query engine, file store), `supabase/` (Auth config and e-mail templates), `packages/shared` (types, schemas, FSRS wrapper, grading rules), `packages/prompts`. |
 | Mobile | Expo SDK (latest stable), Expo Router, React Native | Android-only builds via EAS; development builds (not Expo Go) because of native modules (PDF viewer, widgets). |
 | Server state | TanStack Query | Caching, retries, optimistic updates. |
 | Local state | Zustand | UI/session state. |
 | Local DB | expo-sqlite + Drizzle ORM | Offline cards, card states, review logs, downloaded notes; sync queue. |
 | Validation | Zod | One schema per AI output and per API payload, shared across app/server. |
-| Backend | Supabase cloud (Postgres 15+, Auth, Storage, Realtime) + API server on Bun + Hono, on a VPS through Dokploy (`/api/<name>`; formerly Supabase Edge Functions) | Migrations in `supabase/migrations`. See [ADR 0008](adr/0008-vps-bun-hono-api.md) and [deployment.md](deployment.md). |
+| Backend | API server on Bun + Hono with its own Postgres 17, file store and SSE realtime, on a VPS through Dokploy (`/api/<name>`); Supabase Auth for accounts only | Migrations in `packages/db/migrations`, applied by the API at startup. See [ADR 0008](adr/0008-vps-bun-hono-api.md), [ADR 0012](adr/0012-own-postgres-files-realtime.md) and [deployment.md](deployment.md). |
 | Operation transport | SSE | Immediate stream, live reconnect, persisted result replay; future calendar triggers in the same API process. |
 | AI | Claude API via `@anthropic-ai/sdk` | Details in [ai-pipeline.md](ai-pipeline.md). |
 | Spaced repetition | `ts-fsrs` | Runs on device and on server (same package version). |

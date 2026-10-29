@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows, rpc } from '../common/query';
 
 export interface ClassGroup {
   id: string;
@@ -43,12 +42,7 @@ export function useMyClassGroups() {
   return useQuery({
     queryKey: ['classGroups', userId],
     enabled: !!userId,
-    queryFn: async () => {
-      const mine = await rows<Membership>(supabase.from('class_group_members').select('*').eq('user_id', userId!).in('status', ['active', 'pending']));
-      if (!mine.length) return [];
-      const groups = await rows<ClassGroup>(supabase.from('class_groups').select('*').in('id', mine.map((m) => m.class_group_id)).is('deleted_at', null));
-      return groups.map((g) => ({ ...g, membership: mine.find((m) => m.class_group_id === g.id)! }));
-    },
+    queryFn: () => data<(ClassGroup & { membership: Membership })[]>('class-groups'),
   });
 }
 
@@ -58,10 +52,7 @@ export function useClassGroup(classGroupId: string | undefined) {
     queryKey: ['classGroup', classGroupId, userId],
     enabled: !!classGroupId && !!userId,
     queryFn: async () => {
-      const [group, me] = await Promise.all([
-        row<ClassGroup>(supabase.from('class_groups').select('*').eq('id', classGroupId!).maybeSingle()),
-        row<Membership>(supabase.from('class_group_members').select('*').eq('class_group_id', classGroupId!).eq('user_id', userId!).maybeSingle()),
-      ]);
+      const { group, me } = await data<{ group: ClassGroup | null; me: Membership | null }>('class-get', { class_group_id: classGroupId! });
       return { group, me, isMod: me?.role === 'owner' || me?.role === 'moderator' };
     },
   });
@@ -71,7 +62,7 @@ export function useMembers(classGroupId: string | undefined) {
   return useQuery({
     queryKey: ['classGroup', classGroupId, 'members'],
     enabled: !!classGroupId,
-    queryFn: () => rows<MemberPublic>(supabase.from('class_group_members_public').select('*').eq('class_group_id', classGroupId!).in('status', ['active', 'pending'])),
+    queryFn: () => data<MemberPublic[]>('class-members', { class_group_id: classGroupId! }),
   });
 }
 
@@ -82,61 +73,60 @@ export function usePendingRequestsBadge(): number {
     queryKey: ['classRequests', userId],
     enabled: !!userId,
     refetchInterval: 120_000,
-    queryFn: async () => {
-      const mods = await rows<Membership>(supabase.from('class_group_members').select('class_group_id,role').eq('user_id', userId!).eq('status', 'active').in('role', ['owner', 'moderator']));
-      if (!mods.length) return 0;
-      const { count } = await supabase.from('class_group_members').select('user_id', { count: 'exact', head: true }).in('class_group_id', mods.map((m) => m.class_group_id)).eq('status', 'pending');
-      return count ?? 0;
-    },
+    queryFn: async () => (await data<{ count: number }>('class-requests-count')).count,
   });
   return q.data ?? 0;
 }
 
 export const createClassGroup = (name: string, school?: string, schoolYear?: string) =>
-  rpc<{ class_group_id: string; invite_code: string }>('create_class_group', { name, school: school || null, school_year: schoolYear || null });
+  data<{ class_group_id: string; invite_code: string }>('class-create', { name, school: school || null, school_year: schoolYear || null });
 
-export const joinClassGroup = (code: string) => rpc<{ class_group_id: string; status: 'active' | 'pending' }>('join_class_group', { code });
+export const joinClassGroup = (code: string) => data<{ class_group_id: string; status: 'active' | 'pending' }>('class-join', { code });
 
-export const rotateInvite = (classGroupId: string, days = 14) => rpc<{ invite_code: string; expires_at: string }>('rotate_invite', { class_group_id: classGroupId, expires_in_days: days, uses_left: null });
+export const rotateInvite = (classGroupId: string, days = 14) => data<{ invite_code: string; expires_at: string }>('class-invite-rotate', { class_group_id: classGroupId, expires_in_days: days });
 
-export const moderateMember = (classGroupId: string, userId: string, action: 'approve' | 'reject' | 'remove' | 'ban' | 'unban' | 'promote' | 'demote') =>
-  rpc<void>('moderate_member', { class_group_id: classGroupId, user_id: userId, action });
+export const moderateMember = async (classGroupId: string, userId: string, action: 'approve' | 'reject' | 'remove' | 'ban' | 'unban' | 'promote' | 'demote'): Promise<void> => {
+  await data('class-moderate', { class_group_id: classGroupId, user_id: userId, action });
+};
 
-export const leaveClassGroup = (classGroupId: string) => rpc<void>('leave_class_group', { class_group_id: classGroupId });
+export const leaveClassGroup = async (classGroupId: string): Promise<void> => {
+  await data('class-leave', { class_group_id: classGroupId });
+};
 
 /** SOC-01.15: owner only; the caller confirms by typing the Turma name. */
-export const deleteClassGroup = (classGroupId: string) => rpc<void>('delete_class_group', { class_group_id: classGroupId });
+export const deleteClassGroup = async (classGroupId: string): Promise<void> => {
+  await data('class-delete', { class_group_id: classGroupId });
+};
 
-export const createSharedSubject = (classGroupId: string, name: string, color: string, icon: string) => rpc<string>('create_shared_subject', { class_group_id: classGroupId, name, color, icon });
+export const createSharedSubject = async (classGroupId: string, name: string, color: string, icon: string): Promise<string> =>
+  (await data<{ id: string }>('class-subject-create', { class_group_id: classGroupId, name, color, icon })).id;
 
-export const blockUser = (userId: string) => rpc<void>('block_user', { user_id: userId });
+export const blockUser = async (userId: string): Promise<void> => {
+  await data('class-block-user', { user_id: userId });
+};
 
 export function useInvite(classGroupId: string | undefined) {
   return useQuery({
     queryKey: ['classGroup', classGroupId, 'invite'],
     enabled: !!classGroupId,
-    queryFn: () =>
-      row<{ code: string; expires_at: string }>(
-        supabase.from('invites').select('code,expires_at').eq('class_group_id', classGroupId!).is('revoked_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      ),
+    queryFn: () => data<{ code: string; expires_at: string } | null>('class-invite', { class_group_id: classGroupId! }),
   });
 }
 
-export async function updateMyMembership(classGroupId: string, userId: string, patch: Partial<Pick<Membership, 'nickname' | 'contribute_insights' | 'accepts_duels' | 'league_opt_in'>>) {
-  const { error } = await supabase.from('class_group_members').update(patch).eq('class_group_id', classGroupId).eq('user_id', userId);
-  if (error) throw error;
+/** The membership updated is always the signed-in student's own (the server uses the token's user). */
+export async function updateMyMembership(classGroupId: string, _userId: string, patch: Partial<Pick<Membership, 'nickname' | 'contribute_insights' | 'accepts_duels' | 'league_opt_in'>>) {
+  await data('class-membership-update', { class_group_id: classGroupId, patch });
 }
 
 export async function updateClassGroup(classGroupId: string, patch: Partial<Pick<ClassGroup, 'name' | 'join_policy' | 'allow_member_uploads' | 'settings'>>) {
-  const { error } = await supabase.from('class_groups').update(patch).eq('id', classGroupId);
-  if (error) throw error;
+  await data('class-update', { class_group_id: classGroupId, patch });
 }
 
 export function useClassSubjects(classGroupId: string | undefined) {
   return useQuery({
     queryKey: ['classGroup', classGroupId, 'subjects'],
     enabled: !!classGroupId,
-    queryFn: () => rows<{ id: string; name: string; color: string; icon: string }>(supabase.from('subjects').select('id,name,color,icon').eq('owner_class_group_id', classGroupId!).is('deleted_at', null)),
+    queryFn: () => data<{ id: string; name: string; color: string; icon: string }[]>('class-subjects', { class_group_id: classGroupId! }),
   });
 }
 
@@ -153,7 +143,7 @@ export function useClassInsights(classGroupId: string | undefined, subjectId?: s
   return useQuery({
     queryKey: ['classGroup', classGroupId, 'insights', subjectId],
     enabled: !!classGroupId,
-    queryFn: () => rpc<ClassInsight[]>('class_insights_for', { class_group_id: classGroupId, subject_id: subjectId ?? null }).catch(() => [] as ClassInsight[]),
+    queryFn: () => data<ClassInsight[]>('class-insights', { class_group_id: classGroupId!, subject_id: subjectId ?? null }).catch(() => [] as ClassInsight[]),
   });
 }
 
@@ -182,11 +172,7 @@ export function useDuels(classGroupId?: string) {
     queryKey: ['duels', userId, classGroupId],
     enabled: !!userId,
     refetchInterval: 30_000,
-    queryFn: () => {
-      let q = supabase.from('duels').select('*').or(`challenger_id.eq.${userId},opponent_id.eq.${userId}`).order('created_at', { ascending: false }).limit(30);
-      if (classGroupId) q = q.eq('class_group_id', classGroupId);
-      return rows<Duel>(q);
-    },
+    queryFn: () => data<Duel[]>('class-duels', classGroupId ? { class_group_id: classGroupId } : {}),
   });
 }
 
@@ -195,7 +181,7 @@ export function useDuel(duelId: string | undefined) {
     queryKey: ['duel', duelId],
     enabled: !!duelId,
     refetchInterval: 10_000,
-    queryFn: () => row<Duel>(supabase.from('duels').select('*').eq('id', duelId!).maybeSingle()),
+    queryFn: () => data<Duel | null>('class-duel-get', { duel_id: duelId! }),
   });
 }
 
@@ -262,7 +248,7 @@ export function useLiveBattles(classGroupId: string | undefined) {
     queryKey: ['classGroup', classGroupId, 'battles'],
     enabled: !!classGroupId,
     refetchInterval: 20_000,
-    queryFn: () => rows<Battle>(supabase.from('battles').select('*').eq('class_group_id', classGroupId!).in('status', ['lobby', 'question_open', 'question_closed', 'reveal'])),
+    queryFn: () => data<Battle[]>('class-battles-live', { class_group_id: classGroupId! }),
   });
 }
 
@@ -292,11 +278,13 @@ export function useReviewQueue(classGroupId: string | undefined) {
   return useQuery({
     queryKey: ['classGroup', classGroupId, 'flags'],
     enabled: !!classGroupId,
-    queryFn: () => rows<FlagRow>(supabase.from('content_flags').select('*').eq('class_group_id', classGroupId!).in('status', ['open', 'triaged', 'hidden_pending']).order('created_at')),
+    queryFn: () => data<FlagRow[]>('class-flags', { class_group_id: classGroupId! }),
   });
 }
 
-export const resolveFlag = (flagId: string, decision: 'accept' | 'reject' | 'remove', fix?: unknown) => rpc<void>('resolve_flag', { flag_id: flagId, decision, fix: fix ?? null });
+export const resolveFlag = async (flagId: string, decision: 'accept' | 'reject' | 'remove', fix?: unknown): Promise<void> => {
+  await data('class-flag-resolve', { flag_id: flagId, decision, fix: fix ?? null });
+};
 
 export const reportAbuse = (req: { reported_id?: string; class_group_id?: string; reason: string; context_type?: string; context_id?: string; comment?: string }) =>
   callFunction<typeof req, { report_id: string }>('report-create', req, { idempotencyKey: uuidv7() });

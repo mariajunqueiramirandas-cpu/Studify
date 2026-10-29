@@ -90,6 +90,8 @@ maybe('every data route answers its example over SSE, with no database error', a
   const writes = chosen.filter((r) => r.write);
   for (const route of [...reads, ...writes]) {
     const out = await call(route.name, route.example(seed), route.write);
+    // DATA_ROUTES_REPORT=1 lists how each write answered, to review the refusals by hand.
+    if (process.env.DATA_ROUTES_REPORT && route.write) console.log(`write ${route.name}: ${out.event === 'done' ? 'done' : out.data?.code}`);
     if (out.event === 'done') continue;
     if (out.event === 'error' && route.write && out.data?.code !== 'internal_error') continue;
     failures.push(`${route.name}: ${JSON.stringify(out.data)}`);

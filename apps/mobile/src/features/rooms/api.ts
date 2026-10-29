@@ -5,10 +5,9 @@ import type { RoomControlReq, RoomControlRes, RoomTimerConfig, RoomTimerState } 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { realtime, type RealtimeChannel } from '../../api/realtime';
-import { rows } from '../common/query';
 
 export interface RoomRow {
   id: string;
@@ -27,7 +26,7 @@ export function useOpenRooms(classGroupId: string | undefined) {
     queryKey: ['rooms', classGroupId],
     enabled: !!classGroupId,
     refetchInterval: 30_000,
-    queryFn: () => rows<RoomRow>(supabase.from('study_rooms').select('*').eq('class_group_id', classGroupId!).eq('status', 'open').order('created_at', { ascending: false })),
+    queryFn: () => data<RoomRow[]>('rooms-open', { class_group_id: classGroupId! }),
   });
 }
 
@@ -35,7 +34,7 @@ export function useRoom(roomId: string | undefined) {
   return useQuery({
     queryKey: ['room', roomId],
     enabled: !!roomId,
-    queryFn: async () => (await rows<RoomRow>(supabase.from('study_rooms').select('*').eq('id', roomId!)))[0] ?? null,
+    queryFn: () => data<RoomRow | null>('rooms-get', { room_id: roomId! }),
   });
 }
 

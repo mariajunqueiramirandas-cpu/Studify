@@ -1,7 +1,7 @@
 import type { PodcastStyle } from '@studify/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
 import { ActionBar, Banner, Button, Card, Chip, ChipGroup, Screen, SegmentedControl, SkeletonList, Text, useOnline, useOverlay } from '../../components';
 import { createEpisode } from '../../features/podcast/api';
 import { useSubject } from '../../features/subjects/api';
@@ -26,11 +26,9 @@ export default function NewPodcast() {
   // "Ouvir revisão desta prova" (INT-01.1): the exam's scope topics are preselected.
   useEffect(() => {
     if (!params.examId || initial.size) return;
-    void supabase
-      .from('exam_scope_nodes')
-      .select('node_id')
-      .eq('exam_id', params.examId)
-      .then(({ data }) => setPicked(new Set(((data as { node_id: string }[] | null) ?? []).map((r) => r.node_id))));
+    void data<{ node_ids: string[] }>('podcast-data-exam-scope', { exam_id: params.examId })
+      .then((res) => setPicked(new Set(res.node_ids)))
+      .catch(() => undefined);
   }, [params.examId, initial.size]);
   const [length, setLength] = useState<'5' | '10' | '15'>('10');
   const [style, setStyle] = useState<PodcastStyle>(params.style ?? (params.examId ? 'exam_review' : 'overview'));
