@@ -3,12 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { skillNodeState, skillTreeLayout, type SkillNodeView, type SkillTreeLayout } from '@studify/shared';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
 import { useLive } from '../../db/hooks/use-live';
 import { examScopeNodes, exams, knowledgeNodes, mastery } from '../../db/schema';
 import { studyDateOf } from '../../lib/dates';
 import { useSession } from '../auth/session';
-import { rows } from '../common/query';
 
 export interface SkillTreeData {
   layout: SkillTreeLayout;
@@ -24,11 +23,7 @@ export function usePrerequisites(subjectId: string | undefined) {
     queryKey: ['prereqs', subjectId],
     enabled: !!subjectId,
     staleTime: 10 * 60_000,
-    queryFn: async () => {
-      const nodes = await rows<{ id: string }>(supabase.from('knowledge_nodes').select('id').eq('subject_id', subjectId!).eq('kind', 'topic').is('deleted_at', null));
-      if (!nodes.length) return [];
-      return rows<{ node_id: string; prerequisite_node_id: string }>(supabase.from('node_prerequisites').select('node_id,prerequisite_node_id').in('node_id', nodes.map((n) => n.id)));
-    },
+    queryFn: () => data<Array<{ node_id: string; prerequisite_node_id: string }>>('skilltree-prereqs', { subject_id: subjectId }),
   });
 }
 
@@ -83,6 +78,6 @@ export function useBossAttempts(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['boss-attempts', userId, subjectId],
     enabled: !!userId,
-    queryFn: () => rows<{ unit_node_id: string; passed: boolean; score: number; created_at: string }>(supabase.from('boss_attempts').select('unit_node_id,passed,score,created_at').eq('user_id', userId!).order('created_at', { ascending: false }).limit(200)),
+    queryFn: () => data<Array<{ unit_node_id: string; passed: boolean; score: number; created_at: string }>>('skilltree-boss-attempts'),
   });
 }

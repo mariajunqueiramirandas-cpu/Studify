@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { streamFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { rows } from '../common/query';
 import { toEventHandler, type Citation, type StreamHandlers } from '../learn/api';
 import type { TutorScope } from './open';
 
@@ -41,7 +40,7 @@ export function useThreads() {
   return useQuery({
     queryKey: ['tutorThreads', userId],
     enabled: !!userId,
-    queryFn: () => rows<TutorThread>(supabase.from('tutor_threads').select('*').eq('user_id', userId!).is('archived_at', null).order('last_message_at', { ascending: false, nullsFirst: false }).limit(100)),
+    queryFn: () => data<TutorThread[]>('tutor-data-threads'),
   });
 }
 
@@ -49,7 +48,7 @@ export function useThreadMessages(threadId: string | null) {
   return useQuery({
     queryKey: ['tutorThread', threadId, 'messages'],
     enabled: !!threadId,
-    queryFn: () => rows<TutorMessage>(supabase.from('tutor_messages').select('*').eq('thread_id', threadId!).order('created_at')),
+    queryFn: () => data<TutorMessage[]>('tutor-data-messages', { thread_id: threadId }),
   });
 }
 
@@ -64,12 +63,21 @@ export function sendTutorMessage(
   };
 }
 
+/** Best effort, as before: a failed rating is not shown. */
 export async function rateMessage(messageId: string, feedback: -1 | 1, reason?: string) {
-  await supabase.from('tutor_messages').update({ feedback, feedback_reason: reason ?? null }).eq('id', messageId);
+  try {
+    await data('tutor-data-rate', { message_id: messageId, feedback, ...(reason !== undefined ? { reason } : {}) });
+  } catch {
+    // ignored
+  }
 }
 
 export async function archiveThread(threadId: string) {
-  await supabase.from('tutor_threads').update({ archived_at: new Date().toISOString() }).eq('id', threadId);
+  try {
+    await data('tutor-data-archive', { thread_id: threadId });
+  } catch {
+    // ignored, as before
+  }
 }
 
 /** `[[APOIO]]` marks distress in conversational output (security §8.2) — never shown raw. */

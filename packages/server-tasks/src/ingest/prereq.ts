@@ -38,7 +38,7 @@ export async function runPrerequisites(
   ctx: OperationContext,
   input: { subjectId: string; subjectName: string; ownerClassGroupId: string | null; userId: string | null; aiJobId: string | null; uploadedBy: string | null; documentId: string | null },
 ): Promise<PrereqResult> {
-  const sql: Sql = ctx.db;
+  const sql: Sql = ctx.sql;
   const nodes = await listNodes(sql, input.subjectId, true);
   const keyOf = new Map<string, string>();
   nodes.forEach((n, i) => keyOf.set(n.id, `n${i + 1}`));
@@ -95,7 +95,7 @@ export async function runPrerequisites(
     accepted.push({ node: nodeId, prerequisite: prerequisiteId });
   }
   if (accepted.length > 0) {
-    await withTransaction(ctx.db, async (client) => {
+    await withTransaction(ctx.sql, async (client) => {
       for (const e of accepted) {
         const res = await client.query(
           `insert into public.node_prerequisites (node_id, prerequisite_node_id, origin)

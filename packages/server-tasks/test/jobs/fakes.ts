@@ -401,7 +401,7 @@ export function fakeClaude(): FakeClaude {
   } as FakeClaude;
 }
 
-/** One Realtime broadcast sent through a channel's httpSend (api §8.2). */
+/** One Realtime broadcast sent through ctx.broadcast (api §8.2). Every Studify channel is private. */
 export interface FakeBroadcast {
   topic: string;
   private: boolean;
@@ -411,9 +411,9 @@ export interface FakeBroadcast {
 
 export interface FakeEnv {
   ctx: OperationContext;
-  /** Broadcasts sent through supabase.channel(topic).httpSend, in order. */
+  /** Broadcasts sent through ctx.broadcast, in order. */
   broadcasts: FakeBroadcast[];
-  /** Every httpSend fails with this message (failure path: the transition still commits). */
+  /** Every broadcast fails with this message (failure path: the transition still commits). */
   failBroadcast: string | null;
   db: FakeDatabase;
   storage: FakeStorage;
@@ -422,7 +422,7 @@ export interface FakeEnv {
   pushed: Array<{ userId: string; message: Record<string, unknown> }>;
   progress: Array<Record<string, unknown>>;
   pgQueries: Array<{ text: string; values?: unknown[] }>;
-  /** Rows returned by ctx.db.query for SQL containing `match` (first match wins; default: no rows). */
+  /** Rows returned by ctx.sql.query for SQL containing `match` (first match wins; default: no rows). */
   pgRows: Array<{ match: string; rows: Row[] }>;
   auth: { deleted: string[]; failDelete: string | null };
   setNow(iso: string): void;
@@ -452,17 +452,14 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
   const realtime = {
     failBroadcast: null as string | null,
   };
-  const supabase = {
+  const broadcast = async (topic: string, events: ReadonlyArray<{ event: string; payload: Record<string, unknown> }>) => {
+    for (const e of events) {
+      if (realtime.failBroadcast) throw new Error(realtime.failBroadcast);
+      broadcasts.push({ topic, private: true, event: e.event, payload: e.payload });
+    }
+  };
+  const client = {
     from: (table: string) => db.from(table),
-    channel: (topic: string, opts: { config?: { private?: boolean } } = {}) => ({
-      topic,
-      httpSend: async (event: string, payload: Record<string, unknown>) => {
-        if (realtime.failBroadcast) throw new Error(realtime.failBroadcast);
-        broadcasts.push({ topic, private: opts.config?.private === true, event, payload });
-        return { success: true };
-      },
-    }),
-    removeChannel: async () => 'ok',
     storage,
     auth: {
       admin: {
@@ -475,8 +472,9 @@ export function fakeEnv(startIso: string = NOW): FakeEnv {
     },
   };
   const ctx = {
-    supabase: supabase as unknown as OperationContext['supabase'],
-    db: pg as unknown as OperationContext['db'],
+    db: client as unknown as OperationContext['db'],
+    sql: pg as unknown as OperationContext['sql'],
+    broadcast,
     ai: claude.deps,
     log: pino({ enabled: false }),
     execute: async (name: string, data: Record<string, unknown>, opts?: FakeEnv['enqueued'][number]['opts']) => {

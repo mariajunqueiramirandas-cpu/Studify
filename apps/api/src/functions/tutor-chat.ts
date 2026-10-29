@@ -21,7 +21,7 @@ import { claudeDepsFor } from '../shared/deps.ts';
 import { pumpStream, stopReasonOf } from '../shared/stream.ts';
 import { searchTerms, ftsPages, selectNewPages, prepareTurnSlices, slicesFromStored, TUTOR_CONTEXT_PAGES_CAP, TUTOR_MESSAGES_PER_DAY, TUTOR_THREAD_MESSAGE_CAP, type StoredSlice } from '../shared/retrieval.ts';
 import type { DocumentSlice } from '@studify/ai';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 
 const DISTRESS_MARKER = '[[APOIO]]';
 type Req = TutorChatReq;
@@ -47,7 +47,7 @@ export function startOfLocalDay(now: Date, timeZone: string): string {
   return new Date(now.getTime() - elapsedMs).toISOString();
 }
 
-async function createThread(db: SupabaseClient, newId: () => string, userId: string, req: Req): Promise<ThreadRow> {
+async function createThread(db: Db, newId: () => string, userId: string, req: Req): Promise<ThreadRow> {
   const scope = req.scope;
   if (!scope) throw new ApiFailure('invalid_request');
   let subjectId: string | null = null;
@@ -111,7 +111,7 @@ async function createThread(db: SupabaseClient, newId: () => string, userId: str
   return { id, user_id: userId, scope_type: scope.type, subject_id: subjectId, goal_id: goalId, node_id: nodeId, mode: req.mode, context_pages: [], title: req.message.slice(0, 60), passage, capture_id: captureId };
 }
 
-async function loadThread(db: SupabaseClient, userId: string, threadId: string): Promise<ThreadRow> {
+async function loadThread(db: Db, userId: string, threadId: string): Promise<ThreadRow> {
   const { data, error } = await db
     .from('tutor_threads')
     .select('id, user_id, scope_type, subject_id, goal_id, node_id, mode, context_pages, title, passage, capture_id, archived_at')
@@ -123,7 +123,7 @@ async function loadThread(db: SupabaseClient, userId: string, threadId: string):
 }
 
 /** The student's documents in the thread's subjects (the retrieval set). Access is checked by the caller. */
-async function documentsFor(db: SupabaseClient, subjectIds: string[]) {
+async function documentsFor(db: Db, subjectIds: string[]) {
   if (subjectIds.length === 0) return new Map<string, { title: string; storagePath: string; subjectId: string }>();
   const { data, error } = await db.from('documents').select('id, title, storage_path, subject_id').in('subject_id', subjectIds).is('deleted_at', null);
   if (error) throw error;
@@ -312,14 +312,14 @@ export const handler = defineFunction<Req>({
   },
 });
 
-async function goalSubjects(db: SupabaseClient, goalId: string): Promise<string[]> {
+async function goalSubjects(db: Db, goalId: string): Promise<string[]> {
   const { data, error } = await db.from('exams').select('subject_id').eq('goal_id', goalId).is('deleted_at', null);
   if (error) throw error;
   return (data as Array<{ subject_id: string | null }>).map((e) => e.subject_id).filter((v): v is string => !!v);
 }
 
 /** Subjects the student can read (IDOR: a goal's exam can point at a subject the student no longer sees). */
-async function readableSubjects(db: SupabaseClient, userId: string, ids: string[]): Promise<string[]> {
+async function readableSubjects(db: Db, userId: string, ids: string[]): Promise<string[]> {
   const out: string[] = [];
   for (const id of ids) {
     const subject = await loadSubject(db, id);
@@ -354,7 +354,7 @@ function systemNotes(built: BuiltPrompt): string[] {
 }
 
 /** CAM-01.4: the capture's transcription, kept in the thread's context as data. */
-async function captureTranscription(db: SupabaseClient, captureId: string): Promise<string | null> {
+async function captureTranscription(db: Db, captureId: string): Promise<string | null> {
   const { data, error } = await db.from('camera_captures').select('confirmed_text, transcription').eq('id', captureId).maybeSingle();
   if (error) throw error;
   return ((data?.confirmed_text as string | null) ?? (data?.transcription as string | null) ?? null)?.slice(0, 6000) ?? null;

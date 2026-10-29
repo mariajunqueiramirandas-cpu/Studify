@@ -1,9 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { rows, rpc } from '../common/query';
 import type { SourceRef } from '../../components';
 
 export interface KnowledgeNode {
@@ -77,17 +76,8 @@ export function useOutline(subjectId: string | undefined) {
     queryKey: ['subject', subjectId, 'outline'],
     enabled: !!subjectId && !!userId,
     queryFn: async () => {
-      const nodes = await rows<KnowledgeNode>(
-        supabase.from('knowledge_nodes').select('*').eq('subject_id', subjectId!).is('deleted_at', null).order('position'),
-      );
-      const ids = nodes.map((n) => n.id);
-      const [sources, settings] = ids.length
-        ? await Promise.all([
-            rows<NodeSource>(supabase.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', ids)),
-            rows<{ node_id: string; excluded: boolean }>(supabase.from('node_user_settings').select('node_id,excluded').eq('user_id', userId!).in('node_id', ids)),
-          ])
-        : [[], []];
-      return buildOutline(nodes, sources, new Set(settings.filter((s) => s.excluded).map((s) => s.node_id)));
+      const res = await data<{ nodes: KnowledgeNode[]; sources: NodeSource[]; excluded: string[] }>('outline-get', { subject_id: subjectId });
+      return buildOutline(res.nodes, res.sources, new Set(res.excluded));
     },
     refetchInterval: (q) => (q.state.data && q.state.data.topics.some((t) => t.content_status === 'pending' || t.content_status === 'generating') ? 8000 : false),
   });
@@ -119,15 +109,12 @@ export async function editOutline(subjectId: string, ops: OutlineOp[]) {
 }
 
 export async function undoOutlineEvent(eventId: string) {
-  return rpc<void>('undo_outline_event', { event_id: eventId });
+  await data('outline-undo', { event_id: eventId });
 }
 
 /** Per-user "Não cai na prova" (R1) — works on shared subjects too. */
-export async function setNodeExcluded(userId: string, nodeId: string, excluded: boolean) {
-  const { error } = await supabase
-    .from('node_user_settings')
-    .upsert({ user_id: userId, node_id: nodeId, excluded, updated_at: new Date().toISOString() }, { onConflict: 'user_id,node_id' });
-  if (error) throw error;
+export async function setNodeExcluded(_userId: string, nodeId: string, excluded: boolean) {
+  await data('nodes-set-excluded', { node_id: nodeId, excluded });
 }
 
 export function useInvalidateOutline(subjectId: string) {
@@ -142,10 +129,7 @@ export function useCanEditSubject(subject: { owner_profile_id: string | null; ow
   const membership = useQuery({
     queryKey: ['classGroup', groupId, 'myRole', userId],
     enabled: !!groupId && !!userId,
-    queryFn: async () => {
-      const { data } = await supabase.from('class_group_members').select('role').eq('class_group_id', groupId!).eq('user_id', userId!).maybeSingle();
-      return (data as { role: string } | null)?.role ?? null;
-    },
+    queryFn: async () => (await data<{ role: string | null }>('subjects-group-role', { class_group_id: groupId })).role,
   });
   if (!subject) return false;
   if (subject.owner_profile_id) return subject.owner_profile_id === userId;
@@ -168,7 +152,7 @@ export function useMastery(subjectId: string | undefined) {
     queryKey: ['subject', subjectId, 'mastery', userId],
     enabled: !!subjectId && !!userId,
     queryFn: async () => {
-      const list = await rows<MasteryRow>(supabase.from('mastery').select('node_id,subject_id,mastery,retrievability,evidence_count,last_evidence_at').eq('user_id', userId!).eq('subject_id', subjectId!));
+      const list = await data<MasteryRow[]>('subjects-mastery', { subject_id: subjectId });
       return new Map(list.map((m) => [m.node_id, m]));
     },
   });

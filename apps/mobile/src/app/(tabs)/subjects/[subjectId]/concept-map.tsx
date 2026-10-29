@@ -3,9 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { supabase } from '../../../../api/supabase';
+import { data } from '../../../../api/data';
 import { Banner, Card, EmptyState, ListItem, Screen, SegmentedControl, Text } from '../../../../components';
-import { rows } from '../../../../features/common/query';
 import { useMastery, useOutline } from '../../../../features/subjects/outline';
 import { t } from '../../../../i18n';
 import { masteryColor, masteryLabel, radius, space, useTheme } from '../../../../theme';
@@ -24,13 +23,11 @@ export default function ConceptMap() {
   const edges = useQuery({
     queryKey: ['subject', subjectId, 'edges'],
     enabled: topicIds.length > 0,
-    queryFn: async () => {
-      const [prereq, rel] = await Promise.all([
-        rows<{ node_id: string; prerequisite_node_id: string }>(supabase.from('node_prerequisites').select('node_id,prerequisite_node_id').in('node_id', topicIds)),
-        rows<{ from_node_id: string; to_node_id: string; kind: 'related' | 'contrast'; reason: string | null }>(supabase.from('node_relations').select('from_node_id,to_node_id,kind,reason').eq('subject_id', subjectId)),
-      ]);
-      return { prereq, rel };
-    },
+    queryFn: () =>
+      data<{
+        prereq: Array<{ node_id: string; prerequisite_node_id: string }>;
+        rel: Array<{ from_node_id: string; to_node_id: string; kind: 'related' | 'contrast'; reason: string | null }>;
+      }>('concept-map-edges', { subject_id: subjectId, topic_ids: topicIds }),
   });
 
   const layout = useMemo(() => {

@@ -1,29 +1,57 @@
-# Studify backend for Dokploy (Docker Compose app built from this repository).
+# Studify backend for Dokploy (Docker Compose app built from this repository). Everything but accounts runs here
+# (ADR 0012): the API, its Postgres, the stored files and nightly backups. Accounts stay on Supabase Auth.
 # Dokploy: create a Compose app from this repo, paste the variables from .env.example into its Environment
 # tab (Dokploy writes them to .env next to this file), and add the domain in the Domains tab:
 #   service api, container port 3000, HTTPS on, host studify.vendua.com.br, path / (the same container serves the
 #   API under /api and the link site at /, /c, /i, /q, /b and /.well-known/assetlinks.json).
-# The API has no published ports: Traefik reaches it through dokploy-network (docs/engineering/deployment.md).
+# Only the API joins dokploy-network; Postgres is reachable from the API alone (docs/engineering/deployment.md).
 
 services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: studify
+      POSTGRES_USER: studify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studify -d studify"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     stop_grace_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://studify:${POSTGRES_PASSWORD}@db:5432/studify
+      STORAGE_DIR: /data/storage
+    volumes:
+      - files:/data/storage
     expose:
       - "3000"
     networks:
+      - internal
       - dokploy-network
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 40s
     # Manual Traefik routing, only if the Domains tab is not used (Dokploy generates the same labels):
     # labels:
     #   - traefik.enable=true
@@ -32,7 +60,45 @@ services:
     #   - traefik.http.routers.studify-api.tls.certresolver=letsencrypt
     #   - traefik.http.services.studify-api.loadbalancer.server.port=3000
 
+  # Nightly: a pg_dump of the database and a tarball of the files into the backups volume, keeping BACKUP_KEEP_DAYS
+  # (default 7). Copy that volume off the VPS (deployment.md §5): a backup on the same disk does not survive the disk.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: studify
+      PGDATABASE: studify
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+    volumes:
+      - backups:/backups
+      - files:/data/storage:ro
+    networks:
+      - internal
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          stamp=$$(date -u +%Y%m%dT%H%M%SZ)
+          if pg_dump --format=custom --file=/backups/studify-$$stamp.dump.part && mv /backups/studify-$$stamp.dump.part /backups/studify-$$stamp.dump; then
+            tar -czf /backups/files-$$stamp.tar.gz -C /data storage && echo "backup $$stamp done"
+          else
+            echo "backup $$stamp FAILED"; rm -f /backups/studify-$$stamp.dump.part
+          fi
+          find /backups -type f -mtime +$$KEEP_DAYS -delete
+          sleep 86400
+        done
+
+volumes:
+  pgdata:
+  files:
+  backups:
 
 networks:
+  internal:
   dokploy-network:
     external: true

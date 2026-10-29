@@ -2,7 +2,7 @@
 // Each helper mirrors a SQL helper of foundation.sql (can_read_subject, can_edit_subject,
 // can_upload_to_subject, is_member, is_moderator). A subject the caller may not see is reported as
 // not found, so existence is never revealed.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { ApiFailure } from '@studify/shared';
 
 export interface SubjectRow {
@@ -20,7 +20,7 @@ export interface SubjectRow {
 
 const SUBJECT_COLUMNS = 'id, owner_profile_id, owner_class_group_id, created_by, content_language, is_language_subject, enem_area, name, system_kind';
 
-export async function activeMembership(db: SupabaseClient, userId: string, groupId: string): Promise<{ role: string } | null> {
+export async function activeMembership(db: Db, userId: string, groupId: string): Promise<{ role: string } | null> {
   const { data, error } = await db
     .from('class_group_members')
     .select('role, status')
@@ -32,14 +32,14 @@ export async function activeMembership(db: SupabaseClient, userId: string, group
   return data ? { role: data.role as string } : null;
 }
 
-export async function loadSubject(db: SupabaseClient, subjectId: string): Promise<SubjectRow | null> {
+export async function loadSubject(db: Db, subjectId: string): Promise<SubjectRow | null> {
   const { data, error } = await db.from('subjects').select(SUBJECT_COLUMNS).eq('id', subjectId).is('deleted_at', null).maybeSingle();
   if (error) throw error;
   return (data as SubjectRow | null) ?? null;
 }
 
 /** can_read_subject: personal owner, an active member of the owning Turma, or a system subject (policy subjects_select_system). */
-export async function canReadSubject(db: SupabaseClient, userId: string, subject: SubjectRow): Promise<boolean> {
+export async function canReadSubject(db: Db, userId: string, subject: SubjectRow): Promise<boolean> {
   if (subject.system_kind) return true;
   if (subject.owner_profile_id === userId) return true;
   if (subject.owner_class_group_id) return (await activeMembership(db, userId, subject.owner_class_group_id)) !== null;
@@ -47,7 +47,7 @@ export async function canReadSubject(db: SupabaseClient, userId: string, subject
 }
 
 /** can_edit_subject: personal owner; Turma owner/moderator; or the member who created the shared subject. */
-export async function canEditSubject(db: SupabaseClient, userId: string, subject: SubjectRow): Promise<boolean> {
+export async function canEditSubject(db: Db, userId: string, subject: SubjectRow): Promise<boolean> {
   if (subject.system_kind) return false;
   if (subject.owner_profile_id === userId) return true;
   if (!subject.owner_class_group_id) return false;
@@ -58,7 +58,7 @@ export async function canEditSubject(db: SupabaseClient, userId: string, subject
 }
 
 /** can_upload_to_subject: edit rights, or any active member when the Turma allows member uploads. */
-export async function canUploadToSubject(db: SupabaseClient, userId: string, subject: SubjectRow): Promise<boolean> {
+export async function canUploadToSubject(db: Db, userId: string, subject: SubjectRow): Promise<boolean> {
   if (await canEditSubject(db, userId, subject)) return true;
   if (!subject.owner_class_group_id) return false;
   const { data, error } = await db.from('class_groups').select('allow_member_uploads').eq('id', subject.owner_class_group_id).maybeSingle();
@@ -71,7 +71,7 @@ export async function canUploadToSubject(db: SupabaseClient, userId: string, sub
  * visible subject → 403 (the subject exists and is visible, the action is not allowed).
  */
 export async function requireSubject(
-  db: SupabaseClient,
+  db: Db,
   userId: string,
   subjectId: string,
   need: 'read' | 'edit' | 'upload' = 'read',
@@ -90,7 +90,7 @@ export function personalRowVisible(personalForUserId: string | null | undefined,
 }
 
 /** Loads a node and its subject, then checks read access. Invisible → 404. */
-export async function requireNode(db: SupabaseClient, userId: string, nodeId: string): Promise<{ node: Record<string, unknown>; subject: SubjectRow }> {
+export async function requireNode(db: Db, userId: string, nodeId: string): Promise<{ node: Record<string, unknown>; subject: SubjectRow }> {
   const { data, error } = await db.from('knowledge_nodes').select('*').eq('id', nodeId).is('deleted_at', null).maybeSingle();
   if (error) throw error;
   if (!data) throw new ApiFailure('not_found');
@@ -102,7 +102,7 @@ export async function requireNode(db: SupabaseClient, userId: string, nodeId: st
  * private.is_public_question: a question of a system subject is visible only when it is a published ENEM item or
  * a practice question of a live Atualidades item. Questions of other subjects are not "public".
  */
-export async function isPublicQuestion(db: SupabaseClient, questionId: string): Promise<boolean> {
+export async function isPublicQuestion(db: Db, questionId: string): Promise<boolean> {
   const item = await db.from('enem_items').select('id').eq('question_id', questionId).eq('review_status', 'ok').maybeSingle();
   if (item.error) throw item.error;
   if (item.data) return true;
@@ -118,7 +118,7 @@ export async function isPublicQuestion(db: SupabaseClient, questionId: string): 
 
 /** A question the student may answer: readable subject, not someone else's personal row, and public if global. */
 export async function questionVisible(
-  db: SupabaseClient,
+  db: Db,
   userId: string,
   question: { id: string; subject_id: string; personal_for_user_id?: string | null },
   subject: SubjectRow | null,
@@ -129,7 +129,7 @@ export async function questionVisible(
 }
 
 /** private.is_app_admin: the operator role (profiles.app_role = app_admin). Admin endpoints answer 403 otherwise. */
-export async function requireAppAdmin(db: SupabaseClient, userId: string): Promise<void> {
+export async function requireAppAdmin(db: Db, userId: string): Promise<void> {
   const { data, error } = await db.from('profiles').select('app_role').eq('id', userId).maybeSingle();
   if (error) throw error;
   if (data?.app_role !== 'app_admin') throw new ApiFailure('forbidden');

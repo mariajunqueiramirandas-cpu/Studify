@@ -5,7 +5,8 @@
 import Constants from 'expo-constants';
 import { addPushTokenListener, getExpoPushTokenAsync, getPermissionsAsync } from 'expo-notifications';
 import { Platform } from 'react-native';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
+import { ApiError } from '../../api/errors';
 import { getDeviceId } from '../../lib/device';
 import { logger } from '../../lib/logger';
 
@@ -16,28 +17,15 @@ function projectId(): string | null {
   return extra?.eas?.projectId ?? (Constants as unknown as { easConfig?: { projectId?: string } }).easConfig?.projectId ?? null;
 }
 
-async function save(userId: string, token: string): Promise<TokenOutcome> {
-  const deviceId = getDeviceId();
+async function save(token: string): Promise<TokenOutcome> {
   const appVersion = Constants.expoConfig?.version ?? null;
-  const { data: current } = await supabase
-    .from('push_tokens')
-    .select('id, token')
-    .eq('user_id', userId)
-    .eq('device_id', deviceId)
-    .is('invalidated_at', null)
-    .maybeSingle();
-  const row = current as { id: string; token: string } | null;
-  if (row?.token === token) {
-    await supabase.from('push_tokens').update({ last_seen_at: new Date().toISOString(), app_version: appVersion }).eq('id', row.id);
-    return 'unchanged';
-  }
-  if (row) await supabase.from('push_tokens').update({ invalidated_at: new Date().toISOString() }).eq('id', row.id);
-  const { error } = await supabase.from('push_tokens').insert({ user_id: userId, token, device_id: deviceId, platform: 'android', app_version: appVersion });
-  if (error) {
-    logger.warn('push_token.insert_failed', { code: error.code });
+  try {
+    const res = await data<{ outcome: 'registered' | 'unchanged' }>('push-token-save', { token, device_id: getDeviceId(), app_version: appVersion });
+    return res.outcome;
+  } catch (e) {
+    logger.warn('push_token.insert_failed', { code: e instanceof ApiError ? e.code : String(e) });
     return 'unavailable';
   }
-  return 'registered';
 }
 
 /** Registers this install's Expo push token. Call after sign-in and after the permission is granted. */
@@ -48,8 +36,8 @@ export async function registerPushToken(userId: string): Promise<TokenOutcome> {
   const id = projectId();
   if (!id) return 'unavailable';
   try {
-    const { data } = await getExpoPushTokenAsync({ projectId: id });
-    return await save(userId, data);
+    const { data: token } = await getExpoPushTokenAsync({ projectId: id });
+    return await save(token);
   } catch (e) {
     // Most often: no Firebase project configured in this build.
     logger.warn('push_token.unavailable', { error: String(e) });
@@ -65,15 +53,9 @@ export function watchPushToken(userId: string): () => void {
 }
 
 /** Sign-out: this install stops receiving the user's pushes (security §9). */
-export async function invalidatePushToken(userId: string): Promise<void> {
-  await supabase
-    .from('push_tokens')
-    .update({ invalidated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('device_id', getDeviceId())
-    .is('invalidated_at', null)
-    .then(
-      () => undefined,
-      () => undefined,
-    );
+export async function invalidatePushToken(_userId: string): Promise<void> {
+  await data('push-token-invalidate', { device_id: getDeviceId() }).then(
+    () => undefined,
+    () => undefined,
+  );
 }

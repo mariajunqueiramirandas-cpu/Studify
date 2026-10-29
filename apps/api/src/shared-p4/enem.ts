@@ -1,6 +1,6 @@
 // ENEM helpers shared by enem-simulado-create and quiz-submit (spec 09 ENM-04, spec 08 §8.5): the bank pool with
 // TRI parameters, the student's answered questions, and the per-area TRI result of a submitted simulado.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import {
   scoreArea,
   targetPaceMin,
@@ -50,7 +50,7 @@ function chunk<T>(xs: readonly T[], size: number): T[][] {
   return out;
 }
 
-async function paramsFor(db: SupabaseClient, itemIds: readonly string[]): Promise<Map<string, ParamRow>> {
+async function paramsFor(db: Db, itemIds: readonly string[]): Promise<Map<string, ParamRow>> {
   const out = new Map<string, ParamRow>();
   for (const part of chunk(itemIds, 300)) {
     const res = await db.from('enem_item_params').select('enem_item_id, a, b, c, scale, logistic_d').in('enem_item_id', part);
@@ -68,7 +68,7 @@ function stdParams(p: ParamRow | undefined) {
 }
 
 /** Published, non-annulled regular items of the areas with their standardized `b` (the simulado pool). */
-export async function loadSimuladoPool(db: SupabaseClient, areas: readonly EnemArea[]): Promise<PoolItem[]> {
+export async function loadSimuladoPool(db: Db, areas: readonly EnemArea[]): Promise<PoolItem[]> {
   const items: EnemItemRow[] = [];
   for (const area of areas) {
     const res = await db.from('enem_items').select(ITEM_COLUMNS).eq('area', area).eq('review_status', 'ok').eq('annulled', false).eq('application', 'regular').limit(5000);
@@ -97,7 +97,7 @@ export async function loadSimuladoPool(db: SupabaseClient, areas: readonly EnemA
 }
 
 /** Question ids among `questionIds` the student already answered (ENM-08.4 "avoid answered items"). */
-export async function answeredQuestionIds(db: SupabaseClient, userId: string, questionIds: readonly string[]): Promise<Set<string>> {
+export async function answeredQuestionIds(db: Db, userId: string, questionIds: readonly string[]): Promise<Set<string>> {
   const out = new Set<string>();
   for (const part of chunk(questionIds, 300)) {
     const res = await db.from('attempt_answers').select('question_id').eq('user_id', userId).in('question_id', part);
@@ -127,7 +127,7 @@ export function letterOf(response: unknown): string | null {
  * analysis. Items keep the quiz order, so positions are the simulado's own (fatigue blocks of 15).
  */
 export async function simuladoAreaResults(
-  db: SupabaseClient,
+  db: Db,
   config: Pick<EnemSimuladoConfig, 'mode'>,
   questionIds: readonly string[],
   answers: ReadonlyMap<string, SimuladoAnswer>,

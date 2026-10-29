@@ -294,7 +294,7 @@ export async function buildKindCall(
 ): Promise<BuiltKindCall> {
   const slices: PdfSlice[] = toPdfSlices(refs);
   const languageSubject = bundle.subject.isLanguageSubject;
-  const sqlDb: Sql = env.ctx.db;
+  const sqlDb: Sql = env.ctx.sql;
   const existing = await existingItems(sqlDb, bundle, kind);
   const quantitative = bundle.concepts.some((c) => c.formulas.length > 0);
   const contentLanguage = languageOf;

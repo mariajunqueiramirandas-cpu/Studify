@@ -106,7 +106,7 @@ export const handler = defineFunction<z.infer<typeof SignupCompleteReqSchema>>({
       // The bootstrap owner has no invite row (row is null): nothing to join or use up.
       if (row?.class_group_id) {
         // join_class_group reads auth.uid(), so it runs with the student's own token.
-        const joined = await ctx.deps.asUser(ctx.user.jwt).rpc('join_class_group', { p_code: req.invite_code });
+        const joined = await ctx.deps.asUser(ctx.user).rpc('join_class_group', { p_code: req.invite_code });
         if (joined.error) throw joined.error;
         const payload = joined.data as { class_group_id: string; status: 'active' | 'pending' };
         const group = await db.from('class_groups').select('name').eq('id', payload.class_group_id).maybeSingle();

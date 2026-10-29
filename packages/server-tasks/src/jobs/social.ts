@@ -52,7 +52,7 @@ export const INSIGHT_K = 5;
 export async function handleDuelExpire(ctx: OperationContext, raw: Record<string, unknown>): Promise<{ status: string }> {
   const payload = DuelPayload.parse(raw);
   const duel = unwrap(
-    await ctx.supabase.from('duels').select('id,status,expires_at').eq('id', payload.duel_id).maybeSingle(),
+    await ctx.db.from('duels').select('id,status,expires_at').eq('id', payload.duel_id).maybeSingle(),
     'duels',
   ) as { id: string; status: string; expires_at: string } | null;
   if (!duel) return { status: 'not_found' };
@@ -60,7 +60,7 @@ export async function handleDuelExpire(ctx: OperationContext, raw: Record<string
   if (new Date(duel.expires_at).getTime() > ctx.now().getTime()) return { status: 'not_yet' };
   // Conditional update: only a duel still waiting expires. No penalty (SOC-02.10).
   const changed = unwrapRows<{ id: string }>(
-    await ctx.supabase.from('duels').update({ status: 'expired' }).eq('id', duel.id).eq('status', 'waiting_opponent').select('id'),
+    await ctx.db.from('duels').update({ status: 'expired' }).eq('id', duel.id).eq('status', 'waiting_opponent').select('id'),
     'duels',
   );
   return { status: changed.length > 0 ? 'expired' : 'noop' };
@@ -100,7 +100,7 @@ interface QuestionForBattle {
 export async function handleBattleTick(ctx: OperationContext, raw: Record<string, unknown>): Promise<BattleTickOutcome> {
   const payload = BattlePayload.parse(raw);
   const battle = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('battles')
       .select('id,class_group_id,quiz_id,status,current_index,question_opens_at,question_closes_at,seconds_per_question')
       .eq('id', payload.battle_id)
@@ -108,7 +108,7 @@ export async function handleBattleTick(ctx: OperationContext, raw: Record<string
     'battles',
   ) as BattleForTick | null;
   if (!battle) return { status: 'noop' };
-  const quiz = unwrap(await ctx.supabase.from('quizzes').select('question_ids').eq('id', battle.quiz_id).maybeSingle(), 'quizzes') as
+  const quiz = unwrap(await ctx.db.from('quizzes').select('question_ids').eq('id', battle.quiz_id).maybeSingle(), 'quizzes') as
     | { question_ids: string[] }
     | null;
   const questionIds = quiz?.question_ids ?? [];
@@ -125,7 +125,7 @@ export async function handleBattleTick(ctx: OperationContext, raw: Record<string
   if (step.kind === 'end' && !(elapsed >= REVEAL_MS + PODIUM_MS - TOLERANCE_MS)) return { status: 'noop' };
   if (step.kind === 'close') {
     const claimed = unwrapRows<{ id: string }>(
-      await ctx.supabase.from('battles').update({ status: BATTLE_REVEAL }).eq('id', battle.id).eq('status', BATTLE_OPEN).eq('current_index', payload.index).select('id'),
+      await ctx.db.from('battles').update({ status: BATTLE_REVEAL }).eq('id', battle.id).eq('status', BATTLE_OPEN).eq('current_index', payload.index).select('id'),
       'battles',
     );
     if (claimed.length === 0) return { status: 'noop' };
@@ -143,7 +143,7 @@ export async function handleBattleTick(ctx: OperationContext, raw: Record<string
     const closes = new Date(opens.getTime() + battle.seconds_per_question * 1000);
     const nextQuestion = await loadQuestionFor(ctx, questionIds[step.nextIndex]);
     const moved = unwrapRows<{ id: string }>(
-      await ctx.supabase
+      await ctx.db
         .from('battles')
         .update({ status: BATTLE_OPEN, current_index: step.nextIndex, question_opens_at: opens.toISOString(), question_closes_at: closes.toISOString() })
         .eq('id', battle.id)
@@ -173,7 +173,7 @@ export async function handleBattleTick(ctx: OperationContext, raw: Record<string
   }
   if (step.kind === 'podium') {
     const moved = unwrapRows<{ id: string }>(
-      await ctx.supabase.from('battles').update({ status: BATTLE_PODIUM }).eq('id', battle.id).eq('status', BATTLE_REVEAL).eq('current_index', payload.index).select('id'),
+      await ctx.db.from('battles').update({ status: BATTLE_PODIUM }).eq('id', battle.id).eq('status', BATTLE_REVEAL).eq('current_index', payload.index).select('id'),
       'battles',
     );
     if (moved.length === 0) return { status: 'noop' };
@@ -190,7 +190,7 @@ export async function handleBattleTick(ctx: OperationContext, raw: Record<string
   }
   // end
   const ended = unwrapRows<{ id: string }>(
-    await ctx.supabase.from('battles').update({ status: BATTLE_ENDED, ended_at: now.toISOString() }).eq('id', battle.id).eq('status', BATTLE_PODIUM).eq('current_index', payload.index).select('id'),
+    await ctx.db.from('battles').update({ status: BATTLE_ENDED, ended_at: now.toISOString() }).eq('id', battle.id).eq('status', BATTLE_PODIUM).eq('current_index', payload.index).select('id'),
     'battles',
   );
   if (ended.length === 0) return { status: 'noop' };
@@ -202,7 +202,7 @@ export async function handleBattleTick(ctx: OperationContext, raw: Record<string
 async function loadQuestionFor(ctx: OperationContext, questionId: string | undefined): Promise<QuestionForBattle | null> {
   if (!questionId) return null;
   return unwrap(
-    await ctx.supabase.from('questions').select('id,type,stem,stimulus,payload,explanation').eq('id', questionId).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('questions').select('id,type,stem,stimulus,payload,explanation').eq('id', questionId).is('deleted_at', null).maybeSingle(),
     'questions',
   ) as QuestionForBattle | null;
 }
@@ -210,7 +210,7 @@ async function loadQuestionFor(ctx: OperationContext, questionId: string | undef
 /** Everyone in the battle, with the nickname the Realtime leaderboard shows. */
 async function loadRoster(ctx: OperationContext, battleId: string): Promise<BattlePlayerScore[]> {
   const rows = unwrapRows<{ user_id: string; nickname: string; score: number }>(
-    await ctx.supabase.from('battle_players').select('user_id,nickname,score').eq('battle_id', battleId),
+    await ctx.db.from('battle_players').select('user_id,nickname,score').eq('battle_id', battleId),
     'battle_players',
   );
   return rows.map((r) => ({ user_id: r.user_id, nickname: r.nickname, score: Number(r.score ?? 0) }));
@@ -229,7 +229,7 @@ async function scoreQuestion(
   index: number,
 ): Promise<number> {
   const players = unwrapRows<{ user_id: string; nickname: string; score: number; answer_streak: number; quiz_attempt_id: string | null }>(
-    await ctx.supabase.from('battle_players').select('user_id,nickname,score,answer_streak,quiz_attempt_id').eq('battle_id', battle.id),
+    await ctx.db.from('battle_players').select('user_id,nickname,score,answer_streak,quiz_attempt_id').eq('battle_id', battle.id),
     'battle_players',
   );
   const attemptIds = players.map((p) => p.quiz_attempt_id).filter((id): id is string => id !== null);
@@ -237,7 +237,7 @@ async function scoreQuestion(
   if (question) {
     for (const part of chunk(attemptIds, IN_CHUNK)) {
       for (const a of unwrapRows<{ attempt_id: string; correct: boolean | null; answered_at: string; response: unknown }>(
-        await ctx.supabase.from('attempt_answers').select('attempt_id,correct,answered_at,response').eq('question_id', question.id).in('attempt_id', part),
+        await ctx.db.from('attempt_answers').select('attempt_id,correct,answered_at,response').eq('question_id', question.id).in('attempt_id', part),
         'attempt_answers',
       )) {
         answers.set(a.attempt_id, { correct: a.correct === true, receivedAtMs: Date.parse(a.answered_at), choice: choiceIdOf(question.type, a.response) });
@@ -259,7 +259,7 @@ async function scoreQuestion(
       const result = scoreBattleAnswer(fact, p.answer_streak, opensMs, closesMs, battle.seconds_per_question);
       score = p.score + result.points;
       unwrap(
-        await ctx.supabase.from('battle_players').update({ score, answer_streak: result.nextStreak }).eq('battle_id', battle.id).eq('user_id', p.user_id),
+        await ctx.db.from('battle_players').update({ score, answer_streak: result.nextStreak }).eq('battle_id', battle.id).eq('user_id', p.user_id),
         'battle_players',
       );
     }
@@ -286,21 +286,21 @@ async function scoreQuestion(
 export async function handleInsightsRecompute(ctx: OperationContext, raw: Record<string, unknown>): Promise<{ classes: number; questions: number }> {
   const payload = InsightsPayload.parse(raw);
   if (!payload.class_group_id) {
-    const groups = unwrapRows<{ id: string }>(await ctx.supabase.from('class_groups').select('id').is('deleted_at', null), 'class_groups');
+    const groups = unwrapRows<{ id: string }>(await ctx.db.from('class_groups').select('id').is('deleted_at', null), 'class_groups');
     for (const g of groups) await ctx.execute('insights.recompute', { class_group_id: g.id }, { singletonKey: `insights:${g.id}` });
     return { classes: groups.length, questions: 0 };
   }
   const classId = payload.class_group_id;
   const members = unwrapRows<{ user_id: string; contribute_insights: boolean }>(
-    await ctx.supabase.from('class_group_members').select('user_id,contribute_insights').eq('class_group_id', classId).eq('status', 'active'),
+    await ctx.db.from('class_group_members').select('user_id,contribute_insights').eq('class_group_id', classId).eq('status', 'active'),
     'class_group_members',
   );
   const optedOut = new Set(members.filter((m) => !m.contribute_insights).map((m) => m.user_id));
   const memberIds = members.map((m) => m.user_id);
-  const subjects = unwrapRows<{ id: string }>(await ctx.supabase.from('subjects').select('id').eq('owner_class_group_id', classId).is('deleted_at', null), 'subjects');
+  const subjects = unwrapRows<{ id: string }>(await ctx.db.from('subjects').select('id').eq('owner_class_group_id', classId).is('deleted_at', null), 'subjects');
   const questions: Array<{ id: string; node_id: string; origin?: string }> = [];
   for (const part of chunk(subjects.map((s) => s.id), IN_CHUNK)) {
-    questions.push(...unwrapRows(await ctx.supabase.from('questions').select('id,node_id,origin').in('subject_id', part).is('deleted_at', null), 'questions'));
+    questions.push(...unwrapRows(await ctx.db.from('questions').select('id,node_id,origin').in('subject_id', part).is('deleted_at', null), 'questions'));
   }
   const peer = new Set(questions.filter((q) => q.origin === 'peer').map((q) => q.id));
   const nodeOf = new Map(questions.map((q) => [q.id, q.node_id] as const));
@@ -309,7 +309,7 @@ export async function handleInsightsRecompute(ctx: OperationContext, raw: Record
     for (const memberChunk of chunk(memberIds, IN_CHUNK)) {
       rows.push(
         ...unwrapRows<AnswerRow>(
-          await ctx.supabase.from('attempt_answers').select('user_id,question_id,correct,response,answered_at').in('question_id', part).in('user_id', memberChunk).not('correct', 'is', null),
+          await ctx.db.from('attempt_answers').select('user_id,question_id,correct,response,answered_at').in('question_id', part).in('user_id', memberChunk).not('correct', 'is', null),
           'attempt_answers',
         ),
       );
@@ -317,9 +317,9 @@ export async function handleInsightsRecompute(ctx: OperationContext, raw: Record
   }
   // SOC-07.5: a peer question joins the insights only once it has 10 answerers.
   const aggregates = aggregateInsights(rows, optedOut, INSIGHT_K).filter((agg) => !peer.has(agg.questionId) || agg.answerers >= PEER_INSIGHT_MIN_ANSWERERS);
-  await ctx.db.query('delete from private.class_insights where class_group_id = $1', [classId]);
+  await ctx.sql.query('delete from private.class_insights where class_group_id = $1', [classId]);
   for (const agg of aggregates) {
-    await ctx.db.query(
+    await ctx.sql.query(
       'insert into private.class_insights (class_group_id, question_id, node_id, n_answered, n_wrong, option_counts, computed_at) values ($1, $2, $3, $4, $5, $6, $7)',
       [classId, agg.questionId, nodeOf.get(agg.questionId) ?? null, agg.answerers, agg.wrong, JSON.stringify(agg.optionCounts), ctx.now().toISOString()],
     );

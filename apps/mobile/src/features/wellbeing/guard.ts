@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { and, eq, gte, isNull } from 'drizzle-orm';
 import { useCallback, useEffect, useState } from 'react';
 import { uuidv7 } from 'uuidv7';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
 import { useDb } from '../../db/DatabaseProvider';
 import type { AppDb } from '../../db/client';
 import { exams, reviewLogs } from '../../db/schema';
@@ -13,7 +13,6 @@ import { localDateOf } from '../../lib/dates';
 import { getKv } from '../../lib/kv';
 import { useFocusStore } from '../../stores/focus';
 import { useSession } from '../auth/session';
-import { rows } from '../common/query';
 import { useMotivation } from '../motivation/api';
 import { updateSettings } from '../profile/api';
 import { recomputePlan } from '../goals/api';
@@ -94,7 +93,7 @@ export function useBurnoutNudge(opts: GuardOptions) {
     staleTime: 30 * 60_000,
     queryFn: () => {
       const from = localDateOf(new Date(Date.now() - 7 * 86_400_000));
-      return rows<{ local_date: string; active_minutes: number }>(supabase.from('daily_activity').select('local_date,active_minutes').eq('user_id', userId!).gte('local_date', from)).catch(() => []);
+      return data<{ local_date: string; active_minutes: number }[]>('wellbeing-daily-activity', { from }).catch(() => []);
     },
   });
 
@@ -154,7 +153,7 @@ export function useBurnoutNudge(opts: GuardOptions) {
     if (opts.surface === 'today' && (next.kind === 'long_session' || next.kind === 'performance_drop')) return;
     const id = uuidv7();
     recordShown(next.kind, now);
-    void supabase.from('nudge_events').insert({ id, user_id: userId, kind: next.kind, surface: opts.surface }).then(
+    void data('wellbeing-nudge-shown', { id, kind: next.kind, surface: opts.surface }, { idempotencyKey: id }).then(
       () => undefined,
       () => undefined,
     );
@@ -173,7 +172,7 @@ export function useBurnoutNudge(opts: GuardOptions) {
 
   const log = (action: 'acted' | 'dismissed' | 'accepted' | 'disabled') => {
     if (!nudge) return;
-    void supabase.from('nudge_events').update({ action, action_at: new Date().toISOString() }).eq('id', nudge.id).then(
+    void data('wellbeing-nudge-action', { nudge_id: nudge.id, action }).then(
       () => undefined,
       () => undefined,
     );

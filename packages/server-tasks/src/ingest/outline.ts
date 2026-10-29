@@ -78,7 +78,7 @@ export async function runOutlineCalls(
   doc: DocumentRecord,
   input: { jobId: string | null; pageCount: number; cutStarts: readonly number[]; existing: readonly NodeRow[] },
 ): Promise<{ status: 'ok'; outline: OutlineOut; sliceCount: number } | { status: 'failed'; code: 'ai_failed' | 'ai_refused' }> {
-  const sql: Sql = env.ctx.db;
+  const sql: Sql = env.ctx.sql;
   const slices = await outlineSlices(env, doc, input.pageCount, input.cutStarts);
   const client = env.ctx.ai.client;
   const uploaded = new Map<string, string>();

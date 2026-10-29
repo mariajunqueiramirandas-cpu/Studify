@@ -5,12 +5,11 @@ import type { CaptureActReq, CaptureActRes, CaptureAnalyzeRes, CaptureIntent, Gr
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction, streamFunction } from '../../api/functions';
 import { messageFor } from '../../api/messages';
 import { t } from '../../i18n';
 import { uploadFile } from '../../api/storage';
-import { supabase } from '../../api/supabase';
-import { row } from '../common/query';
 import { toEventHandler, type StreamHandlers } from '../learn/api';
 import type { PreparedPhoto } from './image';
 
@@ -61,18 +60,20 @@ export async function createCapture(
     });
     paths.push(`photos/${object}`);
   }
-  const { error } = await supabase.from('camera_captures').insert({
-    id: captureId,
-    user_id: userId,
-    intent: input.intent,
-    subject_id: input.subjectId ?? null,
-    node_id: input.nodeId ?? null,
-    image_paths: paths,
-    quality_flags: { device: input.photos.map((p) => p.issues), faces: input.photos.reduce((n, p) => n + p.faces, 0) },
-    // True only when the on-device face pass ran on every photo (CAM-00.6, CAM-01.7).
-    faces_blurred: input.photos.every((p) => p.blurChecked),
-  });
-  if (error) throw Object.assign(new Error(error.message), { code: error.code });
+  await data(
+    'camera-data-capture-create',
+    {
+      id: captureId,
+      intent: input.intent,
+      subject_id: input.subjectId ?? null,
+      node_id: input.nodeId ?? null,
+      image_paths: paths,
+      quality_flags: { device: input.photos.map((p) => p.issues), faces: input.photos.reduce((n, p) => n + p.faces, 0) },
+      // True only when the on-device face pass ran on every photo (CAM-00.6, CAM-01.7).
+      faces_blurred: input.photos.every((p) => p.blurChecked),
+    },
+    { idempotencyKey: captureId },
+  );
   return captureId;
 }
 
@@ -80,7 +81,7 @@ export function useCapture(captureId: string | undefined) {
   return useQuery({
     queryKey: ['capture', captureId],
     enabled: !!captureId,
-    queryFn: () => row<CaptureRow>(supabase.from('camera_captures').select('*').eq('id', captureId!).maybeSingle()),
+    queryFn: () => data<CaptureRow | null>('camera-data-capture', { capture_id: captureId }),
   });
 }
 
@@ -104,7 +105,11 @@ export function streamCaptureSolution(captureId: string, questionIndex: number, 
 
 /** Deletes an unsaved capture (the photos follow with the nightly purge, spec 11 §8.4). */
 export async function discardCapture(captureId: string) {
-  await supabase.from('camera_captures').update({ deleted_at: new Date().toISOString() }).eq('id', captureId);
+  try {
+    await data('camera-data-capture-discard', { capture_id: captureId });
+  } catch {
+    // ignored, as before
+  }
 }
 
 // ---------------------------------------------------------------- essays (PRA-07, CAM-03)
@@ -131,7 +136,7 @@ export function useEssay(essayId: string | undefined) {
   return useQuery({
     queryKey: ['essay', essayId],
     enabled: !!essayId,
-    queryFn: () => row<EssayRow>(supabase.from('essays').select('*').eq('id', essayId!).maybeSingle()),
+    queryFn: () => data<EssayRow | null>('camera-data-essay', { essay_id: essayId }),
     refetchInterval: (q) => (q.state.data?.status === 'grading' || q.state.data?.status === 'draft' ? 4000 : false),
   });
 }
@@ -182,20 +187,23 @@ export function useRegrade(essayId: string | undefined, refetch: () => Promise<u
  * version of an earlier answer points at it (PRA-07.8) so the result shows the difference in points.
  */
 export async function createTypedEssay(
-  userId: string,
+  _userId: string,
   input: { text: string; questionId?: string | null; questionText?: string | null; maxPoints?: number | null; subjectId?: string | null; parentEssayId?: string | null },
 ): Promise<string> {
   const id = uuidv7();
-  const { error } = await supabase.from('essays').insert({
-    id,
-    user_id: userId,
-    kind: 'school_answer',
-    question_id: input.questionId ?? null,
-    text: input.text,
-    input_mode: 'typed',
-    parent_essay_id: input.parentEssayId ?? null,
-    prompt: input.questionText ? { question_text: input.questionText, max_points: input.maxPoints ?? 10, subject_id: input.subjectId ?? null } : null,
-  });
-  if (error) throw Object.assign(new Error(error.message), { code: error.code });
+  // The server stores the question in `prompt` ({question_text, max_points (10 by default), subject_id}).
+  await data(
+    'camera-data-essay-create',
+    {
+      id,
+      text: input.text,
+      question_id: input.questionId ?? null,
+      question_text: input.questionText ?? null,
+      max_points: input.maxPoints ?? null,
+      subject_id: input.subjectId ?? null,
+      parent_essay_id: input.parentEssayId ?? null,
+    },
+    { idempotencyKey: id },
+  );
   return id;
 }

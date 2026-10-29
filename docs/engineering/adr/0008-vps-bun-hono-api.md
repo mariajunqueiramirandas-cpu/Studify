@@ -1,6 +1,6 @@
 # 0008 — API server on a VPS with Bun and Hono (Supabase Edge Functions retired)
 
-| Status | Accepted. Supersedes the Edge Functions part of [ADR 0002](0002-supabase-backend.md). |
+| Status | Accepted. Supersedes the Edge Functions part of [ADR 0002](0002-supabase-backend.md). Its "Supabase stays for Postgres, Storage and Realtime" is superseded by [ADR 0012](0012-own-postgres-files-realtime.md). |
 |---|---|
 | Date | 2026-10-27 |
 | Related | [Architecture](../architecture.md) · [API](../api.md) · [Deployment](../deployment.md) · [ADR 0005](0005-job-worker-pg-boss.md) |

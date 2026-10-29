@@ -15,7 +15,7 @@
 
 | Topic | Convention |
 |---|---|
-| Database | Postgres 15+ (Supabase). App tables live in `public` (exposed through PostgREST, RLS always on). Internal tables that clients must never read directly live in schema `private` (not exposed): `private.class_insights`, `private.ai_budgets`, `private.ai_budget_limits`, `private.question_served`, `private.moderation_actions`, `private.admin_audit`. Helper functions used by policies live in `private` and are `security definer`, `stable`, with `set search_path = ''`. |
+| Database | Postgres 15+ (Studify's own, on the VPS; ADR 0012). App tables live in `public` (RLS always on; the app reaches them only through data endpoints that run as the student, api.md §3). Internal tables that clients must never read directly live in schema `private` (never reached as a student): `private.class_insights`, `private.ai_budgets`, `private.ai_budget_limits`, `private.question_served`, `private.moderation_actions`, `private.admin_audit`. Helper functions used by policies live in `private` and are `security definer`, `stable`, with `set search_path = ''`. |
 | Naming | `snake_case`, plural table names, singular column names. FKs are `<entity>_id`. Booleans are adjectives or `is_`/`has_` (`hidden`, `is_leech`, `has_bookmarks`). Code names are English; PT-BR only in UI strings. |
 | Primary keys | `uuid`, **UUID v7** (time-ordered). Default `public.uuid_v7()` — a thin wrapper over the built-in `uuidv7()` on Postgres ≥ 18, or a PL/pgSQL implementation on older versions. Clients **may** supply ids (offline-created rows: attempts, answers, review logs, overrides, XP events); the server never trusts them for authorization. |
 | Join tables | Composite PK of the two FKs (e.g. `class_group_members (class_group_id, user_id)`). |
@@ -140,7 +140,7 @@ erDiagram
 
 ## 4. Core DDL (Phase 0–1)
 
-These statements are the starting point for the first migrations in `supabase/migrations/`. Triggers (`set_updated_at`), RLS enablement and policies are in [§6](#6-row-level-security). Columns are commented with the feature/requirement that needs them.
+These statements are the starting point for the first migrations in `packages/db/migrations/`. Triggers (`set_updated_at`), RLS enablement and policies are in [§6](#6-row-level-security). Columns are commented with the feature/requirement that needs them.
 
 ```sql
 -- 0000_extensions.sql
@@ -1432,7 +1432,7 @@ create policy photos_own on storage.objects for all to authenticated
 
 ## 8. Realtime
 
-### 8.1 `postgres_changes` (RLS-filtered)
+### 8.1 Row changes (RLS-filtered; api.md §8.1)
 
 Tables added to the `supabase_realtime` publication — status/progress changes the app shows live:
 
@@ -1521,7 +1521,7 @@ Rules: push before pull; outbox rows are idempotent on their UUID; tombstones (`
 
 ## 10. Migration plan by phase
 
-Each phase lands as a group of numbered migrations (`supabase/migrations/NNNN_<name>.sql`), each creating tables **with** their RLS policies and pgTAP tests in the same PR ([testing-strategy.md](testing-strategy.md)). Later phases only add tables, columns and CHECK values — never breaking renames (if unavoidable: add new column, backfill, switch readers, drop in a later phase).
+Each phase lands as a group of numbered migrations (`packages/db/migrations/<timestamp>_<name>.sql`, applied by the API at startup), each creating tables **with** their RLS policies and pgTAP tests in the same PR ([testing-strategy.md](testing-strategy.md)). Later phases only add tables, columns and CHECK values — never breaking renames (if unavoidable: add new column, backfill, switch readers, drop in a later phase).
 
 | Phase | Migrations |
 |---|---|

@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
 import { useSession } from '../auth/session';
 import { studyDateOf } from '../../lib/dates';
 import { levelFor } from '@studify/shared';
-import { rows } from '../common/query';
 
 export interface MotivationSummary {
   streak: number;
@@ -28,20 +27,17 @@ export function useMotivation() {
     staleTime: 60_000,
     queryFn: async (): Promise<MotivationSummary | null> => {
       const today = studyDateOf(Date.now());
-      const [streak, day, xp] = await Promise.all([
-        supabase.from('streaks').select('*').eq('user_id', userId!).maybeSingle(),
-        supabase.from('daily_activity').select('active_minutes').eq('user_id', userId!).eq('local_date', today).maybeSingle(),
-        supabase.from('xp_events').select('amount').eq('user_id', userId!),
-      ]);
-      if (streak.error && day.error) return null; // Phase 2 tables not deployed yet
-      const s = (streak.data ?? {}) as { current_length?: number; longest_length?: number; shields_available?: number; reset_notice_pending?: boolean; last_counted_date?: string | null };
-      const totalXp = ((xp.data ?? []) as { amount: number }[]).reduce((a, b) => a + (b.amount ?? 0), 0);
+      // The server reads streaks, today's daily_activity and the XP total; null when neither streak nor day could be read.
+      const res = await data<{ streak: Record<string, unknown> | null; active_minutes: number | null; xp_total: number } | null>('motivation-summary', { today }).catch(() => null);
+      if (!res) return null;
+      const s = (res.streak ?? {}) as { current_length?: number; longest_length?: number; shields_available?: number; reset_notice_pending?: boolean; last_counted_date?: string | null };
+      const totalXp = res.xp_total;
       const dailyGoal = Number((profile?.settings as { daily_goal_minutes?: number } | undefined)?.daily_goal_minutes ?? 20);
       return {
         streak: s.current_length ?? 0,
         bestStreak: s.longest_length ?? 0,
         shields: s.shields_available ?? 0,
-        todayMinutes: Number((day.data as { active_minutes?: number } | null)?.active_minutes ?? 0),
+        todayMinutes: Number(res.active_minutes ?? 0),
         dailyGoal,
         xp: totalXp,
         level: levelFor(totalXp),
@@ -64,6 +60,6 @@ export function useAchievements() {
   return useQuery({
     queryKey: ['achievements', userId],
     enabled: !!userId,
-    queryFn: () => rows<AchievementRow>(supabase.from('achievements').select('code,progress,unlocked_at').eq('user_id', userId!).is('deleted_at', null)).catch(() => [] as AchievementRow[]),
+    queryFn: () => data<AchievementRow[]>('motivation-achievements').catch(() => [] as AchievementRow[]),
   });
 }

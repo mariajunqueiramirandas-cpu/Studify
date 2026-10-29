@@ -3,7 +3,7 @@
 // from the content written ahead for the whole subject (trail_concept_content, ADR 0011) as soon as the path needs
 // them, with no model call; only what that content does not cover is written by a Claude call, in trail-generate.ts.
 // Decisions about what comes next are the pure engine's (@studify/shared learning/trail.ts).
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import {
   ApiFailure,
   McqSinglePayloadSchema,
@@ -134,7 +134,7 @@ export interface Outline {
  * The topics a path can teach (spec 14 §8.1, trailTopicsOf): not excluded by the student ("não cai na prova"), not a
  * placeholder from a content list, and with pages of material to teach from. Concepts follow their topic.
  */
-export async function loadOutline(db: SupabaseClient, userId: string, subjectId: string): Promise<Outline> {
+export async function loadOutline(db: Db, userId: string, subjectId: string): Promise<Outline> {
   const nodes = await db
     .from('knowledge_nodes')
     .select('id, parent_id, kind, title, summary, position, learning_objectives, key_terms, is_placeholder, hidden_reason')
@@ -174,7 +174,7 @@ export interface SubjectPlan {
   prompt_version: string;
 }
 
-export async function loadSubjectPlan(db: SupabaseClient, subjectId: string): Promise<SubjectPlan | null> {
+export async function loadSubjectPlan(db: Db, subjectId: string): Promise<SubjectPlan | null> {
   const row = await db.from('trail_subject_plans').select('outline_hash, goal, chapters, prompt_version').eq('subject_id', subjectId).maybeSingle();
   if (row.error) throw row.error;
   return (row.data as SubjectPlan | null) ?? null;
@@ -219,14 +219,14 @@ export function replan(trail: TrailRow, outline: Outline, startedTopicIds: Reado
 
 /** Short keys for the model (T1…, C1…) and back. */
 
-export async function loadTrail(db: SupabaseClient, userId: string, trailId: string): Promise<TrailRow> {
+export async function loadTrail(db: Db, userId: string, trailId: string): Promise<TrailRow> {
   const row = await db.from('trails').select('*').eq('id', trailId).maybeSingle();
   if (row.error) throw row.error;
   if (!row.data || (row.data as TrailRow).user_id !== userId) throw new ApiFailure('not_found');
   return row.data as TrailRow;
 }
 
-export async function loadSteps(db: SupabaseClient, trailId: string): Promise<StepRow[]> {
+export async function loadSteps(db: Db, trailId: string): Promise<StepRow[]> {
   const rows = await db.from('trail_steps').select('*').eq('trail_id', trailId).order('created_seq');
   if (rows.error) throw rows.error;
   return (rows.data as StepRow[]) ?? [];
@@ -240,7 +240,7 @@ export function outlineHashOf(outline: Outline): string {
 // ---------------------------------------------------------------- generation
 
 /** Takes the generation lease; false when another request is generating right now. */
-export async function takeLease(db: SupabaseClient, trailId: string, now: Date): Promise<boolean> {
+export async function takeLease(db: Db, trailId: string, now: Date): Promise<boolean> {
   const taken = await db
     .from('trails')
     .update({ preparing_until: new Date(now.getTime() + LEASE_MS).toISOString() })
@@ -251,7 +251,7 @@ export async function takeLease(db: SupabaseClient, trailId: string, now: Date):
   return ((taken.data as unknown[]) ?? []).length > 0;
 }
 
-export async function releaseLease(db: SupabaseClient, trailId: string): Promise<void> {
+export async function releaseLease(db: Db, trailId: string): Promise<void> {
   const released = await db.from('trails').update({ preparing_until: null }).eq('id', trailId);
   if (released.error) throw released.error;
 }
@@ -281,7 +281,7 @@ export interface BankRow {
 
 export type Bank = Map<string, BankRow>;
 
-export async function loadBank(db: SupabaseClient, conceptIds: readonly string[]): Promise<Bank> {
+export async function loadBank(db: Db, conceptIds: readonly string[]): Promise<Bank> {
   if (conceptIds.length === 0) return new Map();
   const rows = await db
     .from('trail_concept_content')
@@ -488,7 +488,7 @@ function stepAfterLesson(chapter: TrailChapter, views: TrailStepView[], row: Ste
 }
 
 /** Ensine o Lucas on the topic (TRL-01.12): the best finished score and how many lessons were finished. */
-export async function lucasResult(db: SupabaseClient, userId: string, topicId: string): Promise<{ best: number | null; attempts: number }> {
+export async function lucasResult(db: Db, userId: string, topicId: string): Promise<{ best: number | null; attempts: number }> {
   const rows = await db.from('teaching_sessions').select('score').eq('user_id', userId).eq('node_id', topicId).eq('status', 'finished').is('deleted_at', null);
   if (rows.error) throw rows.error;
   const list = (rows.data as Array<{ score: number | null }>) ?? [];
@@ -506,7 +506,7 @@ function unitOf(outline: Outline, topicId: string): NodeRow | null {
  * The Chefão to offer (TRL-01.14): the latest unit of the path whose chapters (at least 2) are all done and whose
  * boss the student has not defeated yet.
  */
-async function bossFor(db: SupabaseClient, trail: TrailRow, outline: Outline): Promise<TrailState['boss']> {
+async function bossFor(db: Db, trail: TrailRow, outline: Outline): Promise<TrailState['boss']> {
   const doneCount = trail.status === 'completed' ? trail.plan.length : trail.chapter_index;
   const done = new Set(trail.plan.slice(0, doneCount).map((c) => c.topicId));
   const byUnit = new Map<string, { topics: string[]; lastIndex: number }>();

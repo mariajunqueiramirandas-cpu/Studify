@@ -1,9 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows, rpc } from '../common/query';
 
 export interface Goal {
   id: string;
@@ -88,11 +87,7 @@ export function useGoals(status: 'active' | 'all' = 'active') {
   return useQuery({
     queryKey: ['goals', userId, status],
     enabled: !!userId,
-    queryFn: () => {
-      let q = supabase.from('goals').select('*').eq('user_id', userId!).is('deleted_at', null).order('start_date', { ascending: false });
-      if (status === 'active') q = q.eq('status', 'active');
-      return rows<Goal>(q);
-    },
+    queryFn: () => data<Goal[]>('goals-list', { status }),
   });
 }
 
@@ -100,7 +95,7 @@ export function useGoal(goalId: string | undefined) {
   return useQuery({
     queryKey: ['goal', goalId],
     enabled: !!goalId,
-    queryFn: () => row<Goal>(supabase.from('goals').select('*').eq('id', goalId!).maybeSingle()),
+    queryFn: () => data<Goal | null>('goals-get', { goal_id: goalId }),
   });
 }
 
@@ -108,7 +103,7 @@ export function useGoalExams(goalId: string | undefined) {
   return useQuery({
     queryKey: ['goal', goalId, 'exams'],
     enabled: !!goalId,
-    queryFn: () => rows<Exam>(supabase.from('exams').select('*').eq('goal_id', goalId!).is('deleted_at', null).neq('status', 'cancelled').order('local_date')),
+    queryFn: () => data<Exam[]>('goals-exams', { goal_id: goalId }),
   });
 }
 
@@ -121,7 +116,7 @@ export function useUpcomingExams() {
     queryFn: () => {
       const today = new Date();
       const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      return rows<Exam>(supabase.from('exams').select('*').eq('user_id', userId!).eq('status', 'scheduled').gte('local_date', iso).is('deleted_at', null).order('local_date'));
+      return data<Exam[]>('goals-exams-upcoming', { today: iso });
     },
   });
 }
@@ -141,7 +136,7 @@ export function usePlanCoach() {
     queryKey: ['plan_coach', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const found = await row<{ output: PlanCoach; local_date: string }>(supabase.from('plan_coach').select('output,local_date').eq('user_id', userId!).maybeSingle());
+      const found = await data<{ output: PlanCoach; local_date: string } | null>('goals-plan-coach');
       return found ? { ...found.output, localDate: found.local_date } : null;
     },
   });
@@ -151,33 +146,34 @@ export function useExam(examId: string | undefined) {
   return useQuery({
     queryKey: ['exam', examId],
     enabled: !!examId,
-    queryFn: () => row<Exam>(supabase.from('exams').select('*').eq('id', examId!).maybeSingle()),
+    queryFn: () => data<Exam | null>('goals-exam-get', { exam_id: examId }),
   });
 }
 
 export async function createGoal(
-  userId: string,
+  _userId: string,
   input: { name: string; start_date: string; end_date: string; term_index?: number | null; mode?: 'exam_week' | 'enem'; settings?: Record<string, unknown> },
 ) {
   const id = uuidv7();
-  const { error } = await supabase.from('goals').insert({
-    id,
-    user_id: userId,
-    mode: input.mode ?? 'exam_week',
-    name: input.name.trim(),
-    start_date: input.start_date,
-    end_date: input.end_date,
-    term_index: input.term_index ?? null,
-    school_year: new Date().getFullYear(),
-    ...(input.settings ? { settings: input.settings } : {}),
-  });
-  if (error) throw error;
+  await data(
+    'goals-create',
+    {
+      id,
+      mode: input.mode ?? 'exam_week',
+      name: input.name.trim(),
+      start_date: input.start_date,
+      end_date: input.end_date,
+      term_index: input.term_index ?? null,
+      school_year: new Date().getFullYear(),
+      ...(input.settings ? { settings: input.settings } : {}),
+    },
+    { idempotencyKey: id },
+  );
   return id;
 }
 
 export async function updateGoal(goalId: string, patch: Partial<Pick<Goal, 'name' | 'start_date' | 'end_date' | 'status' | 'term_index' | 'settings'>>) {
-  const { error } = await supabase.from('goals').update(patch).eq('id', goalId);
-  if (error) throw error;
+  await data('goals-update', { goal_id: goalId, ...patch });
 }
 
 export interface ExamInput {
@@ -191,30 +187,25 @@ export interface ExamInput {
   parent_exam_id?: string | null;
 }
 
-export async function saveExam(userId: string, goalId: string, input: ExamInput, examId?: string) {
-  const id = examId ?? uuidv7();
-  const payload = { ...input, goal_id: goalId, user_id: userId };
-  const { error } = examId ? await supabase.from('exams').update(input).eq('id', examId) : await supabase.from('exams').insert({ id, ...payload });
-  if (error) throw error;
+export async function saveExam(_userId: string, goalId: string, input: ExamInput, examId?: string) {
+  if (examId) {
+    await data('goals-exam-update', { exam_id: examId, ...input });
+    return examId;
+  }
+  const id = uuidv7();
+  await data('goals-exam-create', { id, goal_id: goalId, ...input }, { idempotencyKey: id });
   return id;
 }
 
 export async function cancelExam(examId: string) {
-  const { error } = await supabase.from('exams').update({ status: 'cancelled' }).eq('id', examId);
-  if (error) throw error;
+  await data('goals-exam-cancel', { exam_id: examId });
 }
 
 export function useScope(examId: string | undefined) {
   return useQuery({
     queryKey: ['exam', examId, 'scope'],
     enabled: !!examId,
-    queryFn: async () => {
-      const [items, nodes] = await Promise.all([
-        rows<ScopeItem>(supabase.from('exam_scope_items').select('*').eq('exam_id', examId!).is('deleted_at', null).order('position')),
-        rows<ScopeNode>(supabase.from('exam_scope_nodes').select('*').eq('exam_id', examId!)),
-      ]);
-      return { items, nodes };
-    },
+    queryFn: () => data<{ items: ScopeItem[]; nodes: ScopeNode[] }>('goals-scope', { exam_id: examId }),
   });
 }
 
@@ -229,7 +220,7 @@ export async function resolveScope(input: { exam_id: string; items?: string[]; t
 }
 
 export async function confirmScope(examId: string, nodeIds: string[], defaultAll = false) {
-  return rpc<void>('confirm_exam_scope', { exam_id: examId, node_ids: nodeIds, default_all: defaultAll });
+  await data('goals-scope-confirm', { exam_id: examId, node_ids: nodeIds, default_all: defaultAll });
 }
 
 export function usePlanRange(from: string, to: string) {
@@ -237,8 +228,7 @@ export function usePlanRange(from: string, to: string) {
   return useQuery({
     queryKey: ['plan', userId, from, to],
     enabled: !!userId,
-    queryFn: () =>
-      rows<PlanItem>(supabase.from('plan_items').select('*').eq('user_id', userId!).gte('local_date', from).lte('local_date', to).is('deleted_at', null).order('local_date').order('order_in_day')),
+    queryFn: () => data<PlanItem[]>('goals-plan-range', { from, to }),
   });
 }
 
@@ -251,8 +241,7 @@ export async function recomputePlan(trigger: string, goalId?: string) {
 }
 
 export async function updatePlanItem(itemId: string, patch: Partial<Pick<PlanItem, 'status' | 'pinned' | 'local_date'>>) {
-  const { error } = await supabase.from('plan_items').update(patch).eq('id', itemId);
-  if (error) throw error;
+  await data('goals-plan-item-update', { item_id: itemId, ...patch });
 }
 
 export interface StudyPreferences {
@@ -271,18 +260,16 @@ export function useStudyPreferences() {
   return useQuery({
     queryKey: ['studyPreferences', userId],
     enabled: !!userId,
-    queryFn: () => row<StudyPreferences>(supabase.from('study_preferences').select('*').eq('user_id', userId!).maybeSingle()),
+    queryFn: () => data<StudyPreferences | null>('goals-study-preferences'),
   });
 }
 
-export async function saveStudyPreferences(userId: string, patch: Partial<Omit<StudyPreferences, 'user_id'>>) {
-  const { error } = await supabase.from('study_preferences').upsert({ user_id: userId, ...patch }, { onConflict: 'user_id' });
-  if (error) throw error;
+export async function saveStudyPreferences(_userId: string, patch: Partial<Omit<StudyPreferences, 'user_id'>>) {
+  await data('goals-study-preferences-save', patch);
 }
 
-export async function saveAvailabilityException(userId: string, localDate: string, minutes: number) {
-  const { error } = await supabase.from('availability_exceptions').upsert({ user_id: userId, local_date: localDate, minutes, source: 'user' }, { onConflict: 'user_id,local_date' });
-  if (error) throw error;
+export async function saveAvailabilityException(_userId: string, localDate: string, minutes: number) {
+  await data('goals-availability-save', { local_date: localDate, minutes });
 }
 
 export function useAvailabilityExceptions() {
@@ -290,7 +277,7 @@ export function useAvailabilityExceptions() {
   return useQuery({
     queryKey: ['availability', userId],
     enabled: !!userId,
-    queryFn: () => rows<{ local_date: string; minutes: number; source: string }>(supabase.from('availability_exceptions').select('local_date,minutes,source').eq('user_id', userId!).order('local_date')),
+    queryFn: () => data<{ local_date: string; minutes: number; source: string }[]>('goals-availability'),
   });
 }
 
@@ -300,7 +287,7 @@ export function useReadiness(examIds: string[]) {
     queryKey: ['readiness', userId, examIds.join(',')],
     enabled: !!userId && examIds.length > 0,
     queryFn: async () => {
-      const list = await rows<Readiness>(supabase.from('readiness_snapshots').select('*').eq('user_id', userId!).in('exam_id', examIds).order('local_date', { ascending: false }));
+      const list = await data<Readiness[]>('goals-readiness', { exam_ids: examIds });
       const latest = new Map<string, Readiness>();
       for (const r of list) if (!latest.has(r.exam_id)) latest.set(r.exam_id, r);
       return latest;
@@ -339,29 +326,28 @@ export function useGradingData(schoolYear: number) {
   return useQuery({
     queryKey: ['grading', userId, schoolYear],
     enabled: !!userId,
-    queryFn: async () => {
-      const [rules, comps] = await Promise.all([
-        rows<GradingRuleRow>(supabase.from('grading_rules').select('*').eq('owner_profile_id', userId!).eq('school_year', schoolYear).is('deleted_at', null)),
-        rows<GradeComponentRow>(supabase.from('grade_components').select('*').eq('user_id', userId!).eq('school_year', schoolYear).is('deleted_at', null).order('position')),
-      ]);
-      return { rules, comps };
-    },
+    queryFn: () => data<{ rules: GradingRuleRow[]; comps: GradeComponentRow[] }>('goals-grading', { school_year: schoolYear }),
   });
 }
 
-export async function saveGradingRule(userId: string, schoolYear: number, formula: unknown, presetKey: string | null, subjectId: string | null, existingId?: string) {
-  const payload = { owner_profile_id: userId, school_year: schoolYear, formula, preset_key: presetKey, subject_id: subjectId };
-  const { error } = existingId ? await supabase.from('grading_rules').update(payload).eq('id', existingId) : await supabase.from('grading_rules').insert({ id: uuidv7(), ...payload });
-  if (error) throw error;
+export async function saveGradingRule(_userId: string, schoolYear: number, formula: unknown, presetKey: string | null, subjectId: string | null, existingId?: string) {
+  const payload = { school_year: schoolYear, formula, preset_key: presetKey, subject_id: subjectId };
+  if (existingId) {
+    await data('goals-grading-rule-save', { id: existingId, existing: true, ...payload });
+  } else {
+    const id = uuidv7();
+    await data('goals-grading-rule-save', { id, existing: false, ...payload }, { idempotencyKey: id });
+  }
 }
 
+/** Upserts a component by id (new ones get an id here); the server sets user_id from the session. */
 export async function saveGradeComponent(row_: Partial<GradeComponentRow> & { user_id: string; subject_id: string; school_year: number; term_index: number; name: string }) {
-  const { error } = await supabase.from('grade_components').upsert({ id: row_.id ?? uuidv7(), kind: 'exam', position: 0, ...row_ });
-  if (error) throw error;
+  const { id, subject_id, school_year, term_index, name, kind, weight, max_points, grade, exam_id, position } = row_;
+  await data('goals-grade-component-save', { id: id ?? uuidv7(), subject_id, school_year, term_index, name, kind, weight, max_points, grade, exam_id, position });
 }
 
 export async function logExamGrade(examId: string, grade: number, gradeMax: number) {
-  return rpc<{ required: { exam_id: string; needed: number | null; status: 'secured' | 'needed' | 'impossible' }[] }>('log_exam_grade', { exam_id: examId, grade, grade_max: gradeMax });
+  return data<{ required: { exam_id: string; needed: number | null; status: 'secured' | 'needed' | 'impossible' }[] }>('goals-exam-grade', { exam_id: examId, grade, grade_max: gradeMax });
 }
 
 // ---------- GOL-12 Modo Desespero ----------
@@ -381,20 +367,20 @@ export function useDesperateMode(goalId: string | undefined) {
   return useQuery({
     queryKey: ['desperate', userId, goalId],
     enabled: !!userId && !!goalId,
-    queryFn: () => row<DesperateMode>(supabase.from('desperate_modes').select('*').eq('user_id', userId!).eq('goal_id', goalId!).eq('status', 'active').maybeSingle()),
+    queryFn: () => data<DesperateMode | null>('goals-desperate', { goal_id: goalId }),
   });
 }
 
 export async function startDesperate(goalId: string, examIds: string[], minutesPerDay: number) {
-  return rpc<{ desperate_mode_id: string; diagnostic_quiz_id?: string | null }>('start_desperate_mode', { goal_id: goalId, exam_ids: examIds, minutes_per_day: minutesPerDay });
+  return data<{ desperate_mode_id: string; diagnostic_quiz_id?: string | null }>('goals-desperate-start', { goal_id: goalId, exam_ids: examIds, minutes_per_day: minutesPerDay });
 }
 
 export async function setDesperateGroups(id: string, moves: { node_id: string; group: 'focus' | 'basic' | 'out' }[]) {
-  return rpc<{ topic_groups: Record<string, 'focus' | 'basic' | 'out'>; coverage: { exam_id: string; pct: number }[] }>('set_desperate_groups', { desperate_mode_id: id, moves });
+  return data<{ topic_groups: Record<string, 'focus' | 'basic' | 'out'>; coverage: { exam_id: string; pct: number }[] }>('goals-desperate-groups', { desperate_mode_id: id, moves });
 }
 
 export async function endDesperate(id: string) {
-  return rpc<{ ok: boolean }>('end_desperate_mode', { desperate_mode_id: id });
+  return data<{ ok: boolean }>('goals-desperate-end', { desperate_mode_id: id });
 }
 
 /** The Modo Véspera sheet (GOL-07) as vespera.prepare stores it, on the exam's véspera plan item. */
@@ -413,9 +399,7 @@ export function useVesperaSheet(examId: string | undefined, waiting: boolean) {
     queryKey: ['vesperaSheet', examId],
     enabled: !!examId,
     queryFn: async (): Promise<VesperaSheet | null> => {
-      const item = await row<{ reason_params: { cheatsheet?: VesperaSheet } | null }>(
-        supabase.from('plan_items').select('reason_params').eq('exam_id', examId!).eq('unit_type', 'vespera').is('deleted_at', null).order('local_date', { ascending: false }).limit(1).maybeSingle(),
-      );
+      const item = await data<{ reason_params: { cheatsheet?: VesperaSheet } | null } | null>('goals-vespera-sheet', { exam_id: examId });
       return item?.reason_params?.cheatsheet ?? null;
     },
     refetchInterval: (q) => (waiting && !q.state.data ? 3000 : false),

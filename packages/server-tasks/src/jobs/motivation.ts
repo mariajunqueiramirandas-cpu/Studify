@@ -35,19 +35,19 @@ export interface RolloverOutcome {
 /** Closes the study days after the streak's last evaluated day, up to yesterday (idempotent). */
 export async function rolloverUser(ctx: OperationContext, userId: string): Promise<RolloverOutcome> {
   const profile = unwrap(
-    await ctx.supabase.from('profiles').select('timezone,settings').eq('id', userId).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('profiles').select('timezone,settings').eq('id', userId).is('deleted_at', null).maybeSingle(),
     'profiles',
   ) as { timezone: string | null; settings: Record<string, unknown> | null } | null;
   if (!profile) return { status: 'no_activity' };
   const timeZone = safeTimeZone(profile.timezone);
-  const prefs = unwrap(await ctx.supabase.from('study_preferences').select('day_rollover_hour').eq('user_id', userId).maybeSingle(), 'study_preferences') as
+  const prefs = unwrap(await ctx.db.from('study_preferences').select('day_rollover_hour').eq('user_id', userId).maybeSingle(), 'study_preferences') as
     | { day_rollover_hour: number }
     | null;
   const rollover = prefs?.day_rollover_hour ?? DEFAULT_ROLLOVER_HOUR;
   const goalMinutes = typeof profile.settings?.daily_goal_minutes === 'number' ? (profile.settings.daily_goal_minutes as number) : 20;
   const now = ctx.now();
   const yesterday = addDays(studyDayFor(now, timeZone, rollover), -1);
-  const row = unwrap(await ctx.supabase.from('streaks').select('*').eq('user_id', userId).maybeSingle(), 'streaks') as
+  const row = unwrap(await ctx.db.from('streaks').select('*').eq('user_id', userId).maybeSingle(), 'streaks') as
     | {
         current_length: number;
         longest_length: number;
@@ -91,22 +91,22 @@ export async function rolloverUser(ctx: OperationContext, userId: string): Promi
     });
   };
   const sessions = unwrapRows<{ started_at: string; active_minutes: number }>(
-    await ctx.supabase.from('study_sessions').select('started_at,active_minutes').eq('user_id', userId).gte('started_at', fromInstant.toISOString()).lt('started_at', toInstant.toISOString()),
+    await ctx.db.from('study_sessions').select('started_at,active_minutes').eq('user_id', userId).gte('started_at', fromInstant.toISOString()).lt('started_at', toInstant.toISOString()),
     'study_sessions',
   );
   for (const s of sessions) bump(dayOf(s.started_at), { activeMinutes: Number(s.active_minutes ?? 0) });
   const reviews = unwrapRows<{ reviewed_at: string }>(
-    await ctx.supabase.from('review_logs').select('reviewed_at').eq('user_id', userId).gte('reviewed_at', fromInstant.toISOString()).lt('reviewed_at', toInstant.toISOString()),
+    await ctx.db.from('review_logs').select('reviewed_at').eq('user_id', userId).gte('reviewed_at', fromInstant.toISOString()).lt('reviewed_at', toInstant.toISOString()),
     'review_logs',
   );
   for (const r of reviews) if (within(r.reviewed_at)) bump(dayOf(r.reviewed_at), { reviews: 1 });
   const answers = unwrapRows<{ answered_at: string }>(
-    await ctx.supabase.from('attempt_answers').select('answered_at').eq('user_id', userId).gte('answered_at', fromInstant.toISOString()).lt('answered_at', toInstant.toISOString()),
+    await ctx.db.from('attempt_answers').select('answered_at').eq('user_id', userId).gte('answered_at', fromInstant.toISOString()).lt('answered_at', toInstant.toISOString()),
     'attempt_answers',
   );
   for (const a of answers) bump(dayOf(a.answered_at), { questions: 1 });
   const quizzes = unwrapRows<{ finished_at: string | null }>(
-    await ctx.supabase.from('quiz_attempts').select('finished_at').eq('user_id', userId).eq('status', 'submitted').gte('finished_at', fromInstant.toISOString()).lt('finished_at', toInstant.toISOString()),
+    await ctx.db.from('quiz_attempts').select('finished_at').eq('user_id', userId).eq('status', 'submitted').gte('finished_at', fromInstant.toISOString()).lt('finished_at', toInstant.toISOString()),
     'quiz_attempts',
   );
   for (const q of quizzes) if (q.finished_at) bump(dayOf(q.finished_at), { sessions: 1 });
@@ -114,11 +114,11 @@ export async function rolloverUser(ctx: OperationContext, userId: string): Promi
   const xpByDay = await xpTotals(ctx, userId, fromInstant, toInstant, timeZone, rollover);
   for (const [day, xp] of xpByDay) bump(day, { xp });
 
-  const goals = unwrapRows<{ id: string }>(await ctx.supabase.from('goals').select('id').eq('user_id', userId).eq('status', 'active').is('deleted_at', null), 'goals');
+  const goals = unwrapRows<{ id: string }>(await ctx.db.from('goals').select('id').eq('user_id', userId).eq('status', 'active').is('deleted_at', null), 'goals');
   const goalIds = goals.map((g) => g.id);
   const exams: Array<{ goal_id: string; local_date: string }> = [];
   for (const part of chunk(goalIds, IN_CHUNK)) {
-    exams.push(...unwrapRows(await ctx.supabase.from('exams').select('goal_id,local_date').in('goal_id', part).eq('status', 'scheduled').is('deleted_at', null), 'exams'));
+    exams.push(...unwrapRows(await ctx.db.from('exams').select('goal_id,local_date').in('goal_id', part).eq('status', 'scheduled').is('deleted_at', null), 'exams'));
   }
   const examDays = new Set(exams.filter((e) => e.local_date >= start && e.local_date <= yesterday).map((e) => e.local_date));
   const goalsForRest = goalIds.map((id) => {
@@ -153,10 +153,10 @@ export async function rolloverUser(ctx: OperationContext, userId: string): Promi
     };
   });
   for (const part of chunk(dailyRows, 200)) {
-    unwrap(await ctx.supabase.from('daily_activity').upsert(part, { onConflict: 'user_id,local_date' }), 'daily_activity');
+    unwrap(await ctx.db.from('daily_activity').upsert(part, { onConflict: 'user_id,local_date' }), 'daily_activity');
   }
   unwrap(
-    await ctx.supabase.from('streaks').upsert(
+    await ctx.db.from('streaks').upsert(
       {
         user_id: userId,
         current_length: next.length,
@@ -175,9 +175,9 @@ export async function rolloverUser(ctx: OperationContext, userId: string): Promi
 
 async function earliestActivityDay(ctx: OperationContext, userId: string, timeZone: string, rollover: number): Promise<LocalDate | null> {
   const candidates: string[] = [];
-  const reviewed = unwrapRows<{ v: string }>(await ctx.supabase.from('review_logs').select('v:reviewed_at').eq('user_id', userId).order('reviewed_at', { ascending: true }).limit(1), 'review_logs');
-  const started = unwrapRows<{ v: string }>(await ctx.supabase.from('study_sessions').select('v:started_at').eq('user_id', userId).order('started_at', { ascending: true }).limit(1), 'study_sessions');
-  const answered = unwrapRows<{ v: string }>(await ctx.supabase.from('attempt_answers').select('v:answered_at').eq('user_id', userId).order('answered_at', { ascending: true }).limit(1), 'attempt_answers');
+  const reviewed = unwrapRows<{ v: string }>(await ctx.db.from('review_logs').select('v:reviewed_at').eq('user_id', userId).order('reviewed_at', { ascending: true }).limit(1), 'review_logs');
+  const started = unwrapRows<{ v: string }>(await ctx.db.from('study_sessions').select('v:started_at').eq('user_id', userId).order('started_at', { ascending: true }).limit(1), 'study_sessions');
+  const answered = unwrapRows<{ v: string }>(await ctx.db.from('attempt_answers').select('v:answered_at').eq('user_id', userId).order('answered_at', { ascending: true }).limit(1), 'attempt_answers');
   for (const rows of [reviewed, started, answered]) {
     const value = rows[0]?.v;
     if (value) candidates.push(studyDayOf(new Date(value), timeZone, rollover));
@@ -189,7 +189,7 @@ async function xpTotals(ctx: OperationContext, userId: string, from: Date, to: D
   const out = new Map<string, number>();
   try {
     const rows = unwrapRows<{ amount: number; occurred_at: string }>(
-      await ctx.supabase.from('xp_events').select('amount,occurred_at').eq('user_id', userId).gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString()),
+      await ctx.db.from('xp_events').select('amount,occurred_at').eq('user_id', userId).gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString()),
       'xp_events',
     );
     for (const r of rows) {
@@ -204,7 +204,7 @@ async function xpTotals(ctx: OperationContext, userId: string, from: Date, to: D
 
 export async function handleStreaksRollover(ctx: OperationContext, raw: Record<string, unknown>): Promise<{ users: number; rolled: number }> {
   const payload = RolloverPayload.parse(raw);
-  const userIds = payload.user_ids ?? unwrapRows<{ id: string }>(await ctx.supabase.from('profiles').select('id').is('deleted_at', null), 'profiles').map((p) => p.id);
+  const userIds = payload.user_ids ?? unwrapRows<{ id: string }>(await ctx.db.from('profiles').select('id').is('deleted_at', null), 'profiles').map((p) => p.id);
   let rolled = 0;
   for (const userId of uniq(userIds)) {
     const result = await rolloverUser(ctx, userId);
@@ -218,10 +218,10 @@ export async function handleStreaksRollover(ctx: OperationContext, raw: Record<s
 /** xp.award (MOT-01): idempotent on (user, ref_type, ref_id, source_feature). Caps per learning-engine §17.1. */
 export async function handleXpAward(ctx: OperationContext, raw: Record<string, unknown>): Promise<{ awarded: number; inserted: number; skipped: number }> {
   const payload = XpPayload.parse(raw);
-  const profile = unwrap(await ctx.supabase.from('profiles').select('timezone').eq('id', payload.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
+  const profile = unwrap(await ctx.db.from('profiles').select('timezone').eq('id', payload.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
   const timeZone = safeTimeZone(profile?.timezone);
   const prefs = unwrap(
-    await ctx.supabase.from('study_preferences').select('quiet_start,quiet_end').eq('user_id', payload.user_id).maybeSingle(),
+    await ctx.db.from('study_preferences').select('quiet_start,quiet_end').eq('user_id', payload.user_id).maybeSingle(),
     'study_preferences',
   ) as { quiet_start: string; quiet_end: string } | null;
   const quietStart = (prefs?.quiet_start ?? '22:00').slice(0, 5);
@@ -231,7 +231,7 @@ export async function handleXpAward(ctx: OperationContext, raw: Record<string, u
   const existing = new Set<string>();
   for (const part of chunk(refIds, IN_CHUNK)) {
     for (const row of unwrapRows<{ ref_type: string; ref_id: string; source_feature: string }>(
-      await ctx.supabase.from('xp_events').select('ref_type,ref_id,source_feature').eq('user_id', payload.user_id).in('ref_id', part),
+      await ctx.db.from('xp_events').select('ref_type,ref_id,source_feature').eq('user_id', payload.user_id).in('ref_id', part),
       'xp_events',
     )) existing.add(keyOf(row.ref_type, row.ref_id, row.source_feature));
   }
@@ -248,7 +248,7 @@ export async function handleXpAward(ctx: OperationContext, raw: Record<string, u
   const counters = new Map<string, XpDayContext>();
   for (const day of days) {
     const rows = unwrapRows<{ ref_type: string; amount: number }>(
-      await ctx.supabase.from('xp_events').select('ref_type,amount').eq('user_id', payload.user_id).eq('local_date', day),
+      await ctx.db.from('xp_events').select('ref_type,amount').eq('user_id', payload.user_id).eq('local_date', day),
       'xp_events',
     );
     counters.set(day, {
@@ -278,7 +278,7 @@ export async function handleXpAward(ctx: OperationContext, raw: Record<string, u
     };
   });
   const inserted = unwrapRows<{ id: string; amount: number }>(
-    await ctx.supabase.from('xp_events').upsert(rowsToInsert, { onConflict: 'user_id,ref_type,ref_id,source_feature', ignoreDuplicates: true }).select('id,amount'),
+    await ctx.db.from('xp_events').upsert(rowsToInsert, { onConflict: 'user_id,ref_type,ref_id,source_feature', ignoreDuplicates: true }).select('id,amount'),
     'xp_events',
   );
   const awarded = inserted.reduce((acc, r) => acc + Number(r.amount), 0);

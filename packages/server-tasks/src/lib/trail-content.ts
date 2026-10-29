@@ -20,7 +20,7 @@ import {
 import type { OperationContext } from '../framework/types.ts';
 import type { Sql } from '../framework/db.ts';
 import { budgetFor, createEnv } from '../ingest/env.ts';
-import { supabaseStore } from '../ingest/store.ts';
+import { fileStore } from '../ingest/store.ts';
 import { contentLanguageOf, labelMapOf, loadTopicBundle, topicSliceRefs, type TopicBundle } from '../ingest/topics.ts';
 import { prepareCall, toPdfSlices, type SliceRef } from '../ingest/tasks.ts';
 import { toSourcePages, type LabelMap } from '../ingest/mappers.ts';
@@ -100,7 +100,7 @@ export type PlanOutcome = 'planned' | 'unchanged' | 'empty' | 'failed' | 'budget
  * finished chapters are applied to it by the API, without another call. Runs again only when the map changed.
  */
 export async function planSubject(ctx: OperationContext, input: { subjectId: string; userId: string | null }): Promise<PlanOutcome> {
-  const sql = ctx.db;
+  const sql = ctx.sql;
   const subject = await loadSubject(sql, input.subjectId);
   if (!subject) return 'empty';
   const outline = await loadSubjectOutline(sql, subject.id);
@@ -248,7 +248,7 @@ export interface TopicContentOutcome {
  */
 export async function prepareTopicContent(ctx: OperationContext, input: { topicId: string; userId: string | null }): Promise<TopicContentOutcome> {
   const outcome: TopicContentOutcome = { written: 0, failed: 0, budget: false };
-  const sql = ctx.db;
+  const sql = ctx.sql;
   const bundle = await loadTopicBundle(sql, input.topicId);
   if (!bundle || bundle.sources.length === 0) return outcome;
   const concepts = conceptsOf(bundle);
@@ -260,7 +260,7 @@ export async function prepareTopicContent(ctx: OperationContext, input: { topicI
   const todo = concepts.filter((c) => !have.get(c.key)?.reinforced);
   if (todo.length === 0) return outcome;
 
-  const env = createEnv(ctx, supabaseStore(ctx.supabase));
+  const env = createEnv(ctx, fileStore(ctx.db));
   const refs: SliceRef[] = await topicSliceRefs(env, bundle.sources);
   if (refs.length === 0) return outcome;
   const slices: PdfSlice[] = toPdfSlices(refs);

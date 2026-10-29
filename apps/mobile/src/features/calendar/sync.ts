@@ -8,7 +8,8 @@ import { ENERGY, freeIntervals, freeMinutes, placeBlocks, type BlockUnit, type M
 import { and, eq, gte, isNull, lte } from 'drizzle-orm';
 import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
+import { ApiError } from '../../api/errors';
 import type { AppDb } from '../../db/client';
 import { calendarEvents, exams, planItems, studyPreferences } from '../../db/schema';
 import { localDateOf } from '../../lib/dates';
@@ -111,7 +112,7 @@ export async function disableCalendarSync(db: AppDb): Promise<void> {
   db.delete(calendarEvents).run();
   const today = localDateOf(Date.now());
   const days = Array.from({ length: CALENDAR_DAYS + 1 }, (_, i) => ({ local_date: addLocalDays(today, i), minutes: null }));
-  await supabase.rpc('set_calendar_availability', { p_days: days }).then(
+  await data('calendar-availability-set', { days }).then(
     () => undefined,
     () => undefined,
   );
@@ -202,8 +203,13 @@ export async function runCalendarSync(db: AppDb, userId: string, goodBuckets: re
     // Only days where busy time leaves less than the usual study minutes carry a calendar row (GOL-09.2).
     return { local_date: d, minutes: (busy.get(d) ?? []).length && free < planned ? free : null };
   });
-  const { error } = await supabase.rpc('set_calendar_availability', { p_days: days });
-  if (error) logger.warn('calendar.availability_failed', { code: error.code });
+  let error: unknown = null;
+  try {
+    await data('calendar-availability-set', { days });
+  } catch (e) {
+    error = e;
+    logger.warn('calendar.availability_failed', { code: e instanceof ApiError ? e.code : String(e) });
+  }
   // Availability changed: the planner moves work to the free days (GOL-04 replan).
   const signature = JSON.stringify(days.filter((d) => d.minutes !== null));
   if (!error && signature !== getKv().getString(KV.lastDays)) {

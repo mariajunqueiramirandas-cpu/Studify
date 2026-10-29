@@ -26,7 +26,7 @@ export interface MasteryResultSummary {
 async function previousMasteries(ctx: OperationContext, userId: string, nodeIds: readonly string[]): Promise<Map<string, number | null>> {
   const rows: Array<{ node_id: string; mastery: number | null }> = [];
   for (const part of chunk(nodeIds, IN_CHUNK)) {
-    rows.push(...unwrapRows<{ node_id: string; mastery: number | null }>(await ctx.supabase.from('mastery').select('node_id,mastery').eq('user_id', userId).in('node_id', part), 'mastery'));
+    rows.push(...unwrapRows<{ node_id: string; mastery: number | null }>(await ctx.db.from('mastery').select('node_id,mastery').eq('user_id', userId).in('node_id', part), 'mastery'));
   }
   return new Map(rows.map((r) => [r.node_id, r.mastery] as const));
 }
@@ -38,7 +38,7 @@ async function previousMasteries(ctx: OperationContext, userId: string, nodeIds:
 export async function handleMasteryRecompute(ctx: OperationContext, data: Record<string, unknown>): Promise<MasteryResultSummary> {
   const payload = MasteryPayload.parse(data);
   const profile = unwrap(
-    await ctx.supabase.from('profiles').select('timezone,settings').eq('id', payload.user_id).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('profiles').select('timezone,settings').eq('id', payload.user_id).is('deleted_at', null).maybeSingle(),
     'profiles',
   ) as { timezone: string | null; settings: Record<string, unknown> | null } | null;
   if (!profile) return { updated: 0, shifted: [], replanQueued: false };
@@ -47,7 +47,7 @@ export async function handleMasteryRecompute(ctx: OperationContext, data: Record
   const retention = typeof memory?.desired_retention === 'number' ? memory.desired_retention : null;
 
   const requestedSubjects = payload.node_ids.length
-    ? unwrapRows<{ subject_id: string }>(await ctx.supabase.from('knowledge_nodes').select('subject_id').in('id', payload.node_ids), 'knowledge_nodes').map((r) => r.subject_id)
+    ? unwrapRows<{ subject_id: string }>(await ctx.db.from('knowledge_nodes').select('subject_id').in('id', payload.node_ids), 'knowledge_nodes').map((r) => r.subject_id)
     : [];
   const subjectIds = uniq([...(await userSubjectIds(ctx, payload.user_id)), ...requestedSubjects]);
   const learning: LearningData = await loadLearningData(ctx, payload.user_id, subjectIds);
@@ -83,7 +83,7 @@ export async function handleMasteryRecompute(ctx: OperationContext, data: Record
     };
   });
   for (const part of chunk(rows, 200)) {
-    unwrap(await ctx.supabase.from('mastery').upsert(part, { onConflict: 'user_id,node_id' }), 'mastery upsert');
+    unwrap(await ctx.db.from('mastery').upsert(part, { onConflict: 'user_id,node_id' }), 'mastery upsert');
   }
 
   const shifted = affected.filter((id) => {
@@ -94,11 +94,11 @@ export async function handleMasteryRecompute(ctx: OperationContext, data: Record
   let replanQueued = false;
   if (shifted.length > 0) {
     const scheduled = unwrapRows<{ id: string }>(
-      await ctx.supabase.from('exams').select('id').eq('user_id', payload.user_id).eq('status', 'scheduled').is('deleted_at', null),
+      await ctx.db.from('exams').select('id').eq('user_id', payload.user_id).eq('status', 'scheduled').is('deleted_at', null),
       'exams',
     ).map((e) => e.id);
     const scopeNodes = scheduled.length
-      ? unwrapRows<{ node_id: string }>(await ctx.supabase.from('exam_scope_nodes').select('node_id').in('exam_id', scheduled), 'exam_scope_nodes').map((r) => r.node_id)
+      ? unwrapRows<{ node_id: string }>(await ctx.db.from('exam_scope_nodes').select('node_id').in('exam_id', scheduled), 'exam_scope_nodes').map((r) => r.node_id)
       : [];
     const inScope = scopeNodes.length === 0 || shifted.some((id) => scopeNodes.includes(id));
     if (inScope) {
@@ -166,7 +166,7 @@ export interface OptimizeOutcome {
 export async function handleSrsOptimize(ctx: OperationContext, data: Record<string, unknown>): Promise<OptimizeOutcome | { status: 'fanout'; jobs: number }> {
   const payload = OptimizePayload.parse(data);
   if (!payload.user_id) {
-    const users = unwrapRows<{ id: string }>(await ctx.supabase.from('profiles').select('id').is('deleted_at', null), 'profiles');
+    const users = unwrapRows<{ id: string }>(await ctx.db.from('profiles').select('id').is('deleted_at', null), 'profiles');
     const parts = chunk(users.map((u) => u.id), 100);
     for (const [i, part] of parts.entries()) {
       for (const userId of part) await ctx.execute('srs.optimize_params', { user_id: userId }, { singletonKey: `srs.optimize_params:${userId}:${i}` });
@@ -176,7 +176,7 @@ export async function handleSrsOptimize(ctx: OperationContext, data: Record<stri
   const userId = payload.user_id;
   const rows = await fetchAll<ReviewLogRow>(
     (from, to) =>
-      ctx.supabase
+      ctx.db
         .from('review_logs')
         .select('id,card_id,rating,reviewed_at,reason,undoes_log_id')
         .eq('user_id', userId)
@@ -203,7 +203,7 @@ export async function handleNotesPrefetch(ctx: OperationContext): Promise<{ user
   const today = localDateOf(now, 'America/Sao_Paulo');
   const horizon = localDateOf(new Date(now.getTime() + 7 * 86_400_000), 'America/Sao_Paulo');
   const exams = unwrapRows<{ id: string; user_id: string }>(
-    await ctx.supabase.from('exams').select('id,user_id').eq('status', 'scheduled').gte('local_date', today).lte('local_date', horizon).is('deleted_at', null),
+    await ctx.db.from('exams').select('id,user_id').eq('status', 'scheduled').gte('local_date', today).lte('local_date', horizon).is('deleted_at', null),
     'exams',
   );
   const examsByUser = new Map<string, string[]>();
@@ -212,10 +212,10 @@ export async function handleNotesPrefetch(ctx: OperationContext): Promise<{ user
   const bySubject = new Map<string, Set<string>>();
   let nodeCount = 0;
   for (const [userId, examIds] of examsByUser) {
-    const scope = unwrapRows<{ node_id: string }>(await ctx.supabase.from('exam_scope_nodes').select('node_id').in('exam_id', examIds), 'exam_scope_nodes').map((r) => r.node_id);
+    const scope = unwrapRows<{ node_id: string }>(await ctx.db.from('exam_scope_nodes').select('node_id').in('exam_id', examIds), 'exam_scope_nodes').map((r) => r.node_id);
     if (scope.length === 0) continue;
     const topics = unwrapRows<{ id: string; subject_id: string }>(
-      await ctx.supabase.from('knowledge_nodes').select('id,subject_id').in('id', uniq(scope)).eq('kind', 'topic').is('deleted_at', null),
+      await ctx.db.from('knowledge_nodes').select('id,subject_id').in('id', uniq(scope)).eq('kind', 'topic').is('deleted_at', null),
       'knowledge_nodes',
     );
     if (topics.length === 0) continue;
@@ -228,12 +228,12 @@ export async function handleNotesPrefetch(ctx: OperationContext): Promise<{ user
     const deepDone = new Set<string>();
     for (const part of chunk([...candidates], IN_CHUNK)) {
       for (const row of unwrapRows<{ node_id: string }>(
-        await ctx.supabase.from('notes').select('node_id').in('node_id', part).eq('depth', 'deep').in('status', ['pending', 'generating', 'ready']).is('deleted_at', null),
+        await ctx.db.from('notes').select('node_id').in('node_id', part).eq('depth', 'deep').in('status', ['pending', 'generating', 'ready']).is('deleted_at', null),
         'notes',
       )) deepDone.add(row.node_id);
       // A topic whose deep note failed recently is not retried every morning (it would fail the same way).
       for (const row of unwrapRows<{ node_id: string }>(
-        await ctx.supabase.from('notes').select('node_id').in('node_id', part).eq('depth', 'deep').eq('status', 'failed')
+        await ctx.db.from('notes').select('node_id').in('node_id', part).eq('depth', 'deep').eq('status', 'failed')
           .gte('updated_at', new Date(now.getTime() - FAILED_DEEP_RETRY_DAYS * 86_400_000).toISOString()).is('deleted_at', null),
         'notes',
       )) deepDone.add(row.node_id);

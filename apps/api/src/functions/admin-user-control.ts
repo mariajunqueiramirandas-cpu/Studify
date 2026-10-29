@@ -3,7 +3,7 @@
 // (PLT-04.6). Every action is written to the audit log; suspensions also to private.moderation_actions.
 // Guards: nobody removes their own admin role (there is always an owner left) or suspends themselves, and an
 // admin must lose the role before they can be suspended.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { AdminUserControlReqSchema, ApiFailure, type AdminUserControlReq } from '@studify/shared';
 import { forgetUser } from '../shared/auth.ts';
 import { defineFunction } from '../shared/http.ts';
@@ -14,7 +14,7 @@ import { audit, loadAdminUserDetail } from '../shared/dashboard.ts';
 const INDEFINITE_BAN = '876000h';
 
 /** The moderation record kept for 5 years (security-privacy §12). Logged on failure: the ban is already in place. */
-async function recordModeration(db: SupabaseClient, row: { actor_id: string; action: 'ban' | 'unban'; target_id: string; reason: string | null }): Promise<void> {
+async function recordModeration(db: Db, row: { actor_id: string; action: 'ban' | 'unban'; target_id: string; reason: string | null }): Promise<void> {
   const { error } = await db.schema('private').from('moderation_actions').insert({ ...row, actor_kind: 'app_admin', target_type: 'profile' });
   if (error) console.error('moderation_actions insert failed', row.action, error.message);
 }

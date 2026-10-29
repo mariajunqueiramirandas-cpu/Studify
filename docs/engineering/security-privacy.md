@@ -55,7 +55,7 @@
 | SP-13 | **Public compliance and privacy notice.** | Anthropic guidelines; LGPD 14 §2, §6 | A web page in plain PT-BR (with a simpler version for teens) covers: what data we collect, why, AI use (Anthropic, US), retention, rights and how to exercise them, the contact channel, and a compliance statement. Linked from onboarding and Perfil → Privacidade. | Before inviting classmates |
 | SP-14 | **Data-subject rights.** | LGPD 18 | Self-service export (JSON + CSV) and account deletion in-app; correction via profile edit; contact channel for everything else; answer within 15 days. | 1 |
 | SP-15 | **Contact channel (encarregado or channel).** | Res. 2/2022 | A privacy email alias. If high-risk status removes the flexibility, appoint an encarregado. | Before inviting classmates |
-| SP-16 | **International transfer** (Claude API in the US; Supabase region). | LGPD 33; Res. 19/2024 | Host Supabase in **São Paulo (`sa-east-1`)**. Disclose the US AI processing in the privacy notice. Check that Anthropic's DPA covers ANPD clauses, or rely on another Art. 33 mechanism, after legal review. | Before inviting classmates |
+| SP-16 | **International transfer** (Claude API in the US; where the VPS and Supabase Auth are). | LGPD 33; Res. 19/2024 | Since ADR 0012 the data and files live on the owner's VPS: **host it in Brazil**, or treat its country as an international transfer too. Supabase Auth (accounts and e-mail addresses) stays in **São Paulo (`sa-east-1`)**. Disclose the US AI processing in the privacy notice. Check that Anthropic's DPA covers ANPD clauses, or rely on another Art. 33 mechanism, after legal review. | Before inviting classmates |
 | SP-17 | **Incident response** within 3 working days. | Res. 15/2024 | Runbook in §12. | 0 |
 | SP-18 | **Legal controller identity.** The owner may be a minor. | LGPD 5 VI | **Open question:** a responsible adult (parent/guardian, or a school partner) should act as the legal controller and sign the vendor agreements. | Before inviting classmates |
 
@@ -72,7 +72,7 @@
 | Storage on device | LargeSecureStore: AES-256 key in `expo-secure-store` (Android Keystore), encrypted session in MMKV ([mobile-app.md §12](mobile-app.md#12-auth-on-device)). |
 | Sign-out | "Sair" clears SQLite user data, MMKV and the file cache. "Sair de todos os dispositivos" revokes all refresh tokens (`signOut({ scope: 'global' })`). |
 | OTP abuse | Supabase Auth rate limits plus a per-email cooldown of 60 s. Generic responses ("Se este e-mail estiver cadastrado…") so emails can't be enumerated. |
-| Service accounts | The worker and Edge Functions use the **service-role key** from secrets. Edge Functions handling user requests **also** verify the caller's JWT and authorize explicitly before any service-role query. The API verifies the token with Supabase Auth (`auth.getUser`, which also refuses a suspended account) and remembers a verified token for at most 60 s (never past its expiry), so a revoked session is refused within a minute; a suspension forgets the account's remembered tokens and takes effect at once (ADR 0011). |
+| Service accounts | The API connects to its own Postgres as the database owner (no RLS) and uses the Supabase **secret key** only for account administration. Every request **also** verifies the caller's JWT; API functions authorize explicitly before any owner query, and data endpoints run every statement as `authenticated` with the caller's claims, so RLS applies (ADR 0012). The API verifies the token with Supabase Auth (`auth.getUser`, which also refuses a suspended account) and remembers a verified token for at most 60 s (never past its expiry), so a revoked session is refused within a minute; a suspension forgets the account's remembered tokens and takes effect at once (ADR 0011). |
 
 ## 4. Authorization: Row Level Security
 
@@ -129,7 +129,8 @@ All buckets are **private**. Clients access objects only through RLS-checked pat
 | Secret | Lives in | Never in |
 |---|---|---|
 | Claude API key | API server env (Dokploy environment); worker env (Dokploy environment) | App, repo, logs, Sentry |
-| Supabase service-role key | API server env, worker env (Dokploy environment) | App, repo |
+| Supabase secret key (account administration) | API server env (Dokploy environment) | App, repo |
+| `POSTGRES_PASSWORD`, `STORAGE_SIGNING_KEY` | API server env (Dokploy environment), plus a copy kept off the VPS | App, repo |
 | Expo push access token | Worker env | App |
 | TTS provider key (Phase 3) | Worker env | App |
 | Sentry DSN | App (public by design) + server | — |
@@ -137,7 +138,7 @@ All buckets are **private**. Clients access objects only through RLS-checked pat
 - **One Anthropic workspace and API key per environment** (`dev`, `staging`, `prod`), each with its **own monthly spend limit** set in the Anthropic Console (verify the exact console feature when setting up). Dev keys get a very low cap.
 - Rotation: rotate on any suspected leak and at least every 6 months. Procedure: create new key → update secrets → redeploy functions/worker → revoke old key.
 - CI runs **gitleaks** on every PR. `.env*` files are gitignored except `.env.example`.
-- The app only receives `EXPO_PUBLIC_*` values (Supabase URL, anon key, env name).
+- The app only receives `EXPO_PUBLIC_*` values (Supabase Auth URL, publishable key, API URL, env name). It has no database access of its own; signed file links last an hour.
 
 ## 7. Rate limiting and AI budgets (PLT-04)
 
@@ -230,7 +231,7 @@ Other measures:
 | Sentry events | 30 days, PII-scrubbed |
 | Exports | 7 days |
 | Moderation records and incident register | ≥ 5 years (Res. 15/2024 for incidents) |
-| Backups | Supabase point-in-time backups per plan. Deleted data leaves backups within the backup window (stated in the privacy notice) |
+| Backups | Nightly `pg_dump` and file tarball on the VPS, kept 7 days, copied off the VPS by the owner (deployment.md §5); encrypted and access-controlled. Deleted data leaves backups within the backup window (stated in the privacy notice) |
 | Claude API | Inputs and outputs deleted by Anthropic within 30 days by default. **Files API uploads are ephemeral**: the worker deletes them when the job that uploaded them finishes, and a sweeper removes anything older than 48 h ([ai-pipeline.md §4.2](ai-pipeline.md#42-files-api)), so they don't meaningfully extend retention |
 
 **Export** (Perfil → Privacidade → "Baixar meus dados"): a ZIP with JSON of the profile, goals, exams, grades, card states, review logs, attempts, mistakes, tutor threads, essays, and CSV of the user's cards. It also includes the user's personal uploads.

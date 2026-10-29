@@ -1,6 +1,6 @@
 // Battle state, PIN, and Realtime payloads (SOC-03, spec 10 §8.3). Status values and event shapes follow
 // the battle screen contract: broadcast on `battle:{id}` with events `state`, `reveal` and `podium`.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { SOCIAL } from '@studify/shared';
 import { padDigits } from './util.ts';
 
@@ -49,7 +49,7 @@ export interface BattleRow {
 const BATTLE_COLUMNS =
   'id, class_group_id, host_id, quiz_id, pin, status, current_index, question_opens_at, question_closes_at, seconds_per_question';
 
-export async function loadBattle(db: SupabaseClient, battleId: string): Promise<BattleRow | null> {
+export async function loadBattle(db: Db, battleId: string): Promise<BattleRow | null> {
   const { data, error } = await db.from('battles').select(BATTLE_COLUMNS).eq('id', battleId).maybeSingle();
   if (error) throw error;
   return (data as BattleRow | null) ?? null;
@@ -76,7 +76,7 @@ export async function pickFreePin(
 }
 
 /** True when a PIN is held by a battle that is still live (the uniqueness rule of data-model §5.7). */
-export async function pinIsLive(db: SupabaseClient, pin: string): Promise<boolean> {
+export async function pinIsLive(db: Db, pin: string): Promise<boolean> {
   const { data, error } = await db.from('battles').select('id').eq('pin', pin).in('status', [...LIVE_BATTLE_STATUSES])
     .limit(1);
   if (error) throw error;

@@ -32,7 +32,7 @@ import {
 import { defineFunction } from '../shared/http.ts';
 import { canReadSubject, isPublicQuestion, loadSubject, type SubjectRow } from '../shared/access.ts';
 import { inBackground, type Deps } from '../shared/deps.ts';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { gradeOffline } from '../shared/grading.ts';
 import { FLAG_TABLES } from '../shared/flags.ts';
 
@@ -58,7 +58,7 @@ export const SyncPushEnvelopeSchema = z.object({
 type Reject = SyncPushRes['rejected'][number];
 
 interface PushState {
-  db: SupabaseClient;
+  db: Db;
   deps: Deps;
   userId: string;
   deviceId: string;

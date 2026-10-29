@@ -260,12 +260,12 @@ export async function loadCoachExtras(ctx: OperationContext, planCtx: PlanContex
   const nodeById = new Map<string, NodeInfo>(planCtx.nodes.map((n) => [n.id, n] as const));
   const subjectIds = uniq(planCtx.exams.map((e) => e.subject_id).filter((s): s is string => !!s));
   const subjects = subjectIds.length
-    ? unwrapRows<{ id: string; name: string }>(await ctx.supabase.from('subjects').select('id,name').in('id', subjectIds), 'subjects')
+    ? unwrapRows<{ id: string; name: string }>(await ctx.db.from('subjects').select('id,name').in('id', subjectIds), 'subjects')
     : [];
 
   const mistakes = new Map<string, Record<string, number>>();
   for (const row of unwrapRows<{ node_id: string; cause: string }>(
-    await ctx.supabase.from('mistakes').select('node_id,cause').eq('user_id', planCtx.userId).is('resolved_at', null).is('deleted_at', null).limit(500),
+    await ctx.db.from('mistakes').select('node_id,cause').eq('user_id', planCtx.userId).is('resolved_at', null).is('deleted_at', null).limit(500),
     'mistakes',
   )) {
     const t = topicOf(row.node_id, nodeById);
@@ -277,12 +277,12 @@ export async function loadCoachExtras(ctx: OperationContext, planCtx: PlanContex
 
   const since30 = new Date(planCtx.now.getTime() - 30 * 86_400_000).toISOString();
   const sureWrong = unwrapRows<{ question_id: string }>(
-    await ctx.supabase.from('attempt_answers').select('question_id').eq('user_id', planCtx.userId).eq('confidence', 4).eq('correct', false).gte('answered_at', since30).limit(300),
+    await ctx.db.from('attempt_answers').select('question_id').eq('user_id', planCtx.userId).eq('confidence', 4).eq('correct', false).gte('answered_at', since30).limit(300),
     'attempt_answers',
   );
   const perTopic = new Map<string, number>();
   for (const part of chunk(uniq(sureWrong.map((a) => a.question_id)), 100)) {
-    const nodes = unwrapRows<{ id: string; node_id: string }>(await ctx.supabase.from('questions').select('id,node_id').in('id', part), 'questions');
+    const nodes = unwrapRows<{ id: string; node_id: string }>(await ctx.db.from('questions').select('id,node_id').in('id', part), 'questions');
     const nodeOf = new Map(nodes.map((q) => [q.id, q.node_id] as const));
     for (const a of sureWrong) {
       const node = nodeOf.get(a.question_id);
@@ -295,7 +295,7 @@ export async function loadCoachExtras(ctx: OperationContext, planCtx: PlanContex
   const teacherShare = new Map<string, number>();
   if (subjectIds.length) {
     const profiles = unwrapRows<{ subject_id: string; n_tests: number; profile: { statistics?: { pointsShare?: Record<string, number> } } }>(
-      await ctx.supabase.from('teacher_profiles').select('subject_id,n_tests,profile').in('subject_id', subjectIds),
+      await ctx.db.from('teacher_profiles').select('subject_id,n_tests,profile').in('subject_id', subjectIds),
       'teacher_profiles',
     );
     const best = new Map<string, (typeof profiles)[number]>();
@@ -310,7 +310,7 @@ export async function loadCoachExtras(ctx: OperationContext, planCtx: PlanContex
 
   const since7 = new Date(planCtx.now.getTime() - 7 * 86_400_000).toISOString();
   const sessions = unwrapRows<{ active_minutes: number | null }>(
-    await ctx.supabase.from('study_sessions').select('active_minutes').eq('user_id', planCtx.userId).gte('started_at', since7),
+    await ctx.db.from('study_sessions').select('active_minutes').eq('user_id', planCtx.userId).gte('started_at', since7),
     'study_sessions',
   );
   return {
@@ -334,7 +334,7 @@ export async function coachFor(
   readiness: readonly ReadinessLike[],
 ): Promise<{ guidance: CoachGuidance | null; stored: StoredCoach | null }> {
   const row = unwrap(
-    await ctx.supabase.from('plan_coach').select('signals_hash,local_date,output,calls_date,calls_today').eq('user_id', planCtx.userId).maybeSingle(),
+    await ctx.db.from('plan_coach').select('signals_hash,local_date,output,calls_date,calls_today').eq('user_id', planCtx.userId).maybeSingle(),
     'plan_coach',
   ) as CoachRow | null;
   const reuse = row ? { guidance: guidanceOf(row.output, false), stored: row.output } : { guidance: null, stored: null };
@@ -366,7 +366,7 @@ export async function coachFor(
   }
   const stored = resolveCoach(outcome.result.data, built);
   unwrap(
-    await ctx.supabase.from('plan_coach').upsert(
+    await ctx.db.from('plan_coach').upsert(
       {
         user_id: planCtx.userId,
         local_date: planCtx.today,

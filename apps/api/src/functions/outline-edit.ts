@@ -23,7 +23,7 @@ export const handler = defineFunction<Req>({
     const userId = ctx.user.userId;
 
     // The RPC's parameters are p_subject_id and p_ops (migrations); the client is the student's own.
-    const applied = await deps.asUser(ctx.user.jwt).rpc('edit_outline', { p_subject_id: input.subject_id, p_ops: input.ops });
+    const applied = await deps.asUser(ctx.user).rpc('edit_outline', { p_subject_id: input.subject_id, p_ops: input.ops });
     if (applied.error) throw applied.error;
     const result = applied.data as OutlineEditRes;
 

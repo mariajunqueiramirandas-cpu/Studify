@@ -11,7 +11,7 @@ const CAP = { reviews: 1000, questions: 500, mistakes: 20, documents: 1, mocks: 
 
 /** Reads every computable metric for one user (table names in the catalog comments of @studify/shared). */
 export async function loadAchievementMetrics(ctx: OperationContext, userId: string): Promise<AchievementMetrics> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const tz = safeTimeZone(
     (unwrap(await sb.from('profiles').select('timezone').eq('id', userId).maybeSingle(), 'profiles') as { timezone: string | null } | null)?.timezone,
   );
@@ -142,7 +142,7 @@ export async function syncAchievements(ctx: OperationContext, userId: string): P
   const metrics = await loadAchievementMetrics(ctx, userId);
   const progress = achievementProgress(metrics).filter((p) => p.computable);
   const existing = unwrapRows<{ code: string; unlocked_at: string | null }>(
-    await ctx.supabase.from('achievements').select('code,unlocked_at').eq('user_id', userId),
+    await ctx.db.from('achievements').select('code,unlocked_at').eq('user_id', userId),
     'achievements',
   );
   const done = new Set(existing.filter((r) => r.unlocked_at !== null).map((r) => r.code));
@@ -151,7 +151,7 @@ export async function syncAchievements(ctx: OperationContext, userId: string): P
     .filter((p) => !done.has(p.code))
     .map((p) => ({ user_id: userId, code: p.code, progress: p.progress, unlocked_at: p.unlocked ? now : null, updated_at: now }));
   if (rows.length > 0) {
-    unwrap(await ctx.supabase.from('achievements').upsert(rows, { onConflict: 'user_id,code' }), 'achievements');
+    unwrap(await ctx.db.from('achievements').upsert(rows, { onConflict: 'user_id,code' }), 'achievements');
   }
   const unlocked = progress.filter((p) => p.unlocked && !done.has(p.code)).map((p) => p.code);
   if (unlocked.length > 0) ctx.log.info({ unlocked }, 'achievements unlocked');

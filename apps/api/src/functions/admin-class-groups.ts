@@ -3,9 +3,9 @@
 import { defineFunction } from '../shared/http.ts';
 import { requireAppAdmin } from '../shared/access.ts';
 import type { AdminClassGroups } from '@studify/shared';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 
-export async function loadAdminClassGroups(db: SupabaseClient): Promise<AdminClassGroups> {
+export async function loadAdminClassGroups(db: Db): Promise<AdminClassGroups> {
   const [groups, limits] = await Promise.all([db.schema('private').rpc('admin_class_groups'), db.schema('private').rpc('admin_limits')]);
   if (groups.error) throw groups.error;
   if (limits.error) throw limits.error;

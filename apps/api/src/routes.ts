@@ -85,10 +85,13 @@ import { handler as tutorChat } from './functions/tutor-chat.ts';
 import { handler as uploadPhotos } from './functions/upload-photos.ts';
 import { handler as vesperaPrepare } from './functions/vespera-prepare.ts';
 import { handler as visualGenerate } from './functions/visual-generate.ts';
+import { realtimeJoin, realtimeLeave, realtimeStream, realtimeTrack } from './realtime/routes.ts';
+import { storageSign } from './storage/routes.ts';
+import { dataHandlers } from './data/index.ts';
 
 export type Handler = (req: Request, deps: P2Deps) => Promise<Response>;
 
-export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
+const FUNCTION_ROUTES = new Map<string, Handler>([
   ['account-delete', accountDelete],
   ['account-reset', accountReset],
   ['account-export', accountExport],
@@ -154,11 +157,16 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['quiz-share', quizShare],
   ['quiz-shared-open', quizSharedOpen],
   ['quiz-submit', quizSubmit],
+  ['realtime-join', realtimeJoin],
+  ['realtime-leave', realtimeLeave],
+  ['realtime-stream', realtimeStream],
+  ['realtime-track', realtimeTrack],
   ['report-create', reportCreate],
   ['room-control', roomControl],
   ['schedule-import', scheduleImport],
   ['scope-resolve', scopeResolve],
   ['signup-complete', signupComplete],
+  ['storage-sign', storageSign],
   ['sync-push', syncPush],
   ['teaching-finish', teachingFinish],
   ['teaching-start', teachingStart],
@@ -173,3 +181,13 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['vespera-prepare', vesperaPrepare],
   ['visual-generate', visualGenerate],
 ]);
+
+/** The functions and the data endpoints (data/index.ts). A data route may not take a function's name. */
+export const ROUTES: ReadonlyMap<string, Handler> = (() => {
+  const all = new Map<string, Handler>(FUNCTION_ROUTES);
+  for (const [name, handler] of dataHandlers()) {
+    if (all.has(name)) throw new Error(`data route ${name} collides with a function`);
+    all.set(name, handler);
+  }
+  return all;
+})();

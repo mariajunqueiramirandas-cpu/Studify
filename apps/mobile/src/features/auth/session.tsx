@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { data } from '../../api/data';
 import { clearStoredSessions } from '../../api/secure-session-storage';
 import { supabase } from '../../api/supabase';
 import { invalidatePushToken } from '../notifications/push-token';
@@ -57,11 +58,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     queryKey: ['profile', userId],
     enabled: !!userId,
     // Profile is needed before anything renders; a cached copy keeps cold start offline-friendly.
-    queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId!).maybeSingle();
-      if (error) throw error;
-      return (data as Profile | null) ?? null;
-    },
+    // Null while the profile does not exist yet (sign-up not completed).
+    queryFn: async () => (await data<Profile | null>('profile-get')) ?? null,
   });
 
   const value: SessionState = {

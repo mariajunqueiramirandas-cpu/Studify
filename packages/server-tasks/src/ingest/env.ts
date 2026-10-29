@@ -18,20 +18,20 @@ export interface PipelineEnv {
 }
 
 export function createEnv(ctx: OperationContext, store: ObjectStore): PipelineEnv {
-  return { ctx, store, sources: new SourceCache(store, ctx.db), documents: new Map() };
+  return { ctx, store, sources: new SourceCache(store, ctx.sql), documents: new Map() };
 }
 
 export function getDocument(env: PipelineEnv, documentId: string): Promise<DocumentRecord | null> {
   let hit = env.documents.get(documentId);
   if (!hit) {
-    hit = loadDocument(env.ctx.db, documentId);
+    hit = loadDocument(env.ctx.sql, documentId);
     env.documents.set(documentId, hit);
   }
   return hit;
 }
 
 export function sqlOf(env: PipelineEnv): Sql {
-  return env.ctx.db;
+  return env.ctx.sql;
 }
 
 export interface CachedSlice {

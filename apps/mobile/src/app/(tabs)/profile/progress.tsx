@@ -2,13 +2,12 @@ import { ACHIEVEMENTS, suggestedReminderTimes } from '@studify/shared';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { View } from 'react-native';
-import { supabase } from '../../../api/supabase';
+import { data } from '../../../api/data';
 import { Capi, Card, ListItem, ProgressBar, Row, Screen, Section, Stat, Text } from '../../../components';
 import { bucketLabel, usePerformanceWindows } from '../../../features/energy/api';
 import { useStudyPreferences } from '../../../features/goals/api';
 import { useCapi } from '../../../features/motivation/capi';
 import { useSession } from '../../../features/auth/session';
-import { rows } from '../../../features/common/query';
 import { addDays, toLocalDate } from '../../../features/common/format';
 import { useAchievements, useMotivation } from '../../../features/motivation/api';
 import { t } from '../../../i18n';
@@ -23,7 +22,7 @@ export default function Progress() {
   const days = useQuery({
     queryKey: ['dailyActivity', userId, from],
     enabled: !!userId,
-    queryFn: () => rows<{ local_date: string; active_minutes: number; counted: boolean | null }>(supabase.from('daily_activity').select('local_date,active_minutes,counted').eq('user_id', userId!).gte('local_date', from)).catch(() => []),
+    queryFn: () => data<Array<{ local_date: string; active_minutes: number; counted: boolean | null }>>('progress-daily-activity', { from }).catch(() => []),
   });
   const achievements = useAchievements();
   const capi = useCapi();

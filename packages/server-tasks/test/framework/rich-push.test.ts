@@ -198,7 +198,7 @@ describe('notify.live', () => {
   function ctxWith(job: Partial<LiveJobRow> | null) {
     const pushes: Array<{ userId: string; message: PushMessage }> = [];
     const ctx = {
-      db: {
+      sql: {
         async query(text: string) {
           if (text.includes('from public.ai_jobs')) return { rows: job ? [{ id: 'job1', type: 'podcast.generate', stage: 'audio', status: 'running', progress: 0.6, user_id: USER, subject_id: null, document_id: null, started_at: null, ...job }] : [] };
           return { rows: [] };

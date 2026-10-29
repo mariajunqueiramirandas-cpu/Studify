@@ -1,0 +1,9 @@
+# Secret scan settings (gitleaks, .github/workflows/ci.yml): the default rules, plus test-only placeholders that
+# look like keys. Only literal fixtures go here, never a pattern that could match a real secret.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, not secrets"
+# A placeholder signing key used by the API tests in commit 51c305e (now 'x'.repeat(32)); it stays in the history.
+regexes = ['''test-signing-key-0123456789abcdef''']

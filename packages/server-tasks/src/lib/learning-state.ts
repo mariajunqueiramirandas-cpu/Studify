@@ -153,17 +153,17 @@ export function computeMasteries(data: LearningData, at: Date, params: LearningP
 /** Subjects the user can learn from: personal subjects plus shared subjects of active Turmas. */
 export async function userSubjectIds(ctx: OperationContext, userId: string): Promise<string[]> {
   const personal = unwrapRows(
-    await ctx.supabase.from('subjects').select('id').eq('owner_profile_id', userId).is('deleted_at', null),
+    await ctx.db.from('subjects').select('id').eq('owner_profile_id', userId).is('deleted_at', null),
     'subjects',
   );
   const memberships = unwrapRows(
-    await ctx.supabase.from('class_group_members').select('class_group_id').eq('user_id', userId).eq('status', 'active'),
+    await ctx.db.from('class_group_members').select('class_group_id').eq('user_id', userId).eq('status', 'active'),
     'class_group_members',
   );
   const groupIds = uniq(memberships.map((m: { class_group_id: string }) => m.class_group_id));
   const shared: Array<{ id: string }> = [];
   for (const part of chunk(groupIds, IN_CHUNK)) {
-    shared.push(...unwrapRows(await ctx.supabase.from('subjects').select('id').in('owner_class_group_id', part).is('deleted_at', null), 'subjects'));
+    shared.push(...unwrapRows(await ctx.db.from('subjects').select('id').in('owner_class_group_id', part).is('deleted_at', null), 'subjects'));
   }
   return uniq([...personal.map((s: { id: string }) => s.id), ...shared.map((s) => s.id)]);
 }
@@ -181,7 +181,7 @@ export async function loadLearningData(ctx: OperationContext, userId: string, su
       title: string;
       position: number;
       is_placeholder: boolean;
-    }>(await ctx.supabase.from('knowledge_nodes').select('id,subject_id,parent_id,kind,title,position,is_placeholder').in('subject_id', part).is('deleted_at', null), 'knowledge_nodes');
+    }>(await ctx.db.from('knowledge_nodes').select('id,subject_id,parent_id,kind,title,position,is_placeholder').in('subject_id', part).is('deleted_at', null), 'knowledge_nodes');
     for (const r of rows) {
       nodes.set(r.id, {
         id: r.id,
@@ -198,7 +198,7 @@ export async function loadLearningData(ctx: OperationContext, userId: string, su
 
   const evidenceRows = await fetchAll<{ node_id: string; weight: number; outcome: number; occurred_at: string; ref_type: string }>(
     (from, to) =>
-      ctx.supabase.from('mastery_evidence').select('node_id,weight,outcome,occurred_at,ref_type').eq('user_id', userId).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<{
+      ctx.db.from('mastery_evidence').select('node_id,weight,outcome,occurred_at,ref_type').eq('user_id', userId).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<{
         data: Array<{ node_id: string; weight: number; outcome: number; occurred_at: string; ref_type: string }> | null;
         error: { message: string } | null;
       }>,
@@ -218,7 +218,7 @@ export async function loadLearningData(ctx: OperationContext, userId: string, su
     for (const part of chunk([...subjectIds], IN_CHUNK)) {
       cardRows.push(
         ...unwrapRows(
-          await ctx.supabase.from('cards').select('id,subject_id,node_id,concept_id,personal_for_user_id').in('subject_id', part).is('deleted_at', null).eq('status', 'active'),
+          await ctx.db.from('cards').select('id,subject_id,node_id,concept_id,personal_for_user_id').in('subject_id', part).is('deleted_at', null).eq('status', 'active'),
           'cards',
         ),
       );
@@ -230,7 +230,7 @@ export async function loadLearningData(ctx: OperationContext, userId: string, su
       IN_CHUNK,
     )) {
       const rows = unwrapRows<Parameters<typeof toCardState>[0]>(
-        await ctx.supabase
+        await ctx.db
           .from('card_states')
           .select('card_id,due,stability,difficulty,reps,lapses,scheduled_days,learning_steps,state,last_review,suspended')
           .eq('user_id', userId)

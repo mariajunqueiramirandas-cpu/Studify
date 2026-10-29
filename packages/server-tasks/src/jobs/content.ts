@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import type { OperationDefinition } from '../framework/types.ts';
 import { parsePayload } from '../framework/errors.ts';
-import { supabaseStore } from '../ingest/store.ts';
+import { fileStore } from '../ingest/store.ts';
 import { runPrereqJob, runRegenerate, runTopicContent, runTopicExtras } from '../ingest/pipeline.ts';
 
 const uuid = z.uuid();
@@ -48,7 +48,7 @@ export const jobs: OperationDefinition<any>[] = [
     // With the Batch API off one job runs a material's concepts and content calls (pipeline.ts runTopicsNow).
     handler: async (ctx, data, meta) => {
       const p = parsePayload(TopicContentPayload, data, 'ingest.topic_content');
-      await runTopicContent(ctx, supabaseStore(ctx.supabase), {
+      await runTopicContent(ctx, fileStore(ctx.db), {
         stage: p.stage,
         subjectId: p.subject_id,
         documentId: p.document_id,
@@ -68,7 +68,7 @@ export const jobs: OperationDefinition<any>[] = [
     concurrency: 4,
     handler: async (ctx, data) => {
       const p = parsePayload(ExtrasPayload, data, 'ingest.topic_extras');
-      await runTopicExtras(ctx, supabaseStore(ctx.supabase), { subjectId: p.subject_id, documentId: p.document_id, userId: p.user_id, nodeIds: p.node_ids });
+      await runTopicExtras(ctx, fileStore(ctx.db), { subjectId: p.subject_id, documentId: p.document_id, userId: p.user_id, nodeIds: p.node_ids });
     },
   },
   {

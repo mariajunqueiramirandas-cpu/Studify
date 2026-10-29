@@ -1,7 +1,7 @@
 // Shared request admission and SSE transport. Validation/authentication errors keep their HTTP status;
 // once admitted, a stream opens before any handler work (including retrieval and the first model token).
 import type { ZodError, ZodType } from 'zod';
-import { ApiFailure, IdempotencyKeySchema, SYNC_SCHEMA_VERSION, apiError } from '@studify/shared';
+import { ApiFailure, IdempotencyKeySchema, SYNC_SCHEMA_VERSION, apiError, isSupportedClient } from '@studify/shared';
 import { authenticate, type AuthUser } from './auth.ts';
 import { usagePctToday } from './budget.ts';
 import type { Deps } from './deps.ts';
@@ -14,7 +14,7 @@ export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'authorization, apikey, content-type, accept, last-event-id, idempotency-key, x-studify-version, x-studify-schema, x-device-id, x-client-info',
+    'authorization, apikey, content-type, accept, last-event-id, idempotency-key, x-studify-version, x-studify-schema, x-studify-compat, x-device-id, x-client-info',
   'Access-Control-Expose-Headers': 'x-ai-usage-today, x-request-id, idempotent-replayed',
   'Access-Control-Max-Age': '600',
 };
@@ -38,6 +38,11 @@ export interface FnSpec<I> {
   streamResult?: boolean | ((input: I) => boolean);
   /** Documents handlers whose model calls run inside an explicit SSE producer. */
   claudeInsideStream?: boolean;
+  /**
+   * Reads and in-memory actions (data reads, realtime joins): still answered over SSE (meta, then done.result),
+   * but without an Idempotency-Key record or replay. A reconnect simply asks again, which is always safe.
+   */
+  readOnly?: boolean;
   run(ctx: FnContext<I>): Promise<Response>;
 }
 export function defineFunction<I>(spec: FnSpec<I>): (req: Request, deps: Deps) => Promise<Response> {
@@ -57,6 +62,8 @@ function validationFailure(error: ZodError): ApiFailure {
 }
 
 async function checkClientVersion(req: Request, deps: Deps): Promise<void> {
+  // An app older than CLIENT_COMPAT_LEVEL (packages/shared/src/core/compat.ts) is asked to update, automatically.
+  if (!isSupportedClient(req.headers)) throw new ApiFailure('app_update_required');
   const schema = req.headers.get('x-studify-schema');
   if (schema && /^\d+$/.test(schema) && Number(schema) > SYNC_SCHEMA_VERSION) {
     throw new ApiFailure('app_update_required');
@@ -75,6 +82,17 @@ function replayResponse(stored: StoredResponse, requestId: string, afterId = 0):
     status: stored.status,
     headers: { ...CORS_HEADERS, ...headers, 'Content-Type': stored.contentType },
   });
+}
+
+/** A handler's JSON response as the stream's terminal event: `done` with the result, or `error`. */
+async function finishStream(writer: SseWriter, response: Response, usagePct: number): Promise<void> {
+  const text = await response.text();
+  const result: unknown = text ? JSON.parse(text) : null;
+  if (response.status >= 400) {
+    writer.send('error', { ...((result as { error?: object })?.error ?? apiError('internal_error').error), status: response.status });
+  } else {
+    writer.send('done', { stop_reason: 'end_turn', usage_pct_today: usagePct, status: response.status, result });
+  }
 }
 
 /** Statuses that a client should retry later rather than receive again: never replayed (api §2.4). */
@@ -125,6 +143,21 @@ export async function runFunction<I>(req: Request, deps: Deps, spec: FnSpec<I>):
     };
 
     const run = async (): Promise<Response> => {
+      if (spec.readOnly && !spec.mutating && wantsStream) {
+        streamed = true;
+        return openSse({ heartbeatMs: deps.heartbeatMs, headers, signal: req.signal }, async (writer) => {
+          writer.send('meta', { request_id: requestId });
+          let explicitStream = false;
+          const response = await spec.run({ ...baseContext,
+            sse: async (producer) => {
+              explicitStream = true;
+              await producer(writer);
+              return new Response(null);
+            },
+          });
+          if (!explicitStream) await finishStream(writer, response, spec.aiCall ? await baseContext.usagePct() : 0);
+        });
+      }
       if (spec.mutating || wantsStream) {
         if (!IdempotencyKeySchema.safeParse(key).success) throw new ApiFailure('invalid_request', { message: 'Este pedido precisa de um Idempotency-Key (UUID v7).' });
         const active = state.active.get(scope + key);
@@ -203,15 +236,7 @@ export async function runFunction<I>(req: Request, deps: Deps, spec: FnSpec<I>):
             return new Response(null);
           },
         });
-        if (!explicitStream) {
-          const text = await response.text();
-          const result: unknown = text ? JSON.parse(text) : null;
-          if (response.status >= 400) {
-            writer.send('error', { ...((result as { error?: object })?.error ?? apiError('internal_error').error), status: response.status });
-          } else {
-            writer.send('done', { stop_reason: 'end_turn', usage_pct_today: spec.aiCall ? await baseContext.usagePct() : 0, status: response.status, result });
-          }
-        }
+        if (!explicitStream) await finishStream(writer, response, spec.aiCall ? await baseContext.usagePct() : 0);
       });
       const live: LiveOperation = { hash: requestHash, operation, handles };
       state.active.set(scope + key, live);

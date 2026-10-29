@@ -103,18 +103,18 @@ export interface EssayGradeOutcome {
 export async function handleEssayGrade(ctx: OperationContext, data: Record<string, unknown>, meta: { aiJobId: string | null }): Promise<EssayGradeOutcome> {
   const payload = parsePayload(EssayPayload, data, 'essay.grade');
   const jobId = payload.ai_job_id ?? meta.aiJobId;
-  const essay = unwrap(await ctx.supabase.from('essays').select('id,user_id,kind,theme_id,prompt,text,input_mode,status,deleted_at').eq('id', payload.essay_id).maybeSingle(), 'essays') as EssayRow | null;
+  const essay = unwrap(await ctx.db.from('essays').select('id,user_id,kind,theme_id,prompt,text,input_mode,status,deleted_at').eq('id', payload.essay_id).maybeSingle(), 'essays') as EssayRow | null;
   if (!essay || essay.deleted_at || essay.user_id !== payload.user_id || essay.kind !== 'enem_redacao') return { status: 'skipped' };
   if (essay.status === 'graded') return { status: 'skipped' };
   const fail = async (code: string): Promise<EssayGradeOutcome> => {
-    unwrap(await ctx.supabase.from('essays').update({ status: 'failed' }).eq('id', essay.id), 'essays');
+    unwrap(await ctx.db.from('essays').update({ status: 'failed' }).eq('id', essay.id), 'essays');
     await ctx.progress({ status: 'failed', error_code: code });
     return { status: 'failed' };
   };
 
   let theme: { title: string; instruction: string | null; motivatingTexts: Array<{ label: string; text: string }> } = { title: essay.prompt?.theme ?? '', instruction: null, motivatingTexts: [] };
   if (essay.theme_id) {
-    const row = unwrap(await ctx.supabase.from('essay_themes').select('title,prompt').eq('id', essay.theme_id).maybeSingle(), 'essay_themes') as {
+    const row = unwrap(await ctx.db.from('essay_themes').select('title,prompt').eq('id', essay.theme_id).maybeSingle(), 'essay_themes') as {
       title: string;
       prompt: { instruction?: string; motivating_texts?: Array<{ label: string; text_md: string }> } | null;
     } | null;
@@ -152,7 +152,7 @@ export async function handleEssayGrade(ctx: OperationContext, data: Record<strin
     competencias[`c${c.id}`] = { ...c, score: total.isZero ? c.score : total.scores[`c${c.id}`] };
   }
   unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('essays')
       .update({
         status: 'graded',
@@ -190,7 +190,7 @@ export const TAG_MIN_CONFIDENCE = 0.5;
 
 export async function handleTagNodes(ctx: OperationContext, data: Record<string, unknown>): Promise<{ tagged: number; links: number } | null> {
   const payload = parsePayload(TagPayload, data, 'enem.tag_nodes');
-  const subject = unwrap(await ctx.supabase.from('subjects').select('id,name,enem_area,owner_profile_id,owner_class_group_id,deleted_at').eq('id', payload.subject_id).maybeSingle(), 'subjects') as {
+  const subject = unwrap(await ctx.db.from('subjects').select('id,name,enem_area,owner_profile_id,owner_class_group_id,deleted_at').eq('id', payload.subject_id).maybeSingle(), 'subjects') as {
     id: string;
     name: string;
     enem_area: EnemArea | null;
@@ -200,15 +200,15 @@ export async function handleTagNodes(ctx: OperationContext, data: Record<string,
   } | null;
   if (!subject || subject.deleted_at || !subject.enem_area) return null;
   const nodes = unwrapRows<{ id: string; title: string; kind: 'unit' | 'topic' | 'concept'; parent_id: string | null; position: number }>(
-    await ctx.supabase.from('knowledge_nodes').select('id,title,kind,parent_id,position').eq('subject_id', subject.id).is('deleted_at', null).order('position').limit(400),
+    await ctx.db.from('knowledge_nodes').select('id,title,kind,parent_id,position').eq('subject_id', subject.id).is('deleted_at', null).order('position').limit(400),
     'knowledge_nodes',
   );
   if (nodes.length === 0) return { tagged: 0, links: 0 };
   const skills = unwrapRows<{ code: string; competency_no: number; description: string | null }>(
-    await ctx.supabase.from('enem_skills').select('code,competency_no,description').eq('area', subject.enem_area).order('skill_no'),
+    await ctx.db.from('enem_skills').select('code,competency_no,description').eq('area', subject.enem_area).order('skill_no'),
     'enem_skills',
   );
-  const topics = unwrapRows<{ id: string; subject: string; title: string }>(await ctx.supabase.from('enem_topics').select('id,subject,title').eq('area', subject.enem_area).order('position'), 'enem_topics');
+  const topics = unwrapRows<{ id: string; subject: string; title: string }>(await ctx.db.from('enem_topics').select('id,subject,title').eq('area', subject.enem_area).order('position'), 'enem_topics');
   const keyOf = new Map(nodes.map((n, i) => [n.id, `n${i + 1}`] as const));
   const nodeByKey = new Map<string, (typeof nodes)[number]>(nodes.map((n, i) => [`n${i + 1}`, n]));
   const topicByKey = new Map<string, (typeof topics)[number]>(topics.map((t, i) => [`T${i + 1}`, t]));
@@ -232,15 +232,15 @@ export async function handleTagNodes(ctx: OperationContext, data: Record<string,
     const node = nodeByKey.get(n.node_key);
     if (!node) continue;
     const codes = n.skill_codes.filter((c) => c.confidence >= TAG_MIN_CONFIDENCE && validCodes.has(c.code)).map((c) => c.code);
-    unwrap(await ctx.supabase.from('knowledge_nodes').update({ enem_skill_codes: codes }).eq('id', node.id), 'knowledge_nodes');
+    unwrap(await ctx.db.from('knowledge_nodes').update({ enem_skill_codes: codes }).eq('id', node.id), 'knowledge_nodes');
     if (codes.length) tagged++;
     for (const t of n.enem_topic_keys) {
       const topic = topicByKey.get(t.key);
       if (topic && t.confidence >= TAG_MIN_CONFIDENCE) links.push({ node_id: node.id, enem_topic_id: topic.id, confidence: t.confidence });
     }
   }
-  for (const part of chunk(nodes.map((n) => n.id), 150)) unwrap(await ctx.supabase.from('knowledge_node_enem_topics').delete().in('node_id', part), 'knowledge_node_enem_topics');
-  for (const part of chunk(links, 200)) unwrap(await ctx.supabase.from('knowledge_node_enem_topics').insert(part), 'knowledge_node_enem_topics');
+  for (const part of chunk(nodes.map((n) => n.id), 150)) unwrap(await ctx.db.from('knowledge_node_enem_topics').delete().in('node_id', part), 'knowledge_node_enem_topics');
+  for (const part of chunk(links, 200)) unwrap(await ctx.db.from('knowledge_node_enem_topics').insert(part), 'knowledge_node_enem_topics');
   return { tagged, links: links.length };
 }
 
@@ -260,27 +260,27 @@ interface BankItemRow {
 
 export async function handleTopicStats(ctx: OperationContext): Promise<{ stats: number; trends: number; bands: number }> {
   const items = await fetchAll<BankItemRow>((from, to) =>
-    ctx.supabase.from('enem_items').select('id,question_id,edition_year,area,application,annulled,enem_topic_ids').eq('review_status', 'ok').order('id').range(from, to),
+    ctx.db.from('enem_items').select('id,question_id,edition_year,area,application,annulled,enem_topic_ids').eq('review_status', 'ok').order('id').range(from, to),
     'enem_items',
   );
   const statItems: StatItem[] = items.map((i) => ({ id: i.id, edition_year: i.edition_year, area: i.area, application: i.application, annulled: i.annulled, enem_topic_ids: i.enem_topic_ids ?? [] }));
   const stats = topicStats(statItems);
-  const topics = unwrapRows<{ id: string; area: EnemArea }>(await ctx.supabase.from('enem_topics').select('id,area'), 'enem_topics');
+  const topics = unwrapRows<{ id: string; area: EnemArea }>(await ctx.db.from('enem_topics').select('id,area'), 'enem_topics');
   const trends = topicTrends(stats, editionsByArea(statItems), new Map(topics.map((t) => [t.id, t.area] as const)));
   const now = ctx.now().toISOString();
 
-  await ctx.db.query('delete from public.enem_topic_stats');
-  for (const part of chunk(stats, 300)) unwrap(await ctx.supabase.from('enem_topic_stats').insert(part), 'enem_topic_stats');
+  await ctx.sql.query('delete from public.enem_topic_stats');
+  for (const part of chunk(stats, 300)) unwrap(await ctx.db.from('enem_topic_stats').insert(part), 'enem_topic_stats');
   for (const part of chunk(
     trends.map((t) => ({ enem_topic_id: t.enem_topic_id, share_last10: t.share_last10, share_recent5: t.share_recent5, share_prev5: t.share_prev5, trend: t.trend, predicted_share: t.predicted_share, computed_at: now })),
     300,
   )) {
-    unwrap(await ctx.supabase.from('enem_topic_trends').upsert(part, { onConflict: 'enem_topic_id' }), 'enem_topic_trends');
+    unwrap(await ctx.db.from('enem_topic_trends').upsert(part, { onConflict: 'enem_topic_id' }), 'enem_topic_trends');
   }
 
   // Difficulty bands by quartiles of b per area across editions (ENM-02.3).
   const params = await fetchAll<{ enem_item_id: string; a: number; b: number; c: number; scale: TriParamScale; logistic_d: number }>((from, to) =>
-    ctx.supabase.from('enem_item_params').select('enem_item_id,a,b,c,scale,logistic_d').order('enem_item_id').range(from, to),
+    ctx.db.from('enem_item_params').select('enem_item_id,a,b,c,scale,logistic_d').order('enem_item_id').range(from, to),
     'enem_item_params',
   );
   const byItem = new Map(items.map((i) => [i.id, i] as const));
@@ -297,7 +297,7 @@ export async function handleTopicStats(ctx: OperationContext): Promise<{ stats: 
       groups.set(band, [...(groups.get(band) ?? []), x.item.question_id]);
     }
     for (const [band, ids] of groups) {
-      for (const part of chunk(ids, 150)) unwrap(await ctx.supabase.from('questions').update({ difficulty_band: band }).in('id', part), 'questions');
+      for (const part of chunk(ids, 150)) unwrap(await ctx.db.from('questions').update({ difficulty_band: band }).in('id', part), 'questions');
       bands += ids.length;
     }
   }
@@ -333,16 +333,16 @@ export async function handleThemesPredict(ctx: OperationContext, data: Record<st
   const today = ctx.now();
   // Cron fires every Monday; only the first Monday of the month runs (unless an admin forces it).
   if (!force && today.getUTCDate() > 7) return { status: 'skipped' };
-  const past = unwrapRows<{ edition_year: number; theme: string }>(await ctx.supabase.from('enem_redacao_themes').select('edition_year,theme').order('edition_year'), 'enem_redacao_themes');
+  const past = unwrapRows<{ edition_year: number; theme: string }>(await ctx.db.from('enem_redacao_themes').select('edition_year,theme').order('edition_year'), 'enem_redacao_themes');
   const since = new Date(today.getTime() - 365 * 86_400_000).toISOString();
-  const digests = unwrapRows<{ id: string }>(await ctx.supabase.from('atualidades_digests').select('id').eq('status', 'published').gte('published_at', since), 'atualidades_digests');
+  const digests = unwrapRows<{ id: string }>(await ctx.db.from('atualidades_digests').select('id').eq('status', 'published').gte('published_at', since), 'atualidades_digests');
   const items = digests.length
     ? unwrapRows<{ id: string; title: string; summary_md: string; redacao_axes: string[]; sources: Array<{ url: string; name: string; published_at: string | null }> }>(
-        await ctx.supabase.from('atualidades_items').select('id,title,summary_md,redacao_axes,sources').in('digest_id', digests.map((d) => d.id)).eq('withdrawn', false).limit(120),
+        await ctx.db.from('atualidades_items').select('id,title,summary_md,redacao_axes,sources').in('digest_id', digests.map((d) => d.id)).eq('withdrawn', false).limit(120),
         'atualidades_items',
       )
     : [];
-  const active = unwrapRows<{ id: string; title: string }>(await ctx.supabase.from('essay_themes').select('id,title').eq('source', 'predicted').is('deleted_at', null), 'essay_themes');
+  const active = unwrapRows<{ id: string; title: string }>(await ctx.db.from('essay_themes').select('id,title').eq('source', 'predicted').is('deleted_at', null), 'essay_themes');
   const keyed = items.map((it, i) => ({ key: `A${i + 1}`, item: it }));
   const out = await runPrompt(ctx.ai, {
     task: getTask('enem.themes.predict'),
@@ -380,8 +380,8 @@ export async function handleThemesPredict(ctx: OperationContext, data: Record<st
     }));
   if (rows.length < 8) throw new JobDataError(`enem.themes.predict: only ${rows.length} usable themes`, 'invalid_output');
   // The new month replaces the previous predictions (kept for essays that already use them).
-  if (active.length) unwrap(await ctx.supabase.from('essay_themes').update({ deleted_at: today.toISOString() }).in('id', active.map((a) => a.id)), 'essay_themes');
-  unwrap(await ctx.supabase.from('essay_themes').insert(rows), 'essay_themes');
+  if (active.length) unwrap(await ctx.db.from('essay_themes').update({ deleted_at: today.toISOString() }).in('id', active.map((a) => a.id)), 'essay_themes');
+  unwrap(await ctx.db.from('essay_themes').insert(rows), 'essay_themes');
   return { status: 'done', themes: rows.length };
 }
 
@@ -395,12 +395,12 @@ const NOTICE_HOUR = { reta_final_start: 18, eve: 19, between_days: 18, exam_day:
 
 export async function handleRetaFinal(ctx: OperationContext): Promise<{ sent: number }> {
   const goals = unwrapRows<{ id: string; user_id: string; settings: { enem_edition?: number; enem_date_override?: string; reta_final_weeks?: number } | null }>(
-    await ctx.supabase.from('goals').select('id,user_id,settings').eq('mode', 'enem').eq('status', 'active').is('deleted_at', null),
+    await ctx.db.from('goals').select('id,user_id,settings').eq('mode', 'enem').eq('status', 'active').is('deleted_at', null),
     'goals',
   );
   if (goals.length === 0) return { sent: 0 };
-  const editions = unwrapRows<{ year: number; day1_date: string | null; day2_date: string | null }>(await ctx.supabase.from('enem_editions').select('year,day1_date,day2_date'), 'enem_editions');
-  const profiles = unwrapRows<{ id: string; timezone: string | null }>(await ctx.supabase.from('profiles').select('id,timezone').in('id', goals.map((g) => g.user_id)), 'profiles');
+  const editions = unwrapRows<{ year: number; day1_date: string | null; day2_date: string | null }>(await ctx.db.from('enem_editions').select('year,day1_date,day2_date'), 'enem_editions');
+  const profiles = unwrapRows<{ id: string; timezone: string | null }>(await ctx.db.from('profiles').select('id,timezone').in('id', goals.map((g) => g.user_id)), 'profiles');
   const tzOf = new Map(profiles.map((p) => [p.id, safeTimeZone(p.timezone)] as const));
   const now = ctx.now();
   let sent = 0;
@@ -427,7 +427,7 @@ export const jobs: OperationDefinition<any>[] = [
       } catch (err) {
         // A failure the handler did not settle leaves the redação gradable again instead of "sendo corrigida" for ever.
         const id = (data as { essay_id?: unknown } | null)?.essay_id;
-        if (typeof id === 'string') await ctx.supabase.from('essays').update({ status: 'failed' }).eq('id', id).eq('status', 'grading');
+        if (typeof id === 'string') await ctx.db.from('essays').update({ status: 'failed' }).eq('id', id).eq('status', 'grading');
         throw err;
       }
     },

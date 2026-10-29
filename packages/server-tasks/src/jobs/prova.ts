@@ -23,17 +23,17 @@ const normalizeTeacher = (name: string | null | undefined): string | null => (na
  * upsert cannot target, so reads and writes go through a plain lookup: NULL keys match with IS NULL.
  */
 function teacherProfileQuery(ctx: OperationContext, subjectId: string, teacherKey: string | null, columns: string) {
-  const query = ctx.supabase.from('teacher_profiles').select(columns).eq('subject_id', subjectId);
+  const query = ctx.db.from('teacher_profiles').select(columns).eq('subject_id', subjectId);
   return teacherKey === null ? query.is('teacher_key', null) : query.eq('teacher_key', teacherKey);
 }
 
 async function writeTeacherProfile(ctx: OperationContext, subjectId: string, teacherKey: string | null, values: Record<string, unknown>): Promise<void> {
   const found = unwrap(await teacherProfileQuery(ctx, subjectId, teacherKey, 'id').maybeSingle(), 'teacher_profiles') as { id: string } | null;
   if (found) {
-    unwrap(await ctx.supabase.from('teacher_profiles').update(values).eq('id', found.id), 'teacher_profiles');
+    unwrap(await ctx.db.from('teacher_profiles').update(values).eq('id', found.id), 'teacher_profiles');
     return;
   }
-  unwrap(await ctx.supabase.from('teacher_profiles').insert({ subject_id: subjectId, teacher_key: teacherKey, version: 1, ...values }), 'teacher_profiles');
+  unwrap(await ctx.db.from('teacher_profiles').insert({ subject_id: subjectId, teacher_key: teacherKey, version: 1, ...values }), 'teacher_profiles');
 }
 
 export interface AnalyzeOutcome {
@@ -48,16 +48,16 @@ export async function handleAnalyzePastTest(ctx: OperationContext, raw: Record<s
   const payload = AnalyzePayload.parse(raw);
   const doc = await loadDocument(ctx, payload.document_id);
   if (doc.kind !== 'past_test') return { status: 'skipped', questions: 0, skipped: { not_past_test: 1 } };
-  const subject = unwrap(await ctx.supabase.from('subjects').select('name,content_language,owner_class_group_id,owner_profile_id').eq('id', doc.subject_id).maybeSingle(), 'subjects') as {
+  const subject = unwrap(await ctx.db.from('subjects').select('name,content_language,owner_class_group_id,owner_profile_id').eq('id', doc.subject_id).maybeSingle(), 'subjects') as {
     name: string;
     content_language: string | null;
   } | null;
   if (!subject) throw new JobDataError('subject missing for past test', 'not_found');
   await ctx.progress({ stage: 'extract', status: 'running' });
-  unwrap(await ctx.supabase.from('documents').update({ status: 'processing' }).eq('id', doc.id), 'documents');
+  unwrap(await ctx.db.from('documents').update({ status: 'processing' }).eq('id', doc.id), 'documents');
 
   const nodes = unwrapRows<{ id: string; kind: string; title: string; summary: string | null }>(
-    await ctx.supabase.from('knowledge_nodes').select('id,kind,title,summary').eq('subject_id', doc.subject_id).is('deleted_at', null),
+    await ctx.db.from('knowledge_nodes').select('id,kind,title,summary').eq('subject_id', doc.subject_id).is('deleted_at', null),
     'knowledge_nodes',
   );
   const nodeIds = new Set(nodes.map((n) => n.id));
@@ -78,7 +78,7 @@ export async function handleAnalyzePastTest(ctx: OperationContext, raw: Record<s
     scope: { ...scope, userId: null, subjectId: doc.subject_id, documentId: doc.id, feature: scope.feature },
   });
   if (outcome.result.status !== 'ok') {
-    unwrap(await ctx.supabase.from('documents').update({ status: 'failed', error_code: outcome.result.status === 'refused' ? 'ai_refused' : 'ai_failed' }).eq('id', doc.id), 'documents');
+    unwrap(await ctx.db.from('documents').update({ status: 'failed', error_code: outcome.result.status === 'refused' ? 'ai_refused' : 'ai_failed' }).eq('id', doc.id), 'documents');
     throw new JobDataError(`pastTest.extract ${outcome.result.status}`, 'ai_failed');
   }
   const extraction = outcome.result.data;
@@ -121,20 +121,20 @@ export async function handleAnalyzePastTest(ctx: OperationContext, raw: Record<s
     });
   }
   // Re-analysis replaces this document's questions (idempotent for the document).
-  unwrap(await ctx.supabase.from('questions').delete().eq('source_document_id', doc.id).eq('origin', 'past_test'), 'questions delete');
-  for (const part of chunk(rows, 100)) unwrap(await ctx.supabase.from('questions').insert(part), 'questions insert');
+  unwrap(await ctx.db.from('questions').delete().eq('source_document_id', doc.id).eq('origin', 'past_test'), 'questions delete');
+  for (const part of chunk(rows, 100)) unwrap(await ctx.db.from('questions').insert(part), 'questions insert');
 
   // Teacher profile (PRA-09.4): statistics are code; the model describes patterns only with evidence.
   let teacherTests = 0;
   const teacherKey = normalizeTeacher(doc.teacher_name ?? extraction.test.teacher_guess);
   {
     const tests = unwrapRows<{ id: string; teacher_name: string | null }>(
-      await ctx.supabase.from('documents').select('id,teacher_name').eq('subject_id', doc.subject_id).eq('kind', 'past_test').is('deleted_at', null),
+      await ctx.db.from('documents').select('id,teacher_name').eq('subject_id', doc.subject_id).eq('kind', 'past_test').is('deleted_at', null),
       'documents',
     ).filter((d) => normalizeTeacher(d.teacher_name) === teacherKey);
     const questions: Array<{ id: string; source_document_id: string; type: string; stem: string; difficulty: number | null; bloom_level: string | null; points: number | null; node_id: string }> = [];
     for (const part of chunk(tests.map((t) => t.id), IN_CHUNK)) {
-      questions.push(...unwrapRows(await ctx.supabase.from('questions').select('id,source_document_id,type,stem,difficulty,bloom_level,points,node_id').in('source_document_id', part).eq('origin', 'past_test'), 'questions'));
+      questions.push(...unwrapRows(await ctx.db.from('questions').select('id,source_document_id,type,stem,difficulty,bloom_level,points,node_id').in('source_document_id', part).eq('origin', 'past_test'), 'questions'));
     }
     teacherTests = tests.length;
     const facts: PastTestFact[] = tests.map((t) => ({
@@ -182,7 +182,7 @@ export async function handleAnalyzePastTest(ctx: OperationContext, raw: Record<s
       computed_at: ctx.now().toISOString(),
     });
   }
-  unwrap(await ctx.supabase.from('documents').update({ status: 'ready', error_code: null }).eq('id', doc.id), 'documents');
+  unwrap(await ctx.db.from('documents').update({ status: 'ready', error_code: null }).eq('id', doc.id), 'documents');
   await ctx.progress({ stage: 'done', status: 'succeeded', items_total: extraction.questions.length, items_done: rows.length });
   return { status: 'ready', questions: rows.length, skipped, teacherTests };
 }
@@ -198,27 +198,27 @@ export interface GenerateOutcome {
 export async function handleGeneratePredicted(ctx: OperationContext, raw: Record<string, unknown>, scope: AiScope = { userId: null, feature: 'PRA-09.7' }): Promise<GenerateOutcome> {
   const payload = GeneratePayload.parse(raw);
   const exam = unwrap(
-    await ctx.supabase.from('exams').select('id,goal_id,subject_id,title,local_date,teacher_name,status').eq('id', payload.exam_id).eq('user_id', payload.user_id).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('exams').select('id,goal_id,subject_id,title,local_date,teacher_name,status').eq('id', payload.exam_id).eq('user_id', payload.user_id).is('deleted_at', null).maybeSingle(),
     'exams',
   ) as { id: string; goal_id: string; subject_id: string | null; title: string; local_date: string; teacher_name: string | null; status: string } | null;
   if (!exam || exam.status !== 'scheduled' || !exam.subject_id) return { status: 'skipped' };
-  const subject = unwrap(await ctx.supabase.from('subjects').select('name,content_language,is_language_subject').eq('id', exam.subject_id).maybeSingle(), 'subjects') as {
+  const subject = unwrap(await ctx.db.from('subjects').select('name,content_language,is_language_subject').eq('id', exam.subject_id).maybeSingle(), 'subjects') as {
     name: string;
     content_language: string | null;
     is_language_subject: boolean;
   } | null;
   if (!subject) return { status: 'skipped' };
 
-  const scopeNodes = unwrapRows<{ node_id: string }>(await ctx.supabase.from('exam_scope_nodes').select('node_id').eq('exam_id', exam.id), 'exam_scope_nodes').map((r) => r.node_id);
+  const scopeNodes = unwrapRows<{ node_id: string }>(await ctx.db.from('exam_scope_nodes').select('node_id').eq('exam_id', exam.id), 'exam_scope_nodes').map((r) => r.node_id);
   const topics = unwrapRows<{ id: string; title: string; kind: string; subject_id: string }>(
-    await ctx.supabase.from('knowledge_nodes').select('id,title,kind,subject_id').eq('subject_id', exam.subject_id).eq('kind', 'topic').is('deleted_at', null),
+    await ctx.db.from('knowledge_nodes').select('id,title,kind,subject_id').eq('subject_id', exam.subject_id).eq('kind', 'topic').is('deleted_at', null),
     'knowledge_nodes',
   );
   const scopeTopics = (scopeNodes.length ? topics.filter((t) => scopeNodes.includes(t.id)) : topics).map((t) => t.id);
   if (scopeTopics.length === 0) return { status: 'skipped' };
 
   const sources = unwrapRows<{ node_id: string; document_id: string; page_start: number; page_end: number }>(
-    await ctx.supabase.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', scopeTopics),
+    await ctx.db.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', scopeTopics),
     'node_sources',
   );
   const sourcesOf = new Map<string, Array<{ kind: 'slides' | 'notes' | 'textbook' | 'other'; pages: number }>>();
@@ -233,7 +233,7 @@ export async function handleGeneratePredicted(ctx: OperationContext, raw: Record
   const stats = profileRow?.profile.statistics;
   const weights = teacherTopicWeights(scopeTopics.sort(), base, stats?.pointsShare ?? {}, profileRow?.n_tests ?? 0);
 
-  const earlier = unwrapRows<{ id: string }>(await ctx.supabase.from('quizzes').select('id').eq('exam_id', exam.id).eq('kind', 'predicted_test'), 'quizzes');
+  const earlier = unwrapRows<{ id: string }>(await ctx.db.from('quizzes').select('id').eq('exam_id', exam.id).eq('kind', 'predicted_test'), 'quizzes');
   const regeneration = earlier.length;
   const seed = `${payload.user_id}|${exam.id}|${regeneration}`;
   const blueprint = predictedBlueprint({
@@ -246,7 +246,7 @@ export async function handleGeneratePredicted(ctx: OperationContext, raw: Record
   });
   const topicTitle = new Map(topics.map((t) => [t.id, t.title] as const));
   const examples = unwrapRows<{ type: string; stem: string }>(
-    await ctx.supabase.from('questions').select('type,stem').eq('subject_id', exam.subject_id).eq('origin', 'past_test').is('deleted_at', null).limit(6),
+    await ctx.db.from('questions').select('type,stem').eq('subject_id', exam.subject_id).eq('origin', 'past_test').is('deleted_at', null).limit(6),
     'questions',
   ).map((q) => ({ type: q.type, statement: q.stem.slice(0, 400) }));
 
@@ -332,9 +332,9 @@ export async function handleGeneratePredicted(ctx: OperationContext, raw: Record
     });
   }
   if (questionRows.length === 0) throw new JobDataError('predictedTest produced no valid question', 'invalid_output');
-  const inserted = unwrapRows<{ id: string }>(await ctx.supabase.from('questions').insert(questionRows).select('id'), 'questions insert');
+  const inserted = unwrapRows<{ id: string }>(await ctx.db.from('questions').insert(questionRows).select('id'), 'questions insert');
   const quiz = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('quizzes')
       .insert({
         owner_id: payload.user_id,
@@ -373,7 +373,7 @@ export interface ScheduleOutcome {
 /** ING-07 schedule.import: extracts the calendar of a schedule document into schedule_imports.extracted (draft). */
 export async function handleScheduleImport(ctx: OperationContext, raw: Record<string, unknown>, scope: AiScope = { userId: null, feature: 'ING-07' }): Promise<ScheduleOutcome> {
   const payload = SchedulePayload.parse(raw);
-  const row = unwrap(await ctx.supabase.from('schedule_imports').select('id,user_id,document_id,status').eq('id', payload.schedule_import_id).maybeSingle(), 'schedule_imports') as {
+  const row = unwrap(await ctx.db.from('schedule_imports').select('id,user_id,document_id,status').eq('id', payload.schedule_import_id).maybeSingle(), 'schedule_imports') as {
     id: string;
     user_id: string;
     document_id: string;
@@ -385,8 +385,8 @@ export async function handleScheduleImport(ctx: OperationContext, raw: Record<st
     doc.mime_type === 'application/pdf'
       ? [{ kind: 'pdf', slice: await wholeDocumentSlice(ctx, doc) }]
       : [{ kind: 'photo', data: await downloadBase64(ctx, 'photos', doc.storage_path), mediaType: doc.mime_type === 'image/png' ? 'image/png' : 'image/jpeg' }];
-  const subjects = unwrapRows<{ name: string }>(await ctx.supabase.from('subjects').select('name').eq('owner_profile_id', row.user_id).is('deleted_at', null), 'subjects').map((s) => s.name);
-  const profile = unwrap(await ctx.supabase.from('profiles').select('timezone').eq('id', row.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
+  const subjects = unwrapRows<{ name: string }>(await ctx.db.from('subjects').select('name').eq('owner_profile_id', row.user_id).is('deleted_at', null), 'subjects').map((s) => s.name);
+  const profile = unwrap(await ctx.db.from('profiles').select('timezone').eq('id', row.user_id).maybeSingle(), 'profiles') as { timezone: string | null } | null;
   const timeZone = safeTimeZone(profile?.timezone);
   const today = localDateOf(ctx.now(), timeZone);
   const outcome = await runPrompt(ctx.ai, {
@@ -405,7 +405,7 @@ export async function handleScheduleImport(ctx: OperationContext, raw: Record<st
     date_ambiguous: e.date_ambiguous,
     weight: e.weight,
   }));
-  unwrap(await ctx.supabase.from('schedule_imports').update({ extracted }).eq('id', row.id).eq('status', 'draft'), 'schedule_imports update');
+  unwrap(await ctx.db.from('schedule_imports').update({ extracted }).eq('id', row.id).eq('status', 'draft'), 'schedule_imports update');
   return { status: 'extracted', exams: extracted.length };
 }
 

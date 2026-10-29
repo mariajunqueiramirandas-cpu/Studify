@@ -24,7 +24,8 @@ All roadmap phases (0–5) are implemented in code and covered by automated test
 | `packages/shared` | Domain logic shared by app and API (FSRS, planner, TRI, grading, motivation, wellbeing) and the API/sync schemas |
 | `packages/prompts` | Prompt tasks, output schemas and fixtures |
 | `packages/ai`, `packages/speech` | Claude client with budgets; TTS providers |
-| `supabase` | Migrations, RLS and pgTAP tests |
+| `packages/db` | Migrations, RLS and pgTAP tests, the query engine and the file store (own Postgres, ADR 0012) |
+| `supabase` | Supabase Auth config and e-mail templates (accounts only) |
 
 Common commands (from the root): `pnpm typecheck`, `pnpm test`, `pnpm db:test` (pgTAP against a local Postgres), `pnpm db:rls-coverage`, `pnpm api:dev`, `pnpm --filter @studify/dashboard dev` (the web dashboard against a local API). The app: `pnpm --filter @studify/mobile start` (needs a development build for the native modules).
 

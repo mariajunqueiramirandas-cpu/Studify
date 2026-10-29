@@ -27,7 +27,7 @@ import { runPrompt, runText } from '../lib/ai-adapter.ts';
 import { IN_CHUNK, chunk, unwrap, unwrapRows, uniq } from '../lib/db.ts';
 import { addDays, localDateOf, safeTimeZone } from '../lib/time.ts';
 import { createEnv } from '../ingest/env.ts';
-import { supabaseStore } from '../ingest/store.ts';
+import { fileStore } from '../ingest/store.ts';
 import { topicSliceRefs } from '../ingest/topics.ts';
 import { toPdfSlices } from '../ingest/tasks.ts';
 import { renderCitedBody, type CitationInput } from '../ingest/citations.ts';
@@ -98,7 +98,7 @@ export function findingRows(
 }
 
 export async function handleMaterialCheck(ctx: OperationContext, data: { document_id: string; force?: boolean }): Promise<{ status: 'done' | 'skipped'; findings?: number }> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const doc = unwrap(await sb.from('documents').select('id, subject_id, uploaded_by, title, page_count, status, deleted_at, language').eq('id', data.document_id).maybeSingle(), 'documents') as {
     id: string;
     subject_id: string;
@@ -148,7 +148,7 @@ export async function handleMaterialCheck(ctx: OperationContext, data: { documen
     otherDocuments.push({ key, title: others.find((o) => o.id === id)!.title, topics: ns.filter((n) => n.kind === 'topic').slice(0, 15).map((n) => ({ title: n.title, summary: n.summary ?? '' })) });
   }
 
-  const env = createEnv(ctx, supabaseStore(sb));
+  const env = createEnv(ctx, fileStore(sb));
   const lastPage = Math.min(doc.page_count, MAX_CHECK_PAGES);
   const rows: FindingRow[] = [];
   for (let start = 1; start <= lastPage; start += CHECK_SLICE_PAGES) {
@@ -185,7 +185,7 @@ export async function handleMaterialCheck(ctx: OperationContext, data: { documen
 // ---------------------------------------------------------------------------
 
 export async function handleDivideMerge(ctx: OperationContext, data: { divide_plan_id: string }): Promise<{ status: 'done' | 'skipped'; notes?: number }> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const plan = unwrap(await sb.from('divide_plans').select('id, class_group_id, subject_id, status, created_by, title').eq('id', data.divide_plan_id).maybeSingle(), 'divide_plans') as {
     id: string;
     class_group_id: string;
@@ -203,7 +203,7 @@ export async function handleDivideMerge(ctx: OperationContext, data: { divide_pl
   const byNode = new Map<string, Array<{ author: string; body: string }>>();
   for (const c of contributions) byNode.set(c.node_id, [...(byNode.get(c.node_id) ?? []), { author: c.author_id, body: c.body_md }]);
 
-  const env = createEnv(ctx, supabaseStore(sb));
+  const env = createEnv(ctx, fileStore(sb));
   const task = getTask('divide.merge');
   let written = 0;
   for (const [nodeId, parts] of byNode) {
@@ -272,7 +272,7 @@ export function closedWeekStart(now: Date): string {
 }
 
 export async function handleLeagueWeekly(ctx: OperationContext, data: { week_start?: string }): Promise<{ groups: number; entries: number }> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const week = data.week_start ?? closedWeekStart(ctx.now());
   const weekEnd = addDays(week, 6);
   const members = unwrapRows<{ class_group_id: string; user_id: string }>(
@@ -337,7 +337,7 @@ function longestRun(days: readonly string[]): number {
 }
 
 export async function retroStats(ctx: OperationContext, userId: string, period: RetroPeriod): Promise<RetroStats> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const activity = unwrapRows<{ local_date: string; active_minutes: number; reviews: number; questions: number; counted: boolean }>(
     await sb.from('daily_activity').select('local_date, active_minutes, reviews, questions, counted').eq('user_id', userId).gte('local_date', period.start).lte('local_date', period.end),
     'daily_activity',
@@ -431,7 +431,7 @@ export function retroTitleStats(stats: RetroStats): Record<string, number | null
 }
 
 async function createRetro(ctx: OperationContext, userId: string, period: RetroPeriod): Promise<boolean> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   let q = sb.from('retrospectives').select('id').eq('user_id', userId).eq('period_type', period.type).eq('period_start', period.start).eq('period_end', period.end);
   q = period.goalId ? q.eq('goal_id', period.goalId) : q.is('goal_id', null);
   if (unwrapRows(await q.limit(1), 'retrospectives').length) return false;
@@ -452,7 +452,7 @@ async function createRetro(ctx: OperationContext, userId: string, period: RetroP
 }
 
 export async function handleRetroGenerate(ctx: OperationContext): Promise<{ created: number }> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const spToday = localDateOf(ctx.now(), 'America/Sao_Paulo');
   const since = addDays(spToday, -RETRO_ACTIVE_DAYS);
   const active = uniq(
@@ -500,7 +500,7 @@ export async function handleRetroGenerate(ctx: OperationContext): Promise<{ crea
 export const ENERGY_LOOKBACK_DAYS = 60;
 
 export async function handleEnergyWindows(ctx: OperationContext, data: { user_ids?: string[] }): Promise<{ users: number }> {
-  const sb = ctx.supabase;
+  const sb = ctx.db;
   const sinceIso = new Date(ctx.now().getTime() - ENERGY_LOOKBACK_DAYS * 86_400_000).toISOString();
   const userIds =
     data.user_ids ??

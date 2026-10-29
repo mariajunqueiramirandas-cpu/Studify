@@ -46,7 +46,7 @@ const ManifestSchema = z.object({
 });
 
 async function download(ctx: OperationContext, path: string): Promise<Uint8Array> {
-  const res = await ctx.supabase.storage.from(BUCKET).download(path);
+  const res = await ctx.db.storage.from(BUCKET).download(path);
   if (res.error || !res.data) throw new JobDataError(`enem storage: ${path} not found (${res.error?.message ?? 'empty'})`, 'missing_input');
   return new Uint8Array(await res.data.arrayBuffer());
 }
@@ -64,19 +64,19 @@ async function fileText(ctx: OperationContext, path: string): Promise<string> {
 
 /** The system subject of an area's bank (owned by the importing admin) and its root node. */
 export async function ensureBankSubject(ctx: OperationContext, area: EnemArea, adminId: string): Promise<{ subjectId: string; nodeId: string }> {
-  let subject = unwrap(await ctx.supabase.from('subjects').select('id').eq('system_kind', 'enem_bank').eq('enem_area', area).is('deleted_at', null).maybeSingle(), 'subjects') as { id: string } | null;
+  let subject = unwrap(await ctx.db.from('subjects').select('id').eq('system_kind', 'enem_bank').eq('enem_area', area).is('deleted_at', null).maybeSingle(), 'subjects') as { id: string } | null;
   if (!subject) {
     const id = crypto.randomUUID();
     unwrap(
-      await ctx.supabase.from('subjects').insert({ id, owner_profile_id: adminId, created_by: adminId, name: `ENEM — ${AREA_NAME[area]}`, color: '#2f5aa8', icon: 'school', enem_area: area, system_kind: 'enem_bank', content_language: 'pt-BR' }),
+      await ctx.db.from('subjects').insert({ id, owner_profile_id: adminId, created_by: adminId, name: `ENEM — ${AREA_NAME[area]}`, color: '#2f5aa8', icon: 'school', enem_area: area, system_kind: 'enem_bank', content_language: 'pt-BR' }),
       'subjects',
     );
     subject = { id };
   }
-  let node = unwrap(await ctx.supabase.from('knowledge_nodes').select('id').eq('subject_id', subject.id).eq('kind', 'unit').is('deleted_at', null).limit(1).maybeSingle(), 'knowledge_nodes') as { id: string } | null;
+  let node = unwrap(await ctx.db.from('knowledge_nodes').select('id').eq('subject_id', subject.id).eq('kind', 'unit').is('deleted_at', null).limit(1).maybeSingle(), 'knowledge_nodes') as { id: string } | null;
   if (!node) {
     const id = crypto.randomUUID();
-    unwrap(await ctx.supabase.from('knowledge_nodes').insert({ id, subject_id: subject.id, parent_id: null, kind: 'unit', title: `Banco ENEM — ${AREA_NAME[area]}`, content_status: 'skipped_excluded' }), 'knowledge_nodes');
+    unwrap(await ctx.db.from('knowledge_nodes').insert({ id, subject_id: subject.id, parent_id: null, kind: 'unit', title: `Banco ENEM — ${AREA_NAME[area]}`, content_status: 'skipped_excluded' }), 'knowledge_nodes');
     node = { id };
   }
   return { subjectId: subject.id, nodeId: node.id };
@@ -107,12 +107,12 @@ export async function handleImportEdition(ctx: OperationContext, data: Record<st
   const scale: TriParamScale = editionScale(groups);
 
   // Edition row (dates stay provisional until an admin verifies the edital).
-  const edition = unwrap(await ctx.supabase.from('enem_editions').select('year').eq('year', payload.year).maybeSingle(), 'enem_editions');
-  if (!edition) unwrap(await ctx.supabase.from('enem_editions').insert({ year: payload.year, dates_status: 'provisional' }), 'enem_editions');
+  const edition = unwrap(await ctx.db.from('enem_editions').select('year').eq('year', payload.year).maybeSingle(), 'enem_editions');
+  if (!edition) unwrap(await ctx.db.from('enem_editions').insert({ year: payload.year, dates_status: 'provisional' }), 'enem_editions');
 
   // Questions + enem_items + params, one per CO_ITEM. Re-imports keep the ids and the review state.
   const existing = unwrapRows<{ id: string; question_id: string; co_item: string; review_status: string }>(
-    await ctx.supabase.from('enem_items').select('id,question_id,co_item,review_status').eq('edition_year', payload.year).eq('application', application),
+    await ctx.db.from('enem_items').select('id,question_id,co_item,review_status').eq('edition_year', payload.year).eq('application', application),
     'enem_items',
   );
   const byCoItem = new Map(existing.map((e) => [e.co_item, e] as const));
@@ -127,7 +127,7 @@ export async function handleImportEdition(ctx: OperationContext, data: Record<st
     itemIdOf.set(g.coItem, itemId);
     if (!found) {
       unwrap(
-        await ctx.supabase.from('questions').insert({
+        await ctx.db.from('questions').insert({
           id: questionId,
           subject_id: bank.subjectId,
           node_id: bank.nodeId,
@@ -159,10 +159,10 @@ export async function handleImportEdition(ctx: OperationContext, data: Record<st
       annulled: g.annulled,
       annul_reason: g.annulReason,
     };
-    unwrap(await ctx.supabase.from('enem_items').upsert(row, { onConflict: 'edition_year,application,co_item' }), 'enem_items');
+    unwrap(await ctx.db.from('enem_items').upsert(row, { onConflict: 'edition_year,application,co_item' }), 'enem_items');
     if (g.params) {
       unwrap(
-        await ctx.supabase.from('enem_item_params').upsert({ enem_item_id: itemId, a: g.params.a, b: g.params.b, c: g.params.c, scale, source: `microdata_${payload.year}`, logistic_d: 1 }, { onConflict: 'enem_item_id' }),
+        await ctx.db.from('enem_item_params').upsert({ enem_item_id: itemId, a: g.params.a, b: g.params.b, c: g.params.c, scale, source: `microdata_${payload.year}`, logistic_d: 1 }, { onConflict: 'enem_item_id' }),
         'enem_item_params',
       );
     }
@@ -189,7 +189,7 @@ export async function handleImportEdition(ctx: OperationContext, data: Record<st
       const paths: string[] = [];
       for (const [n, img] of images.entries()) {
         const path = `${payload.year}/${group.coItem}/${n + 1}.${img.extension}`;
-        const up = await ctx.supabase.storage.from(BUCKET).upload(path, img.bytes, { contentType: img.contentType, upsert: true });
+        const up = await ctx.db.storage.from(BUCKET).upload(path, img.bytes, { contentType: img.contentType, upsert: true });
         if (up.error) throw new JobDataError(`enem crop upload failed: ${up.error.message}`, 'storage');
         paths.push(path);
       }
@@ -201,7 +201,7 @@ export async function handleImportEdition(ctx: OperationContext, data: Record<st
         // Annulled items keep no key; the banner explains (ENM-02.6).
       } else if (printed === undefined) notes.push('answer_key_position_missing');
       else if (printed !== group.key) notes.push(`answer_key_mismatch:${printed ?? 'null'}≠${group.key ?? 'null'}`);
-      unwrap(await ctx.supabase.from('enem_items').update({ crop_paths: paths, review_notes: notes }).eq('id', itemId), 'enem_items');
+      unwrap(await ctx.db.from('enem_items').update({ crop_paths: paths, review_notes: notes }).eq('id', itemId), 'enem_items');
       await ctx.execute(
         'enem.import_item',
         { enem_item_id: itemId, booklet_path: bookletPath, page: marker.page, ai_job_id: payload.ai_job_id ?? null },
@@ -212,7 +212,7 @@ export async function handleImportEdition(ctx: OperationContext, data: Record<st
   }
   // Items no booklet marker matched: stay under review with the reason.
   const unmatched = groups.filter((g) => !matched.has(g.coItem)).map((g) => itemIdOf.get(g.coItem)!);
-  for (const part of chunk(unmatched, 150)) unwrap(await ctx.supabase.from('enem_items').update({ review_notes: ['crop_not_found'], review_status: 'needs_review' }).in('id', part), 'enem_items');
+  for (const part of chunk(unmatched, 150)) unwrap(await ctx.db.from('enem_items').update({ review_notes: ['crop_not_found'], review_status: 'needs_review' }).in('id', part), 'enem_items');
   await ctx.progress({ stage: 'items', progress: 0.5, items_total: queued, items_done: 0 });
   return { items: groups.length, cropped, queued, needsReview: unmatched.length };
 }
@@ -239,7 +239,7 @@ let bookletCache: { path: string; bytes: Uint8Array } | null = null;
 export async function handleImportItem(ctx: OperationContext, data: Record<string, unknown>): Promise<{ status: 'published' | 'needs_review' | 'skipped'; notes: string[] }> {
   const payload = parsePayload(ItemPayload, data, 'enem.import_item');
   const item = unwrap(
-    await ctx.supabase.from('enem_items').select('id,question_id,edition_year,day,area,positions,answer_key,skill_code,annulled,crop_paths,review_notes').eq('id', payload.enem_item_id).maybeSingle(),
+    await ctx.db.from('enem_items').select('id,question_id,edition_year,day,area,positions,answer_key,skill_code,annulled,crop_paths,review_notes').eq('id', payload.enem_item_id).maybeSingle(),
     'enem_items',
   ) as ItemRow | null;
   if (!item) return { status: 'skipped', notes: [] };
@@ -260,7 +260,7 @@ export async function handleImportItem(ctx: OperationContext, data: Record<strin
     const tr = await runPrompt(ctx.ai, { task: getTask('enem.bank.transcribe'), schema: EnemItemTranscription as unknown as z.ZodType<z.infer<typeof EnemItemTranscription>>, input: { ...ref, crops: usableCrops, page }, scope });
     if (tr.result.status !== 'ok') {
       notes.push(`transcription_${tr.result.status}`);
-      unwrap(await ctx.supabase.from('enem_items').update({ review_status: 'needs_review', review_notes: notes }).eq('id', item.id), 'enem_items');
+      unwrap(await ctx.db.from('enem_items').update({ review_status: 'needs_review', review_notes: notes }).eq('id', item.id), 'enem_items');
       return { status: 'needs_review', notes };
     }
     const t = tr.result.data as z.infer<typeof EnemItemTranscription>;
@@ -268,7 +268,7 @@ export async function handleImportItem(ctx: OperationContext, data: Record<strin
     const transcriptionMd = `${t.statement_md}\n\n${t.alternatives.map((a) => `${a.label}) ${a.text_md}`).join('\n')}`;
 
     // 2. ENEM topics (when the curated taxonomy exists for the area).
-    const topics = unwrapRows<{ id: string; subject: string; title: string }>(await ctx.supabase.from('enem_topics').select('id,subject,title').eq('area', item.area).order('position'), 'enem_topics');
+    const topics = unwrapRows<{ id: string; subject: string; title: string }>(await ctx.db.from('enem_topics').select('id,subject,title').eq('area', item.area).order('position'), 'enem_topics');
     let topicIds: string[] = [];
     let subjectName = t.subject_guess;
     if (topics.length > 0) {
@@ -311,7 +311,7 @@ export async function handleImportItem(ctx: OperationContext, data: Record<strin
       correct: item.answer_key ?? 'A',
     };
     unwrap(
-      await ctx.supabase
+      await ctx.db
         .from('questions')
         .update({ stem: t.statement_md, payload: payloadOut, explanation: explanation?.solution_md ?? null, has_math: /\$/.test(transcriptionMd), format_features: t.has_figure ? ['figure'] : [] })
         .eq('id', item.question_id),
@@ -319,7 +319,7 @@ export async function handleImportItem(ctx: OperationContext, data: Record<strin
     );
     const publish = notes.length === 0;
     unwrap(
-      await ctx.supabase
+      await ctx.db
         .from('enem_items')
         .update({ transcription_md: transcriptionMd, alt_text: t.alt_text, subject: subjectName, enem_topic_ids: topicIds, explanation_status: item.annulled ? 'ok' : explanationStatus, review_status: publish ? 'ok' : 'needs_review', review_notes: notes })
         .eq('id', item.id),
@@ -329,7 +329,7 @@ export async function handleImportItem(ctx: OperationContext, data: Record<strin
     return { status: publish ? 'published' : 'needs_review', notes };
   } catch (err) {
     if (err instanceof BudgetExceededError) {
-      unwrap(await ctx.supabase.from('enem_items').update({ review_status: 'needs_review', review_notes: [...notes, 'budget_exceeded'] }).eq('id', item.id), 'enem_items');
+      unwrap(await ctx.db.from('enem_items').update({ review_status: 'needs_review', review_notes: [...notes, 'budget_exceeded'] }).eq('id', item.id), 'enem_items');
       return { status: 'needs_review', notes: [...notes, 'budget_exceeded'] };
     }
     throw err;

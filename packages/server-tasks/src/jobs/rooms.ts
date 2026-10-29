@@ -8,19 +8,19 @@ import { broadcastPrivate } from '../lib/realtime.ts';
 export async function handleRoomsSweep(ctx: OperationContext): Promise<{ closed: number }> {
   const now = ctx.now();
   const rooms = unwrapRows<{ id: string; created_at: string; last_active_at: string }>(
-    await ctx.supabase.from('study_rooms').select('id,created_at,last_active_at').eq('status', 'open'),
+    await ctx.db.from('study_rooms').select('id,created_at,last_active_at').eq('status', 'open'),
     'study_rooms',
   );
   let closed = 0;
   for (const room of rooms) {
     const inside = unwrapRows<{ user_id: string }>(
-      await ctx.supabase.from('study_room_members').select('user_id').eq('room_id', room.id).is('left_at', null),
+      await ctx.db.from('study_room_members').select('user_id').eq('room_id', room.id).is('left_at', null),
       'study_room_members',
     );
     if (!roomShouldClose(room, inside.length, now)) continue;
     const at = now.toISOString();
-    unwrap(await ctx.supabase.from('study_rooms').update({ status: 'closed', closed_at: at }).eq('id', room.id).eq('status', 'open'), 'study_rooms');
-    if (inside.length > 0) unwrap(await ctx.supabase.from('study_room_members').update({ left_at: at }).eq('room_id', room.id).is('left_at', null), 'study_room_members');
+    unwrap(await ctx.db.from('study_rooms').update({ status: 'closed', closed_at: at }).eq('id', room.id).eq('status', 'open'), 'study_rooms');
+    if (inside.length > 0) unwrap(await ctx.db.from('study_room_members').update({ left_at: at }).eq('room_id', room.id).is('left_at', null), 'study_room_members');
     await broadcastPrivate(ctx, `room:${room.id}`, [{ event: 'closed', payload: { reason: inside.length > 0 ? 'lifetime' : 'empty' } }]);
     closed++;
   }

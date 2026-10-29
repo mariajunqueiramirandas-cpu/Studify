@@ -1,6 +1,6 @@
 // In-memory stand-ins for Supabase Storage and for the job queue. The integration test runs the real
 // OperationRegistry over the in-memory backend, so every retry, permanent failure and ai_jobs mirror is exercised.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { ScheduleOptions as SendOptions } from '../../../src/framework/scheduler.ts';
 import { randomUUID } from 'node:crypto';
 
@@ -35,8 +35,8 @@ export class FakeObjectStore {
   }
 }
 
-/** Only the storage surface of supabase-js is provided; the pipeline never calls other APIs on it. */
-export function fakeSupabase(store: FakeObjectStore): SupabaseClient {
+/** Only the storage surface of the database client is provided; the pipeline never calls other APIs on it. */
+export function fakeStorageDb(store: FakeObjectStore): Db {
   const client = {
     storage: {
       from(bucket: string) {
@@ -61,7 +61,7 @@ export function fakeSupabase(store: FakeObjectStore): SupabaseClient {
       },
     },
   };
-  return client as unknown as SupabaseClient;
+  return client as unknown as Db;
 }
 
 /** Test clock for delayed calendar actions. Immediate operations run in the real registry. */

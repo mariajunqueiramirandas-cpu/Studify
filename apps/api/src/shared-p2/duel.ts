@@ -1,6 +1,6 @@
 // Duel timing, scoring, answer recording and completion (SOC-02, spec 10 §8.2, learning-engine §18.1).
 // Times come from the server clock only: `served_at` from private.question_served, receipt = now().
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { ApiFailure, duelAnswerSeconds, duelPoints, SOCIAL, suggestMistakeCause } from '@studify/shared';
 import type { P2Deps } from './deps.ts';
 import { gradeQuestion, parseResponse, payloadOf, type QuestionRow } from './questions.ts';
@@ -47,20 +47,20 @@ export interface QuizRow {
 const DUEL_COLUMNS =
   'id, class_group_id, challenger_id, opponent_id, quiz_id, status, expires_at, challenger_attempt_id, opponent_attempt_id, challenger_score, opponent_score, winner_id, rematch_of';
 
-export async function loadDuel(db: SupabaseClient, duelId: string): Promise<DuelRow | null> {
+export async function loadDuel(db: Db, duelId: string): Promise<DuelRow | null> {
   const { data, error } = await db.from('duels').select(DUEL_COLUMNS).eq('id', duelId).maybeSingle();
   if (error) throw error;
   return (data as DuelRow | null) ?? null;
 }
 
-export async function duelForQuiz(db: SupabaseClient, quizId: string): Promise<DuelRow | null> {
+export async function duelForQuiz(db: Db, quizId: string): Promise<DuelRow | null> {
   const { data, error } = await db.from('duels').select(DUEL_COLUMNS).eq('quiz_id', quizId).maybeSingle();
   if (error) throw error;
   return (data as DuelRow | null) ?? null;
 }
 
 /** An attempt that belongs to the caller (IDOR: another user's attempt is 404). */
-export async function loadOwnAttempt(db: SupabaseClient, attemptId: string, userId: string): Promise<AttemptRow> {
+export async function loadOwnAttempt(db: Db, attemptId: string, userId: string): Promise<AttemptRow> {
   const { data, error } = await db.from('quiz_attempts').select('id, user_id, quiz_id, status, device_id').eq(
     'id',
     attemptId,
@@ -70,7 +70,7 @@ export async function loadOwnAttempt(db: SupabaseClient, attemptId: string, user
   return data as AttemptRow;
 }
 
-export async function loadQuiz(db: SupabaseClient, quizId: string): Promise<QuizRow | null> {
+export async function loadQuiz(db: Db, quizId: string): Promise<QuizRow | null> {
   const { data, error } = await db.from('quizzes').select('id, kind, question_ids').eq('id', quizId).is(
     'deleted_at',
     null,
@@ -302,7 +302,7 @@ export interface DuelContext {
  * quiz without a duel is 404. A finished, declined or expired duel is 409 duel_not_open.
  */
 export async function loadDuelContext(
-  db: SupabaseClient,
+  db: Db,
   attemptId: string,
   userId: string,
   now: Date,

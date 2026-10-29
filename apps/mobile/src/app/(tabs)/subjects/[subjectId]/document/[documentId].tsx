@@ -4,9 +4,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Pdf from 'react-native-pdf';
-import { supabase } from '../../../../../api/supabase';
+import { data } from '../../../../../api/data';
 import { ActionBar, Banner, Button, ErrorState, IconButton, Row, Screen, Skeleton, Text, TextField, useOnline } from '../../../../../components';
-import { row } from '../../../../../features/common/query';
 import { signedUrl, type DocumentRow } from '../../../../../features/subjects/api';
 import { downloadDocumentForOffline, localDocumentUri } from '../../../../../features/subjects/files';
 import { matchSpans, type PageSpan } from '../../../../../features/subjects/highlight';
@@ -33,11 +32,11 @@ export default function DocumentViewer() {
 
   const doc = useQuery({
     queryKey: ['document', documentId],
-    queryFn: () => row<DocumentRow>(supabase.from('documents').select('*').eq('id', documentId).maybeSingle()),
+    queryFn: () => data<DocumentRow | null>('documents-get', { document_id: documentId }),
   });
   const pageRow = useQuery({
     queryKey: ['document', documentId, 'page', current],
-    queryFn: () => row<PageRow>(supabase.from('document_pages').select('page_number,text_source,image_path,text_items_path,text').eq('document_id', documentId).eq('page_number', current).maybeSingle()),
+    queryFn: () => data<PageRow | null>('documents-page', { document_id: documentId, page_number: current }),
   });
   const image = useQuery({
     queryKey: ['document', documentId, 'page', current, 'image'],

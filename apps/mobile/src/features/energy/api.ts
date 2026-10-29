@@ -2,9 +2,8 @@
 // good buckets to order Hoje, suggest reminder times and place calendar blocks.
 import { ENERGY } from '@studify/shared';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../api/supabase';
+import { data as callData } from '../../api/data';
 import { useSession } from '../auth/session';
-import { rows } from '../common/query';
 
 export interface WindowRow {
   bucket: number;
@@ -28,7 +27,7 @@ export function usePerformanceWindows() {
     enabled: !!userId,
     staleTime: 6 * 3600_000,
     queryFn: async (): Promise<EnergyWindows> => {
-      const data = await rows<WindowRow>(supabase.from('performance_windows').select('bucket,n_events,mean_residual,ci_low,ci_high,good').eq('user_id', userId!).order('bucket')).catch(() => [] as WindowRow[]);
+      const data = await callData<WindowRow[]>('energy-windows').catch(() => [] as WindowRow[]);
       const best = data
         .filter((w) => w.good)
         .sort((a, b) => b.mean_residual - a.mean_residual || a.bucket - b.bucket)

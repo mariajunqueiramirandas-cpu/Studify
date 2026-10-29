@@ -42,14 +42,14 @@ interface ProfileRow {
 
 export async function loadPlanContext(ctx: OperationContext, userId: string): Promise<PlanContext | null> {
   const profile = unwrap(
-    await ctx.supabase.from('profiles').select('timezone,settings').eq('id', userId).is('deleted_at', null).maybeSingle(),
+    await ctx.db.from('profiles').select('timezone,settings').eq('id', userId).is('deleted_at', null).maybeSingle(),
     'profiles',
   ) as ProfileRow | null;
   if (!profile) return null;
 
   const timeZone = safeTimeZone(profile.timezone);
   const prefs = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('study_preferences')
       .select('minutes_by_weekday,window_start,window_end,min_block_min,max_block_min,max_subjects_per_day,review_seconds_estimate,day_rollover_hour,quiet_start,quiet_end,vespera_time')
       .eq('user_id', userId)
@@ -63,12 +63,12 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   const today = studyDayFor(now, timeZone, rollover);
 
   const goals = unwrapRows<{ id: string }>(
-    await ctx.supabase.from('goals').select('id').eq('user_id', userId).eq('status', 'active').is('deleted_at', null),
+    await ctx.db.from('goals').select('id').eq('user_id', userId).eq('status', 'active').is('deleted_at', null),
     'goals',
   );
   const goalIds = new Set(goals.map((g) => g.id));
   const allExams = unwrapRows<ExamRow>(
-    await ctx.supabase
+    await ctx.db
       .from('exams')
       .select('id,goal_id,subject_id,title,local_date,starts_at,kind,status,weight')
       .eq('user_id', userId)
@@ -82,7 +82,7 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   let scope: ScopeRow[] = [];
   for (const part of chunk(examIds, IN_CHUNK)) {
     scope = scope.concat(
-      unwrapRows<ScopeRow>(await ctx.supabase.from('exam_scope_nodes').select('exam_id,node_id,confirmed,source').in('exam_id', part), 'exam_scope_nodes'),
+      unwrapRows<ScopeRow>(await ctx.db.from('exam_scope_nodes').select('exam_id,node_id,confirmed,source').in('exam_id', part), 'exam_scope_nodes'),
     );
   }
 
@@ -91,7 +91,7 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   const nodes = [...learning.nodes.values()];
 
   const excludedRows = unwrapRows<{ node_id: string }>(
-    await ctx.supabase.from('node_user_settings').select('node_id').eq('user_id', userId).eq('excluded', true),
+    await ctx.db.from('node_user_settings').select('node_id').eq('user_id', userId).eq('excluded', true),
     'node_user_settings',
   );
   const excludedNodeIds = new Set(excludedRows.map((r) => r.node_id));
@@ -99,12 +99,12 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   const topicIds = nodes.filter((n) => n.kind === 'topic').map((n) => n.id);
   const sourceRows: Array<{ node_id: string; document_id: string; page_start: number; page_end: number }> = [];
   for (const part of chunk(topicIds, IN_CHUNK)) {
-    sourceRows.push(...unwrapRows(await ctx.supabase.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', part), 'node_sources'));
+    sourceRows.push(...unwrapRows(await ctx.db.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', part), 'node_sources'));
   }
   const docIds = uniq(sourceRows.map((s) => s.document_id));
   const kindOf = new Map<string, string>();
   for (const part of chunk(docIds, IN_CHUNK)) {
-    for (const d of unwrapRows<{ id: string; kind: string }>(await ctx.supabase.from('documents').select('id,kind').in('id', part), 'documents')) {
+    for (const d of unwrapRows<{ id: string; kind: string }>(await ctx.db.from('documents').select('id,kind').in('id', part), 'documents')) {
       kindOf.set(d.id, d.kind);
     }
   }
@@ -112,7 +112,7 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   const estimateOf = new Map<string, number>();
   for (const part of chunk(topicIds, IN_CHUNK)) {
     for (const e of unwrapRows<{ node_id: string; document_id: string; minutes: number }>(
-      await ctx.supabase.from('topic_study_estimates').select('node_id,document_id,minutes').in('node_id', part),
+      await ctx.db.from('topic_study_estimates').select('node_id,document_id,minutes').in('node_id', part),
       'topic_study_estimates',
     )) {
       estimateOf.set(`${e.node_id}|${e.document_id}`, e.minutes);
@@ -135,7 +135,7 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
 
   const masteries = computeMasteries(learning, now, paramsFor(retention, timeZone));
   const exceptions = unwrapRows<{ local_date: string; minutes: number }>(
-    await ctx.supabase.from('availability_exceptions').select('local_date,minutes').eq('user_id', userId).gte('local_date', today).is('deleted_at', null),
+    await ctx.db.from('availability_exceptions').select('local_date,minutes').eq('user_id', userId).gte('local_date', today).is('deleted_at', null),
     'availability_exceptions',
   );
 
@@ -143,7 +143,7 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   const reviewMinutesByDay = reviewForecast(learning, exams, today, now, params, reviewSeconds ?? params.reviewSecondsDefault, nodes);
 
   const desperate = unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('desperate_modes')
       .select('exam_ids,minutes_per_day,topic_groups,user_moves')
       .eq('user_id', userId)
@@ -153,12 +153,12 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   ) as DesperateRow | null;
 
   const latestRun = unwrap(
-    await ctx.supabase.from('plan_runs').select('id,version,input_hash').eq('user_id', userId).order('version', { ascending: false }).limit(1).maybeSingle(),
+    await ctx.db.from('plan_runs').select('id,version,input_hash').eq('user_id', userId).order('version', { ascending: false }).limit(1).maybeSingle(),
     'plan_runs',
   ) as { id: string; version: number; input_hash: string } | null;
   const previousRows = latestRun
     ? unwrapRows<PlanItemRow>(
-        await ctx.supabase.from('plan_items').select('*').eq('plan_run_id', latestRun.id).is('deleted_at', null),
+        await ctx.db.from('plan_items').select('*').eq('plan_run_id', latestRun.id).is('deleted_at', null),
         'plan_items',
       )
     : [];
@@ -199,7 +199,7 @@ const PACE_WINDOW_DAYS = 60;
 async function measuredPace(ctx: OperationContext, userId: string, now: Date): Promise<{ overall: number; bySubject: Map<string, number> }> {
   const since = new Date(now.getTime() - PACE_WINDOW_DAYS * 86_400_000).toISOString();
   const sessions = unwrapRows<{ plan_item_id: string; active_minutes: number; started_at: string }>(
-    await ctx.supabase
+    await ctx.db
       .from('study_sessions')
       .select('plan_item_id,active_minutes,started_at')
       .eq('user_id', userId)
@@ -217,7 +217,7 @@ async function measuredPace(ctx: OperationContext, userId: string, now: Date): P
   const samples: PaceSample[] = [];
   for (const part of chunk([...actual.keys()], IN_CHUNK)) {
     for (const item of unwrapRows<{ id: string; minutes: number; subject_id: string | null }>(
-      await ctx.supabase.from('plan_items').select('id,minutes,subject_id').in('id', part).in('unit_type', ['learn', 'learn_light']).eq('status', 'done'),
+      await ctx.db.from('plan_items').select('id,minutes,subject_id').in('id', part).in('unit_type', ['learn', 'learn_light']).eq('status', 'done'),
       'plan_items',
     )) {
       const a = actual.get(item.id);
@@ -230,7 +230,7 @@ async function measuredPace(ctx: OperationContext, userId: string, now: Date): P
 /** Seconds per review from the student's last review durations; null keeps the stored or default value. */
 async function measuredReviewSeconds(ctx: OperationContext, userId: string, stored: number | null): Promise<number | null> {
   const logs = unwrapRows<{ duration_ms: number | null }>(
-    await ctx.supabase.from('review_logs').select('duration_ms').eq('user_id', userId).is('undoes_log_id', null).order('reviewed_at', { ascending: false }).limit(200),
+    await ctx.db.from('review_logs').select('duration_ms').eq('user_id', userId).is('undoes_log_id', null).order('reviewed_at', { ascending: false }).limit(200),
     'review_logs',
   );
   const durations = logs.map((l) => l.duration_ms).filter((d): d is number => typeof d === 'number').reverse();

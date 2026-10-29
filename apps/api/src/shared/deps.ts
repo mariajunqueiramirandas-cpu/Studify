@@ -1,6 +1,7 @@
 // Dependency seam. Handlers receive a `Deps` object; production wiring (prod.ts) builds the real
 // clients, and tests build fakes. Nothing in a handler reads the environment or creates a client.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
+import type { AuthUser } from './auth.ts';
 import type { AnthropicLike, BudgetStore, ClaudeDeps, UsageSink } from '@studify/ai';
 
 /** Invokes a domain operation directly and awaits it; a future start time registers a calendar trigger. */
@@ -35,13 +36,13 @@ export interface AiDeps {
 
 export interface Deps {
   signal?: AbortSignal;
-  /** Service-role client. Only used after the caller is authorized explicitly (security §3). */
-  db: SupabaseClient;
-  /** Public URL and anon key, for calls that must run as the signed-in user (join_class_group). */
+  /** Service client on Studify's Postgres (bypasses RLS). Only used after the caller is authorized explicitly (security §3). */
+  db: Db;
+  /** Supabase Auth's public URL and publishable key (accounts stay on Supabase Auth, ADR 0012). */
   supabaseUrl: string;
   anonKey: string;
-  /** A client that acts as the student (their JWT), for RPCs that read auth.uid(). */
-  asUser(jwt: string): SupabaseClient;
+  /** A client that acts as the verified student (role authenticated, their claims), so RLS and auth.uid() apply. */
+  asUser(user: AuthUser): Db;
   /**
    * Checks a fresh e-mail sign-in code (re-authentication for account reset and deletion) on a single-use
    * client. Never call auth.verifyOtp on `db`: the client keeps the session it returns and every later query

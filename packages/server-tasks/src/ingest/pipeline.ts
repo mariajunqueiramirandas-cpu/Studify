@@ -66,7 +66,7 @@ interface Stage {
 
 function stageOf(ctx: OperationContext, store: ObjectStore): Stage {
   const env = createEnv(ctx, store);
-  return { env, ctx, sql: ctx.db, store };
+  return { env, ctx, sql: ctx.sql, store };
 }
 
 /** Sends the processing-channel push for a finished or failed document (PLT-05.4: not counted). */
@@ -175,7 +175,7 @@ export async function runIngestDocument(ctx: OperationContext, store: ObjectStor
         await failDocument(stage, current, outline.code, payload.userId, payload.aiJobId);
         return;
       }
-      const written = await writeOutline(ctx.db, current, outline.outline, pageCount);
+      const written = await writeOutline(ctx.sql, current, outline.outline, pageCount);
       if (!written.normalized.isStudyMaterial) {
         await failDocument(stage, current, 'not_study_material', payload.userId, payload.aiJobId);
         return;
@@ -338,10 +338,10 @@ async function resumePageWork(stage: Stage, documentId: string, payload: IngestP
 
 /** ingest.render_pages: page images and thumbnails (ING-02.4). Independent of S1, so it does not block the outline. */
 export async function runRenderPages(ctx: OperationContext, store: ObjectStore, documentId: string): Promise<number> {
-  const doc = await loadDocument(ctx.db, documentId);
+  const doc = await loadDocument(ctx.sql, documentId);
   if (!doc || doc.deleted) return 0;
   const bytes = await store.download(BUCKET.documents, doc.storagePath);
-  const { rows } = await ctx.db.query<{ page_number: number }>(
+  const { rows } = await ctx.sql.query<{ page_number: number }>(
     `select page_number from public.document_pages where document_id = $1 and image_path is null order by page_number`,
     [documentId],
   );
@@ -351,7 +351,7 @@ export async function runRenderPages(ctx: OperationContext, store: ObjectStore, 
     await store.upload(BUCKET.pageImages, imageKey, rendered.image.bytes, rendered.image.contentType);
     const thumbKey = keys.thumb(documentId, rendered.pageNumber);
     await store.upload(BUCKET.pageImages, thumbKey, rendered.thumb.bytes, 'image/jpeg');
-    await setPageAssets(ctx.db, documentId, [{ pageNumber: rendered.pageNumber, imagePath: imageKey, thumbnailPath: thumbKey }]);
+    await setPageAssets(ctx.sql, documentId, [{ pageNumber: rendered.pageNumber, imagePath: imageKey, thumbnailPath: thumbKey }]);
   });
 }
 
@@ -361,12 +361,12 @@ export async function runRenderPages(ctx: OperationContext, store: ObjectStore, 
 
 export async function runTranscription(ctx: OperationContext, store: ObjectStore, payload: { documentId: string; pages: number[]; userId: string | null; aiJobId: string | null }): Promise<void> {
   const stage = stageOf(ctx, store);
-  const doc = await loadDocument(ctx.db, payload.documentId);
+  const doc = await loadDocument(ctx.sql, payload.documentId);
   if (!doc || doc.deleted) return;
-  const wanted = payload.pages.length > 0 ? payload.pages : await scannedPages(ctx.db, doc.id);
+  const wanted = payload.pages.length > 0 ? payload.pages : await scannedPages(ctx.sql, doc.id);
   const runs = transcriptionRuns(wanted);
   if (runs.length === 0) return;
-  const subject = await loadSubject(ctx.db, doc.subjectId);
+  const subject = await loadSubject(ctx.sql, doc.subjectId);
   const language = subject?.contentLanguage ?? doc.language ?? 'pt-BR';
   const genBatchId = uuidV7();
   try {
@@ -396,7 +396,7 @@ export async function runTranscription(ctx: OperationContext, store: ObjectStore
     });
   } catch (err) {
     if (err instanceof BudgetExceededError) {
-      const when = nextLocalMidnight(ctx.now(), await timezoneOf(ctx.db, payload.userId));
+      const when = nextLocalMidnight(ctx.now(), await timezoneOf(ctx.sql, payload.userId));
       await ctx.execute('ingest.transcribe_pages', { document_id: doc.id, pages: wanted, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
         startAfter: when,
         singletonKey: `transcribe:${doc.id}:resume`,
@@ -600,7 +600,7 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
   // The student sees "Resumos e cartões" now, not when the S4 job has prepared its requests: until then the app sat
   // on "Encontrando conceitos · 15 de 15" for a minute or more.
   if (payload.aiJobId) {
-    await applyProgress(ctx.db, payload.aiJobId, { stage: 'S4', status: 'running', items_total: payload.nodeIds.length, items_done: 0 });
+    await applyProgress(ctx.sql, payload.aiJobId, { stage: 'S4', status: 'running', items_total: payload.nodeIds.length, items_done: 0 });
   }
   await enqueueAfterConcepts(ctx, payload);
   await ctx.execute('ingest.topic_content', {
@@ -883,9 +883,9 @@ async function finalizeDocument(stage: Stage, doc: DocumentRecord, payload: Inge
 // ---------------------------------------------------------------------------
 
 export async function runPrereqJob(ctx: OperationContext, payload: { subjectId: string; documentId: string | null; userId: string | null; aiJobId: string | null }): Promise<void> {
-  const subject = await loadSubject(ctx.db, payload.subjectId);
+  const subject = await loadSubject(ctx.sql, payload.subjectId);
   if (!subject) return;
-  const doc = payload.documentId ? await loadDocument(ctx.db, payload.documentId) : null;
+  const doc = payload.documentId ? await loadDocument(ctx.sql, payload.documentId) : null;
   try {
     const result = await runPrerequisites(ctx, {
       subjectId: subject.id,
@@ -907,7 +907,7 @@ export async function runPrereqJob(ctx: OperationContext, payload: { subjectId: 
 }
 
 export async function runRegenerate(ctx: OperationContext, payload: { nodeId: string; kinds: string[]; userId: string | null }): Promise<void> {
-  const node = await ctx.db.query<{ subject_id: string; origin_document_id: string | null; kind: string; parent_id: string | null }>(
+  const node = await ctx.sql.query<{ subject_id: string; origin_document_id: string | null; kind: string; parent_id: string | null }>(
     `select subject_id, origin_document_id, kind, parent_id from public.knowledge_nodes where id = $1 and deleted_at is null`,
     [payload.nodeId],
   );

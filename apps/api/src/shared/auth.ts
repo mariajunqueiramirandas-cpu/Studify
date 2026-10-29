@@ -2,7 +2,7 @@
 // before any service-role query, and the authorization checks in access.ts use the returned user id only.
 // A verified token is remembered briefly (never past its expiry), so a burst of calls from one session pays one
 // round trip to Supabase Auth (ADR 0011); a suspension forgets the account's tokens, so it still takes effect at once.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { ApiFailure } from '@studify/shared';
 import { AuthError } from './errors.ts';
 
@@ -16,7 +16,7 @@ export interface AuthUser {
 const VERIFIED_MS = 60_000;
 const VERIFIED_MAX = 5_000;
 /** Per service client, so each runtime (and each test harness) keeps its own. */
-const verifiedBy = new WeakMap<SupabaseClient, Map<string, { user: AuthUser; until: number }>>();
+const verifiedBy = new WeakMap<Db, Map<string, { user: AuthUser; until: number }>>();
 
 export function bearerToken(req: Request): string | null {
   const header = req.headers.get('authorization') ?? '';
@@ -34,7 +34,7 @@ function expiryOf(jwt: string): number | null {
   }
 }
 
-export async function authenticate(req: Request, db: SupabaseClient): Promise<AuthUser> {
+export async function authenticate(req: Request, db: Db): Promise<AuthUser> {
   const jwt = bearerToken(req);
   if (!jwt) throw new AuthError();
   const now = Date.now();
@@ -59,7 +59,7 @@ export async function authenticate(req: Request, db: SupabaseClient): Promise<Au
 }
 
 /** Forgets the remembered tokens of an account (a suspension), so its next call is checked by Supabase Auth again. */
-export function forgetUser(db: SupabaseClient, userId: string): void {
+export function forgetUser(db: Db, userId: string): void {
   const verified = verifiedBy.get(db);
   if (!verified) return;
   for (const [jwt, entry] of verified) if (entry.user.userId === userId) verified.delete(jwt);

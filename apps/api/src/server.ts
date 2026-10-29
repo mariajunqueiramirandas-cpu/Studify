@@ -6,6 +6,7 @@ import { log } from './log.ts';
 import { buildP2Runtime } from './shared-p2/prod.ts';
 import { drainOperations } from './shared/operations.ts';
 import { existsSync } from 'node:fs';
+import { migrate } from '@studify/db';
 
 /** Dokploy gives a stopping container 60 s (stop_grace_period in docker-compose.yml). Stay under it. */
 const SHUTDOWN_DEADLINE_MS = 50_000;
@@ -22,6 +23,10 @@ async function main(): Promise<void> {
   }
   if (!existsSync(config.siteDir)) log('warn', 'static site directory not found', { siteDir: config.siteDir });
   if (!existsSync(config.dashboardDir)) log('warn', 'dashboard directory not found', { dashboardDir: config.dashboardDir });
+
+  // The schema first (ADR 0012): a deploy always meets the migrations its code needs.
+  const applied = await migrate(config.databaseUrl, { log: (msg, fields) => log('info', msg, fields) });
+  log('info', 'schema ready', { applied: applied.length });
 
   const runtime = buildP2Runtime(config);
   await runtime.start();
@@ -46,6 +51,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }, SHUTDOWN_DEADLINE_MS);
     deadline.unref();
+    // Realtime streams never end on their own; close them so the server can stop. The apps reconnect elsewhere.
+    runtime.deps.realtime?.closeAll();
     await server.stop();
     await drainOperations(runtime.deps);
     await runtime.stop();

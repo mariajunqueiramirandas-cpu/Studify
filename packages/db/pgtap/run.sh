@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Local database test run (no Docker): fresh database, Supabase shim, every migration in order,
-# then the pgTAP suite. Exits non-zero on the first failing step or failing test.
+# Local database test run (no Docker): fresh database, every migration in order (the first one,
+# platform, creates the roles and the auth, storage and realtime schemas), then the pgTAP suite.
+# Exits non-zero on the first failing step or failing test.
 #
 # Connection: standard libpq variables (PGHOST, PGPORT, PGUSER, PGPASSWORD). Defaults target the
 # local PostgreSQL at postgres:postgres@localhost:5432.
@@ -13,13 +14,13 @@ export PGPASSWORD="${PGPASSWORD:-postgres}"
 DB="${STUDIFY_TEST_DB:-studify_test}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SUPA="$(cd "$HERE/.." && pwd)"
+PKG="$(cd "$HERE/.." && pwd)"
 
 shopt -s nullglob
-migrations=("$SUPA"/migrations/*.sql)
+migrations=("$PKG"/migrations/*.sql)
 tests=("$HERE"/*.test.sql)
 if [ "${#migrations[@]}" -eq 0 ]; then
-  echo "no migrations found in $SUPA/migrations" >&2
+  echo "no migrations found in $PKG/migrations" >&2
   exit 1
 fi
 if [ "${#tests[@]}" -eq 0 ]; then
@@ -33,9 +34,6 @@ psql -d postgres -v ON_ERROR_STOP=1 -q -c "create database $DB;"
 
 echo "== pgTAP extension"
 psql -d "$DB" -v ON_ERROR_STOP=1 -q -c "create extension if not exists pgtap with schema public;"
-
-echo "== shim (not a migration)"
-psql -d "$DB" -v ON_ERROR_STOP=1 -q -f "$HERE/00_supabase_shim.sql"
 
 echo "== migrations"
 # Lexical order is the apply order (timestamp-prefixed names). Each file runs in one transaction.

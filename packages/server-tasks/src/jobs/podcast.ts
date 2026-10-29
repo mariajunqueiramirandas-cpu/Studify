@@ -85,7 +85,7 @@ function pageAllowedIn(documents: DocumentMap | null) {
 
 async function topicSlices(ctx: OperationContext, nodeIds: readonly string[]): Promise<PdfSlice[]> {
   const sources = unwrapRows<{ node_id: string; document_id: string; page_start: number; page_end: number }>(
-    await ctx.supabase.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', [...nodeIds]).is('deleted_at', null),
+    await ctx.db.from('node_sources').select('node_id,document_id,page_start,page_end').in('node_id', [...nodeIds]).is('deleted_at', null),
     'node_sources',
   );
   const out: PdfSlice[] = [];
@@ -110,7 +110,7 @@ async function topicSlices(ctx: OperationContext, nodeIds: readonly string[]): P
 }
 
 async function fail(ctx: OperationContext, episodeId: string, code: string): Promise<PodcastOutcome> {
-  unwrap(await ctx.supabase.from('podcast_episodes').update({ status: 'failed', error_code: code }).eq('id', episodeId), 'podcast_episodes');
+  unwrap(await ctx.db.from('podcast_episodes').update({ status: 'failed', error_code: code }).eq('id', episodeId), 'podcast_episodes');
   await ctx.progress({ status: 'failed', error_code: code });
   return { status: 'failed', audio: false, reason: code };
 }
@@ -199,7 +199,7 @@ async function audioFor(ctx: OperationContext, episode: EpisodeRow, requester: s
       error_code: null,
     });
     const object = episode.owner_user_id ? `answers/${episode.owner_user_id}/${episode.id}.mp3` : `${episode.subject_id}/${episode.id}.mp3`;
-    const uploaded = await ctx.supabase.storage.from('audio').upload(object, concatMp3(results.map((r) => r.audio)), { contentType: 'audio/mpeg', upsert: true });
+    const uploaded = await ctx.db.storage.from('audio').upload(object, concatMp3(results.map((r) => r.audio)), { contentType: 'audio/mpeg', upsert: true });
     if (uploaded.error) throw new JobDataError(`audio upload failed: ${uploaded.error.message}`, 'storage');
     return { path: `audio/${object}`, results, provider: tts };
   } finally {
@@ -210,7 +210,7 @@ async function audioFor(ctx: OperationContext, episode: EpisodeRow, requester: s
 export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<string, unknown>): Promise<PodcastOutcome> {
   const payload = parsePayload(Payload, raw, 'podcast.generate');
   const episode = unwrap(
-    await ctx.supabase.from('podcast_episodes').select('id,subject_id,node_ids,style,length_minutes,owner_user_id,class_group_id,status,created_by').eq('id', payload.episode_id).maybeSingle(),
+    await ctx.db.from('podcast_episodes').select('id,subject_id,node_ids,style,length_minutes,owner_user_id,class_group_id,status,created_by').eq('id', payload.episode_id).maybeSingle(),
     'podcast_episodes',
   ) as EpisodeRow | null;
   if (!episode) return { status: 'skipped', audio: false, reason: 'not_found' };
@@ -218,15 +218,15 @@ export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<s
   const requester = payload.user_id ?? episode.created_by;
 
   const subject = unwrap(
-    await ctx.supabase.from('subjects').select('id,name,content_language,is_language_subject').eq('id', episode.subject_id).maybeSingle(),
+    await ctx.db.from('subjects').select('id,name,content_language,is_language_subject').eq('id', episode.subject_id).maybeSingle(),
     'subjects',
   ) as { id: string; name: string; content_language: string | null; is_language_subject: boolean } | null;
   if (!subject) return fail(ctx, episode.id, 'subject_missing');
-  unwrap(await ctx.supabase.from('podcast_episodes').update({ status: 'scripting', error_code: null }).eq('id', episode.id), 'podcast_episodes');
+  unwrap(await ctx.db.from('podcast_episodes').update({ status: 'scripting', error_code: null }).eq('id', episode.id), 'podcast_episodes');
   await ctx.progress({ stage: 'script', status: 'running', progress: 0.1 });
 
   const topics = unwrapRows<TopicRow>(
-    await ctx.supabase.from('knowledge_nodes').select('id,title,summary,learning_objectives').in('id', episode.node_ids).is('deleted_at', null),
+    await ctx.db.from('knowledge_nodes').select('id,title,summary,learning_objectives').in('id', episode.node_ids).is('deleted_at', null),
     'knowledge_nodes',
   );
   if (topics.length === 0) return fail(ctx, episode.id, 'no_topics');
@@ -237,16 +237,16 @@ export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<s
   let recentMistakes: string[] = [];
   if (episode.style === 'exam_review' && episode.owner_user_id) {
     const mastery = unwrapRows<{ node_id: string; mastery: number }>(
-      await ctx.supabase.from('mastery').select('node_id,mastery').eq('user_id', episode.owner_user_id).in('node_id', episode.node_ids),
+      await ctx.db.from('mastery').select('node_id,mastery').eq('user_id', episode.owner_user_id).in('node_id', episode.node_ids),
       'mastery',
     );
     for (const m of mastery) weights.set(m.node_id, 1 - Number(m.mastery));
     const concepts = unwrapRows<{ id: string; title: string; parent_id: string }>(
-      await ctx.supabase.from('knowledge_nodes').select('id,title,parent_id').in('parent_id', episode.node_ids).eq('kind', 'concept').is('deleted_at', null),
+      await ctx.db.from('knowledge_nodes').select('id,title,parent_id').in('parent_id', episode.node_ids).eq('kind', 'concept').is('deleted_at', null),
       'knowledge_nodes',
     );
     const conceptMastery = unwrapRows<{ node_id: string; mastery: number }>(
-      await ctx.supabase.from('mastery').select('node_id,mastery').eq('user_id', episode.owner_user_id).in('node_id', concepts.map((c) => c.id)),
+      await ctx.db.from('mastery').select('node_id,mastery').eq('user_id', episode.owner_user_id).in('node_id', concepts.map((c) => c.id)),
       'mastery',
     );
     weakConcepts = conceptMastery
@@ -256,7 +256,7 @@ export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<s
       .map((m) => concepts.find((c) => c.id === m.node_id)?.title ?? '')
       .filter(Boolean);
     const mistakes = unwrapRows<{ node_id: string | null }>(
-      await ctx.supabase.from('mistakes').select('node_id').eq('user_id', episode.owner_user_id).in('node_id', episode.node_ids).is('resolved_at', null).limit(20),
+      await ctx.db.from('mistakes').select('node_id').eq('user_id', episode.owner_user_id).in('node_id', episode.node_ids).is('resolved_at', null).limit(20),
       'mistakes',
     );
     recentMistakes = [...new Set(mistakes.map((m) => topics.find((t) => t.id === m.node_id)?.title).filter((v): v is string => !!v))];
@@ -265,11 +265,11 @@ export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<s
   const included = allocation.included;
 
   const notes = unwrapRows<{ node_id: string; body: string }>(
-    await ctx.supabase.from('notes').select('node_id,body').in('node_id', included.map((t) => t.node_id)).eq('depth', episode.style === 'deep' ? 'deep' : 'study').eq('status', 'ready').is('deleted_at', null),
+    await ctx.db.from('notes').select('node_id,body').in('node_id', included.map((t) => t.node_id)).eq('depth', episode.style === 'deep' ? 'deep' : 'study').eq('status', 'ready').is('deleted_at', null),
     'notes',
   );
   const glossary = unwrapRows<{ term: string; definition: string }>(
-    await ctx.supabase.from('glossary_terms').select('term,definition').in('node_id', included.map((t) => t.node_id)).is('deleted_at', null).limit(20),
+    await ctx.db.from('glossary_terms').select('term,definition').in('node_id', included.map((t) => t.node_id)).is('deleted_at', null).limit(20),
     'glossary_terms',
   );
   const keyToNode = new Map<string, string>();
@@ -334,7 +334,7 @@ export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<s
     return fail(ctx, episode.id, 'script_invalid');
   }
 
-  unwrap(await ctx.supabase.from('podcast_episodes').update({ status: 'synthesizing', title: script.title, script }).eq('id', episode.id), 'podcast_episodes');
+  unwrap(await ctx.db.from('podcast_episodes').update({ status: 'synthesizing', title: script.title, script }).eq('id', episode.id), 'podcast_episodes');
   await ctx.progress({ stage: 'audio', progress: 0.6 });
   const audio = await audioFor(ctx, episode, requester, script).catch((err: unknown) => {
     ctx.log.warn({ episode: episode.id, err: err instanceof Error ? err.message : 'unknown' }, 'podcast tts failed: device audio');
@@ -342,7 +342,7 @@ export async function handlePodcastGenerate(ctx: OperationContext, raw: Record<s
   });
   const timeline = buildPodcastTimeline(script, audio ? audio.results.map((r) => r.durationMs) : []);
   unwrap(
-    await ctx.supabase
+    await ctx.db
       .from('podcast_episodes')
       .update({
         status: 'ready',

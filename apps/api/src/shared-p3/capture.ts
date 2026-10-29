@@ -1,7 +1,7 @@
 // Câmera Mágica helpers (spec 11): the caller's capture, its photos as image blocks, the student's readable
 // subjects, the course match of Step B (§8.5: full-text search → topics via node_sources → accept rule, with a
 // tie-break call when two topics are close) and the matched pages for Step C. Every read is scoped to the caller.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import { getTask, type CaptureImage, type PdfSlice } from '@studify/prompts';
 import { ApiFailure, decideTopicMatch, type TopicMatchScore } from '@studify/shared';
 import { canReadSubject, type SubjectRow } from '../shared/access.ts';
@@ -40,7 +40,7 @@ export interface CaptureRow {
 }
 
 /** The caller's capture; someone else's or a deleted one is not found (api §2.2). */
-export async function loadOwnCapture(db: SupabaseClient, userId: string, captureId: string): Promise<CaptureRow> {
+export async function loadOwnCapture(db: Db, userId: string, captureId: string): Promise<CaptureRow> {
   const { data, error } = await db.from('camera_captures').select('*').eq('id', captureId).maybeSingle();
   if (error) throw error;
   const row = data as CaptureRow | null;
@@ -53,7 +53,7 @@ function mediaTypeOf(path: string): CaptureImage['mediaType'] {
 }
 
 /** The capture's photos (already resized, EXIF-free and face-blurred on device, CAM-00.6), as image blocks. */
-export async function captureImages(db: SupabaseClient, paths: readonly string[], max: number): Promise<CaptureImage[]> {
+export async function captureImages(db: Db, paths: readonly string[], max: number): Promise<CaptureImage[]> {
   const out: CaptureImage[] = [];
   for (const path of paths.slice(0, max)) {
     out.push({ data: toBase64(await downloadBytes(db, path)), mediaType: mediaTypeOf(path) });
@@ -63,7 +63,7 @@ export async function captureImages(db: SupabaseClient, paths: readonly string[]
 }
 
 /** Removes the capture's photos from Storage (not study content, refusal, retention; spec 11 §8.4). */
-export async function deleteCapturePhotos(db: SupabaseClient, paths: readonly string[]): Promise<void> {
+export async function deleteCapturePhotos(db: Db, paths: readonly string[]): Promise<void> {
   const objects = paths.filter((p) => p.startsWith('photos/')).map((p) => p.slice('photos/'.length));
   if (objects.length === 0) return;
   const storage = db.storage.from('photos') as unknown as { remove?: (paths: string[]) => Promise<unknown> };
@@ -73,7 +73,7 @@ export async function deleteCapturePhotos(db: SupabaseClient, paths: readonly st
 const SUBJECT_COLUMNS = 'id, owner_profile_id, owner_class_group_id, created_by, content_language, is_language_subject, enem_area, name';
 
 /** Personal subjects and subjects of the caller's active Turmas (the camera's subject list). */
-export async function readableSubjects(db: SupabaseClient, userId: string): Promise<SubjectRow[]> {
+export async function readableSubjects(db: Db, userId: string): Promise<SubjectRow[]> {
   const personal = await db.from('subjects').select(SUBJECT_COLUMNS).eq('owner_profile_id', userId).is('deleted_at', null);
   if (personal.error) throw personal.error;
   const memberships = await db.from('class_group_members').select('class_group_id').eq('user_id', userId).eq('status', 'active');
@@ -89,7 +89,7 @@ export async function readableSubjects(db: SupabaseClient, userId: string): Prom
 }
 
 /** "Biologia › Genética › 1ª Lei de Mendel" (CAM-02.3). */
-export async function nodeLabel(db: SupabaseClient, subjectName: string, nodeId: string): Promise<string> {
+export async function nodeLabel(db: Db, subjectName: string, nodeId: string): Promise<string> {
   const titles: string[] = [];
   let current: string | null = nodeId;
   for (let depth = 0; current && depth < 4; depth++) {

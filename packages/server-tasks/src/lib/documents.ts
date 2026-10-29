@@ -28,7 +28,7 @@ export interface SliceRow {
 }
 
 export async function downloadBase64(ctx: OperationContext, bucket: string, path: string): Promise<string> {
-  const res = await ctx.supabase.storage.from(bucket).download(path);
+  const res = await ctx.db.storage.from(bucket).download(path);
   if (res.error || !res.data) throw new JobDataError(`storage download failed (${bucket}/${path}): ${res.error?.message ?? 'empty'}`, 'storage');
   return Buffer.from(await res.data.arrayBuffer()).toString('base64');
 }
@@ -47,7 +47,7 @@ export async function slicesFor(ctx: OperationContext, document: DocumentRow, pa
   const wanted = pages ? new Set(pages) : null;
   const rows = await fetchAll<SliceRow>(
     (from, to) =>
-      ctx.supabase
+      ctx.db
         .from('document_slices')
         .select('document_id,page_start,page_end,storage_path,anthropic_file_id,anthropic_file_expires_at')
         .eq('document_id', document.id)
@@ -85,7 +85,7 @@ export async function wholeDocumentSlice(ctx: OperationContext, document: Docume
 
 export async function loadDocument(ctx: OperationContext, documentId: string): Promise<DocumentRow> {
   const row = unwrap(
-    await (ctx.supabase.from('documents').select('*').eq('id', documentId).is('deleted_at', null).maybeSingle() as unknown as PromiseLike<{ data: DocumentRow | null; error: { message: string } | null }>),
+    await (ctx.db.from('documents').select('*').eq('id', documentId).is('deleted_at', null).maybeSingle() as unknown as PromiseLike<{ data: DocumentRow | null; error: { message: string } | null }>),
     'documents',
   );
   if (!row) throw new JobDataError(`document ${documentId} not found`, 'not_found');

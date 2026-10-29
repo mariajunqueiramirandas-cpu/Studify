@@ -7,14 +7,21 @@ import { DEFAULT_APK_URL } from './site.ts';
 const Env = z.object({
   PG_POOL_MAX: z.coerce.number().int().min(4).max(50).default(12),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+  /** Supabase Auth (accounts only, ADR 0012): project URL, secret key for admin calls, publishable key. */
   SUPABASE_URL: z.url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SUPABASE_ANON_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
   /** Points the SDK at the mock Claude server (packages/ai/src/mock) in local runs and tests. */
   ANTHROPIC_BASE_URL: z.url().optional(),
-  /** Session-mode Postgres connection (Supavisor port 5432). direct SQL uses session mode (docs/engineering/deployment.md). */
+  /** Studify's own Postgres (the `db` service of docker-compose.yml). Session connections: the API holds advisory locks and LISTENs. */
   DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, 'must start with postgres:// or postgresql://'),
+  /** Directory of the stored files, one folder per bucket (a Docker volume in production). */
+  STORAGE_DIR: z.string().min(1).default('/data/storage'),
+  /** HMAC key of signed file links. At least 32 characters; changing it invalidates links already handed out. */
+  STORAGE_SIGNING_KEY: z.string().min(32, 'must be at least 32 characters'),
+  /** Public base of the API that signed file links start with. Default: https://<BASE_URL>/api. */
+  PUBLIC_API_URL: z.url().optional(),
   /** Public host without scheme. Unset: studify.vendua.com.br. Empty: custom-scheme links only. */
   BASE_URL: z.string().optional(),
   /** Directory with the built link site. Default: apps/site/dist in the repo (the image sets /app/site). */
@@ -38,6 +45,10 @@ export interface ApiConfig {
   anthropicApiKey: string;
   anthropicBaseUrl: string | undefined;
   databaseUrl: string;
+  storageDir: string;
+  storageSigningKey: string;
+  /** Public base of the API (signed file links), without a trailing slash. */
+  publicApiUrl: string;
   /** Raw BASE_URL: undefined means the default host, '' means custom-scheme links (see shared-p2/util.ts). */
   baseUrl: string | undefined;
   siteDir: string;
@@ -61,6 +72,13 @@ export const DEFAULT_SITE_DIR = path.resolve(import.meta.dir, '../../site/dist')
 
 /** Default dashboard directory: apps/dashboard/dist (`pnpm --filter @studify/dashboard build`). */
 export const DEFAULT_DASHBOARD_DIR = path.resolve(import.meta.dir, '../../dashboard/dist');
+
+/** https://<BASE_URL>/api; the production host when BASE_URL is unset; localhost when it is empty (local runs). */
+function defaultPublicApiUrl(baseUrl: string | undefined, port: number): string {
+  if (baseUrl === undefined) return 'https://studify.vendua.com.br/api';
+  const host = baseUrl.trim();
+  return host === '' ? `http://localhost:${port}/api` : `https://${host}/api`;
+}
 
 /** Empty strings mean "unset", except BASE_URL where empty has a meaning (custom-scheme links). */
 function withoutEmpty(env: Record<string, string | undefined>): Record<string, string | undefined> {
@@ -91,6 +109,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     anthropicApiKey: v.ANTHROPIC_API_KEY,
     anthropicBaseUrl: v.ANTHROPIC_BASE_URL,
     databaseUrl: v.DATABASE_URL,
+    storageDir: v.STORAGE_DIR,
+    storageSigningKey: v.STORAGE_SIGNING_KEY,
+    publicApiUrl: (v.PUBLIC_API_URL ?? defaultPublicApiUrl(env.BASE_URL, v.PORT)).replace(/\/+$/, ''),
     baseUrl: env.BASE_URL === undefined ? undefined : env.BASE_URL.trim(),
     siteDir: v.SITE_DIR ?? DEFAULT_SITE_DIR,
     dashboardDir: v.DASHBOARD_DIR ?? DEFAULT_DASHBOARD_DIR,

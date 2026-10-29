@@ -12,8 +12,8 @@ const packageSuffix = ENV === 'production' ? '' : `.${ENV}`;
 
 // Android build numbering. The GitHub release workflow (.github/workflows/android-release.yml) sets
 // ANDROID_VERSION_CODE to run_number + offset and may set APP_VERSION_SUFFIX (e.g. "-beta.1").
-// Without them the version stays 0.1.0 and versionCode keeps Expo's default.
-const BASE_VERSION = '0.1.0';
+// Without them the version stays BASE_VERSION and versionCode keeps Expo's default.
+const BASE_VERSION = '0.2.0';
 const APP_VERSION_SUFFIX = process.env.APP_VERSION_SUFFIX ?? '';
 
 function parseVersionCode(raw: string | undefined): number | undefined {

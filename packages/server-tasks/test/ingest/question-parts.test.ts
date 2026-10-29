@@ -69,7 +69,7 @@ describe('question bank requests', () => {
       conceptIdByKey: new Map([['C1', 'id-1'], ['C2', 'id-2'], ['C3', 'id-3']]),
       subject: { ownerClassGroupId: null, isLanguageSubject: false },
     } as unknown as TopicBundle;
-    const env = { ctx: { db: { query: async () => ({ rows: [] }) } } } as unknown as Parameters<typeof topicItems>[0];
+    const env = { ctx: { sql: { query: async () => ({ rows: [] }) } } } as unknown as Parameters<typeof topicItems>[0];
     const refs = [{ id: 's1', documentId: 'doc-1', title: 'Doc', pages: [1, 2], tokenCount: null, source: { kind: 'base64' as const, data: 'JVBERi0=' } }];
     const opts = { jobId: null, userId: null, documentId: 'doc-1', genBatchId: '0190f3a2-7b1c-7d3e-8f00-0000000000aa', force: false, language: 'pt-BR' };
     const items = await topicItems(env, bundle, 'questions', refs, opts);

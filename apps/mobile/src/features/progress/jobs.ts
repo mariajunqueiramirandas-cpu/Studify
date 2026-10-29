@@ -4,7 +4,7 @@
 import { isLiveJobType, liveJobProgress } from '@studify/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useJob } from '../../api/realtime';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
 import { t } from '../../i18n';
 import { useSession } from '../auth/session';
 import { useSubjectJobs, type AiJob } from '../subjects/api';
@@ -68,11 +68,7 @@ export function useOwnJob(type: string, since: string | null | undefined, jobId?
   const found = useQuery({
     queryKey: ['ownJob', type, since ?? null],
     enabled: !jobId && !!userId && !!since,
-    queryFn: async () => {
-      const from = new Date(Date.parse(since!) - 60_000).toISOString();
-      const { data } = await supabase.from('ai_jobs').select('id').eq('user_id', userId!).eq('type', type).gte('created_at', from).order('created_at', { ascending: false }).limit(1);
-      return (data?.[0]?.id as string | undefined) ?? null;
-    },
+    queryFn: async () => (await data<{ id: string | null }>('jobs-latest', { type, since })).id,
   });
   return useJob(jobId ?? found.data ?? null).data as AiJob | undefined;
 }

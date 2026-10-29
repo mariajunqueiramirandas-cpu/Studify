@@ -5,8 +5,8 @@ import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { CAPTURE_IMAGE, fitLongEdge, occlusionCardText, occlusionCardsFor, suggestMasks, type OcclusionMask, type OcclusionMode } from '@studify/shared';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { uploadFile } from '../../api/storage';
-import { supabase } from '../../api/supabase';
 
 export interface OcclusionSource {
   uri: string;
@@ -32,33 +32,22 @@ export async function prepareOcclusionImage(source: OcclusionSource): Promise<Oc
 }
 
 export async function createOcclusionCards(
-  userId: string,
+  _userId: string,
   input: { subjectId: string; nodeId: string; image: OcclusionSource; masks: OcclusionMask[]; mode: OcclusionMode; personal: boolean },
 ): Promise<number> {
   const object = `${input.subjectId}/occlusion/${uuidv7()}.jpg`;
   await uploadFile({ bucket: 'media', path: object, uri: input.image.uri, contentType: 'image/jpeg' });
   const medias = occlusionCardsFor({ path: `media/${object}`, width: input.image.width, height: input.image.height }, input.masks, input.mode);
   const group = uuidv7();
-  const rows = medias.map((media) => {
+  const cards = medias.map((media) => {
     const text = occlusionCardText(media);
-    return {
-      id: uuidv7(),
-      subject_id: input.subjectId,
-      node_id: input.nodeId,
-      type: 'image_occlusion',
-      front: text.front,
-      back: text.back,
-      media,
-      has_math: false,
-      sibling_group_id: group,
-      source_pages: [],
-      origin: 'user',
-      created_by: userId,
-      personal_for_user_id: input.personal ? userId : null,
-    };
+    return { id: uuidv7(), front: text.front, back: text.back, media };
   });
-  if (rows.length === 0) return 0;
-  const { error } = await supabase.from('cards').insert(rows);
-  if (error) throw Object.assign(new Error(error.message), { code: error.code });
-  return rows.length;
+  if (cards.length === 0) return 0;
+  await data(
+    'learn-occlusion-cards',
+    { subject_id: input.subjectId, node_id: input.nodeId, sibling_group_id: group, personal: input.personal, cards },
+    { idempotencyKey: group },
+  );
+  return cards.length;
 }

@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
     "@studify/ai": "workspace:*",
+    "@studify/db": "workspace:*",
     "@studify/prompts": "workspace:*",
     "@studify/shared": "workspace:*",
     "@studify/speech": "workspace:*",

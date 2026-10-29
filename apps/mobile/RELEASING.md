@@ -161,13 +161,17 @@ The first run after a cache reset is the slowest; later runs reuse the caches wr
 
 ## Versioning
 
-- **Version name**: `version` in `app.config.ts` (`0.1.0`), plus `APP_VERSION_SUFFIX` if the variable is set.
+- **Version name**: `BASE_VERSION` in `app.config.ts` (`0.2.0` since the move to the own backend, ADR 0012), plus `APP_VERSION_SUFFIX` if the variable is set.
 - **versionCode**: the workflow sets `ANDROID_VERSION_CODE = github.run_number + 100`. Android refuses to install
   an update with a lower versionCode, and run numbers only go up. The offset (`ANDROID_VERSION_CODE_OFFSET` in the
   workflow) keeps the codes above any build made before this workflow existed. Raise the offset if an older build
   ever has a higher code.
 - `app.config.ts` reads `ANDROID_VERSION_CODE` (an integer from 1 to 2100000000) and `APP_VERSION_SUFFIX`. Without
   them, the versionCode stays at Expo's default.
+- **Forcing an update** is automatic: the app sends `CLIENT_COMPAT_LEVEL` (`packages/shared/src/core/compat.ts`) on
+  every call, and the API asks any app below it to update (its update screen opens `/download`, the newest APK).
+  When a change makes older apps stop working with the API, raise the level in that same change; nothing else is
+  needed. Most releases do not change it, so students are not pushed to update for every build.
 
 To run the workflow manually: Actions > Android release > Run workflow, on `main`. Runs on other branches stop before
 building, unless **dry_run** is ticked: a dry run builds and signs the APK on any branch and attaches it to the run as

@@ -1,7 +1,7 @@
-// Supabase Storage uploads with progress (mobile-app.md §9). Files up to 6 MB use a standard
-// upload; larger files use the TUS resumable protocol in 6 MB chunks (Supabase requires that size),
-// retrying a failed chunk from the server's reported offset.
-import { getEnv } from './env';
+// Uploads to the API's file store with progress (mobile-app.md §9, ADR 0012). Files up to 6 MB use a standard
+// upload; larger files use the TUS resumable protocol in 6 MB chunks, retrying a failed chunk from the server's
+// reported offset. The server checks every upload against the storage policies, as the signed-in student.
+import { getApiUrl } from './env';
 import { ApiError, apiErrorFromResponse, offlineError } from './errors';
 import { supabase } from './supabase';
 
@@ -54,11 +54,10 @@ function xhr(
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const env = getEnv();
   const { data } = await supabase.auth.getSession();
+  if (!data.session) throw new ApiError('unauthorized', 401, 'Sua sessão expirou. Entre de novo.');
   return {
-    Authorization: `Bearer ${data.session?.access_token ?? env.anonKey}`,
-    apikey: env.anonKey,
+    Authorization: `Bearer ${data.session.access_token}`,
     'x-upsert': 'true',
   };
 }
@@ -68,8 +67,7 @@ function base64(value: string): string {
 }
 
 async function standardUpload(opts: UploadOptions, blob: Blob): Promise<void> {
-  const env = getEnv();
-  const url = `${env.url}/storage/v1/object/${opts.bucket}/${encodePath(opts.path)}`;
+  const url = `${getApiUrl()}/storage/object/${opts.bucket}/${encodePath(opts.path)}`;
   const res = await xhr(
     'POST',
     url,
@@ -81,7 +79,7 @@ async function standardUpload(opts: UploadOptions, blob: Blob): Promise<void> {
 }
 
 async function tusUpload(opts: UploadOptions, blob: Blob): Promise<void> {
-  const env = getEnv();
+  const base = getApiUrl();
   const common = { ...(await authHeaders()), 'Tus-Resumable': '1.0.0' };
   const metadata = [
     `bucketName ${base64(opts.bucket)}`,
@@ -90,7 +88,7 @@ async function tusUpload(opts: UploadOptions, blob: Blob): Promise<void> {
     `cacheControl ${base64('3600')}`,
   ].join(',');
 
-  const created = await xhr('POST', `${env.url}/storage/v1/upload/resumable`, {
+  const created = await xhr('POST', `${base}/storage/upload/resumable`, {
     ...common,
     'Upload-Length': String(blob.size),
     'Upload-Metadata': metadata,
@@ -98,7 +96,8 @@ async function tusUpload(opts: UploadOptions, blob: Blob): Promise<void> {
   if (created.status >= 300) throw apiErrorFromResponse(created.status, created.text);
   const location = created.headers('Location');
   if (!location) throw new ApiError('unknown', created.status, 'Resposta de upload sem Location.');
-  const uploadUrl = new URL(location, env.url).toString();
+  // The server answers with a path (/api/storage/upload/resumable/<id>) on its own origin.
+  const uploadUrl = new URL(location, base).toString();
 
   let offset = 0;
   let failures = 0;

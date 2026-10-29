@@ -1,7 +1,7 @@
 // In-memory fakes for the Phase 2 handler tests. The query builder implements the supabase-js subset the
 // functions use: select/insert/upsert/update/delete, eq/neq/in/is/gt/gte/lt/lte, order, limit, maybeSingle,
 // and awaiting the builder. Unique constraints are declared per table (23505), as in Postgres.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type { AiDeps } from '../src/shared/deps.ts';
 import type { BroadcastMessage, P2Deps, UserRpc } from '../src/shared-p2/deps.ts';
 import { uuidV7 } from '@studify/shared';
@@ -223,7 +223,7 @@ export class Builder implements PromiseLike<Result> {
 }
 
 /** Builds the fake client. The same tables back both the public and private schemas. */
-export function createFakeDb(config: FakeConfig = {}): FakeDb & SupabaseClient {
+export function createFakeDb(config: FakeConfig = {}): FakeDb & Db {
   const uniques: Record<string, string[][]> = {
     idempotency_keys: [['user_id', 'function_name', 'key']],
     question_served: [['quiz_attempt_id', 'question_id']],
@@ -267,7 +267,7 @@ export function createFakeDb(config: FakeConfig = {}): FakeDb & SupabaseClient {
       };
     },
   };
-  return db as unknown as FakeDb & SupabaseClient;
+  return db as unknown as FakeDb & Db;
 }
 
 export interface Sent {
@@ -277,7 +277,7 @@ export interface Sent {
 }
 
 export interface FakeDepsOptions {
-  db: FakeDb & SupabaseClient;
+  db: FakeDb & Db;
   now?: Date;
   baseUrl?: string | null;
   userRpc?: UserRpc;
@@ -290,7 +290,7 @@ export interface FakeEnv {
   sent: Sent[];
   broadcasts: BroadcastMessage[];
   setNow(d: Date): void;
-  db: FakeDb & SupabaseClient;
+  db: FakeDb & Db;
 }
 
 /** Deterministic deps: fixed clock, sequential v7-shaped ids, recorded enqueues and broadcasts. */

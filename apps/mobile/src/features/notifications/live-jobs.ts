@@ -7,7 +7,8 @@ import { isLiveJobType, liveKeyOf, liveRich, materialDoneRich, type LiveJobRow }
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { eq } from 'drizzle-orm';
 import { useEffect, useRef } from 'react';
-import { supabase } from '../../api/supabase';
+import { data } from '../../api/data';
+import { realtime, rowTopic, type RowChange } from '../../api/realtime';
 import { useDb } from '../../db/DatabaseProvider';
 import { subjects } from '../../db/schema';
 import { richNotifier } from '../../platform/rich-notify';
@@ -23,32 +24,24 @@ export function useLiveJobs() {
   const tracked = useRef(new Map<string, LiveJobRow>());
   useEffect(() => {
     if (!userId) return undefined;
-    const channel = supabase
-      .channel(`livejobs:${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_jobs', filter: `user_id=eq.${userId}` }, (payload: { new?: Partial<AiJob> }) => {
+    const channel = realtime
+      .channel(rowTopic('ai_jobs', 'user_id', userId))
+      .on('change', (payload: RowChange<Partial<AiJob>>) => {
         // The new row goes straight into the screens' caches: progress shows the moment the server writes it.
         if (payload.new?.id) mergeJobRow(qc, payload.new as Partial<AiJob> & { id: string });
         void qc.invalidateQueries({ queryKey: ['liveJobs', userId] });
       })
       .subscribe();
     return () => {
-      void supabase.removeChannel(channel);
+      void realtime.removeChannel(channel);
     };
   }, [userId, qc]);
   const query = useQuery({
     queryKey: ['liveJobs', userId],
     enabled: !!userId,
     queryFn: async (): Promise<LiveJobRow[]> => {
-      const since = new Date(Date.now() - 6 * 3600_000).toISOString();
-      const { data } = await supabase
-        .from('ai_jobs')
-        .select('id,type,stage,status,progress,user_id,subject_id,document_id,started_at,items_total,items_done')
-        .eq('user_id', userId!)
-        .is('parent_job_id', null)
-        .gte('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      return ((data ?? []) as LiveJobRow[]).filter((j) => isLiveJobType(j.type));
+      const rows = await data<LiveJobRow[]>('notifications-live-jobs').catch(() => [] as LiveJobRow[]);
+      return rows.filter((j) => isLiveJobType(j.type));
     },
     refetchInterval: (q) => ((q.state.data ?? []).some((j) => ACTIVE.includes(j.status)) || tracked.current.size > 0 ? 5000 : false),
   });

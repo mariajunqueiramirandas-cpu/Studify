@@ -5,7 +5,7 @@ Each ADR records one significant decision: its context, the decision, the altern
 | # | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-expo-react-native-android-first.md) | Expo / React Native, Android first | Accepted | 2026-10-26 |
-| [0002](0002-supabase-backend.md) | Supabase as the backend | Accepted | 2026-10-26 |
+| [0002](0002-supabase-backend.md) | Supabase as the backend | Superseded by 0008 (functions) and 0012 (database, Storage, Realtime); Auth stays | 2026-10-26 |
 | [0003](0003-claude-api-opus-default.md) | Claude API as the only LLM, Haiku 5.5 by default (Opus 5.5 before 2026-10-27) | Accepted, amended 2026-10-27 | 2026-10-26 |
 | [0004](0004-fsrs-on-device.md) | FSRS scheduling on device with `ts-fsrs` | Accepted | 2026-10-26 |
 | [0005](0005-job-worker-pg-boss.md) | Node.js job worker with pg-boss (hosting open) | Superseded by 0010 | 2026-10-26 |
@@ -15,6 +15,7 @@ Each ADR records one significant decision: its context, the decision, the altern
 | [0009](0009-no-request-waits-on-claude.md) | No request waits on Claude: AI work runs as a job or inside a stream | Superseded by 0010 | 2026-10-28 |
 | [0010](0010-direct-sse-api.md) | Direct SSE operations in one API service | Accepted | 2026-10-28 |
 | [0011](0011-write-ahead-and-background-work.md) | Write content ahead (the Trilha, once per subject), keep side work in the background | Accepted | 2026-10-29 |
+| [0012](0012-own-postgres-files-realtime.md) | Own Postgres, files and realtime on the VPS; Supabase keeps only Auth | Accepted | 2026-10-29 |
 
 ## Template
 

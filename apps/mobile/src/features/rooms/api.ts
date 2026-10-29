@@ -5,9 +5,9 @@ import type { RoomControlReq, RoomControlRes, RoomTimerConfig, RoomTimerState } 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { callFunction } from '../../api/functions';
-import { supabase } from '../../api/supabase';
-import { rows } from '../common/query';
+import { realtime, type RealtimeChannel } from '../../api/realtime';
 
 export interface RoomRow {
   id: string;
@@ -26,7 +26,7 @@ export function useOpenRooms(classGroupId: string | undefined) {
     queryKey: ['rooms', classGroupId],
     enabled: !!classGroupId,
     refetchInterval: 30_000,
-    queryFn: () => rows<RoomRow>(supabase.from('study_rooms').select('*').eq('class_group_id', classGroupId!).eq('status', 'open').order('created_at', { ascending: false })),
+    queryFn: () => data<RoomRow[]>('rooms-open', { class_group_id: classGroupId! }),
   });
 }
 
@@ -34,7 +34,7 @@ export function useRoom(roomId: string | undefined) {
   return useQuery({
     queryKey: ['room', roomId],
     enabled: !!roomId,
-    queryFn: async () => (await rows<RoomRow>(supabase.from('study_rooms').select('*').eq('id', roomId!)))[0] ?? null,
+    queryFn: () => data<RoomRow | null>('rooms-get', { room_id: roomId! }),
   });
 }
 
@@ -65,11 +65,11 @@ export function useRoomChannel(roomId: string, me: { userId: string | null; nick
     hiddenRef.current = hidden;
   }, [hidden]);
   const statusRef = useRef(me.status);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     if (!me.userId) return undefined;
-    const channel = supabase.channel(`room:${roomId}`, { config: { private: true, presence: { key: me.userId } } });
+    const channel = realtime.channel(`room:${roomId}`, { presence: { key: me.userId } });
     channelRef.current = channel;
     channel
       .on('broadcast', { event: 'timer' }, ({ payload }) => onTimer(payload as RoomTimerState))
@@ -91,7 +91,7 @@ export function useRoomChannel(roomId: string, me: { userId: string | null; nick
       });
     return () => {
       channelRef.current = null;
-      void supabase.removeChannel(channel);
+      void realtime.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, me.userId]);

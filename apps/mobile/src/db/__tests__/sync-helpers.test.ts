@@ -1,27 +1,11 @@
 /// <reference types="jest" />
 jest.mock('expo-sqlite', () => require('../testing/expo-sqlite.mock'));
 
-import { cursorOrFilter } from '../sync/cursor';
 import { filterSignature } from '../sync/engine';
 import { parseInstantMs } from '../sync/clock';
 import { serverRowToValues, keyValues, selectColumnsFor } from '../sync/mapping';
 import { planWindowAround, PULL_TABLES } from '../sync/registry';
 import { cardStates, cards } from '../schema';
-
-describe('cursorOrFilter', () => {
-  it('builds a lexicographic (updated_at, ...pk) > cursor condition', () => {
-    const f = cursorOrFilter(['user_id', 'card_id'], '2026-10-27T10:00:00.000100+00:00', ['u1', 'c5']);
-    expect(f).toBe(
-      'updated_at.gt."2026-10-27T10:00:00.000100+00:00",' +
-        'and(updated_at.eq."2026-10-27T10:00:00.000100+00:00",user_id.gt."u1"),' +
-        'and(updated_at.eq."2026-10-27T10:00:00.000100+00:00",user_id.eq."u1",card_id.gt."c5")',
-    );
-  });
-
-  it('escapes quotes in values', () => {
-    expect(cursorOrFilter(['id'], 'ts', ['a"b'])).toContain('id.gt."a\\"b"');
-  });
-});
 
 describe('filterSignature', () => {
   it('is stable for the same scope regardless of value order', () => {

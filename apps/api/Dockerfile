@@ -2,7 +2,8 @@
 # API image (Bun + Hono). Build context: the repository root (docker-compose.yml sets it).
 # Stage 1 installs production dependencies with pnpm (node-linker=hoisted, see .npmrc). Stages 2 and 3 build the
 # React link site (apps/site) and the web dashboard (apps/dashboard) with Vite. The last stage runs the server on
-# Bun with the built site in /app/site and the dashboard in /app/dashboard (served at /painel).
+# Bun with the built site in /app/site and the dashboard in /app/dashboard (served at /painel). The schema migrations
+# (packages/db/migrations) are part of the image; the server applies pending ones before it listens.
 
 
 FROM node:22-slim AS manifests
@@ -16,6 +17,7 @@ COPY apps/mobile/package.json apps/mobile/
 COPY apps/site/package.json apps/site/
 COPY apps/dashboard/package.json apps/dashboard/
 COPY packages/ai/package.json packages/ai/
+COPY packages/db/package.json packages/db/
 COPY packages/prompts/package.json packages/prompts/
 COPY packages/shared/package.json packages/shared/
 COPY packages/speech/package.json packages/speech/
@@ -47,6 +49,8 @@ COPY --from=build --chown=bun:bun /repo/packages ./packages
 COPY --from=build --chown=bun:bun /repo/apps/api ./apps/api
 COPY --from=site --chown=bun:bun /repo/apps/site/dist ./site
 COPY --from=dashboard --chown=bun:bun /repo/apps/dashboard/dist ./dashboard
+# The files volume mounts here (docker-compose.yml); a new named volume takes this ownership, so bun can write it.
+RUN mkdir -p /data/storage && chown -R bun:bun /data
 USER bun
 EXPOSE 3000
 # No curl in the image: Bun's fetch checks the health endpoint.

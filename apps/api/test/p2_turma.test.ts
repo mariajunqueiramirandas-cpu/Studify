@@ -159,8 +159,8 @@ test('quiz-shared-open: 404 for an expired or revoked token, 401 without a sessi
 test('join-class: normalizes the grouped code and returns the RPC payload unchanged', async () => {
   const calls: Record<string, unknown>[] = [];
   const e = env({
-    userRpc: (jwt, fn, args) => {
-      calls.push({ jwt, fn, args });
+    userRpc: (user, fn, args) => {
+      calls.push({ jwt: user.jwt, fn, args });
       return Promise.resolve({ data: { class_group_id: GROUP, status: 'pending' }, error: null });
     },
   });

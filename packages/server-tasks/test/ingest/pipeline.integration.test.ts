@@ -3,7 +3,7 @@
 // ai_jobs mirroring and the job modules in src/jobs are all exercised. CI never calls Claude.
 //
 // Database: TEST_DATABASE_URL (default: studify_test_worker on localhost). Create it with
-//   STUDIFY_TEST_DB=studify_test_worker bash supabase/tests/run.sh
+//   STUDIFY_TEST_DB=studify_test_worker bash packages/db/pgtap/run.sh
 // The suite is skipped when the database is not reachable.
 import { randomUUID, createHash } from 'node:crypto';
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
@@ -21,7 +21,7 @@ import { jobs as contentJobs } from '../../src/jobs/content.ts';
 import { jobs as batchJobs } from '../../src/jobs/batch.ts';
 import { jobs as filesJobs } from '../../src/jobs/files.ts';
 import { jobs as trailJobs } from '../../src/jobs/trail.ts';
-import { FakeObjectStore, InMemoryQueue, fakeSupabase } from './support/fakes.ts';
+import { FakeObjectStore, InMemoryQueue, fakeStorageDb } from './support/fakes.ts';
 import { loadTopicBundle, writeNote } from '../../src/ingest/topics.ts';
 import { setProgressListener } from '../../src/framework/progress.ts';
 import { encryptedPdfBytes, textPdf } from './support/pdf.ts';
@@ -334,7 +334,7 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     registry = new OperationRegistry({
       schedule: (name, data, opts) => backend.send(name, data, opts),
       pool,
-      supabase: fakeSupabase(store),
+      db: fakeStorageDb(store),
       claude,
       push,
       log,

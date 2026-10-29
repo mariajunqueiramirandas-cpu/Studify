@@ -475,12 +475,12 @@ select test_helpers.check_rows('bob reads no tutor messages of alice', 'authenti
   $$select id from public.tutor_messages$$, 0);
 
 -- =====================================================================
--- 13. realtime (data-model §8.1): notes and essays are published
+-- 13. realtime (data-model §8.1): notes and essays stream their row changes
 -- =====================================================================
 select is(
-  (select count(*)::int from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename in ('notes','essays')),
-  2, 'notes and essays are in the supabase_realtime publication');
+  (select count(*)::int from pg_trigger
+    where tgname = 'notify_row_change' and tgrelid in ('public.notes'::regclass, 'public.essays'::regclass)),
+  2, 'notes and essays notify their row changes');
 
 -- =====================================================================
 -- 14. edit_outline: merge, split, restore and their undo (ING-04.3, .4, .5)

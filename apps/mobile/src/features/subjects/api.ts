@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { uuidv7 } from 'uuidv7';
+import { data } from '../../api/data';
 import { ApiError, callFunction } from '../../api/functions';
 import { uploadFile } from '../../api/storage';
-import { supabase } from '../../api/supabase';
 import { useSession } from '../auth/session';
-import { row, rows, rpc } from '../common/query';
 import { SUBJECT_COLORS, type SubjectColor } from '../../theme';
 
 export interface Subject {
@@ -103,14 +102,7 @@ export function useSubjects() {
   return useQuery({
     queryKey: ['subjects', userId],
     enabled: !!userId,
-    queryFn: async () => {
-      const [subjects, settings] = await Promise.all([
-        rows<Subject>(supabase.from('subjects').select('*').is('deleted_at', null).is('system_kind', null).order('created_at')),
-        rows<SubjectUserSettings>(supabase.from('subject_user_settings').select('*').eq('user_id', userId!)),
-      ]);
-      const byId = new Map(settings.map((s) => [s.subject_id, s]));
-      return subjects.map((s) => ({ ...s, settings: byId.get(s.id) ?? null }));
-    },
+    queryFn: () => data<Array<Subject & { settings: SubjectUserSettings | null }>>('subjects-list'),
   });
 }
 
@@ -118,25 +110,16 @@ export function useSubject(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['subject', subjectId],
     enabled: !!subjectId,
-    queryFn: () => row<Subject>(supabase.from('subjects').select('*').eq('id', subjectId!).maybeSingle()),
+    queryFn: () => data<Subject | null>('subjects-get', { subject_id: subjectId }),
   });
 }
 
 export function useCreateSubject() {
   const qc = useQueryClient();
-  const { userId } = useSession();
   return useMutation({
     mutationFn: async (input: { name: string; color: SubjectColor; icon: string }) => {
       const id = uuidv7();
-      const { error } = await supabase.from('subjects').insert({
-        id,
-        name: input.name.trim(),
-        color: SUBJECT_COLORS[input.color].light,
-        icon: input.icon,
-        owner_profile_id: userId,
-        created_by: userId,
-      });
-      if (error) throw error;
+      await data('subjects-create', { id, name: input.name.trim(), color: SUBJECT_COLORS[input.color].light, icon: input.icon }, { idempotencyKey: id });
       return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['subjects'] }),
@@ -151,8 +134,7 @@ export function useUpdateSubject(subjectId: string) {
       if (patch.name) update.name = patch.name.trim();
       if (patch.color) update.color = SUBJECT_COLORS[patch.color].light;
       if (patch.icon) update.icon = patch.icon;
-      const { error } = await supabase.from('subjects').update(update).eq('id', subjectId);
-      if (error) throw error;
+      await data('subjects-update', { subject_id: subjectId, ...update });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['subjects'] });
@@ -162,18 +144,15 @@ export function useUpdateSubject(subjectId: string) {
 }
 
 /** PLT-03.4 archive is per user (subject_user_settings), so Turma subjects can be archived too. */
-export async function setSubjectArchived(userId: string, subjectId: string, archived: boolean) {
-  const { error } = await supabase
-    .from('subject_user_settings')
-    .upsert({ user_id: userId, subject_id: subjectId, archived_at: archived ? new Date().toISOString() : null }, { onConflict: 'user_id,subject_id' });
-  if (error) throw error;
+export async function setSubjectArchived(_userId: string, subjectId: string, archived: boolean) {
+  await data('subjects-archive', { subject_id: subjectId, archived });
 }
 
 export function useDocuments(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['subject', subjectId, 'documents'],
     enabled: !!subjectId,
-    queryFn: () => rows<DocumentRow>(supabase.from('documents').select('*').eq('subject_id', subjectId!).is('deleted_at', null).order('created_at')),
+    queryFn: () => data<DocumentRow[]>('subjects-documents', { subject_id: subjectId }),
     refetchInterval: (q) => ((q.state.data ?? []).some((d) => d.status === 'uploaded' || d.status === 'processing') ? 5000 : false),
   });
 }
@@ -183,16 +162,7 @@ export function useSubjectJobs(subjectId: string | undefined) {
   return useQuery({
     queryKey: ['subject', subjectId, 'jobs'],
     enabled: !!subjectId,
-    queryFn: () =>
-      rows<AiJob>(
-        supabase
-          .from('ai_jobs')
-          .select('*')
-          .eq('subject_id', subjectId!)
-          .is('parent_job_id', null)
-          .order('created_at', { ascending: false })
-          .limit(5),
-      ),
+    queryFn: () => data<AiJob[]>('subjects-jobs', { subject_id: subjectId }),
     // Realtime keeps the rows current (mergeJobRow); the poll is the fallback for a dropped connection.
     refetchInterval: (q) => ((q.state.data ?? []).some((j) => !FINISHED_JOB.has(j.status)) ? 8000 : false),
   });
@@ -266,23 +236,27 @@ export async function retryIngestion(documentId: string) {
 }
 
 export async function renameDocument(documentId: string, title: string) {
-  const { error } = await supabase.from('documents').update({ title: title.trim() }).eq('id', documentId);
-  if (error) throw error;
+  await data('documents-rename', { document_id: documentId, title: title.trim() });
 }
 
 export async function deleteDocument(documentId: string) {
-  const { error } = await supabase.from('documents').update({ deleted_at: new Date().toISOString() }).eq('id', documentId);
-  if (error) throw error;
+  await data('documents-delete', { document_id: documentId });
 }
 
 export async function shareSubject(subjectId: string, classGroupId: string) {
-  return rpc<void>('share_subject', { subject_id: subjectId, class_group_id: classGroupId, copyright_ack: true });
+  await data('subjects-share', { subject_id: subjectId, class_group_id: classGroupId });
+}
+
+/** Signed URLs for stored objects the student may read (1 h TTL, data-model §7); null where none was signed. */
+export async function signedUrls(bucket: string, paths: string[]): Promise<Array<string | null>> {
+  if (paths.length === 0) return [];
+  const res = await data<{ urls: Array<{ signedUrl: string | null }> }>('storage-sign', { bucket, paths, expires_in: 3600 });
+  return res.urls.map((u) => u.signedUrl);
 }
 
 /** Signed URL for a stored object (1 h TTL, data-model §7). */
 export async function signedUrl(bucket: string, path: string): Promise<string | null> {
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
-  return data?.signedUrl ?? null;
+  return (await signedUrls(bucket, [path]))[0] ?? null;
 }
 
 /** Signed URL of a stored `bucket/path` (refreshed before the 1 h TTL ends); null path → null. */

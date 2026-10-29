@@ -1,5 +1,5 @@
 // Compares the enum value lists in `ENUMS` (src/core/enums.ts) with the CHECK constraints in
-// supabase/migrations/*.sql. Every enum-style CHECK must be attributed to a `create table`
+// packages/db/migrations/*.sql. Every enum-style CHECK must be attributed to a `create table`
 // statement and to a `table.column` key; every key must exist on both sides with the same values.
 //
 // Known mismatches live in KNOWN_DIFFERENCES below. Each entry pins the exact difference, so a
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ENUMS } from '../../src/core/enums.ts';
 
-const MIGRATIONS_DIR = fileURLToPath(new URL('../../../../supabase/migrations/', import.meta.url));
+const MIGRATIONS_DIR = fileURLToPath(new URL('../../../../packages/db/migrations/', import.meta.url));
 
 interface KnownDifference {
   key: string;
@@ -294,7 +294,7 @@ const mismatches = compareWithEnums(parsed.enums, ENUMS);
 const failing = mismatches.filter((m) => !m.orderOnly);
 const orderOnly = mismatches.filter((m) => m.orderOnly);
 
-describe('ENUMS vs supabase/migrations CHECK constraints', () => {
+describe('ENUMS vs packages/db/migrations CHECK constraints', () => {
   it('parses a realistic number of enum CHECKs from the migrations', () => {
     expect(parsed.checkCount).toBeGreaterThanOrEqual(100); // 111 text-enum CHECKs in Phase 0-2 at time of writing
     expect(parsed.enums.get('documents.status')).toEqual(['uploaded', 'processing', 'ready', 'failed', 'waiting_budget']);

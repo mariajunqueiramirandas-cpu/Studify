@@ -1,15 +1,20 @@
 // Domain operation definitions shared by ingestion, generation, planning, grading and notifications.
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Db } from '@studify/db';
 import type pg from 'pg';
 import type { ClaudeDeps } from '@studify/ai';
 import type { TtsProvider } from '@studify/speech';
 import type { Logger } from 'pino';
 
+/** Sends events on a private realtime channel (`battle:{id}`, `room:{id}`, ...). Never throws. */
+export type Broadcast = (topic: string, events: ReadonlyArray<{ event: string; payload: Record<string, unknown> }>) => Promise<void>;
+
 export interface OperationContext {
-  /** Service-role client (bypasses RLS) — authorize from job data, never trust it blindly. */
-  supabase: SupabaseClient;
+  /** Service client on Studify's Postgres (bypasses RLS), with Supabase Auth and the file store attached. Authorize from job data, never trust it blindly. */
+  db: Db;
   /** Direct Postgres pool for transactions and private.* functions. */
-  db: pg.Pool;
+  sql: pg.Pool;
+  /** Realtime broadcast to the app's WebSocket channels (apps/api/src/realtime). */
+  broadcast: Broadcast;
   /** Claude dependencies (client, BudgetStore over private.ai_budget_*, UsageSink → ai_usage). */
   ai: ClaudeDeps;
   log: Logger;
