@@ -175,12 +175,14 @@ export const TASK_INPUTS: Record<string, unknown> = {
     contentLanguage: 'pt-BR',
     languageSubject: false,
   },
+  // One of the parts ingestion writes in parallel: its share of the quotas and the concepts it covers.
   'questions.generate': {
     topic,
     slices: [bio],
-    quotas: { mcq_single: 8, true_false: 2, fill_blank: 2, matching: 1, short_answer: 2 },
+    quotas: { mcq_single: 4, true_false: 1, fill_blank: 1, short_answer: 1 },
     existingStems: ['Qual é a fórmula da glicose?'],
     quantitative: false,
+    focusConceptKeys: ['c1'],
     contentLanguage: 'pt-BR',
     languageSubject: false,
   },

@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { ingestionJob, ingestionView } from '../progress';
+import { ingestionJob, ingestionView, topicProgress } from '../progress';
 import type { AiJob } from '../api';
 
 jest.mock('../../../api/supabase', () => ({ supabase: {} }));
@@ -49,5 +49,14 @@ describe('ingestion progress view', () => {
     expect(ingestionView(job({ status: 'succeeded', stage: 'S4' }), { status: 'ready' })).toMatchObject({ fraction: 1 });
     expect(ingestionView(job({ status: 'running' }), { status: 'failed' }).steps.some((s) => s.state === 'failed')).toBe(true);
     expect(ingestionView(undefined, { status: 'uploaded' }).fraction).toBe(0);
+  });
+});
+
+describe('topics ready while the material is written', () => {
+  it('counts the ready topics and the ones still being written, leaving out excluded and failed ones', () => {
+    const tp = (content_status: string, excluded = false) => ({ id: content_status, excluded, content_status });
+    const { ready, writing } = topicProgress([tp('ready'), tp('generating'), tp('pending'), tp('failed'), tp('ready', true)]);
+    expect(ready.map((r) => r.id)).toEqual(['ready']);
+    expect(writing).toBe(2);
   });
 });

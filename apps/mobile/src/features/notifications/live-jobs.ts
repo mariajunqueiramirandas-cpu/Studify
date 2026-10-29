@@ -42,7 +42,7 @@ export function useLiveJobs() {
       const since = new Date(Date.now() - 6 * 3600_000).toISOString();
       const { data } = await supabase
         .from('ai_jobs')
-        .select('id,type,stage,status,progress,user_id,subject_id,document_id,started_at')
+        .select('id,type,stage,status,progress,user_id,subject_id,document_id,started_at,items_total,items_done')
         .eq('user_id', userId!)
         .is('parent_job_id', null)
         .gte('created_at', since)

@@ -112,7 +112,9 @@ export async function runOutlineCalls(
         existing,
       });
       const prepared = prepareCall('ingest.outline', built, budgetFor({ ...doc, documentId: doc.id }, { jobId: input.jobId, feature: 'ING-03' }), [ref]);
-      return withS1Retries(env, () => callClaude(env.ctx.ai, withShortCache(prepared.call)));
+      // The outline gates the whole material: first in the shared lane.
+      const call = () => callClaude(env.ctx.ai, withShortCache(prepared.call));
+      return withS1Retries(env, () => (env.ctx.aiLane ? env.ctx.aiLane({ position: -1 }, call) : call()));
     });
 
     const outlines: unknown[] = [];

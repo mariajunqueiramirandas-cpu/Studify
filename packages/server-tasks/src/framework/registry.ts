@@ -12,6 +12,7 @@ import { applyProgress, finishProgress, withProgressListener, ensureAiJob, isUui
 import type { PushService } from './push.ts';
 import type { Logger } from './logger.ts';
 import type { TtsProvider } from '@studify/speech';
+import { aiLane, type AiLane } from '../ingest/concurrency.ts';
 import type { Schedule, ScheduleOptions } from './scheduler.ts';
 
 export interface RuntimeDeps {
@@ -38,7 +39,11 @@ export class OperationRegistry {
   private counts = new Map<string, number>();
   private running = new Set<Promise<unknown>>();
   private stopped = false;
-  constructor(private deps: RuntimeDeps) {}
+  /** One lane for the model calls of every operation this registry runs. */
+  private readonly lane: AiLane;
+  constructor(private deps: RuntimeDeps) {
+    this.lane = aiLane(deps.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY);
+  }
   async register(definitions: ReadonlyArray<OperationDefinition<any>>): Promise<void> {
     for (const def of definitions) {
       if (this.definitions.has(def.name)) throw new Error(`duplicate operation name: ${def.name}`);
@@ -93,6 +98,7 @@ export class OperationRegistry {
       progress, push: async (user, message) => { await this.deps.push.push(user, message); },
       tts: this.deps.tts ?? null, useBatch: this.deps.useBatch ?? false,
       waveConcurrency: this.deps.waveConcurrency ?? STANDARD_WAVE_CONCURRENCY,
+      aiLane: this.lane,
     };
     await progress({ status: 'running', attempts: 1 });
     try {

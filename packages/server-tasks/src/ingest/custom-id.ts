@@ -22,22 +22,24 @@ const CODE_KIND: Readonly<Record<string, TopicKind>> = Object.fromEntries(
 );
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TOPIC_ID = /^([0-9a-f]{32})-([a-z])$/;
+const TOPIC_ID = /^([0-9a-f]{32})-([a-z])(\d)?$/;
 const PAGES_ID = /^p(\d{1,5})-(\d{1,5})$/;
 
-export function buildTopicCustomId(nodeId: string, kind: TopicKind): string {
+/** `part`: one part of a topic's question bank (0–9), written by its own request. */
+export function buildTopicCustomId(nodeId: string, kind: TopicKind, part?: number): string {
   if (!UUID.test(nodeId)) throw new Error(`node id must be a UUID: ${nodeId}`);
-  return `${nodeId.replace(/-/g, '').toLowerCase()}-${KIND_CODE[kind]}`;
+  if (part !== undefined && !(Number.isInteger(part) && part >= 0 && part <= 9)) throw new Error(`part must be 0–9: ${part}`);
+  return `${nodeId.replace(/-/g, '').toLowerCase()}-${KIND_CODE[kind]}${part ?? ''}`;
 }
 
-export function parseTopicCustomId(customId: string): { nodeId: string; kind: TopicKind } | null {
+export function parseTopicCustomId(customId: string): { nodeId: string; kind: TopicKind; part?: number } | null {
   const match = TOPIC_ID.exec(customId);
   if (!match) return null;
   const hex = match[1] ?? '';
   const kind = CODE_KIND[match[2] ?? ''];
   if (!kind) return null;
   const nodeId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-  return { nodeId, kind };
+  return match[3] !== undefined ? { nodeId, kind, part: Number(match[3]) } : { nodeId, kind };
 }
 
 /** Transcription batches: one request per run of consecutive scanned pages (ingest.transcribePages). */

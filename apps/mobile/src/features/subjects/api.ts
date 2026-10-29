@@ -86,6 +86,9 @@ export function mergeJobRow(qc: QueryClient, row: Partial<AiJob> & { id: string 
   } else if (row.stage && row.stage !== previous?.stage) {
     void qc.invalidateQueries({ queryKey: ['subject', subjectId, 'outline'] });
     void qc.invalidateQueries({ queryKey: ['subject', subjectId, 'documents'] });
+  } else if (row.items_done !== undefined && row.items_done !== previous?.items_done) {
+    // A topic just finished: it opens at once instead of on the outline's next poll.
+    void qc.invalidateQueries({ queryKey: ['subject', subjectId, 'outline'] });
   }
 }
 

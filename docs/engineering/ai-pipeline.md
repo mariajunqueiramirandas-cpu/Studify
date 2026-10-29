@@ -187,7 +187,7 @@ export async function callClaude<T>(call: TaskCall<T>) {
 
 | Task id | Features | Trigger | Runs | Input | Output | Effort | Class | Cache | Volume | Budget |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `questions.generate` | PRA-01.4, PRA-02 | S4 per topic | **Batch** | SYS → TS → topic JSON + type quotas + existing stems | `S:TopicQuestions` (payload per spec 05 §8.1, incl. `remediation_card`) | `medium` | L | SYS, TS | 1 per topic | content |
+| `questions.generate` | PRA-01.4, PRA-02 | S4 per topic | **Batch** | SYS → TS → topic JSON + type quotas (this part's share) + the part's concepts + existing stems | `S:TopicQuestions` (payload per spec 05 §8.1, incl. `remediation_card`) | `medium` | L | SYS, TS | 1 per concept, up to 3 per topic, in parallel (ADR 0011) | content |
 | `questions.more` | PRA-01.4 | Quiz builder needs more | Edge | Same, quota 10 | `S:TopicQuestions` | `medium` | M | SYS, TS | on demand | user |
 | `grade.shortAnswer` | PRA-01.6 | Student submits a short answer | Edge | Question, rubric, model answer, student answer (**data**), topic page **text** | `S:ShortAnswerGrade` | `low` | S | SYS, page text | ~10/user/day | user |
 | `grade.essayQuestion` | PRA-07 (Ph 3) | Essay answer submitted (typed or CAM-03) | Edge·SSE (progress) | Question, rubric or "build rubric", transcription, optional photo | `S:EssayQuestionGrade` | `high` | L | SYS, pages | ~2/user/day | user |

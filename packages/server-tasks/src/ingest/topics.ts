@@ -1,7 +1,7 @@
 // Topic content (S2 concepts, S4 notes, glossary, cards, questions, feed): loads a topic's bundle from the
 // map, builds the prompts input for each kind, and writes the outputs. Calls are built the same way for the
 // Batch path and the standard-API path, so a re-run uses the same prompt bytes (ai-pipeline §6.1).
-import { cardTargetCount, decodeQuestion, getTask, topicQuotas, withContextPages, type QuestionDraft as ModelQuestionDraft } from '@studify/prompts';
+import { cardTargetCount, decodeQuestion, getTask, topicQuotas, withContextPages, type QuestionDraft as ModelQuestionDraft, type QuotaMap } from '@studify/prompts';
 import type { PdfSlice } from '@studify/prompts';
 import { checkProblemConsistency, parseQuestionPayload, uuidV7, type QuestionType } from '@studify/shared';
 import type { BudgetContext, MappedCitation, TaskCall } from '@studify/ai';
@@ -207,6 +207,69 @@ export function contentLanguageOf(bundle: TopicBundle, documentLanguage: string 
   return bundle.subject.contentLanguage ?? documentLanguage ?? 'pt-BR';
 }
 
+// ---------------------------------------------------------------- question bank in parallel parts
+
+/**
+ * A topic's ~15 questions are written by up to this many calls at once, each with its share of the quotas and of the
+ * concepts. One call writing all of them (~20k output tokens) took 60–85 s and was the last thing a material waited
+ * on; a part takes about a third of that.
+ */
+export const QUESTION_PARTS_MAX = 3;
+
+/** Relative output size of a question type (a multiple choice carries a rationale per option), to balance the parts. */
+const QUESTION_WEIGHT: Partial<Record<QuestionType, number>> = { mcq_single: 3, multi_select: 3, essay_question: 3, short_answer: 2, matching: 2, ordering: 2 };
+
+export interface QuestionPart {
+  index: number;
+  of: number;
+  quotas: QuotaMap;
+  /** Concept keys this part covers (empty when the bank is one part). */
+  focusConceptKeys: string[];
+}
+
+/**
+ * The parts of a topic's bank: one per concept up to QUESTION_PARTS_MAX, concepts dealt in map order and question
+ * slots dealt heaviest first, so the parts are about the same size and never ask for the same concept twice.
+ */
+export function questionParts(bundle: Pick<TopicBundle, 'concepts'>, quotas: QuotaMap): QuestionPart[] {
+  const of = Math.max(1, Math.min(QUESTION_PARTS_MAX, bundle.concepts.length));
+  if (of === 1) return [{ index: 0, of: 1, quotas, focusConceptKeys: [] }];
+  const parts: QuestionPart[] = Array.from({ length: of }, (_v, index) => ({ index, of, quotas: {}, focusConceptKeys: [] }));
+  const slots = Object.entries(quotas)
+    .flatMap(([type, n]) => Array.from({ length: n ?? 0 }, () => type as QuestionType))
+    .sort((a, b) => (QUESTION_WEIGHT[b] ?? 1) - (QUESTION_WEIGHT[a] ?? 1));
+  slots.forEach((type, i) => {
+    const q = parts[i % of]!.quotas;
+    q[type] = (q[type] ?? 0) + 1;
+  });
+  bundle.concepts.forEach((c, i) => parts[i % of]!.focusConceptKeys.push(c.key));
+  return parts;
+}
+
+/** The topic's bank quotas (PRA-01.4), split into parts. */
+export function topicQuestionParts(bundle: Pick<TopicBundle, 'concepts'>): QuestionPart[] {
+  return questionParts(bundle, topicQuotas({ quantitative: isQuantitativeTopic(bundle) }));
+}
+
+/**
+ * Parts of the topic's bank not written yet, so a resumed or retried topic writes only those: a part is written when
+ * one of the topic's generated questions covers one of its concepts.
+ */
+export async function missingQuestionParts(sql: Sql, bundle: TopicBundle): Promise<number[]> {
+  const parts = topicQuestionParts(bundle);
+  const { rows } = await sql.query<{ concept_ids: string[] | null }>(
+    `select concept_ids from public.questions
+      where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active' and type not in ('find_error','problem')`,
+    [bundle.topicId],
+  );
+  if (rows.length === 0) return parts.map((p) => p.index);
+  if (parts.length === 1) return [];
+  const covered = new Set(rows.flatMap((r) => r.concept_ids ?? []));
+  return parts
+    .filter((p) => !p.focusConceptKeys.some((key) => covered.has(bundle.conceptIdByKey.get(key) ?? '')))
+    .map((p) => p.index);
+}
+
 export interface BuiltKindCall {
   kind: TopicKind;
   taskId: string;
@@ -217,7 +280,8 @@ export interface BuiltKindCall {
 
 /**
  * Builds the call for one kind. `refs` come from topicSliceRefs (all sources for S4; the current upload's
- * sources for S2). `budget` is the ctx of the call (ai_usage attribution).
+ * sources for S2). `budget` is the ctx of the call (ai_usage attribution). `part` picks one part of the question
+ * bank (topicQuestionParts).
  */
 export async function buildKindCall(
   env: PipelineEnv,
@@ -226,6 +290,7 @@ export async function buildKindCall(
   refs: readonly SliceRef[],
   budget: BudgetContext,
   languageOf: string,
+  part?: number,
 ): Promise<BuiltKindCall> {
   const slices: PdfSlice[] = toPdfSlices(refs);
   const languageSubject = bundle.subject.isLanguageSubject;
@@ -281,17 +346,21 @@ export async function buildKindCall(
         languageSubject,
       });
       break;
-    case 'questions':
+    case 'questions': {
+      const parts = topicQuestionParts(bundle);
+      const share = parts[part ?? 0] ?? parts[0]!;
       built = getTask(taskId).build({
         topic: topicInput(bundle),
         slices,
-        quotas: topicQuotas({ quantitative }),
+        quotas: share.quotas,
         existingStems: existing,
         quantitative,
+        ...(share.of > 1 ? { focusConceptKeys: share.focusConceptKeys } : {}),
         contentLanguage,
         languageSubject,
       });
       break;
+    }
     case 'feed':
       built = getTask(taskId).build({
         topic: topicInput(bundle),
@@ -730,11 +799,12 @@ export async function writeQuestions(
   const reasons: Record<string, number> = {};
   await withTransaction(ctx.pool, async (client) => {
     if (ctx.force) {
+      // Only earlier generations: the other parts of this one (same gen_batch_id) are kept.
       await client.query(
         `update public.questions set status = 'archived', updated_at = now()
           where node_id = $1 and origin = 'generated' and deleted_at is null and status = 'active'
-            and type not in ('find_error','problem')`,
-        [ctx.bundle.topicId],
+            and type not in ('find_error','problem') and gen_batch_id is distinct from $2::uuid`,
+        [ctx.bundle.topicId, ctx.genBatchId],
       );
     }
     for (const raw of data.questions) {

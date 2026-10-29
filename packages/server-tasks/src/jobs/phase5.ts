@@ -6,7 +6,7 @@
 //  - league.weekly (SOC-08.2/.4): closes last week's league of every Turma with ranks and badges.
 //  - retro.generate (MOT-04): daily; builds the Retrospectivas that are due (goal recap, semester, year).
 //  - energy.windows (GOL-10.1): nightly; performance residual per 2-hour window from reviews and answers.
-import { getTask, MaterialFindings, RetroTitle, type MaterialFindingsOutput } from '@studify/prompts';
+import { getTask, MaterialFindings, RetroTitle, type MaterialFindingsOutput, type MaterialCheckInput } from '@studify/prompts';
 import {
   DEFAULT_SEMESTER_ENDS,
   leagueBadges,
@@ -139,7 +139,7 @@ export async function handleMaterialCheck(ctx: OperationContext, data: { documen
     'documents',
   );
   const otherByKey = new Map(others.map((o, i) => [`O${i + 1}`, o.id]));
-  const otherDocuments = [];
+  const otherDocuments: MaterialCheckInput['otherDocuments'][number][] = [];
   for (const [key, id] of otherByKey) {
     const srcs = unwrapRows<{ node_id: string }>(await sb.from('node_sources').select('node_id').eq('document_id', id).is('deleted_at', null).limit(60), 'node_sources');
     const ns = srcs.length
@@ -153,7 +153,8 @@ export async function handleMaterialCheck(ctx: OperationContext, data: { documen
   const rows: FindingRow[] = [];
   for (let start = 1; start <= lastPage; start += CHECK_SLICE_PAGES) {
     const refs = await topicSliceRefs(env, [{ documentId: doc.id, pageStart: start, pageEnd: Math.min(lastPage, start + CHECK_SLICE_PAGES - 1) }], { context: false });
-    const { result, documents } = await runPrompt(ctx.ai, {
+    // No student waits on the check: background in the shared lane, after every material's own content.
+    const check = () => runPrompt(ctx.ai, {
       task: getTask('material.check'),
       schema: MaterialFindings,
       input: {
@@ -166,6 +167,7 @@ export async function handleMaterialCheck(ctx: OperationContext, data: { documen
       // Content calls are charged to a student (the budget refuses them without one): the uploader.
       scope: { userId: doc.uploaded_by ?? subject.created_by, classGroupId: subject.owner_class_group_id, subjectId: subject.id, documentId: doc.id, feature: 'ING-06' },
     });
+    const { result, documents } = ctx.aiLane ? await ctx.aiLane({ position: 0, background: true }, check) : await check();
     if (result.status !== 'ok') {
       ctx.log.warn({ status: result.status, start }, 'material.check slice skipped');
       continue;

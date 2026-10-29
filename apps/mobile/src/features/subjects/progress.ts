@@ -41,3 +41,12 @@ export function ingestionView(job: AiJob | undefined, doc?: Pick<DocumentRow, 's
 export function stageLabel(job: AiJob | undefined, doc?: DocumentRow): string {
   return ingestionView(job, doc).label;
 }
+
+/** Ready and still-writing topics of a subject, in map order (topics open as soon as their own content is written). */
+export function topicProgress<T extends { excluded: boolean; content_status: string }>(topics: readonly T[]): { ready: T[]; writing: number } {
+  const active = topics.filter((tp) => !tp.excluded);
+  return {
+    ready: active.filter((tp) => tp.content_status === 'ready'),
+    writing: active.filter((tp) => tp.content_status === 'pending' || tp.content_status === 'generating').length,
+  };
+}

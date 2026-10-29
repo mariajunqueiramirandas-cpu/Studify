@@ -6628,7 +6628,8 @@ exports[`builders > questions.generate > matches the stored snapshot (schema exc
   ],
   "title": "Respiração celular"
 }
-Cotas por tipo: mcq_single: 8, true_false: 2, fill_blank: 2, matching: 1, short_answer: 2.
+Cotas por tipo: mcq_single: 4, true_false: 1, fill_blank: 1, short_answer: 1.
+Estas questões são uma parte do banco do tópico: cubra só os conceitos c1. As outras partes cobrem os demais conceitos.
 Enunciados existentes (não repita):
 [
   "Qual é a fórmula da glicose?"
@@ -6641,7 +6642,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "questions.generate@v2",
+  "promptVersion": "questions.generate@v3",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.

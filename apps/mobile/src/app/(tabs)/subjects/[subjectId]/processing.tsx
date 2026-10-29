@@ -7,6 +7,7 @@ import { DOCUMENT_ERROR_KEYS } from '../../../../features/subjects/errors';
 import { retryIngestion, useDocuments, useSubjectJobs } from '../../../../features/subjects/api';
 import { useOutline } from '../../../../features/subjects/outline';
 import { ingestionJob, ingestionView, isJobActive } from '../../../../features/subjects/ProcessingCard';
+import { ReadyTopics } from '../../../../features/subjects/ReadyTopics';
 import { t } from '../../../../i18n';
 import { space, useTheme } from '../../../../theme';
 import { messageFor } from '../../../../api/messages';
@@ -59,6 +60,7 @@ export default function Processing() {
           <Text variant="heading">{view.label}</Text>
         </Card>
       )}
+      <ReadyTopics subjectId={subjectId} />
       <Section>
         {view.steps.map(({ label, state }) => (
           <Row key={label} gap={space.md}>

@@ -62,6 +62,11 @@ export interface QuestionsInput {
   quotas: QuotaMap;
   existingStems: readonly string[];
   quantitative: boolean;
+  /**
+   * One part of a topic's bank written in parallel with the others (ingestion splits the 15 questions so the topic is
+   * ready sooner): the concepts this part covers. The other parts cover the rest, so the parts do not repeat.
+   */
+  focusConceptKeys?: readonly string[];
   contentLanguage: string;
   languageSubject: boolean;
 }
@@ -70,7 +75,7 @@ const QUESTIONS_TASK = 'Tarefa: escreva as questões do tópico seguindo as cota
 
 export const questionsGenerate = defineTask<QuestionsInput, ReturnType<typeof TopicQuestions.parse>>({
   id: 'questions.generate',
-  version: 2,
+  version: 3,
   features: ['PRA-01.4', 'PRA-02'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -105,6 +110,9 @@ function questionsMessages(input: QuestionsInput, ttl: CacheTtl) {
   const body = lines(
     section('Tópico (JSON):', stableStringify(input.topic)),
     `Cotas por tipo: ${quotas}.`,
+    input.focusConceptKeys?.length
+      ? `Estas questões são uma parte do banco do tópico: cubra só os conceitos ${input.focusConceptKeys.join(', ')}. As outras partes cobrem os demais conceitos.`
+      : null,
     input.quantitative ? 'Tópico quantitativo: use numeric no lugar de algumas múltiplas escolhas, conforme as cotas.' : null,
     section('Enunciados existentes (não repita):', stableStringify(input.existingStems)),
     contentLanguageLines(input.contentLanguage, input.languageSubject),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIVE_JOB_STEPS, liveJobProgress, parseRichNotification, RichNotificationSchema, type RichNotificationInput } from '../../src/index.ts';
+import { LIVE_JOB_STEPS, liveJobProgress, liveRich, parseRichNotification, RichNotificationSchema, type RichNotificationInput } from '../../src/index.ts';
 
 const base: RichNotificationInput = { v: 1, key: 'k1', template: 'basic', channel: 'plan', title: 'Oi', body: 'Corpo' };
 
@@ -81,5 +81,24 @@ describe('live job progress', () => {
 
   it('treats an unknown stage as the first step', () => {
     expect(liveJobProgress('pp.generate', 'something_new', 'running', null).steps[0]!.state).toBe('active');
+  });
+});
+
+describe('live material notification', () => {
+  const job = { id: 'j1', type: 'ingest.document', stage: 'S4', status: 'running', progress: 0.5, user_id: 'u1', subject_id: 's1', document_id: 'd1', started_at: '2026-10-29T12:00:00Z' };
+  const subject = { name: 'Biologia', color: '#16A34A' };
+
+  it('names the step and opens the processing screen before any topic is ready', () => {
+    const rich = liveRich({ ...job, stage: 'S2', items_total: 5, items_done: 2 }, subject)!;
+    expect(rich.body).toBe('Encontrando conceitos…');
+    expect(rich.deep_link).toBe('studify://subjects/s1/processing');
+    expect(rich.actions).toEqual([]);
+  });
+
+  it('says how many topics are ready and opens the subject on them while the rest is written', () => {
+    const rich = liveRich({ ...job, items_total: 5, items_done: 2 }, subject)!;
+    expect(rich.body).toBe('2 de 5 tópicos prontos: já dá pra estudar');
+    expect(rich.deep_link).toBe('studify://subjects/s1');
+    expect(rich.actions).toEqual([expect.objectContaining({ id: 'open', label: 'Estudar agora', deep_link: 'studify://subjects/s1' })]);
   });
 });
