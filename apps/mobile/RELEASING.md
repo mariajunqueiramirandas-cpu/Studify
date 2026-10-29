@@ -161,7 +161,7 @@ The first run after a cache reset is the slowest; later runs reuse the caches wr
 
 ## Versioning
 
-- **Version name**: `version` in `app.config.ts` (`0.1.0`), plus `APP_VERSION_SUFFIX` if the variable is set.
+- **Version name**: `BASE_VERSION` in `app.config.ts` (`0.2.0` since the move to the own backend, ADR 0012), plus `APP_VERSION_SUFFIX` if the variable is set.
 - **versionCode**: the workflow sets `ANDROID_VERSION_CODE = github.run_number + 100`. Android refuses to install
   an update with a lower versionCode, and run numbers only go up. The offset (`ANDROID_VERSION_CODE_OFFSET` in the
   workflow) keeps the codes above any build made before this workflow existed. Raise the offset if an older build
