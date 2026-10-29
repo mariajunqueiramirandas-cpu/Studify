@@ -15,6 +15,9 @@ import { builtinJobs } from './builtin.ts';
 import { isTerminalStatus, setProgressListener } from './progress.ts';
 import type pg from 'pg';
 
+/** Lock-screen progress within a stage: often enough to feel live, rare enough for the platforms' push budgets. */
+const LIVE_PUSH_EVERY_MS = 30_000;
+
 export interface Runtime {
   log: Logger;
   pool: pg.Pool;
@@ -88,9 +91,9 @@ export async function createRuntime(config: TaskConfig, overrides: RuntimeOverri
   } satisfies RuntimeDeps);
   enqueueRef = (name, data, opts) => registry.execute(name, data, opts);
   // Live progress (api.md §9.1): each stage change and each terminal state of a job, and at most one
-  // update per minute within a stage, become a notify.live job.
+  // update every 30 seconds within a stage, become a notify.live job.
   setProgressListener((aiJobId, patch) => {
-    const slot = isTerminalStatus(patch.status) ? 'end' : String(Math.floor(now().getTime() / 60_000));
+    const slot = isTerminalStatus(patch.status) ? 'end' : String(Math.floor(now().getTime() / LIVE_PUSH_EVERY_MS));
     void registry
       .execute('notify.live', { ai_job_id: aiJobId }, { singletonKey: `live:${aiJobId}:${patch.stage ?? ''}:${patch.status ?? ''}:${slot}` })
       .catch(() => undefined);

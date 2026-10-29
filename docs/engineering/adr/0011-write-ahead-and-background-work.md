@@ -17,6 +17,10 @@ The buffer also had a correctness bug: the chapter test it wrote ahead while the
 
 **3. Every request verified its token over the network** (`auth.getUser`), a round trip to Supabase Auth before any work.
 
+**4. Long generations were awaited by the request that started them.** `ingest-start`, `ingest-retry`, `upload-photos`, `podcast-create`, ENEM `grade-essay`, `prova-provavel-generate`, `schedule-import` and `vespera-prepare` were designed as "202 and follow the job", but each awaited the whole generation before replying: the upload screen held its spinner until every topic was written. Material processing itself awaited the rendering and AI reading of every page before the outline, and treated Ache o Erro and problem sets as part of "material pronto". A restart failed every material it cut off. The Véspera sheet, documented as "pre-generated at D−1 04:00", was scheduled by nothing and only started when the student opened the eve screen.
+
+**5. Every screen showed a wait its own way**, mostly a skeleton or a "Pensando…" with no step, no time and no end: a failed stream left some in their loading state for ever, an operation that returned without settling its `ai_jobs` row kept the app polling (and counted toward the three jobs a student may run), and failures showed a generic message.
+
 ## Decision
 
 ### Write the Trilha ahead, once per subject
@@ -34,6 +38,17 @@ The buffer also had a correctness bug: the chapter test it wrote ahead while the
 - Background now: AI grading from `quiz-submit` and `sync-push`, flag triage, Turma pushes and report notifications, topic regeneration from `outline-edit`, `divide.merge`, `account.export`, the prerequisites and the material check of a material, and the Trilha content. A duel answer debounces `mastery.recompute` by 60 s like every other evidence writer.
 - A calendar trigger refused at its operation's concurrency limit is re-scheduled five seconds later with the same key instead of being dropped.
 
+### Long generations answer at once and report progress
+
+- The endpoints above start their operation in the background and answer with its job at once. The operation's `ai_jobs` row is created by the request (removed when the work could not start), carries the step and, where the work is countable, the share done (pages, voice lines); an operation that created its own row marks it succeeded when it returns.
+- A calendar trigger carries its key to the registry, so it joins a run of the same key that is still going instead of repeating it.
+- Material processing starts page images and page transcription in the background and builds the outline from the PDF itself; "material pronto" means notes, glossary, cards and questions; Ache o Erro and problem sets follow (`ingest.topic_extras`). On start, the API schedules a resume for each material a restart interrupted, and the pipeline continues from what is written.
+- `plan.nightly` schedules `vespera.prepare` for the start of each test's eve (the day rollover + 5 min), so the eve screen opens on the sheet.
+
+### One way to show a wait
+
+Every generation screen shows its wait with one component (`GenerationStatus`): what is being made, the step, a bar filled from the progress the server reports (gliding when one long call reports none), elapsed time, the time left once a sixth is done, a "slower than usual" note, and — for background work — that the student can leave and will be told. Job rows arrive by Realtime and are merged into the screens' caches. Failures show the server's PT-BR message with a retry; every stream failure (network, deadline) reaches its screen. The lock-screen live notification updates at each step and at most every 30 s within one.
+
 ### Verify tokens locally
 
 `authenticate` verifies the access token's signature locally when the project's signing keys allow it (`auth.getClaims`, JWKS cached by supabase-js) and keeps a verified token for at most 60 seconds or until it expires, whichever comes first, so a burst of requests from one session pays one verification.
@@ -44,6 +59,7 @@ The buffer also had a correctness bug: the chapter test it wrote ahead while the
 - **Write the whole Trilha for each student when they open a subject.** No waits after the first open, but the first open waits for minutes and the cost multiplies by the class size.
 - **Write everything ahead, including a re-teaching aimed at every wrong option.** Three wrong options per question make it several times the content for a rare path; the feedback of the wrong option already explains it, and the shared re-explanation attacks the common confusions.
 - **Fire-and-forget promises instead of the calendar.** Simpler, but lost on a restart and invisible to the drain on shutdown.
+- **Fewer, larger model calls** (one call per Trilha concept for the lesson and what comes after it; one call per topic for notes, cards and questions). Output tokens set a call's duration, so one call writing two parts takes about as long as the two run one after the other and longer than the two in parallel, and the student waits for both parts to read the first; a failure loses both. The second Trilha call already reads the first one's cached material, so merging saves little. Calls are merged only where they repeat the same input with nothing to show in between; the gains here come from writing ahead and sharing what is written, not from fewer calls.
 
 ## Consequences
 
@@ -52,4 +68,6 @@ The buffer also had a correctness bug: the chapter test it wrote ahead while the
 - A student who opens the Trilha in the minutes between "material pronto" and the end of its Trilha content gets the first concept written on demand while the rest is written in the background.
 - The re-explanation after a miss is the same for everyone and is not aimed at the chosen option; the option's own rationale, shown first, still is. The rare cases above keep the targeted calls.
 - `quiz-submit`, `sync-push`, `flag-create`, `outline-edit` and the other call sites answer in milliseconds; their side work finishes a second or more later, which the app already shows as pending.
-- A background trigger claimed by the calendar and interrupted by a crash is lost, like any calendar action (ADR 0010); grading stays pending and the Trilha content is written on demand or by the next open.
+- A background trigger claimed by the calendar and interrupted by a crash is lost, like any calendar action (ADR 0010); grading stays pending and the Trilha content is written on demand or by the next open. An interrupted material is resumed on start; an ENEM redação whose grading was lost can be sent again.
+- Upload, podcast, grading, Prova provável and schedule-import requests answer in about a second; the app follows the job row, and the student may leave the screen.
+- Each test's Véspera sheet is paid for on its eve whether or not the student opens it.
