@@ -1,16 +1,9 @@
-// The Trilha's Claude calls (TRL-01; api §4.11): the chapter plan (planChapters, replan) and the content of the
-// next step (generate). Kept apart from shared/trail.ts so the import graph shows exactly which functions reach a
-// plain Claude call (ADR 0009): trail-open and trail-prepare run as jobs, trail-answer does not need to.
-import {
-  checkpointBlueprint,
-  normalizeTrailPlan,
-  type ProposedChapter,
-  type SourcePage,
-  type TrailChapter,
-  type TrailNeed,
-  type TrailOutlineTopic,
-  type TrailStepPurpose,
-} from '@studify/shared';
+// The Trilha's Claude calls (TRL-01; api §4.11), for what the content written ahead does not cover (ADR 0011): a
+// concept whose lesson is not written yet (a material processed before the Trilha was written ahead, or a call that
+// failed then), a re-teaching once a concept's fresh questions are used up, a chapter-test round the shared test
+// questions cannot fill. Kept apart from shared/trail.ts so the import graph shows exactly which functions reach a
+// plain Claude call: only trail-prepare does.
+import { checkpointBlueprint, taughtBeforeIn, type TrailNeed } from '@studify/shared';
 import { getTask, type DocumentMap } from '@studify/prompts';
 import type { SubjectRow } from './access.ts';
 import { callTask, unwrapResult } from './ai.ts';
@@ -18,143 +11,44 @@ import { budgetCtxFor } from './ctx.ts';
 import { claudeDepsFor, type Deps } from './deps.ts';
 import { loadTopic, topicSlices, type TopicBundle } from './topic.ts';
 import { mapPages } from '../shared-p3/teaching.ts';
-import { isQuestionPurpose, toView, type LessonContent, type Outline, type QuestionContent, type StepRow, type TrailRow } from './trail.ts';
+import { isQuestionPurpose, stepRows, toView, type BankLesson, type BankQuestion, type NewStep, type Outline, type QuestionContent, type StepRow, type TrailRow } from './trail.ts';
 
 const FEATURE = 'TRL-01';
-function keyMaps(topics: readonly TrailOutlineTopic[]) {
-  const topicKey = new Map<string, string>();
-  const conceptKey = new Map<string, string>();
-  const fromKey = new Map<string, string>();
-  let c = 0;
-  topics.forEach((t, i) => {
-    topicKey.set(t.id, `T${i + 1}`);
-    fromKey.set(`T${i + 1}`, t.id);
-    for (const concept of t.concepts) {
-      c += 1;
-      conceptKey.set(concept.id, `C${c}`);
-      fromKey.set(`C${c}`, concept.id);
-    }
-  });
-  return { topicKey, conceptKey, fromKey };
+
+type ModelPages = Array<{ doc: string; page_start: number; page_end: number }>;
+interface ModelLesson {
+  title: string;
+  body: string;
+  terms: BankLesson['terms'];
+  source_pages: ModelPages;
 }
-
-interface PlanOut {
-  goal: string;
-  chapters: Array<{ topic_key: string; why: string; concept_keys: string[] }>;
-}
-
-/**
- * The path for `topics` after the chapters already fixed (spec 14 §8.1). The model proposes the order; the
- * outline order is the fallback when the call fails, so the path never waits on AI to exist.
- */
-export async function planChapters(
-  deps: Deps,
-  userId: string,
-  subject: SubjectRow,
-  outline: Outline,
-  topics: readonly TrailOutlineTopic[],
-  doneTitles: readonly string[],
-): Promise<{ chapters: TrailChapter[]; goal: string | null; promptVersion: string | null }> {
-  if (topics.length === 0) return { chapters: [], goal: null, promptVersion: null };
-  const sorted = [...topics].sort((a, b) => a.order - b.order);
-  const { topicKey, conceptKey, fromKey } = keyMaps(sorted);
-  const keyOf = (id: string) => topicKey.get(id) ?? conceptKey.get(id);
-
-  const units: Array<{ title: string | null; topics: Array<Record<string, unknown>> }> = [];
-  for (const t of sorted) {
-    const node = outline.nodes.get(t.id);
-    const parent = node?.parent_id ? outline.nodes.get(node.parent_id) : undefined;
-    const unitTitle = parent && parent.kind === 'unit' ? parent.title : null;
-    if (units.at(-1)?.title !== unitTitle || units.length === 0) units.push({ title: unitTitle, topics: [] });
-    units.at(-1)!.topics.push({
-      key: topicKey.get(t.id),
-      title: t.title,
-      summary: node?.summary ?? null,
-      objectives: node?.learning_objectives ?? [],
-      concepts: [...t.concepts].sort((a, b) => a.order - b.order).map((c) => ({ key: conceptKey.get(c.id), title: c.title })),
-    });
-  }
-  const needs = new Map<string, Set<string>>();
-  for (const e of outline.prerequisites) {
-    const a = keyOf(e.nodeId);
-    const b = keyOf(e.prerequisiteId);
-    if (a && b && a !== b) needs.set(a, (needs.get(a) ?? new Set()).add(b));
-  }
-
-  const task = getTask('trail.plan');
-  try {
-    const built = task.build({
-      subjectName: subject.name,
-      units,
-      prerequisites: [...needs.entries()].map(([key, set]) => ({ key, needs: [...set].sort() })),
-      alreadyDone: doneTitles,
-      contentLanguage: subject.content_language ?? 'pt-BR',
-      languageSubject: subject.is_language_subject,
-    });
-    const result = await callTask(claudeDepsFor(deps), {
-      built,
-      taskId: 'trail.plan',
-      ctx: budgetCtxFor(subject, userId, FEATURE, 'user'),
-      choices: { topic: [...topicKey.values()], concept: [...conceptKey.values()] },
-    });
-    const out = unwrapResult(result) as PlanOut;
-    const proposed: ProposedChapter[] = out.chapters
-      .map((ch) => ({ topicId: fromKey.get(ch.topic_key) ?? '', why: ch.why, conceptIds: ch.concept_keys.map((k) => fromKey.get(k) ?? '') }))
-      .filter((ch) => ch.topicId);
-    return { chapters: normalizeTrailPlan(proposed, sorted, outline.prerequisites), goal: out.goal, promptVersion: task.promptVersion };
-  } catch (err) {
-    // Budget, refusal or an unusable answer: the outline order still makes a valid path.
-    console.warn('[trail] plan fallback', err instanceof Error ? err.message : err);
-    return { chapters: normalizeTrailPlan([], sorted, outline.prerequisites), goal: null, promptVersion: null };
-  }
-}
-
-/**
- * After the outline changed (new material, edits, "não cai na prova"): finished chapters and the one in progress
- * keep their place, with their concept lists refreshed; everything else is planned again.
- */
-export async function replan(deps: Deps, userId: string, subject: SubjectRow, trail: TrailRow, outline: Outline, startedTopicIds: ReadonlySet<string>) {
-  const live = new Map(outline.topics.map((t) => [t.id, t]));
-  const fixedCount = Math.min(trail.plan.length, trail.chapter_index + (startedTopicIds.has(trail.plan[trail.chapter_index]?.topicId ?? '') ? 1 : 0));
-  const fixed: TrailChapter[] = [];
-  let doneCount = 0;
-  trail.plan.slice(0, fixedCount).forEach((ch, i) => {
-    const topic = live.get(ch.topicId);
-    if (!topic) return;
-    const own = [...topic.concepts].sort((a, b) => a.order - b.order).map((c) => c.id);
-    const conceptIds = own.length ? [...ch.conceptIds.filter((id) => own.includes(id)), ...own.filter((id) => !ch.conceptIds.includes(id))] : [topic.id];
-    fixed.push({ ...ch, conceptIds });
-    if (i < trail.chapter_index) doneCount += 1;
-  });
-  const rest = outline.topics.filter((t) => !fixed.some((f) => f.topicId === t.id));
-  const planned = await planChapters(deps, userId, subject, outline, rest, fixed.map((f) => live.get(f.topicId)!.title));
-  return { plan: [...fixed, ...planned.chapters], chapterIndex: doneCount, goal: planned.goal ?? trail.goal, promptVersion: planned.promptVersion ?? trail.prompt_version };
-}
+type ModelQuestion = QuestionContent & { source_pages: ModelPages };
 interface LessonOut {
-  lesson: { title: string; body: string; terms: LessonContent['terms']; source_pages: Array<{ doc: string; page_start: number; page_end: number }> };
-  questions: Array<Omit<QuestionContent, never> & { source_pages: Array<{ doc: string; page_start: number; page_end: number }> }>;
+  lesson: ModelLesson;
+  questions: ModelQuestion[];
 }
 interface RemediationOut {
-  lesson: LessonOut['lesson'];
-  question: LessonOut['questions'][number];
+  lesson: ModelLesson;
+  question: ModelQuestion;
 }
 interface CheckpointOut {
-  questions: Array<LessonOut['questions'][number] & { concept_key: string }>;
+  questions: Array<ModelQuestion & { concept_key: string }>;
 }
 
-function questionContent(q: LessonOut['questions'][number]): QuestionContent {
-  return { stem: q.stem, options: q.options, correct: q.correct, explanation: q.explanation, tip: q.tip, terms: q.terms };
-}
+const bankLesson = (l: ModelLesson, documents: DocumentMap): BankLesson => ({ title: l.title, body: l.body, terms: l.terms, source_pages: mapPages(l.source_pages, documents) });
+const bankQuestion = (q: ModelQuestion, documents: DocumentMap): BankQuestion => ({
+  stem: q.stem,
+  options: q.options,
+  correct: q.correct,
+  explanation: q.explanation,
+  tip: q.tip,
+  terms: q.terms,
+  source_pages: mapPages(q.source_pages, documents),
+});
 
-/** Titles of the concepts the path taught before `conceptId` (or up to it, `inclusive`), the last 12. */
+/** Titles of the concepts this student's path taught before `conceptId` (or up to it, `inclusive`). */
 function taughtBefore(trail: TrailRow, conceptId: string, outline: Outline, inclusive = false): string[] {
-  const order = trail.plan.flatMap((ch) => ch.conceptIds);
-  const idx = order.indexOf(conceptId);
-  return order
-    .slice(0, Math.max(0, idx + (inclusive ? 1 : 0)))
-    .slice(-12)
-    .map((id) => outline.nodes.get(id)?.title)
-    .filter((t): t is string => !!t);
+  return taughtBeforeIn(trail.plan.flatMap((ch) => ch.conceptIds), conceptId, (id) => outline.nodes.get(id)?.title, inclusive);
 }
 
 function conceptInput(bundle: TopicBundle, conceptId: string) {
@@ -173,18 +67,11 @@ function topicPromptInput(bundle: TopicBundle) {
   };
 }
 
-interface NewStep {
-  concept_id: string;
-  purpose: TrailStepPurpose;
-  round: number;
-  for_step_id: string | null;
-  content: LessonContent | QuestionContent;
-  source_pages: SourcePage[];
-}
-
 /**
- * Generates the content one need asks for and stores it as `ready` steps (spec 14 §7). The topic's PDF pages
- * are the cached prefix, so every step of a chapter reuses them.
+ * Writes the content one need asks for (spec 14 §7). A lesson goes into the subject's shared content
+ * (trail_concept_content), like the lessons written ahead: this student's trail copies it from there, and so does
+ * every classmate who reaches the concept later, without another call. A re-teaching or a chapter test aimed at this
+ * student's answers is stored as their own `ready` steps. The topic's PDF pages are the cached prefix.
  */
 export async function generate(
   deps: Deps,
@@ -208,19 +95,31 @@ export async function generate(
   };
   const ctx = budgetCtxFor(subject, userId, FEATURE, 'user', { nodeId: chapter.topicId });
   const chapterSteps = steps.filter((s) => s.topic_id === chapter.topicId);
-  const fresh: NewStep[] = [];
-  let promptVersion: string;
-  let documents: DocumentMap;
+  const documentsOf = (built: { documents?: DocumentMap }): DocumentMap => built.documents ?? { labels: {}, allowedPages: {} };
 
   if (need.kind === 'teach') {
     const task = getTask('trail.lesson');
     const built = task.build({ ...base, concept: conceptInput(bundle, need.conceptId), taughtBefore: taughtBefore(trail, need.conceptId, outline) });
     const out = unwrapResult(await callTask(claudeDepsFor(deps), { built, taskId: 'trail.lesson', ctx })) as LessonOut;
-    documents = built.documents ?? { labels: {}, allowedPages: {} };
-    promptVersion = task.promptVersion;
-    fresh.push({ concept_id: need.conceptId, purpose: 'lesson', round: 0, for_step_id: null, content: { title: out.lesson.title, body: out.lesson.body, terms: out.lesson.terms }, source_pages: mapPages(out.lesson.source_pages, documents) });
-    for (const q of out.questions) fresh.push({ concept_id: need.conceptId, purpose: 'practice', round: 0, for_step_id: null, content: questionContent(q), source_pages: mapPages(q.source_pages, documents) });
-  } else if (need.kind === 'remediate') {
+    const documents = documentsOf(built);
+    // A classmate's call (or the material's) that finished first keeps its version.
+    const stored = await deps.db.from('trail_concept_content').upsert(
+      {
+        concept_id: need.conceptId,
+        topic_id: chapter.topicId,
+        subject_id: subject.id,
+        lesson: bankLesson(out.lesson, documents),
+        practice: out.questions.map((q) => bankQuestion(q, documents)),
+        prompt_version: task.promptVersion,
+      },
+      { onConflict: 'concept_id', ignoreDuplicates: true },
+    );
+    if (stored.error) throw stored.error;
+    return;
+  }
+
+  const fresh: NewStep[] = [];
+  if (need.kind === 'remediate') {
     const wrong = steps.find((s) => s.id === need.forStepId);
     if (!wrong) return;
     const q = wrong.content as QuestionContent;
@@ -235,10 +134,12 @@ export async function generate(
       askedStems: chapterSteps.filter((s) => s.concept_id === need.conceptId && isQuestionPurpose(s.purpose)).map((s) => (s.content as QuestionContent).stem).slice(-8),
     });
     const out = unwrapResult(await callTask(claudeDepsFor(deps), { built, taskId: 'trail.remediate', ctx })) as RemediationOut;
-    documents = built.documents ?? { labels: {}, allowedPages: {} };
-    promptVersion = task.promptVersion;
-    fresh.push({ concept_id: need.conceptId, purpose: 'remedial_lesson', round: need.round, for_step_id: wrong.id, content: { title: out.lesson.title, body: out.lesson.body, terms: out.lesson.terms }, source_pages: mapPages(out.lesson.source_pages, documents) });
-    fresh.push({ concept_id: need.conceptId, purpose: 'remedial_question', round: need.round, for_step_id: wrong.id, content: questionContent(out.question), source_pages: mapPages(out.question.source_pages, documents) });
+    const documents = documentsOf(built);
+    const stepBase = { concept_id: need.conceptId, round: need.round, for_step_id: wrong.id, prompt_version: task.promptVersion };
+    const lesson = bankLesson(out.lesson, documents);
+    const question = bankQuestion(out.question, documents);
+    fresh.push({ ...stepBase, purpose: 'remedial_lesson', content: { title: lesson.title, body: lesson.body, terms: lesson.terms }, source_pages: lesson.source_pages });
+    fresh.push({ ...stepBase, purpose: 'remedial_question', content: { stem: question.stem, options: question.options, correct: question.correct, explanation: question.explanation, tip: question.tip, terms: question.terms }, source_pages: question.source_pages });
   } else {
     const blueprint = checkpointBlueprint(chapter, chapterSteps.map(toView));
     const keys = new Map(blueprint.map((b, i) => [`C${i + 1}`, b.conceptId]));
@@ -253,33 +154,29 @@ export async function generate(
       round: need.round,
     });
     const out = unwrapResult(await callTask(claudeDepsFor(deps), { built, taskId: 'trail.checkpoint', ctx, choices: { concept: [...keys.keys()] } })) as CheckpointOut;
-    documents = built.documents ?? { labels: {}, allowedPages: {} };
-    promptVersion = task.promptVersion;
+    const documents = documentsOf(built);
     const fallbackConcept = blueprint[0]?.conceptId ?? chapter.conceptIds[0]!;
     for (const q of out.questions) {
-      fresh.push({ concept_id: keys.get(q.concept_key) ?? fallbackConcept, purpose: 'checkpoint', round: need.round, for_step_id: null, content: questionContent(q), source_pages: mapPages(q.source_pages, documents) });
+      const question = bankQuestion(q, documents);
+      fresh.push({
+        concept_id: keys.get(q.concept_key) ?? fallbackConcept,
+        purpose: 'checkpoint',
+        round: need.round,
+        for_step_id: null,
+        content: { stem: question.stem, options: question.options, correct: question.correct, explanation: question.explanation, tip: question.tip, terms: question.terms },
+        source_pages: question.source_pages,
+        prompt_version: task.promptVersion,
+      });
     }
   }
 
-  // Creation order continues after the newest step (re-read: another request may have added steps meanwhile).
-  const last = await deps.db.from('trail_steps').select('created_seq').eq('trail_id', trail.id).order('created_seq', { ascending: false }).limit(1);
-  if (last.error) throw last.error;
-  let seq = ((last.data as Array<{ created_seq: number }>)[0]?.created_seq ?? 0) + 1;
-  const rows = fresh.map((s) => ({
-    id: deps.newId(),
-    trail_id: trail.id,
-    user_id: userId,
-    chapter_index: chapterIndex,
-    topic_id: chapter.topicId,
-    status: 'ready',
-    prompt_version: promptVersion,
-    created_seq: seq++,
-    served_seq: null,
-    response: null,
-    correct: null,
-    answered_at: null,
-    ...s,
-  }));
-  const inserted = await deps.db.from('trail_steps').insert(rows);
-  if (inserted.error) throw inserted.error;
+  // Creation order continues after the newest step, re-read: steps copied from the shared content meanwhile (another
+  // request of this student) took the next numbers, so a collision reads them again once.
+  for (let attempt = 0; ; attempt += 1) {
+    const last = await deps.db.from('trail_steps').select('created_seq').eq('trail_id', trail.id).order('created_seq', { ascending: false }).limit(1);
+    if (last.error) throw last.error;
+    const inserted = await deps.db.from('trail_steps').insert(stepRows(deps, trail, chapterIndex, fresh, (last.data as Array<{ created_seq: number }>)[0]?.created_seq ?? 0));
+    if (!inserted.error) return;
+    if (inserted.error.code !== '23505' || attempt >= 1) throw inserted.error;
+  }
 }

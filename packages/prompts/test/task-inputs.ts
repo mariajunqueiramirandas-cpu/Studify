@@ -632,6 +632,16 @@ export const TASK_INPUTS: Record<string, unknown> = {
     contentLanguage: 'pt-BR',
     languageSubject: false,
   },
+  'trail.reinforce': {
+    topic: { ...topic, summary: 'Como a célula obtém energia.' },
+    concept: { key: 'c1', title: 'Glicólise', summary: 'Quebra da glicose no citoplasma.', keyTerms: ['glicólise', 'piruvato'] },
+    taughtBefore: ['Mitocôndria'],
+    slices: [bio],
+    lesson: { title: 'Glicólise', body: 'A **glicólise** quebra a glicose no citoplasma.' },
+    askedStems: ['Onde ocorre a glicólise?'],
+    contentLanguage: 'pt-BR',
+    languageSubject: false,
+  },
   'trail.remediate': {
     topic: { ...topic, summary: 'Como a célula obtém energia.' },
     concept: { key: 'c1', title: 'Glicólise', summary: 'Quebra da glicose no citoplasma.', keyTerms: ['glicólise'] },

@@ -26,6 +26,8 @@ const UNIQUE: Record<string, string[][]> = {
   mastery_evidence: [['ref_type', 'ref_id', 'node_id']],
   trails: [['id'], ['user_id', 'subject_id']],
   trail_steps: [['id'], ['trail_id', 'created_seq']],
+  trail_concept_content: [['concept_id']],
+  trail_subject_plans: [['subject_id']],
   exam_scope_nodes: [['exam_id', 'node_id']],
   invites: [['id']],
   profiles: [['id']],
@@ -341,6 +343,18 @@ export class Query implements PromiseLike<{ data: unknown; error: PgError | null
     if (this.#op === 'insert' || this.#op === 'upsert') {
       const list = Array.isArray(this.#payload) ? this.#payload : [this.#payload as Row];
       const out: Row[] = [];
+      // One statement: a plain insert that conflicts anywhere writes none of its rows, as in Postgres.
+      if (this.#op === 'insert') {
+        const before = table.length;
+        for (const raw of list) {
+          if (this.#findConflict({ ...raw })) {
+            table.length = before;
+            return { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } };
+          }
+          table.push({ ...raw });
+        }
+        table.length = before;
+      }
       for (const raw of list) {
         const row: Row = { ...raw };
         // Column defaults the database would fill in: receipt time for created_at.

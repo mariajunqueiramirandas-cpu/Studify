@@ -500,6 +500,7 @@ async function runTopicsNow(stage: Stage, payload: TopicContentPayload, genBatch
     // A topic is ready when all of its items were written; one cut short by the budget waits for the resume.
     const status = outcomes.every((o) => o === 'written') ? 'ready' : outcomes.some((o) => o === 'budget' || o === 'skipped') ? 'pending' : 'failed';
     await setContentStatus(sql, [bundle.topicId], status);
+    if (status === 'ready') await prepareTrailContent(ctx, [bundle.topicId], payload.userId);
   };
 
   await mapLimit(payload.nodeIds, size, async (topicId, index) => {
@@ -576,6 +577,17 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
     force: false,
     ai_job_id: payload.aiJobId,
   }, { singletonKey: `topic-content:S4:${payload.documentId ?? payload.nodeIds.join(',')}` });
+}
+
+/**
+ * The Trilha's lessons, re-explanations and chapter-test questions for topics whose content was just written
+ * (lib/trail-content.ts). They start in the background, so the topic is ready for notes and cards right away, and
+ * by the time a student reaches it in the path its steps are already written (ADR 0011).
+ */
+async function prepareTrailContent(ctx: OperationContext, topicIds: readonly string[], userId: string | null): Promise<void> {
+  for (const topicId of topicIds) {
+    await ctx.execute('trail.prepare_topic', { topic_id: topicId, user_id: userId }, { singletonKey: topicId, startAfter: 0 });
+  }
 }
 
 /**
@@ -736,6 +748,7 @@ async function finishTopics(
   const failIds = topicIds.filter((id) => failed.has(id) || (!ok.has(id)));
   await setContentStatus(sql, okIds, 'ready');
   await setContentStatus(sql, failIds, budgetExceeded ? 'pending' : 'failed');
+  await prepareTrailContent(stage.ctx, okIds, payload.userId);
   if (payload.aiJobId) {
     await applyProgress(sql, payload.aiJobId, {
       stage: 'S4',
@@ -810,13 +823,12 @@ export async function runPrereqJob(ctx: OperationContext, payload: { subjectId: 
     });
     ctx.log.info({ status: result.status, written: result.written, dropped: result.dropped }, 'prerequisites stage');
   } catch (err) {
-    if (err instanceof BudgetExceededError) {
-      // Prerequisites are optional (ING-03.5): the rest of the pipeline proceeds without them.
-      ctx.log.warn('prerequisites skipped: budget exhausted');
-      return;
-    }
-    throw err;
+    if (!(err instanceof BudgetExceededError)) throw err;
+    // Prerequisites are optional (ING-03.5): the rest of the pipeline proceeds without them.
+    ctx.log.warn('prerequisites skipped: budget exhausted');
   }
+  // The Trilha's path order (TRL-01.2) reads the whole map and its prerequisites: planned once for the subject.
+  await ctx.execute('trail.plan_subject', { subject_id: subject.id, user_id: payload.userId }, { singletonKey: subject.id, startAfter: 0 });
 }
 
 export async function runRegenerate(ctx: OperationContext, payload: { nodeId: string; kinds: string[]; userId: string | null }): Promise<void> {

@@ -283,10 +283,11 @@ No AI in duels, battles, insights or study rooms.
 
 | Task id | Features | Trigger | Runs | Input | Output | Effort | Class | Cache | Volume | Budget |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `trail.plan` | TRL-01.2, 01.3 | First open; outline changed | Edge | Outline as data (T/C keys), prerequisites, finished chapters | `S:TrailPlan`; outline order on failure | `medium` | M | SYS | 1 per subject per outline change | user |
-| `trail.lesson` | TRL-01.4, 01.5 | A concept is about to be taught (trail-prepare) | Edge | SYS → TS (1 h) → topic JSON, concept, concepts already taught | `S:TrailLesson` (lesson + 3 questions) | `medium` | M | SYS, TS | 1 per concept reached | user |
-| `trail.remediate` | TRL-01.6 | Wrong answer | Edge | SYS → TS → concept, the missed question and chosen option (untrusted), stems used | `S:TrailRemediation` | `medium` | M | SYS, TS | per miss | user |
-| `trail.checkpoint` | TRL-01.7 | Last concept of a chapter; failed round | Edge | SYS → TS → blueprint (concept key, count, weak), stems used | `S:TrailCheckpoint` (4–10) | `medium` | L | SYS, TS | 1 per chapter round | user |
+| `trail.plan` | TRL-01.2, 01.3 | After a material's prerequisites (`trail.plan_subject`); map changed | Worker | Outline as data (T/C keys), prerequisites | `S:TrailPlan`; outline order on failure | `medium` | M | SYS | 1 per subject per map change | content |
+| `trail.lesson` | TRL-01.4, 01.5 | After the topic's content (`trail.prepare_topic`); on demand (trail-prepare) for a concept not written yet | Worker / Edge | SYS → TS → topic JSON, concept, concepts taught before it | `S:TrailLesson` (lesson + 3 questions), shared per concept | `medium` | M | SYS, TS | 1 per concept | content (on demand: user) |
+| `trail.reinforce` | TRL-01.6, 01.7 | Right after the concept's lesson (`trail.prepare_topic`) | Worker | SYS → TS → topic JSON, concept, the lesson, its stems | `S:TrailReinforcement` (re-explanation + 3 fresh + 4 test questions), shared per concept | `medium` | L | SYS, TS | 1 per concept | content |
+| `trail.remediate` | TRL-01.6 | A miss after the concept's fresh questions are used up | Edge | SYS → TS → concept, the missed question and chosen option (untrusted), stems used | `S:TrailRemediation` | `medium` | M | SYS, TS | rare | user |
+| `trail.checkpoint` | TRL-01.7 | A test round the shared test questions cannot fill | Edge | SYS → TS → blueprint (concept key, count, weak), stems used | `S:TrailCheckpoint` (4–10) | `medium` | L | SYS, TS | rare | user |
 
 ## 4. PDF and image inputs
 

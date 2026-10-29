@@ -167,6 +167,19 @@ describe('next step (spec 14 §8.2)', () => {
     expect(afterTest.some((s) => s.purpose === 'checkpoint' && s.round === 2)).toBe(true);
   });
 
+  it('a chapter test written ahead waits until the last concept is cleared', () => {
+    // The buffer writes the test while the student reads the last concept's lesson; its practice still comes first.
+    const one: TrailChapter = { topicId: 't3', why: null, conceptIds: ['t3'] };
+    const sim = new Sim(one);
+    sim.fulfil({ kind: 'teach', conceptId: 't3' });
+    sim.steps[0]!.servedSeq = 1;
+    expect(trailNeeds(one, sim.steps, null)).toEqual([{ need: { kind: 'checkpoint', round: 1 }, blocking: false, nextChapter: false }]);
+    sim.fulfil({ kind: 'checkpoint', round: 1 });
+    expect(trailNeeds(one, sim.steps, null), 'the test is not asked for twice').toEqual([]);
+    const served = sim.run(() => true);
+    expect(served.map((s) => s.purpose)).toEqual(['lesson', 'practice', 'practice', ...Array(checkpointSize(1)).fill('checkpoint')]);
+  });
+
   it('resumes the step that was shown but not finished', () => {
     const sim = new Sim(CH);
     sim.fulfil({ kind: 'teach', conceptId: 'c1' });

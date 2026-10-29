@@ -1,23 +1,29 @@
 // Trilha (TRL-01, spec 14; api §4.11): what trail-open, trail-prepare and trail-answer share. Loads the subject's
-// outline, loads and leases trails and turns the stored steps into the state the app shows. The Claude calls (the
-// trail.plan path and the trail.lesson / trail.remediate / trail.checkpoint content) live in trail-generate.ts.
+// outline and its path, loads and leases trails and turns the stored steps into the state the app shows. Steps come
+// from the content written ahead for the whole subject (trail_concept_content, ADR 0011) as soon as the path needs
+// them, with no model call; only what that content does not cover is written by a Claude call, in trail-generate.ts.
 // Decisions about what comes next are the pure engine's (@studify/shared learning/trail.ts).
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   ApiFailure,
   McqSinglePayloadSchema,
   TRAIL,
+  checkpointBlueprint,
   checkpointScore,
   chapterFraction,
   conceptStates,
   evidenceWeight,
   nextTrailMove,
+  normalizeTrailPlan,
   trailNeeds,
   trailOutlineHash,
   trailProgress,
+  trailTopicsOf,
+  type ProposedChapter,
   type SourcePage,
   type TrailChapter,
   type TrailFeedback,
+  type TrailNeed,
   type TrailOutlineTopic,
   type TrailPrerequisite,
   type TrailState,
@@ -26,7 +32,7 @@ import {
   type TrailStepPurpose,
   type TrailStepView,
 } from '@studify/shared';
-import type { Deps } from './deps.ts';
+import { inBackground, type Deps } from './deps.ts';
 import { recordMistake } from './mistakes.ts';
 
 /** How long one trail-prepare may hold the generation lease. */
@@ -120,10 +126,12 @@ export interface Outline {
   topics: TrailOutlineTopic[];
   prerequisites: TrailPrerequisite[];
   nodes: Map<string, NodeRow>;
+  /** The outline hash of the subject's map before this student's exclusions: what the subject's path is planned from. */
+  subjectHash: string;
 }
 
 /**
- * The topics a path can teach (spec 14 §8.1): not excluded by the student ("não cai na prova"), not a
+ * The topics a path can teach (spec 14 §8.1, trailTopicsOf): not excluded by the student ("não cai na prova"), not a
  * placeholder from a content list, and with pages of material to teach from. Concepts follow their topic.
  */
 export async function loadOutline(db: SupabaseClient, userId: string, subjectId: string): Promise<Outline> {
@@ -146,27 +154,65 @@ export async function loadOutline(db: SupabaseClient, userId: string, subjectId:
   ]);
   if (settings.error) throw settings.error;
   const excluded = new Set(((settings.data as Array<{ node_id: string; excluded: boolean }>) ?? []).filter((s) => s.excluded).map((s) => s.node_id));
-  const isExcluded = (n: NodeRow): boolean => excluded.has(n.id) || (n.parent_id !== null && byId.has(n.parent_id) && isExcluded(byId.get(n.parent_id)!));
-
   if (sources.error) throw sources.error;
   const withPages = new Set(((sources.data as Array<{ node_id: string }>) ?? []).map((s) => s.node_id));
-
-  const rootPos = (n: NodeRow): number => {
-    const parent = n.parent_id ? byId.get(n.parent_id) : undefined;
-    return parent && parent.kind === 'unit' ? parent.position * 1000 + n.position : n.position * 1000;
-  };
-  const topics: TrailOutlineTopic[] = rows
-    .filter((n) => n.kind === 'topic' && !n.is_placeholder && withPages.has(n.id) && !isExcluded(n))
-    .map((n) => ({
-      id: n.id,
-      title: n.title,
-      order: rootPos(n),
-      concepts: rows.filter((c) => c.kind === 'concept' && c.parent_id === n.id && !isExcluded(c)).map((c) => ({ id: c.id, title: c.title, order: c.position })),
-    }));
+  const topics = trailTopicsOf(rows, withPages, excluded);
+  const subjectHash = trailOutlineHash(excluded.size > 0 ? trailTopicsOf(rows, withPages) : topics);
 
   if (prereqs.error) throw prereqs.error;
   const prerequisites = ((prereqs.data as Array<{ node_id: string; prerequisite_node_id: string }>) ?? []).map((p) => ({ nodeId: p.node_id, prerequisiteId: p.prerequisite_node_id }));
-  return { topics, prerequisites, nodes: byId };
+  return { topics, prerequisites, nodes: byId, subjectHash };
+}
+
+// ---------------------------------------------------------------- the subject's path
+
+/** trail.plan for the whole subject, written ahead (trail.plan_subject): the order every student's path starts from. */
+export interface SubjectPlan {
+  outline_hash: string;
+  goal: string | null;
+  chapters: ProposedChapter[];
+  prompt_version: string;
+}
+
+export async function loadSubjectPlan(db: SupabaseClient, subjectId: string): Promise<SubjectPlan | null> {
+  const row = await db.from('trail_subject_plans').select('outline_hash, goal, chapters, prompt_version').eq('subject_id', subjectId).maybeSingle();
+  if (row.error) throw row.error;
+  return (row.data as SubjectPlan | null) ?? null;
+}
+
+/**
+ * The chapters for `topics` (spec 14 §8.1) with no model call: the subject's path repaired against this student's
+ * map (exclusions, topics added since it was planned), or the outline order when the subject has no path yet.
+ */
+export function planFrom(outline: Outline, topics: readonly TrailOutlineTopic[], subjectPlan: SubjectPlan | null): TrailChapter[] {
+  return normalizeTrailPlan(subjectPlan?.chapters ?? [], topics, outline.prerequisites);
+}
+
+/**
+ * After the outline changed (new material, edits, "não cai na prova"), or once the subject's path is ready for a trail
+ * that started in outline order: finished chapters and the one in progress keep their place, with their concept lists
+ * refreshed; everything else follows the subject's path.
+ */
+export function replan(trail: TrailRow, outline: Outline, startedTopicIds: ReadonlySet<string>, subjectPlan: SubjectPlan | null) {
+  const live = new Map(outline.topics.map((t) => [t.id, t]));
+  const fixedCount = Math.min(trail.plan.length, trail.chapter_index + (startedTopicIds.has(trail.plan[trail.chapter_index]?.topicId ?? '') ? 1 : 0));
+  const fixed: TrailChapter[] = [];
+  let doneCount = 0;
+  trail.plan.slice(0, fixedCount).forEach((ch, i) => {
+    const topic = live.get(ch.topicId);
+    if (!topic) return;
+    const own = [...topic.concepts].sort((a, b) => a.order - b.order).map((c) => c.id);
+    const conceptIds = own.length ? [...ch.conceptIds.filter((id) => own.includes(id)), ...own.filter((id) => !ch.conceptIds.includes(id))] : [topic.id];
+    fixed.push({ ...ch, conceptIds });
+    if (i < trail.chapter_index) doneCount += 1;
+  });
+  const rest = outline.topics.filter((t) => !fixed.some((f) => f.topicId === t.id));
+  return {
+    plan: [...fixed, ...planFrom(outline, rest, subjectPlan)],
+    chapterIndex: doneCount,
+    goal: subjectPlan?.goal ?? trail.goal,
+    promptVersion: subjectPlan?.prompt_version ?? trail.prompt_version,
+  };
 }
 
 // ---------------------------------------------------------------- plan
@@ -208,6 +254,180 @@ export async function takeLease(db: SupabaseClient, trailId: string, now: Date):
 export async function releaseLease(db: SupabaseClient, trailId: string): Promise<void> {
   const released = await db.from('trails').update({ preparing_until: null }).eq('id', trailId);
   if (released.error) throw released.error;
+}
+
+// ---------------------------------------------------------------- content written ahead
+
+export interface BankLesson extends LessonContent {
+  source_pages: SourcePage[];
+}
+
+export interface BankQuestion extends QuestionContent {
+  source_pages: SourcePage[];
+}
+
+/** One concept's shared content (trail_concept_content): written while the material was processed, or on demand. */
+export interface BankRow {
+  concept_id: string;
+  topic_id: string;
+  lesson: BankLesson;
+  practice: BankQuestion[];
+  remedial_lesson: BankLesson | null;
+  remedial_questions: BankQuestion[];
+  test_questions: BankQuestion[];
+  prompt_version: string;
+  reinforce_prompt_version: string | null;
+}
+
+export type Bank = Map<string, BankRow>;
+
+export async function loadBank(db: SupabaseClient, conceptIds: readonly string[]): Promise<Bank> {
+  if (conceptIds.length === 0) return new Map();
+  const rows = await db
+    .from('trail_concept_content')
+    .select('concept_id, topic_id, lesson, practice, remedial_lesson, remedial_questions, test_questions, prompt_version, reinforce_prompt_version')
+    .in('concept_id', [...new Set(conceptIds)]);
+  if (rows.error) throw rows.error;
+  return new Map(((rows.data as BankRow[]) ?? []).map((r) => [r.concept_id, r]));
+}
+
+/** The concepts of the chapter the student is on and of the next one: what the next steps can come from. */
+export function nearConceptIds(trail: TrailRow): string[] {
+  return [trail.plan[trail.chapter_index], trail.plan[trail.chapter_index + 1]].flatMap((ch) => ch?.conceptIds ?? []);
+}
+
+/** A step to store: the content of one lesson or question and where it belongs. */
+export interface NewStep {
+  concept_id: string;
+  purpose: TrailStepPurpose;
+  round: number;
+  for_step_id: string | null;
+  content: LessonContent | QuestionContent;
+  source_pages: SourcePage[];
+  prompt_version: string;
+}
+
+const lessonStep = (s: Omit<NewStep, 'content' | 'source_pages'>, l: BankLesson): NewStep => ({ ...s, content: { title: l.title, body: l.body, terms: l.terms }, source_pages: l.source_pages });
+const questionStep = (s: Omit<NewStep, 'content' | 'source_pages'>, q: BankQuestion): NewStep => ({
+  ...s,
+  content: { stem: q.stem, options: q.options, correct: q.correct, explanation: q.explanation, tip: q.tip, terms: q.terms },
+  source_pages: q.source_pages,
+});
+
+/**
+ * The steps a need gets from the content written ahead, or null when that content does not cover it (then a Claude
+ * call writes it, trail-generate.ts). Questions already asked in the chapter are never asked again.
+ *  - teach: the concept's lesson and its practice questions.
+ *  - remediate: the re-explanation from another angle and a fresh question on the same point. While learning, the
+ *    re-explanation is shown once per concept; a later miss gets the next fresh question alone (its feedback already
+ *    explained the mistake). Before a new chapter-test round the concept is re-explained again.
+ *  - checkpoint: the blueprint's count of test questions per concept (from a second round on, the unused fresh
+ *    questions too), one concept after another so the test is mixed.
+ */
+export function bankStepsFor(need: TrailNeed, chapter: TrailChapter, chapterSteps: readonly StepRow[], bank: Bank): NewStep[] | null {
+  const asked = new Set(chapterSteps.filter((s) => isQuestionPurpose(s.purpose)).map((s) => (s.content as QuestionContent).stem));
+  if (need.kind === 'teach') {
+    const row = bank.get(need.conceptId);
+    if (!row) return null;
+    const base = { concept_id: need.conceptId, round: 0, for_step_id: null, prompt_version: row.prompt_version };
+    return [lessonStep({ ...base, purpose: 'lesson' }, row.lesson), ...row.practice.filter((q) => !asked.has(q.stem)).map((q) => questionStep({ ...base, purpose: 'practice' }, q))];
+  }
+  if (need.kind === 'remediate') {
+    const row = bank.get(need.conceptId);
+    if (!row?.remedial_lesson || !row.reinforce_prompt_version) return null;
+    const question = row.remedial_questions.find((q) => !asked.has(q.stem));
+    if (!question) return null;
+    const base = { concept_id: need.conceptId, round: need.round, for_step_id: need.forStepId, prompt_version: row.reinforce_prompt_version };
+    const shown = chapterSteps.some((s) => s.purpose === 'remedial_lesson' && s.concept_id === need.conceptId && (s.content as LessonContent).body === row.remedial_lesson!.body);
+    return [...(!shown || need.round > 0 ? [lessonStep({ ...base, purpose: 'remedial_lesson' }, row.remedial_lesson)] : []), questionStep({ ...base, purpose: 'remedial_question' }, question)];
+  }
+  const picks: NewStep[][] = [];
+  for (const { conceptId, count } of checkpointBlueprint(chapter, chapterSteps.map(toView))) {
+    const row = bank.get(conceptId);
+    if (!row?.reinforce_prompt_version) return null;
+    const pool = [...row.test_questions, ...(need.round > 1 ? row.remedial_questions : [])].filter((q) => !asked.has(q.stem));
+    if (pool.length < count) return null;
+    const base = { concept_id: conceptId, purpose: 'checkpoint' as const, round: need.round, for_step_id: null, prompt_version: row.reinforce_prompt_version };
+    picks.push(pool.slice(0, count).map((q) => questionStep(base, q)));
+  }
+  const mixed: NewStep[] = [];
+  for (let i = 0; picks.some((p) => p[i]); i += 1) for (const p of picks) if (p[i]) mixed.push(p[i]!);
+  return mixed;
+}
+
+/** Whether the content written ahead covers a need of the current or the next chapter. */
+export function bankCovers(trail: TrailRow, steps: readonly StepRow[], need: ReturnType<typeof needsOf>[number], bank: Bank): boolean {
+  const chapter = trail.plan[need.chapterIndex];
+  return !!chapter && bankStepsFor(need.need, chapter, steps.filter((s) => s.topic_id === chapter.topicId), bank) !== null;
+}
+
+/** Rows for new steps of a chapter, in creation order after `afterSeq`. */
+export function stepRows(deps: Deps, trail: TrailRow, chapterIndex: number, fresh: readonly NewStep[], afterSeq: number) {
+  const topicId = trail.plan[chapterIndex]!.topicId;
+  let seq = afterSeq + 1;
+  return fresh.map((s) => ({
+    id: deps.newId(),
+    trail_id: trail.id,
+    user_id: trail.user_id,
+    chapter_index: chapterIndex,
+    topic_id: topicId,
+    status: 'ready' as const,
+    created_seq: seq++,
+    served_seq: null,
+    response: null,
+    correct: null,
+    answered_at: null,
+    question_id: null,
+    ...s,
+  }));
+}
+
+const lastSeq = (steps: readonly StepRow[]) => Math.max(0, ...steps.map((s) => s.created_seq));
+
+/**
+ * Copies the steps the chapter needs next from the content written ahead, until the next move is a step to show or a
+ * need that content does not cover. Creation numbers follow the steps this request read, so two requests filling the
+ * same need collide on (trail_id, created_seq): the second re-reads the steps and finds the need already filled.
+ */
+async function fillFromBank(deps: Deps, trail: TrailRow, steps: StepRow[], bank: Bank): Promise<StepRow[]> {
+  const chapter = trail.plan[trail.chapter_index];
+  if (!chapter || trail.status === 'completed') return steps;
+  for (let round = 0; round < 6; round += 1) {
+    const chapterSteps = steps.filter((s) => s.topic_id === chapter.topicId);
+    const move = nextTrailMove(chapter, chapterSteps.map(toView));
+    if (move.kind !== 'need') return steps;
+    const fresh = bankStepsFor(move.need, chapter, chapterSteps, bank);
+    if (!fresh || fresh.length === 0) return steps;
+    const rows = stepRows(deps, trail, trail.chapter_index, fresh, lastSeq(steps)) as StepRow[];
+    const inserted = await deps.db.from('trail_steps').insert(rows);
+    if (inserted.error?.code === '23505') {
+      steps = await loadSteps(deps.db, trail.id);
+      continue;
+    }
+    if (inserted.error) throw inserted.error;
+    steps = [...steps, ...rows];
+  }
+  return steps;
+}
+
+/**
+ * Starts writing, in the background, the shared content the current and the next chapter still lack (a subject whose
+ * material was processed before the Trilha was written ahead, or a concept whose call failed then): the student keeps
+ * going on what exists, and the rest is ready by the time they reach it. Best effort.
+ */
+export async function prepareAhead(deps: Deps, trail: TrailRow, bank?: Bank): Promise<void> {
+  const known = bank ?? (await loadBank(deps.db, nearConceptIds(trail)));
+  const topics = [trail.plan[trail.chapter_index], trail.plan[trail.chapter_index + 1]].filter(
+    (ch): ch is TrailChapter => !!ch && ch.conceptIds.some((id) => !known.get(id)?.reinforce_prompt_version),
+  );
+  await Promise.all(
+    topics.map((ch) =>
+      inBackground(deps, 'trail.prepare_topic', { topic_id: ch.topicId, user_id: trail.user_id }, ch.topicId).catch((err) => {
+        console.warn('[trail] prepare ahead', err instanceof Error ? err.message : err);
+        return null;
+      }),
+    ),
+  );
 }
 
 /** What the current chapter (and the next one, for lookahead) still needs, blocking first. */
@@ -308,16 +528,21 @@ async function bossFor(db: SupabaseClient, trail: TrailRow, outline: Outline): P
 }
 
 /**
- * The state the app shows (TrailState). When the next move is a step not yet shown, it is marked as served here,
- * so leaving and coming back resumes on the same step.
+ * The state the app shows (TrailState). Steps the path needs next are copied from the content written ahead first
+ * (fillFromBank), so the state is `preparing` only when that content does not cover them. When the next move is a
+ * step not yet shown, it is marked as served here, so leaving and coming back resumes on the same step.
  */
 export async function buildState(
   deps: Deps,
   trail: TrailRow,
-  steps: StepRow[],
+  loaded: StepRow[],
   outline: Outline,
   extras: { chapterDone?: TrailState['chapter_done'] } = {},
 ): Promise<TrailState> {
+  let steps = loaded;
+  const wanted = needsOf(trail, steps);
+  const bank = wanted.length > 0 ? await loadBank(deps.db, nearConceptIds(trail)) : new Map<string, BankRow>();
+  if (wanted.some((n) => n.blocking)) steps = await fillFromBank(deps, trail, steps, bank);
   const chapter = trail.plan[trail.chapter_index];
   const chapterSteps = chapter ? steps.filter((s) => s.topic_id === chapter.topicId) : [];
   const views = chapterSteps.map(toView);
@@ -381,7 +606,8 @@ export async function buildState(
     boss: await bossFor(deps.db, trail, outline),
     chapter_done: extras.chapterDone ?? null,
     preparing,
-    prefetch: !preparing && needsOf(trail, steps).some((n) => !n.blocking),
+    // Only what the content written ahead does not cover is worth a trail-prepare in the background.
+    prefetch: !preparing && needsOf(trail, steps).some((n) => !n.blocking && !bankCovers(trail, steps, n, bank)),
   };
 }
 
