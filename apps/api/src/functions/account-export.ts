@@ -1,6 +1,7 @@
 // account-export (SP-14, PLT-02.9). Queues a ZIP export; the worker writes it to the `exports` bucket and
 // sends the export_ready push. At most one open export per student: a second request returns the open one.
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 
 const OPEN = ['queued', 'running'];
 
@@ -25,7 +26,7 @@ export const handler = defineFunction<undefined>({
     const exportId = ctx.deps.newId();
     const inserted = await db.from('data_exports').insert({ id: exportId, user_id: userId, status: 'queued' });
     if (inserted.error) throw inserted.error;
-    await ctx.deps.execute('account.export', { export_id: exportId, user_id: userId }, { });
+    await inBackground(ctx.deps, 'account.export', { export_id: exportId, user_id: userId });
     return ctx.json({ export_id: exportId }, 202);
   },
 });

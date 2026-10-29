@@ -55,6 +55,9 @@ export const jobs: OperationDefinition<any>[] = [
   },
   {
     name: 'ingest.prerequisites',
+    // A side job of the material (it runs in the background, ADR 0011): its ai_job_id only attributes the usage, so it
+    // never moves a material that is already "pronto" back to running.
+    tracksProgress: false,
     handler: async (ctx, data, meta) => {
       const p = parsePayload(PrereqPayload, data, 'ingest.prerequisites');
       await runPrereqJob(ctx, {

@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { RPC_SCHEMAS } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 
 type Req = z.infer<typeof RPC_SCHEMAS.edit_outline.args>;
 
@@ -26,9 +27,8 @@ export const handler = defineFunction<Req>({
     if (applied.error) throw applied.error;
     const result = applied.data as OutlineEditRes;
 
-    for (const nodeId of result.regenerate_node_ids) {
-      await deps.execute('content.regenerate_topic', { node_id: nodeId, user_id: userId }, { });
-    }
+    // Regenerating a topic is minutes of AI work: it runs after the answer (ADR 0011), the topics show it as generating.
+    await Promise.all(result.regenerate_node_ids.map((nodeId) => inBackground(deps, 'content.regenerate_topic', { node_id: nodeId, user_id: userId })));
 
     const body: OutlineEditRes = { event_ids: result.event_ids, regenerate_node_ids: result.regenerate_node_ids };
     return ctx.json(body);

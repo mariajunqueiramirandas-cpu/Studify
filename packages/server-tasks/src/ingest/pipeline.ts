@@ -578,7 +578,11 @@ export async function continueAfterConcepts(stage: Stage, payload: TopicContentP
   }, { singletonKey: `topic-content:S4:${payload.documentId ?? payload.nodeIds.join(',')}` });
 }
 
-/** S3 prerequisites and the material check, which read the written concepts of the whole material. */
+/**
+ * S3 prerequisites and the material check, which read the written concepts of the whole material. Both start in the
+ * background (a calendar trigger due now, ADR 0011): run inline, they held the last topic's content and the
+ * "material pronto" for as long as their own calls took.
+ */
 async function enqueueAfterConcepts(ctx: OperationContext, payload: TopicContentPayload): Promise<void> {
   if (payload.documentId) {
     await ctx.execute('ingest.prerequisites', {
@@ -586,11 +590,11 @@ async function enqueueAfterConcepts(ctx: OperationContext, payload: TopicContent
       document_id: payload.documentId,
       user_id: payload.userId,
       ai_job_id: payload.aiJobId,
-    }, { singletonKey: `prereq:${payload.subjectId}:${payload.documentId}` });
+    }, { singletonKey: `prereq:${payload.subjectId}:${payload.documentId}`, startAfter: 0 });
   }
   // ING-06: the material checker runs once per document after S2; it never blocks generation (ING-06.4).
   if (payload.documentId) {
-    await ctx.execute('ingest.material_check', { document_id: payload.documentId, user_id: payload.userId }, { singletonKey: `material-check:${payload.documentId}` });
+    await ctx.execute('ingest.material_check', { document_id: payload.documentId, user_id: payload.userId }, { singletonKey: `material-check:${payload.documentId}`, startAfter: 0 });
   }
 }
 

@@ -1,5 +1,6 @@
 // Worker execute and push helpers (api §7, §9). The Edge side only enqueues; the worker consumes.
 import type { P2Deps } from './deps.ts';
+import { inBackground } from '../shared/deps.ts';
 import { secondsUntil } from './util.ts';
 import { ApiFailure } from '@studify/shared';
 
@@ -18,7 +19,5 @@ export async function scheduleAt(
 
 /** Push through notify.dispatch (quiet hours, cap and toggles are applied by the worker, PLT-05). */
 export async function pushTo(deps: P2Deps, userId: string, type: string, data: Record<string, unknown>): Promise<void> {
-  await deps.execute('notify.dispatch', { user_id: userId, type, data }, {
-    singletonKey: `push:${type}:${userId}:${String(data.duel_id ?? data.battle_id ?? data.exam_id ?? '')}`,
-  });
+  await inBackground(deps, 'notify.dispatch', { user_id: userId, type, data }, `push:${type}:${userId}:${String(data.duel_id ?? data.battle_id ?? data.exam_id ?? '')}`);
 }

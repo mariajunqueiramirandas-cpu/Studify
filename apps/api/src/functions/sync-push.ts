@@ -31,7 +31,7 @@ import {
 } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
 import { canReadSubject, isPublicQuestion, loadSubject, type SubjectRow } from '../shared/access.ts';
-import type { Deps } from '../shared/deps.ts';
+import { inBackground, type Deps } from '../shared/deps.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { gradeOffline } from '../shared/grading.ts';
 import { FLAG_TABLES } from '../shared/flags.ts';
@@ -452,9 +452,8 @@ async function pushAnswers(st: PushState, items: AnswerItem[]): Promise<void> {
     st.acked.add(item.id);
     if (grading.status === 'pending') pendingGrading.push(item.id);
   }
-  for (const id of pendingGrading) {
-    await st.deps.execute('grading.answer', { attempt_answer_id: id }, { singletonKey: id, });
-  }
+  // AI grading never holds the sync (ADR 0011).
+  await Promise.all(pendingGrading.map((id) => inBackground(st.deps, 'grading.answer', { attempt_answer_id: id }, id)));
 }
 
 // ---------------------------------------------------------------- last-writer-wins edits
@@ -732,7 +731,7 @@ async function pushFlags(st: PushState, items: Item<'flag'>[]): Promise<void> {
         return;
       }
       st.acked.add(item.id);
-      await st.deps.execute('flag.triage', { flag_id: item.id }, { singletonKey: item.id, });
+      await inBackground(st.deps, 'flag.triage', { flag_id: item.id }, item.id);
     });
   }
 }

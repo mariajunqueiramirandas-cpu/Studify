@@ -35,6 +35,7 @@ test('sync-push flag: a note the student can read is flagged once, queued for tr
   assertEquals(rows[0]?.status, 'open');
   assertEquals(rows[0]?.class_group_id, null);
   assertEquals(h.enqueued.filter((e) => e.queue === 'flag.triage').length, 1);
+  assertEquals(h.enqueued.find((e) => e.queue === 'flag.triage')?.options?.startAfterSeconds, 0);
 });
 
 test('sync-push flag: an item in another student’s private subject is not found and nothing is stored', async () => {

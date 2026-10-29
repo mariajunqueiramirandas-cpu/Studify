@@ -5,7 +5,7 @@ import { ApiFailure, ReportCreateReqSchema, } from '@studify/shared';
 import type { ReportCreateRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
 import { activeMembership } from '../shared/access.ts';
-import type { Deps } from '../shared/deps.ts';
+import { inBackground, type Deps } from '../shared/deps.ts';
 
 type Req = z.infer<typeof ReportCreateReqSchema>;
 
@@ -56,13 +56,12 @@ export const handler = defineFunction<Req>({
     });
     if (inserted.error) throw inserted.error;
     // One notification per recipient: notify.dispatch needs a user (the worker pushes to a user's devices).
-    for (const recipient of await reportRecipients(deps.db, input.class_group_id ?? null, userId)) {
-      await deps.execute('notify.dispatch', {
-        user_id: recipient,
-        type: 'report_created',
-        data: { report_id: reportId, class_group_id: input.class_group_id ?? null },
-      }, { singletonKey: `report_created:${reportId}:${recipient}`, });
-    }
+    const recipients = await reportRecipients(deps.db, input.class_group_id ?? null, userId);
+    await Promise.all(recipients.map((recipient) => inBackground(deps, 'notify.dispatch', {
+      user_id: recipient,
+      type: 'report_created',
+      data: { report_id: reportId, class_group_id: input.class_group_id ?? null },
+    }, `report_created:${reportId}:${recipient}`)));
 
     const body: ReportCreateRes = { report_id: reportId };
     return ctx.json(body);

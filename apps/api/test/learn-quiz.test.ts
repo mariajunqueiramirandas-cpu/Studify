@@ -52,6 +52,36 @@ test('quiz-submit: the server scores every answer, creates a Caderno entry, a re
   assertEquals(h.claude.calls.length, 0, 'auto-graded answers never call Claude');
 });
 
+test('quiz-submit: AI-graded answers are graded after the answer, never inside it (ADR 0011)', async () => {
+  const h = makeHarness();
+  await seedWorld(h);
+  const shortAnswer = (id: string) => ({ id, subject_id: IDS.subject, node_id: IDS.topic, concept_ids: [], type: 'short_answer', stem: 'Explique a fotossíntese.', payload: { model_answer: 'Luz vira energia química.', rubric: [{ id: 'r1', criterion: 'Luz', points: 1 }], max_points: 1, key_terms: [] }, explanation: 'Explicação.', source_pages: [], personal_for_user_id: null, deleted_at: null });
+  h.db.seed('questions', [shortAnswer(IDS.question), shortAnswer(IDS.question2)]);
+  h.db.seed('quizzes', { id: IDS.quiz, owner_id: ALICE.id, question_ids: [IDS.question, IDS.question2], kind: 'practice', goal_id: null });
+  h.db.seed('quiz_attempts', { id: IDS.attempt, user_id: ALICE.id, quiz_id: IDS.quiz, status: 'in_progress', device_id: 'device-1', started_at: '2026-10-27T14:00:00Z' });
+  const res = await quizSubmit(
+    request('quiz-submit', {
+      idem: v7(510),
+      body: {
+        attempt_id: IDS.attempt,
+        finished_at: '2026-10-27T14:20:00Z',
+        answers: [
+          { id: v7(511), question_id: IDS.question, response: { text: 'A luz vira energia.' }, confidence: 3, time_spent_ms: 30000 },
+          { id: v7(512), question_id: IDS.question2, response: { text: 'Não sei.' }, confidence: 1, time_spent_ms: 10000 },
+        ],
+      },
+    }),
+    h.deps,
+  );
+  assertEquals(res.status, 200);
+  const body = await json(res);
+  assertEquals(body.pending_ai_grading, 2);
+  const grading = h.enqueued.filter((e) => e.queue === 'grading.answer');
+  assertEquals(grading.length, 2);
+  assertEquals(grading.map((e) => e.options?.startAfterSeconds), [0, 0], 'each grading starts in the background');
+  assertEquals(h.claude.calls.length, 0);
+});
+
 test('quiz-submit: the remediation card is the one written with the question when it has one (PRA-02.3)', async () => {
   const h = makeHarness();
   await seedWorld(h);
@@ -195,7 +225,8 @@ test('flag-create: flags a visible card once; another student’s personal card 
   await seedWorld(h);
   const ok = await flagCreate(request('flag-create', { idem: v7(670), body: { item_type: 'card', item_id: IDS.card, reason: 'wrong_fact' } }), h.deps);
   assertEquals(ok.status, 200);
-  assertEquals(h.enqueued.find((e) => e.queue === 'flag.triage') !== undefined, true);
+  // Triage is a Claude call: it starts in the background (ADR 0011), the flag answers at once.
+  assertEquals(h.enqueued.find((e) => e.queue === 'flag.triage')?.options?.startAfterSeconds, 0);
   const again = await flagCreate(request('flag-create', { idem: v7(671), body: { item_type: 'card', item_id: IDS.card, reason: 'unclear' } }), h.deps);
   assertEquals((await json(again)).flag_id, (await json(ok)).flag_id, 'one open flag per reporter and item');
   const foreign = await flagCreate(request('flag-create', { idem: v7(672), body: { item_type: 'card', item_id: IDS.bobCard, reason: 'wrong_fact' } }), h.deps);

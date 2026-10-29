@@ -13,6 +13,16 @@ export interface ExecuteOptions {
   startAfterSeconds?: number;
 }
 
+/**
+ * Starts an operation without holding the caller (ADR 0011): it is registered as a calendar trigger due now, so it
+ * starts within about a second, survives an API restart that happens before it starts, and its duration never adds
+ * to the request. For side effects the response does not wait for: AI grading the app polls for, flag triage,
+ * pushes, topic regeneration. `execute` without a start time still runs the operation and awaits it.
+ */
+export function inBackground(deps: Deps, name: string, data: Record<string, unknown>, singletonKey?: string): Promise<string | null> {
+  return deps.execute(name, data, { ...(singletonKey ? { singletonKey } : {}), startAfterSeconds: 0 });
+}
+
 export interface AiDeps {
   client: AnthropicLike;
   budget: BudgetStore;

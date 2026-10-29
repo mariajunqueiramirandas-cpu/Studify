@@ -26,6 +26,8 @@ test('outline-edit: the RPC runs as the student and each reported topic is queue
   const queued = h.enqueued.filter((e) => e.queue === 'content.regenerate_topic');
   assertEquals(queued.map((e) => e.data.node_id), [newTopic, IDS.topic]);
   assertEquals(queued[0]?.data.user_id, ALICE.id);
+  // Minutes of AI work per topic: never inside the request (ADR 0011).
+  assertEquals(queued.map((e) => e.options?.startAfterSeconds), [0, 0]);
 });
 
 test('outline-edit: an operation that is not valid is rejected before the RPC runs', async () => {
