@@ -5,7 +5,8 @@ import { Banner, Card, ProgressBar, Row, Text } from '../../components';
 import { formatDuration, useElapsed } from '../progress/time';
 import { t } from '../../i18n';
 import type { AiJob, DocumentRow } from './api';
-import { ingestionView } from './progress';
+import { ingestionView, topicProgress } from './progress';
+import { useOutline } from './outline';
 
 export { ingestionJob, ingestionView, stageLabel, type IngestionView } from './progress';
 
@@ -33,6 +34,8 @@ function ActiveCard({ subjectId, job, document }: { subjectId: string; job: AiJo
   const view = ingestionView(job, document);
   const elapsed = useElapsed(job?.started_at ?? job?.created_at);
   const eta = job?.status === 'queued' ? null : etaSeconds(view.fraction, elapsed);
+  // Topics open as they are ready (in the map below): say so, so nobody waits for the whole material.
+  const { ready, writing } = topicProgress(useOutline(subjectId).data?.topics ?? []);
   return (
     <Card onPress={() => router.push(`/subjects/${subjectId}/processing`)} accessibilityLabel={view.label} tone="soft">
       <Row>
@@ -42,6 +45,11 @@ function ActiveCard({ subjectId, job, document }: { subjectId: string; job: AiJo
           <Text variant="caption" tone="secondary">
             {job?.status === 'queued' ? t('wait.queued') : eta !== null ? t('wait.eta', { time: formatDuration(eta) }) : t('wait.elapsed', { time: formatDuration(elapsed) })}
           </Text>
+          {ready.length > 0 && writing > 0 ? (
+            <Text variant="caption" tone="success">
+              {t('ingest.start_now_hint', { done: ready.length, total: ready.length + writing })}
+            </Text>
+          ) : null}
         </View>
       </Row>
     </Card>

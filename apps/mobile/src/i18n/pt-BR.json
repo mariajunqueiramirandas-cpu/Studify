@@ -173,7 +173,9 @@
       "waiting_batch": "Gerando em lote…"
     },
     "processing_title": "Processamento",
-    "use_anyway": "Usar mesmo assim"
+    "use_anyway": "Usar mesmo assim",
+    "start_now": "Já dá pra começar",
+    "start_now_hint": "{done} de {total} tópicos prontos: abra um enquanto eu escrevo o resto."
   },
   "outline": {
     "title": "Revisar mapa",

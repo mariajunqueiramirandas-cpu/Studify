@@ -293,6 +293,9 @@ export interface LiveJobRow {
   subject_id: string | null;
   document_id: string | null;
   started_at: string | null;
+  /** Ingestion in S4: topics in the material and topics ready so far. */
+  items_total?: number | null;
+  items_done?: number | null;
 }
 
 const LIVE_COPY: Record<LiveJobType, { title: string; glyph: RichGlyph }> = {
@@ -330,18 +333,22 @@ export function liveRich(job: LiveJobRow, subject: { name: string; color: string
   const eta = etaSeconds(progress.fraction, elapsed);
   const active = progress.steps.find((s) => s.state === 'active')?.label ?? progress.steps[0]!.label;
   const copy = LIVE_COPY[type];
-  const link = job.type === 'ingest.document' && job.subject_id ? `studify://subjects/${job.subject_id}/processing` : undefined;
+  // While a material is written, its first topics are already open: say so and open the subject on them.
+  const ready = type === 'ingest.document' && job.stage === 'S4' && (job.items_done ?? 0) > 0 && (job.items_total ?? 0) > 0 ? { done: job.items_done!, total: job.items_total! } : null;
+  const link =
+    job.type === 'ingest.document' && job.subject_id ? (ready ? `studify://subjects/${job.subject_id}` : `studify://subjects/${job.subject_id}/processing`) : undefined;
   return parseRichNotification({
     v: 1,
     key: liveKeyOf(job),
     template: 'progress',
     channel: 'live',
     title: copy.title,
-    body: `${active}…`,
+    body: ready ? `${ready.done} de ${ready.total} tópicos prontos: já dá pra estudar` : `${active}…`,
     ...(subject ? { sub: subject.name.slice(0, 60), accent: subject.color } : { accent: '#0369A1' }),
     glyph: copy.glyph,
     ...(link ? { deep_link: link } : {}),
     progress: { ...progress, ...(eta !== null && eta <= 7200 ? { eta_s: eta } : {}) },
+    ...(ready && link ? { actions: [{ id: 'open', label: 'Estudar agora', kind: 'open', deep_link: link }] } : {}),
   });
 }
 

@@ -55,7 +55,7 @@ export type LiveOutcome = 'updated' | 'ended' | 'skipped';
 export async function handleNotifyLive(ctx: OperationContext, raw: Record<string, unknown>): Promise<LiveOutcome> {
   const { ai_job_id } = LivePayload.parse(raw);
   const { rows } = await ctx.db.query<LiveJobRow>(
-    `select id, type, stage, status, progress, user_id, subject_id, document_id, started_at::text
+    `select id, type, stage, status, progress, user_id, subject_id, document_id, started_at::text, items_total, items_done
        from public.ai_jobs where id = $1`,
     [ai_job_id],
   );
