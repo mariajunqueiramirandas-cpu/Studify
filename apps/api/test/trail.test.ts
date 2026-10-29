@@ -73,13 +73,19 @@ test('trail: plan, lesson, wrong answer re-taught and saved to the Caderno, chap
   assertEquals(prepared.step?.terms[0]?.term, 'clorofila');
   assertEquals(prepared.step?.source_pages, [{ document_id: IDS.doc, page_start: 12, page_end: 12 }]);
   assertEquals(prepared.prefetch, true);
+  // The question after the lesson is already written, so the app can show it before the lesson is recorded.
+  assertEquals(prepared.next_step?.kind, 'question');
   const lessonId = prepared.step!.id;
 
-  // 3. Read the lesson: the first question comes, without its answer.
+  // 3. Read the lesson: the first question comes, without its answer, and it is the one shown ahead of the answer.
   const read = TrailAnswerResSchema.parse((await call(trailAnswer, 'trail-answer', { trail_id: trailId, step_id: lessonId, response: null })).body);
   assertEquals(read.feedback, null);
   assertEquals(read.state.step?.kind, 'question');
-  assert(!JSON.stringify(read.state).includes('rationale') && !JSON.stringify(read.state).includes('"correct"'), 'the answer never reaches the app before answering');
+  assertEquals(read.state.step?.id, prepared.next_step?.id);
+  assertEquals(read.state.next_step, null);
+  // The answer travels with the question, so the app shows the verdict at once; the record still waits for trail-grade.
+  assertEquals(read.state.step?.kind === 'question' && read.state.step.answer.correct_option, 'B');
+  assertEquals(read.state.step?.kind === 'question' && read.state.step.answer.rationales.length, 4);
   const q1 = read.state.step!.id;
 
   // 4. Wrong answer: feedback that teaches, evidence 0, and the re-teaching needs content.
