@@ -73,7 +73,7 @@ export async function createRuntime(config: TaskConfig, overrides: RuntimeOverri
     },
   });
 
-  const scheduler: Scheduler = new Scheduler(sql, log, (name, data) => registry.execute(name, data));
+  const scheduler: Scheduler = new Scheduler(sql, log, (name, data, singletonKey) => registry.execute(name, data, singletonKey ? { singletonKey } : {}));
   const registry: OperationRegistry = new OperationRegistry({
     schedule: overrides.schedule ?? scheduler.schedule,
     cron: (name, expression) => scheduler.cron(name, expression),

@@ -5,6 +5,7 @@ import type { z } from 'zod';
 import { ApiFailure, UploadPhotosReqSchema, } from '@studify/shared';
 import type { UploadPhotosRes } from '../shared/responses.ts';
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 import { requireSubject } from '../shared/access.ts';
 import { objectExists } from '../shared/storage.ts';
 import { createAiJob } from '../shared/jobs.ts';
@@ -46,7 +47,7 @@ export const handler = defineFunction<z.infer<typeof UploadPhotosReqSchema>>({
     if (inserted.error) throw inserted.error;
 
     const jobId = await createAiJob(deps, { type: 'ingest.photos_to_pdf', userId, subjectId: subject.id, documentId, stage: 'photos' });
-    await deps.execute('ingest.photos_to_pdf', { subject_id: subject.id, image_paths: input.image_paths, document_id: documentId, ai_job_id: jobId }, { });
+    await inBackground(deps, 'ingest.photos_to_pdf', { subject_id: subject.id, image_paths: input.image_paths, document_id: documentId, ai_job_id: jobId });
 
     const body: UploadPhotosRes = { document_id: documentId, job_id: jobId };
     return ctx.json(body, 202);

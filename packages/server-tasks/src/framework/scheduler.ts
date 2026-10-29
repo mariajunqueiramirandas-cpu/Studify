@@ -15,7 +15,8 @@ export class Scheduler {
   #ticking: Promise<void> | null = null;
   #running = new Set<Promise<unknown>>();
   #cron = new Map<string, { expression: string; next: Date }>();
-  constructor(private sql: Sql, private log: Logger, private run: (name: string, data: Record<string, unknown>) => Promise<unknown>) {}
+  /** `singletonKey` is the caller's key: a trigger joins a run of the same key that is still going instead of repeating it. */
+  constructor(private sql: Sql, private log: Logger, private run: (name: string, data: Record<string, unknown>, singletonKey?: string) => Promise<unknown>) {}
   cron(name: string, expression: string): void {
     this.#cron.set(name, { expression, next: CronExpressionParser.parse(expression, { tz: 'UTC' }).next().toDate() });
   }
@@ -54,7 +55,8 @@ export class Scheduler {
        returning name, data, singleton_key`, [16 - this.#running.size],
     );
     for (const { name, data, singleton_key: singletonKey } of rows) {
-      const running = this.run(name, data).catch(async (err) => {
+      const key = singletonKey?.startsWith(`${name}:`) ? singletonKey.slice(name.length + 1) : undefined;
+      const running = this.run(name, data, key).catch(async (err) => {
         // The operation never started (it was at its concurrency limit): background work waits a little, it is not lost.
         if (err instanceof ApiFailure && err.code === 'rate_limited') {
           await this.sql.query(

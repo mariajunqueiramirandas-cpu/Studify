@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { ApiFailure, VesperaPrepareReqSchema } from '@studify/shared';
 import { defineFunction } from '../shared/http.ts';
+import { inBackground } from '../shared/deps.ts';
 
 type Req = z.infer<typeof VesperaPrepareReqSchema>;
 
@@ -20,7 +21,8 @@ export const handler = defineFunction<Req>({
     if (exam.data.status === 'cancelled' || exam.data.status === 'done') {
       throw new ApiFailure('invalid_request', { message: 'Essa prova não está mais agendada.' });
     }
-    const jobId = await deps.execute('vespera.prepare', { exam_id: input.exam_id, user_id: userId }, { singletonKey: input.exam_id, });
+    // Written in the background (ADR 0011); the screen follows the sheet until it exists.
+    const jobId = await inBackground(deps, 'vespera.prepare', { exam_id: input.exam_id, user_id: userId }, input.exam_id);
     return ctx.json({ status: 'preparing', job_id: jobId ?? '' }, 202);
   },
 });

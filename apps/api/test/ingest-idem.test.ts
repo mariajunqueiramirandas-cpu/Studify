@@ -52,6 +52,8 @@ test('ingest-start: queues the document, pre-checks the budget and returns the j
   assertEquals(job.data.document_id, UPLOADED);
   assertEquals(job.data.ai_job_id, body.job_id, 'the worker reports progress on the job the app was given');
   assertEquals(job.options?.singletonKey, UPLOADED);
+  // The material is processed in the background: the app gets the job at once and follows it (ADR 0011).
+  assertEquals(job.options?.startAfterSeconds, 0);
 });
 
 test('ingest-start: a checksum already in the subject → 409 duplicate_document with the existing id', async () => {

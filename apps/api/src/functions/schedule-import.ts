@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ApiFailure } from '@studify/shared';
 import { defineP2 } from '../shared-p2/http.ts';
 import { canReadSubject, loadSubject } from '../shared/access.ts';
+import { inBackground } from '../shared/deps.ts';
 
 export const ScheduleImportInput = z.object({ document_id: z.uuid() });
 export type ScheduleImportInput = z.infer<typeof ScheduleImportInput>;
@@ -36,9 +37,7 @@ export const handler = defineP2<ScheduleImportInput>({
     });
     if (inserted.error) throw inserted.error;
 
-    const jobId = await p2.execute('schedule.import', { schedule_import_id: scheduleImportId }, {
-      singletonKey: `schedule-import:${scheduleImportId}`,
-    });
+    const jobId = await inBackground(p2, 'schedule.import', { schedule_import_id: scheduleImportId }, `schedule-import:${scheduleImportId}`);
     if (!jobId) throw new ApiFailure('internal_error', { message: 'Não consegui iniciar a leitura do cronograma.' });
     return ctx.json({ job_id: jobId, schedule_import_id: scheduleImportId }, 202);
   },

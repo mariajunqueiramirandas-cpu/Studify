@@ -80,6 +80,27 @@ export async function applyProgress(sql: Sql, aiJobId: string, patch: ProgressPa
 }
 
 /**
+ * Marks a job succeeded when it is still queued or running. A row its operation already finished, parked for the
+ * budget or handed to a Batch wave keeps its state. Returns whether it changed.
+ */
+export async function finishProgress(sql: Sql, aiJobId: string): Promise<boolean> {
+  const done = await sql.query(
+    `update public.ai_jobs set status = 'succeeded', progress = 1, finished_at = now(), updated_at = now()
+      where id = $1 and status in ('queued', 'running')`,
+    [aiJobId],
+  );
+  if (!done.rowCount) return false;
+  const patch: ProgressPatch = { status: 'succeeded', progress: 1 };
+  scopedProgress.getStore()?.(aiJobId, patch);
+  try {
+    listener?.(aiJobId, patch);
+  } catch {
+    // A notification problem never fails the job.
+  }
+  return true;
+}
+
+/**
  * Returns the ai_jobs row for a the API runtime job, creating it on the first attempt. The the API runtime job id is
  * stable across retries, so a retried job finds the same row.
  */

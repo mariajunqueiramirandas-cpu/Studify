@@ -20,7 +20,7 @@ import { defineFunction } from '../shared/http.ts';
 import { loadSubject, canReadSubject, requireSubject, type SubjectRow } from '../shared/access.ts';
 import { callTask, unwrapResult } from '../shared/ai.ts';
 import { budgetCtxFor } from '../shared/ctx.ts';
-import { claudeDepsFor, type Deps } from '../shared/deps.ts';
+import { claudeDepsFor, inBackground, type Deps } from '../shared/deps.ts';
 import { createAiJob, activeJobCount } from '../shared/jobs.ts';
 import { recordMistake } from '../shared/mistakes.ts';
 import { captureImages } from '../shared-p3/capture.ts';
@@ -152,7 +152,7 @@ export const handler = defineFunction<{ essay_id: string }>({
       const jobId = await createAiJob(deps, { type: 'essay.grade', userId, stage: 'essay' });
       const marked = await db.from('essays').update({ status: 'grading', ...lineFields }).eq('id', essay.id);
       if (marked.error) throw marked.error;
-      await deps.execute('essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, { singletonKey: `essay.grade:${essay.id}` });
+      await inBackground(deps, 'essay.grade', { essay_id: essay.id, user_id: userId, ai_job_id: jobId }, `essay.grade:${essay.id}`);
       return ctx.json({ mode: 'async', job_id: jobId, eta_s: 90 } satisfies GradeEssayRes, 202);
     }
 

@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { OperationContext, OperationDefinition } from './types.ts';
 import { PermanentJobError } from './errors.ts';
 import { STANDARD_WAVE_CONCURRENCY } from './concurrency-defaults.ts';
-import { applyProgress, withProgressListener, ensureAiJob, isUuid, type ProgressPatch } from './progress.ts';
+import { applyProgress, finishProgress, withProgressListener, ensureAiJob, isUuid, type ProgressPatch } from './progress.ts';
 import type { PushService } from './push.ts';
 import type { Logger } from './logger.ts';
 import type { TtsProvider } from '@studify/speech';
@@ -72,8 +72,10 @@ export class OperationRegistry {
     invocation.signal?.throwIfAborted();
     const def = this.definitions.get(name)!;
     const id = randomUUID();
+    // A row handed in (data.ai_job_id) belongs to the caller, which finishes it; a row created here is this operation's.
+    const ownsRow = def.tracksProgress !== false && !isUuid(data.ai_job_id) && (isUuid(data.subject_id) || isUuid(data.document_id));
     const aiJobId = def.tracksProgress === false ? null : isUuid(data.ai_job_id) ? data.ai_job_id :
-      (isUuid(data.subject_id) || isUuid(data.document_id)) ? await ensureAiJob(this.deps.pool, {
+      ownsRow ? await ensureAiJob(this.deps.pool, {
         operationId: id, type: name, userId: isUuid(data.user_id) ? data.user_id : null,
         subjectId: isUuid(data.subject_id) ? data.subject_id : null, documentId: isUuid(data.document_id) ? data.document_id : null,
       }) : null;
@@ -96,6 +98,9 @@ export class OperationRegistry {
     try {
       await def.handler(ctx, data, { jobId: id, aiJobId, attempt: 1 });
       invocation.signal?.throwIfAborted();
+      // Most operations never write their own success: left running, the row kept the app polling and counted toward
+      // the student's three jobs in flight for good.
+      if (ownsRow && aiJobId) await finishProgress(this.deps.pool, aiJobId);
       return id;
     } catch (error) {
       const code = error instanceof PermanentJobError ? error.code : 'ai_failed';

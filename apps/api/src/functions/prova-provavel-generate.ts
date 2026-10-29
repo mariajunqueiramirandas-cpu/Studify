@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { ApiFailure } from '@studify/shared';
 import { defineP2 } from '../shared-p2/http.ts';
+import { inBackground } from '../shared/deps.ts';
 
 export const ProvaProvavelInput = z.object({ exam_id: z.uuid(), regenerate: z.boolean().optional() });
 export type ProvaProvavelInput = z.infer<typeof ProvaProvavelInput>;
@@ -38,11 +39,8 @@ export const handler = defineP2<ProvaProvavelInput>({
     }
     if (generations >= PP_MAX_GENERATIONS) throw new ApiFailure('regenerate_limit');
 
-    const jobId = await p2.execute(
-      'pp.generate',
-      { exam_id: i.exam_id, user_id: me },
-      { singletonKey: `pp-generate:${me}:${i.exam_id}` },
-    );
+    // Minutes of AI work: it runs in the background (ADR 0011) and the screen follows the quiz until it exists.
+    const jobId = await inBackground(p2, 'pp.generate', { exam_id: i.exam_id, user_id: me }, `pp-generate:${me}:${i.exam_id}`);
     if (!jobId) {
       throw new ApiFailure('already_exists', {
         message: 'Já estou gerando essa prova. Espera um pouquinho.',

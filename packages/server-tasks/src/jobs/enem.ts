@@ -175,7 +175,8 @@ export async function handleEssayGrade(ctx: OperationContext, data: Record<strin
       .eq('id', essay.id),
     'essays',
   );
-  await ctx.progress({ status: 'done', progress: 1 });
+  // 'done' is not a job status: the update failed after the grade was saved, the job read as failed and no push went out.
+  await ctx.progress({ status: 'succeeded', progress: 1 });
   await ctx.execute('notify.dispatch', { user_id: essay.user_id, type: 'essay_graded', data: { essay_id: essay.id } }, { singletonKey: `essay_graded:${essay.id}` });
   return { status: 'graded', total: total.total };
 }
