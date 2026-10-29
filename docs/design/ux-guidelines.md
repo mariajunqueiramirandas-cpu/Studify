@@ -367,9 +367,12 @@ Ids are stable and used by flows, tickets and tests. **Phase** is when the scree
 | Component | Notes |
 |---|---|
 | `AppBar` | Back, title, ≤ 2 actions, optional context chip below |
-| `BottomTabBar` | 5 tabs, labels always visible, badge dot for Turma requests |
-| `Button` (primary / secondary / text / destructive) | Min height 48 dp; primary is full-width in the thumb zone |
+| `BottomTabBar` | 5 tabs, labels always visible, the chosen tab's icon sits in a tinted key and its label goes bold; badge dot for Turma requests |
+| `Button` (primary / secondary / text / destructive) | Min height 48 dp; primary is full-width in the thumb zone. A disabled primary, tonal or destructive key turns grey instead of fading |
 | `IconButton` | 48×48 dp touch target, 24 dp icon, mandatory accessibility label |
+| `IconTile` | A small tinted square holding an icon (36 dp in list rows, 44 dp on hub tiles and Hoje cards); tones `primary`, `lagoon`, `lamp`, `success`, `danger`, `neutral`, or a subject colour. List rows show their icon in one; radio and checkbox icons stay bare |
+| `Notebook` | A subject on the Matérias shelf: cover in the subject hue, binding, emblem, and a paper label with the name and the next test. The subject form shows one as a live preview |
+| `CodeField` | One-time code as six key caps over a single invisible input (keyboard, paste and autofill go to that input) |
 | `Chip` (filter / scope / status / **PageChip**) | Squared key when tappable, inline text when it only states something; PageChip is a footnote link (icon + page label), tap and long-press behaviors (§5.3) |
 | `Card` (subject, topic, plan item, test, Hoje card) | The subject color hangs as a bookmark ribbon from the top edge |
 | `CountdownChip` | Calendar leaf with the day, then "Faltam 3 dias" / "É amanhã!" / "Hoje às 14:00" |

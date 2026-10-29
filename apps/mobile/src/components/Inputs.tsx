@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View, type TextInputProps } from 'react-native';
 import { shortDate, timeHM, weekdayDate } from '../features/common/format';
 import { tap } from '../lib/haptics';
-import { radius, space, touch, useTheme } from '../theme';
+import { depth, FONTS, radius, shade, space, touch, useTheme } from '../theme';
+import { Tactile } from './Tactile';
 import { Text } from './Text';
 
 interface FieldProps extends TextInputProps {
@@ -56,6 +57,58 @@ export function TextField({ label, hint, error, counter, style, multiline, value
       {counter && len >= (counter.showAfter ?? 0) ? (
         <Text variant="bodySmall" tone={len > counter.max ? 'danger' : 'secondary'} align="right">
           {len}/{counter.max}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * A one-time code as a row of key caps, one digit each. A single invisible field sits on top and takes the
+ * keyboard, paste and SMS/e-mail autofill, so the caps only show what was typed.
+ */
+export function CodeField({ value, onChange, length = 6, label, error, autoFocus }: { value: string; onChange: (v: string) => void; length?: number; label?: string; error?: string | null; autoFocus?: boolean }) {
+  const { colors: c, easyReading } = useTheme();
+  const [focused, setFocused] = useState(!!autoFocus);
+  const active = Math.min(value.length, length - 1);
+  return (
+    <View style={{ gap: space.sm }}>
+      {label ? <Text variant="label">{label}</Text> : null}
+      <View style={styles.codeRow}>
+        {Array.from({ length }, (_, i) => {
+          const digit = value[i] ?? '';
+          const current = focused && i === active;
+          const ink = error ? c.danger : current ? c.primary : c.border;
+          return (
+            <View
+              key={i}
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.codeCell, { backgroundColor: current ? c.primarySoft : c.surface1, borderColor: ink, borderBottomColor: error || current ? ink : shade(c.border, 0.14) }]}
+            >
+              <Text variant="title" style={easyReading ? undefined : { fontFamily: FONTS.display }}>
+                {digit}
+              </Text>
+            </View>
+          );
+        })}
+        <TextInput
+          value={value}
+          onChangeText={(v) => onChange(v.replace(/\D/g, '').slice(0, length))}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          keyboardType="number-pad"
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
+          maxLength={length}
+          autoFocus={autoFocus}
+          caretHidden
+          accessibilityLabel={label}
+          style={[StyleSheet.absoluteFill, styles.codeInput]}
+        />
+      </View>
+      {error ? (
+        <Text variant="bodySmall" tone="danger" accessibilityLiveRegion="polite">
+          {error}
         </Text>
       ) : null}
     </View>
@@ -146,16 +199,20 @@ export function RadioList<T extends string>({ options, value, onChange }: { opti
       {options.map((o) => {
         const selected = o.value === value;
         return (
-          <Pressable
+          // A choice is a key, like a chip: it stands on a ledge and inks in when chosen.
+          <Tactile
             key={o.value}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
             accessibilityLabel={o.hint ? `${o.label}. ${o.hint}` : o.label}
-            onPress={() => {
-              tap();
-              onChange(o.value);
-            }}
-            style={[styles.radio, { borderColor: selected ? c.primary : c.border, backgroundColor: selected ? c.primarySoft : c.surface1 }]}
+            onPress={() => onChange(o.value)}
+            color={selected ? c.primarySoft : c.surface1}
+            borderColor={selected ? c.primary : c.border}
+            ledge={selected ? shade(c.primary, 0.15) : shade(c.border, 0.12)}
+            borderWidth={2}
+            radius={radius.md}
+            depth={depth.sm}
+            style={styles.radio}
           >
             <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? c.primary : c.textSecondary} />
             <View style={{ flex: 1, gap: 2 }}>
@@ -168,7 +225,7 @@ export function RadioList<T extends string>({ options, value, onChange }: { opti
                 </Text>
               ) : null}
             </View>
-          </Pressable>
+          </Tactile>
         );
       })}
     </View>
@@ -238,8 +295,12 @@ const styles = StyleSheet.create({
   segmentRow: { flexGrow: 1, gap: space.sm },
   segmentItem: { flexGrow: 1, minHeight: 46, alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.xxs, gap: space.sm },
   segmentBar: { alignSelf: 'stretch', height: 3, borderTopLeftRadius: 2, borderTopRightRadius: 2, marginBottom: -1 },
-  radio: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1.5, minHeight: touch.option },
+  radio: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, minHeight: touch.option },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: touch.option },
   stepBtn: { width: touch.min, height: touch.min, borderRadius: radius.round, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   dateBtn: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1 },
+  codeRow: { flexDirection: 'row', gap: space.sm },
+  codeCell: { flex: 1, aspectRatio: 0.82, maxHeight: 72, borderRadius: radius.md, borderWidth: 2, borderBottomWidth: 4, alignItems: 'center', justifyContent: 'center' },
+  // Invisible but still focusable and tappable: it covers the caps.
+  codeInput: { opacity: 0.02, color: 'transparent', fontSize: 1 },
 });

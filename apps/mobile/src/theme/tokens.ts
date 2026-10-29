@@ -27,6 +27,8 @@ export interface Palette {
   lagoon: string;
   /** Lamp yellow: the highlighter on bold study text, stars, small celebrations. */
   lamp: string;
+  /** Ink on a lamp-yellow face (result bands, keys). */
+  onLamp: string;
   /** Translucent highlighter stroke laid under bold text in notes. */
   highlight: string;
   /** Capi's fur: warm accents next to the mascot. */
@@ -58,6 +60,7 @@ const light: Palette = {
   overlay: 'rgba(30,32,51,0.45)',
   lagoon: '#0C6F6A',
   lamp: '#E9A62B',
+  onLamp: '#1E2033',
   highlight: 'rgba(242,179,61,0.42)',
   fur: '#A06A3A',
 };
@@ -85,6 +88,7 @@ const dark: Palette = {
   overlay: 'rgba(6,6,16,0.62)',
   lagoon: '#62D5C8',
   lamp: '#F4C25E',
+  onLamp: '#16162A',
   highlight: 'rgba(244,194,94,0.28)',
   fur: '#D29A63',
 };

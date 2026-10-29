@@ -70,10 +70,15 @@ function Ribbon({ color }: { color: string }) {
   );
 }
 
+/** The tint of a list row's icon tile. */
+export type IconTone = 'primary' | 'lagoon' | 'lamp' | 'success' | 'danger' | 'neutral';
+
 interface ListItemProps {
   title: string;
   subtitle?: string;
   icon?: IconName;
+  /** Tile tint; `iconColor` (a subject colour, say) wins over it. */
+  tone?: IconTone;
   iconColor?: string;
   right?: ReactNode;
   onPress?: () => void;
@@ -88,8 +93,11 @@ interface ListItemProps {
   first?: boolean;
 }
 
-export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onLongPress, chevron = !!onPress, destructive, accessibilityLabel, disabled, testID, inList, first }: ListItemProps) {
+export function ListItem({ title, subtitle, icon, tone = 'primary', iconColor, right, onPress, onLongPress, chevron = !!onPress, destructive, accessibilityLabel, disabled, testID, inList, first }: ListItemProps) {
   const { colors: c, easyReading } = useTheme();
+  // Radio buttons and checkboxes are controls, not pictures: they stay bare and ink in when chosen.
+  const control = !!icon && (icon.startsWith('radio-button') || icon.startsWith('checkbox'));
+  const on = control && (icon.endsWith('-on') || icon === 'checkbox');
   return (
     <Pressable
       testID={testID}
@@ -100,8 +108,8 @@ export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onL
       onLongPress={onLongPress}
       style={({ pressed }) => [styles.item, inList && styles.listRow, pressed && onPress ? { backgroundColor: c.surface2 } : null, disabled && { opacity: 0.5 }]}
     >
-      {inList && !first ? <View style={[styles.divider, { left: icon ? space.lg + 22 + space.md : space.lg, backgroundColor: c.border }]} /> : null}
-      {icon ? <Ionicons name={icon} size={22} color={destructive ? c.danger : (iconColor ?? c.textSecondary)} /> : null}
+      {inList && !first ? <View style={[styles.divider, { left: icon ? space.lg + (control ? 24 : TILE) + space.md : space.lg, backgroundColor: c.border }]} /> : null}
+      {control ? <Ionicons name={icon} size={24} color={on ? c.primary : c.textSecondary} /> : icon ? <IconTile icon={icon} tone={destructive ? 'danger' : tone} color={iconColor} /> : null}
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="body" tone={destructive ? 'danger' : 'primary'} style={easyReading ? undefined : { fontFamily: FONTS.uiMedium }}>
           {title}
@@ -113,8 +121,29 @@ export function ListItem({ title, subtitle, icon, iconColor, right, onPress, onL
         ) : null}
       </View>
       {right}
-      {chevron ? <Ionicons name="chevron-forward" size={20} color={c.textSecondary} /> : null}
+      {chevron ? <Ionicons name="chevron-forward" size={18} color={c.textSecondary} /> : null}
     </Pressable>
+  );
+}
+
+const TILE = 36;
+
+/** A small tinted square holding an icon: list rows, hub tiles and stat cards share it. */
+export function IconTile({ icon, tone = 'primary', color, size = TILE }: { icon: IconName; tone?: IconTone; color?: string; size?: number }) {
+  const { colors: c, scheme } = useTheme();
+  const tones: Record<IconTone, { bg: string; fg: string }> = {
+    primary: { bg: c.primarySoft, fg: c.primary },
+    lagoon: { bg: c.infoSoft, fg: c.lagoon },
+    lamp: { bg: c.warningSoft, fg: c.warning },
+    success: { bg: c.successSoft, fg: c.success },
+    danger: { bg: c.dangerSoft, fg: c.danger },
+    neutral: { bg: c.surface2, fg: c.textSecondary },
+  };
+  const ink = color ? { bg: `${color}${scheme === 'dark' ? '33' : '1F'}`, fg: color } : tones[tone];
+  return (
+    <View style={{ width: size, height: size, borderRadius: size >= 44 ? radius.md : radius.sm + 2, backgroundColor: ink.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={Math.round(size * 0.56)} color={ink.fg} />
+    </View>
   );
 }
 

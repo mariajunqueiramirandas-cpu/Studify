@@ -38,9 +38,9 @@ export default function SessionEnd() {
         {kind === 'review' ? t('review.done', { n, min: Math.max(1, min) }) : t('session.summary', { min: Math.max(1, min), cards: n, questions: Number(questions ?? 0), topics: Number(topics ?? 0) })}
       </Text>
       <Row gap={space.sm} style={{ alignItems: 'stretch' }}>
-        <StatTile value={String(n)} label={t('subjects.cards')} color={c.lamp} fg="#1E2033" />
-        {questions ? <StatTile value={questions} label="questões" color={c.primary} fg={c.onPrimary} /> : null}
-        <StatTile value={`${Math.max(1, min)} min`} label="tempo" color={c.lagoon} fg={c.onPrimary} />
+        <StatTile value={String(n)} label={t('session.stat_cards')} color={c.lamp} fg={c.onLamp} />
+        {questions ? <StatTile value={questions} label={t('session.stat_questions')} color={c.primary} fg={c.onPrimary} /> : null}
+        <StatTile value={`${Math.max(1, min)} min`} label={t('session.stat_time')} color={c.lagoon} fg={c.onPrimary} />
       </Row>
     </Screen>
   );

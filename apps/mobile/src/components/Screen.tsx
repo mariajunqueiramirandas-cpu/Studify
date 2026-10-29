@@ -21,9 +21,11 @@ interface AppBarProps {
   context?: ReactNode;
   closeIcon?: boolean;
   large?: boolean;
+  /** A quiet line above the title (or in its place), e.g. today's date on Hoje. */
+  eyebrow?: string;
 }
 
-export function AppBar({ title, root, onBack, actions, context, closeIcon, large }: AppBarProps) {
+export function AppBar({ title, root, onBack, actions, context, closeIcon, large, eyebrow }: AppBarProps) {
   const { colors: c } = useTheme();
   const back = onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')));
   return (
@@ -35,6 +37,11 @@ export function AppBar({ title, root, onBack, actions, context, closeIcon, large
           <View style={{ width: space.sm }} />
         )}
         <View style={styles.titleWrap}>
+          {eyebrow ? (
+            <Text variant="label" tone="secondary" numberOfLines={1}>
+              {eyebrow}
+            </Text>
+          ) : null}
           {title ? (
             <Text variant={large || root ? 'display' : 'title'} numberOfLines={2} accessibilityRole="header">
               {title}
@@ -69,6 +76,7 @@ interface ScreenProps {
   hideOfflineBanner?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   header?: ReactNode;
+  eyebrow?: string;
 }
 
 export function Screen({
@@ -90,6 +98,7 @@ export function Screen({
   hideOfflineBanner,
   contentStyle,
   header,
+  eyebrow,
 }: ScreenProps) {
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
@@ -109,7 +118,7 @@ export function Screen({
     >
       {!hideOfflineBanner ? <OfflineBanner /> : null}
       {title !== undefined || !root ? (
-        <AppBar title={title} root={root} actions={actions} context={context} onBack={onBack} closeIcon={closeIcon || immersive} large={largeTitle} />
+        <AppBar title={title} root={root} actions={actions} context={context} onBack={onBack} closeIcon={closeIcon || immersive} large={largeTitle} eyebrow={eyebrow} />
       ) : null}
       {header}
       {scroll ? (

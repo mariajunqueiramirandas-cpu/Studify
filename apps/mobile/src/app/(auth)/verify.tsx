@@ -1,8 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { supabase } from '../../api/supabase';
-import { ActionBar, Button, Screen, Text, TextField } from '../../components';
+import { ActionBar, Button, CodeField, IconTile, Screen, Text } from '../../components';
 import { t } from '../../i18n';
+import { space } from '../../theme';
 
 /** S-AUTH-02 Código de verificação: 6-digit OTP; the magic link lands on /auth/callback. */
 export default function Verify() {
@@ -45,23 +47,25 @@ export default function Verify() {
         </ActionBar>
       }
     >
-      <Text variant="title">{t('auth.code.title')}</Text>
-      <Text tone="secondary">{t('auth.code.generic')}</Text>
-      <TextField
+      <IconTile icon="mail-unread-outline" size={56} />
+      <View style={{ gap: space.xs }}>
+        <Text variant="title">{t('auth.code.title')}</Text>
+        <Text tone="secondary">{t('auth.code.generic')}</Text>
+        {email ? (
+          <Text variant="label" tone="accent">
+            {email}
+          </Text>
+        ) : null}
+      </View>
+      <CodeField
         label={t('auth.code.label')}
         value={code}
-        onChangeText={(v) => {
-          const digits = v.replace(/\D/g, '').slice(0, 6);
+        onChange={(digits) => {
           setCode(digits);
           if (digits.length === 6) void verify(digits);
         }}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-        textContentType="oneTimeCode"
-        maxLength={6}
         autoFocus
         error={error}
-        style={{ fontSize: 28, letterSpacing: 8, textAlign: 'center' }}
       />
     </Screen>
   );

@@ -55,7 +55,9 @@ export function Button({
     text: { bg: 'transparent', fg: c.primary, ledge: 'transparent' },
     destructive: { bg: c.danger, fg: c.onPrimary, ledge: shade(c.danger, 0.32) },
   };
-  const p = palette[variant];
+  // A disabled key goes grey and flat-coloured instead of fading: it reads as "not yet", not as a washed-out colour.
+  const greyed = disabled && (variant === 'primary' || variant === 'destructive' || variant === 'tonal');
+  const p = greyed ? { bg: c.surface2, fg: c.textSecondary, ledge: shade(c.surface2, 0.12) } : palette[variant];
   const inactive = disabled || loading;
   const tone = variant === 'primary' || variant === 'destructive' ? 'onPrimary' : 'accent';
   const press = inactive ? (disabled ? onDisabledPress : undefined) : onPress;
@@ -101,7 +103,7 @@ export function Button({
       radius={compact ? radius.md : radius.lg}
       depth={compact ? depth.sm : depth.md}
       haptic={!!press}
-      style={[styles.base, compact && styles.compact, fullWidth && styles.full, disabled && { opacity: 0.45 }, style]}
+      style={[styles.base, compact && styles.compact, fullWidth && styles.full, disabled && !greyed && { opacity: 0.45 }, style]}
     >
       {content}
     </Tactile>

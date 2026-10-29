@@ -27,7 +27,7 @@ import { ProcessingCard, ingestionJob } from '../../../../features/subjects/Proc
 import { TrailCard } from '../../../../features/trail/TrailCard';
 import { openTutor } from '../../../../features/tutor/open';
 import { t } from '../../../../i18n';
-import { space, subjectColor, useTheme } from '../../../../theme';
+import { radius, space, subjectColor, useTheme } from '../../../../theme';
 
 /** S-MAT-03 {Matéria}: outline, materials, processing card, progress, shortcuts. */
 export default function SubjectHome() {
@@ -48,6 +48,7 @@ export default function SubjectHome() {
   const settings = subjects.data?.find((s) => s.id === subjectId)?.settings;
   const s = subject.data;
   const topics = outline.data?.topics.filter((tp) => !tp.excluded) ?? [];
+  const tint = s ? subjectColor(colorKeyFromHex(s.color), scheme) : undefined;
   const studied = topics.filter((tp) => (masteryMap.get(tp.id) ?? 0) > 0).length;
 
   const refresh = () => {
@@ -105,17 +106,17 @@ export default function SubjectHome() {
 
       <Section title={t('subjects.shortcuts')}>
         <Card>
-          <ListItem icon="map-outline" title={t('map.title')} subtitle={t('map.entry_hint')} onPress={() => router.push({ pathname: '/subjects/[subjectId]/map', params: { subjectId } })} />
-          <ListItem icon="timer-outline" title={t('focus.title')} subtitle={t('focus.entry_hint')} onPress={() => router.push({ pathname: '/focus', params: { subjectId, ...(s?.name ? { label: s.name } : {}) } })} />
-          <ListItem icon="document-text-outline" title={t('subjects.documents')} subtitle={docs.data ? `${docs.data.length}` : undefined} onPress={() => router.push(`/subjects/${subjectId}/documents`)} />
-          <ListItem icon="albums-outline" title={t('subjects.cards')} onPress={() => router.push(`/subjects/${subjectId}/cards`)} />
-          <ListItem icon="text-outline" title={t('subjects.glossary')} onPress={() => router.push(`/subjects/${subjectId}/glossary`)} />
-          <ListItem icon="git-network-outline" title={t('subjects.concept_map')} onPress={() => router.push(`/subjects/${subjectId}/concept-map`)} />
-          <ListItem icon="sparkles-outline" title={t('memory_map.title')} onPress={() => router.push({ pathname: '/practice/memory-map', params: { subjectId } })} />
-          <ListItem icon="newspaper-outline" title={t('subjects.past_tests')} onPress={() => router.push(`/subjects/${subjectId}/past-tests`)} />
-          <ListItem icon="headset-outline" title={t('podcast.episodes')} onPress={() => router.push({ pathname: '/podcast/list', params: { subjectId } })} />
-          <ListItem icon="chatbubbles-outline" title={t('arg.title')} subtitle={t('arg.entry_hint')} onPress={() => router.push({ pathname: '/argument/new', params: { goalMode: 'exam_week', subjectId } })} />
-          <ListItem icon="camera-outline" title={t('cam.title')} subtitle={t('cam.add_photos_hint')} onPress={() => router.push({ pathname: '/camera', params: { subjectId } })} />
+          <ListItem iconColor={tint} icon="map-outline" title={t('map.title')} subtitle={t('map.entry_hint')} onPress={() => router.push({ pathname: '/subjects/[subjectId]/map', params: { subjectId } })} />
+          <ListItem iconColor={tint} icon="timer-outline" title={t('focus.title')} subtitle={t('focus.entry_hint')} onPress={() => router.push({ pathname: '/focus', params: { subjectId, ...(s?.name ? { label: s.name } : {}) } })} />
+          <ListItem iconColor={tint} icon="document-text-outline" title={t('subjects.documents')} subtitle={docs.data ? `${docs.data.length}` : undefined} onPress={() => router.push(`/subjects/${subjectId}/documents`)} />
+          <ListItem iconColor={tint} icon="albums-outline" title={t('subjects.cards')} onPress={() => router.push(`/subjects/${subjectId}/cards`)} />
+          <ListItem iconColor={tint} icon="text-outline" title={t('subjects.glossary')} onPress={() => router.push(`/subjects/${subjectId}/glossary`)} />
+          <ListItem iconColor={tint} icon="git-network-outline" title={t('subjects.concept_map')} onPress={() => router.push(`/subjects/${subjectId}/concept-map`)} />
+          <ListItem iconColor={tint} icon="sparkles-outline" title={t('memory_map.title')} onPress={() => router.push({ pathname: '/practice/memory-map', params: { subjectId } })} />
+          <ListItem iconColor={tint} icon="newspaper-outline" title={t('subjects.past_tests')} onPress={() => router.push(`/subjects/${subjectId}/past-tests`)} />
+          <ListItem iconColor={tint} icon="headset-outline" title={t('podcast.episodes')} onPress={() => router.push({ pathname: '/podcast/list', params: { subjectId } })} />
+          <ListItem iconColor={tint} icon="chatbubbles-outline" title={t('arg.title')} subtitle={t('arg.entry_hint')} onPress={() => router.push({ pathname: '/argument/new', params: { goalMode: 'exam_week', subjectId } })} />
+          <ListItem iconColor={tint} icon="camera-outline" title={t('cam.title')} subtitle={t('cam.add_photos_hint')} onPress={() => router.push({ pathname: '/camera', params: { subjectId } })} />
         </Card>
       </Section>
 
@@ -143,9 +144,14 @@ export default function SubjectHome() {
 
 /** The open notebook's cover: the subject's colour as a wash, its name set large, how much of it you've studied. */
 function SubjectCover({ name, icon, tint, studied, total, dark }: { name: string; icon: string | null; tint: string; studied: number; total: number; dark: boolean }) {
+  // Subject hues sit in the same band as the primary, so text on the primary reads on them too.
+  const onTint = useTheme().colors.onPrimary;
   return (
     <View style={{ marginHorizontal: -(space.gutter), marginTop: -space.sm, paddingHorizontal: space.gutter, paddingVertical: space.lg, gap: space.md, backgroundColor: `${tint}${dark ? '2A' : '1C'}`, borderBottomWidth: 3, borderBottomColor: tint }}>
-      <Ionicons name={(icon ?? 'book-outline') as IconName} size={30} color={tint} />
+      {/* The same emblem as the notebook on the shelf. */}
+      <View style={{ width: 48, height: 48, borderRadius: radius.md, backgroundColor: tint, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={(icon ?? 'book-outline') as IconName} size={26} color={onTint} />
+      </View>
       <Text variant="display" accessibilityRole="header">
         {name}
       </Text>

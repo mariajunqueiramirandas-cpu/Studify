@@ -12,18 +12,22 @@ import {
   Card,
   CountdownChip,
   IconButton,
+  IconTile,
   ProgressRing,
   RichText,
   Row,
   Screen,
   Section,
+  Tactile,
   Text,
   useOverlay,
+  type IconName,
+  type IconTone,
 } from '../../../components';
 import { useDb } from '../../../db/DatabaseProvider';
 import { useLive } from '../../../db/hooks';
 import { useSession } from '../../../features/auth/session';
-import { daysBetween, greeting, parseDate } from '../../../features/common/format';
+import { daysBetween, greeting, longDate, parseDate, weekdayLong } from '../../../features/common/format';
 import { updatePlanItem, useGoalExams, useGoals, usePlanCoach, useUpcomingExams, type Exam } from '../../../features/goals/api';
 import { CoachCard } from '../../../features/goals/CoachCard';
 import { enemRoute } from '../../../features/enem/format';
@@ -40,7 +44,7 @@ import { useFocusStore } from '../../../stores/focus';
 import { colorKeyFromHex, useSubjects } from '../../../features/subjects/api';
 import { t } from '../../../i18n';
 import { cheer } from '../../../lib/haptics';
-import { radius, space, subjectColor, useTheme } from '../../../theme';
+import { FONTS, radius, shade, space, subjectColor, useTheme } from '../../../theme';
 
 /** S-HOJE-01 Hoje (GOL-05): plan, countdowns, ≤ 3 cards, "Começar sessão". */
 export default function Today() {
@@ -86,10 +90,14 @@ export default function Today() {
       out.push({
         key: 'vespera',
         node: (
-          <Card key="vespera" tone="soft" onPress={() => router.push({ pathname: '/goal/[goalId]/eve/[examId]', params: { goalId: tomorrow[0]!.goal_id, examId: tomorrow[0]!.id } })}>
-            <Text variant="heading">{t('vespera.title')}</Text>
-            <Text>{t('vespera.notify', { subject: subjectName.get(tomorrow[0]!.subject_id ?? '') ?? tomorrow[0]!.title, minutes: 25 })}</Text>
-          </Card>
+          <OfferCard
+            key="vespera"
+            icon="moon-outline"
+            tone="lagoon"
+            title={t('vespera.title')}
+            body={t('vespera.notify', { subject: subjectName.get(tomorrow[0]!.subject_id ?? '') ?? tomorrow[0]!.title, minutes: 25 })}
+            onPress={() => router.push({ pathname: '/goal/[goalId]/eve/[examId]', params: { goalId: tomorrow[0]!.goal_id, examId: tomorrow[0]!.id } })}
+          />
         ),
       });
     }
@@ -101,10 +109,14 @@ export default function Today() {
       out.push({
         key: 'desperate',
         node: (
-          <Card key="desperate" tone="outline" onPress={() => router.push({ pathname: '/goal/[goalId]/desperate', params: { goalId: activeGoal.id } })}>
-            <Text variant="heading">{t('desperate.offer.title', { n: daysBetween(now, parseDate(soon.local_date)) })}</Text>
-            <Text tone="secondary">{t('desperate.offer.body')}</Text>
-          </Card>
+          <OfferCard
+            key="desperate"
+            icon="flash-outline"
+            tone="lamp"
+            title={t('desperate.offer.title', { n: daysBetween(now, parseDate(soon.local_date)) })}
+            body={t('desperate.offer.body')}
+            onPress={() => router.push({ pathname: '/goal/[goalId]/desperate', params: { goalId: activeGoal.id } })}
+          />
         ),
       });
     }
@@ -128,12 +140,13 @@ export default function Today() {
       out.push({
         key: 'grade',
         node: (
-          <Card key="grade" onPress={() => router.push({ pathname: '/goal/[goalId]/exam/[examId]', params: { goalId: ungraded.goal_id, examId: ungraded.id } })}>
-            <Text variant="heading">{t('grade.ask', { subject: subjectName.get(ungraded.subject_id ?? '') ?? ungraded.title })}</Text>
-            <Text variant="label" tone="accent">
-              {t('exam.log_grade')}
-            </Text>
-          </Card>
+          <OfferCard
+            key="grade"
+            icon="ribbon-outline"
+            title={t('grade.ask', { subject: subjectName.get(ungraded.subject_id ?? '') ?? ungraded.title })}
+            action={t('exam.log_grade')}
+            onPress={() => router.push({ pathname: '/goal/[goalId]/exam/[examId]', params: { goalId: ungraded.goal_id, examId: ungraded.id } })}
+          />
         ),
       });
     }
@@ -141,15 +154,16 @@ export default function Today() {
       out.push({
         key: 'upload',
         node: (
-          <Card key="upload" tone="soft" onPress={() => router.push('/subjects/new')}>
-            <Text variant="heading">{t('upload.button')}</Text>
-            <Text>{t('today.upload_cta')}</Text>
-          </Card>
+          <OfferCard key="upload" icon="cloud-upload-outline" title={t('upload.button')} body={t('today.upload_cta')} onPress={() => router.push('/subjects/new')} />
         ),
       });
     }
     return out.slice(0, 3);
   }, [exams.data, pastExams.data, activeGoal, hasSubjects, subjectName]);
+
+  const today = new Date();
+  const weekday = weekdayLong(today);
+  const dateLine = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${longDate(today)}`;
 
   const startSession = (minutes?: number) => router.push({ pathname: '/session/[sessionId]', params: { sessionId: 'new', ...(minutes ? { minutes: String(minutes) } : {}) } });
 
@@ -166,6 +180,7 @@ export default function Today() {
     <Screen
       root
       title=""
+      eyebrow={dateLine}
       actions={
         <>
           <IconButton icon="timer-outline" label={t('focus.title')} onPress={() => router.push('/focus')} />
@@ -176,7 +191,7 @@ export default function Today() {
       footer={
         <ActionBar>
           <Button label={pending.length || dueN ? t('today.start') : t('review.start')} icon="play" onPress={() => startSession()} disabled={!pending.length && !dueN} />
-          <Button variant="text" label={t('today.quick', { n: 10 }).replace('10', '…')} onPress={() => setQuick(true)} />
+          <Button variant="text" compact icon="hourglass-outline" label={t('today.quick', { n: 10 }).replace('10', '…')} onPress={() => setQuick(true)} />
         </ActionBar>
       }
     >
@@ -188,8 +203,12 @@ export default function Today() {
           {motivation.data ? (
             // The ring and streak open Progresso.
             <Pressable onPress={() => router.push('/profile/progress')} accessibilityRole="button" accessibilityLabel={t('progress.title')} style={styles.goal}>
-              <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={34} stroke={5} color={colors.lagoon} label={t('goal_daily.label', { n: motivation.data.dailyGoal })} />
-              <View style={{ flexShrink: 1 }}>
+              <ProgressRing value={Math.min(1, motivation.data.todayMinutes / motivation.data.dailyGoal)} size={52} stroke={6} color={colors.lagoon} label={t('goal_daily.label', { n: motivation.data.dailyGoal })}>
+                <Text variant="label" weight="bold" style={{ fontSize: 15, lineHeight: 18 }}>
+                  {Math.min(999, Math.round(motivation.data.todayMinutes))}
+                </Text>
+              </ProgressRing>
+              <View style={{ flexShrink: 1, gap: 2 }}>
                 <Text variant="label">{motivation.data.todayMinutes >= motivation.data.dailyGoal ? t('goal_daily.done') : t('goal_daily.label', { n: motivation.data.dailyGoal })}</Text>
                 {motivation.data.streak > 0 ? (
                   <Text variant="bodySmall" tone="secondary">
@@ -217,14 +236,20 @@ export default function Today() {
       {upcoming.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.exams}>
           {upcoming.map((e: Exam) => (
-            <Pressable
+            <Tactile
               key={e.id}
               onPress={() => router.push({ pathname: '/goal/[goalId]/exam/[examId]', params: { goalId: e.goal_id, examId: e.id } })}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.exam, { borderColor: colors.border, backgroundColor: pressed ? colors.surface2 : 'transparent' }]}
+              color={colors.surface1}
+              borderColor={colors.border}
+              ledge={shade(colors.border, 0.14)}
+              borderWidth={1.5}
+              radius={radius.lg}
+              depth={3}
+              style={styles.exam}
+              pressedStyle={{ backgroundColor: colors.surface2 }}
             >
               <CountdownChip startsAt={e.starts_at ?? e.local_date} hasTime={!!e.starts_at} label={subjectName.get(e.subject_id ?? '') ?? e.title} />
-            </Pressable>
+            </Tactile>
           ))}
         </ScrollView>
       ) : null}
@@ -232,9 +257,7 @@ export default function Today() {
       {dueN > 0 ? (
         <Card onPress={() => router.push('/review')} accessibilityLabel={t('review.start')}>
           <Row gap={space.md}>
-            <View style={[styles.stack, { backgroundColor: colors.primarySoft }]}>
-              <Ionicons name="albums-outline" size={22} color={colors.primary} />
-            </View>
+            <IconTile icon="albums-outline" size={44} />
             <View style={{ flex: 1 }}>
               <RichText>{t('review.today', { n: dueN, min: Math.max(1, Math.round((dueN * 8) / 60)) })}</RichText>
             </View>
@@ -285,12 +308,48 @@ export default function Today() {
   );
 }
 
+/** Plan unit types as the student reads them, each with its own icon. */
+const UNITS: Record<string, { key: string; icon: IconName }> = {
+  learn: { key: 'learn', icon: 'book-outline' },
+  learn_light: { key: 'learn', icon: 'book-outline' },
+  practice: { key: 'practice', icon: 'help-circle-outline' },
+  mock: { key: 'mock', icon: 'timer-outline' },
+  review: { key: 'review', icon: 'albums-outline' },
+  warmup: { key: 'review', icon: 'albums-outline' },
+  vespera: { key: 'vespera', icon: 'moon-outline' },
+  upload_material: { key: 'upload', icon: 'cloud-upload-outline' },
+  essay: { key: 'essay', icon: 'create-outline' },
+};
+
+/** A Hoje suggestion (véspera, desespero, grade, upload): icon key, a line or two, and where it leads. */
+function OfferCard({ icon, tone = 'primary', title, body, action, onPress }: { icon: IconName; tone?: IconTone; title: string; body?: string; action?: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Card onPress={onPress} accessibilityLabel={body ? `${title}. ${body}` : title}>
+      <Row gap={space.md} style={{ alignItems: 'flex-start' }}>
+        <IconTile icon={icon} tone={tone} size={44} />
+        <View style={{ flex: 1, gap: space.xs }}>
+          <Text variant="heading">{title}</Text>
+          {body ? <Text tone="secondary">{body}</Text> : null}
+          {action ? (
+            <Text variant="label" tone="accent">
+              {action}
+            </Text>
+          ) : null}
+        </View>
+        <Ionicons name="arrow-forward" size={20} color={colors.primary} style={{ marginTop: space.sm }} />
+      </Row>
+    </Card>
+  );
+}
+
 /** One line of the day's checklist: tick it, start a focus timer on it, or skip it. */
 function PlanRow({ item, first, color, onDone, onSkip }: { item: TodayItem; first: boolean; color: string; onDone: () => void; onSkip: () => void }) {
-  const { colors } = useTheme();
+  const { colors, easyReading } = useTheme();
   const done = item.status !== 'planned';
   // ENEM units open their own screen (simulado setup, redação, bank, Reta Final).
   const enem = enemRoute(item);
+  const unit = UNITS[item.unitType] ?? UNITS.learn!;
   return (
     <Pressable
       disabled={done || !enem}
@@ -316,12 +375,15 @@ function PlanRow({ item, first, color, onDone, onSkip }: { item: TodayItem; firs
         {item.status === 'skipped' ? <Ionicons name="remove" size={18} color={colors.textSecondary} /> : null}
       </Pressable>
       <View style={{ flex: 1, gap: 2, opacity: done ? 0.6 : 1 }}>
-        <Text variant="label" style={done ? { textDecorationLine: 'line-through' } : undefined}>
+        <Text variant="label" style={[!easyReading && { fontFamily: FONTS.uiSemiBold }, done && { textDecorationLine: 'line-through' }]}>
           {item.title}
         </Text>
-        <Text variant="bodySmall" tone="secondary">
-          {item.minutes} min{item.status === 'done' ? `, ${t('plan.status.done').toLowerCase()}` : item.status === 'skipped' ? `, ${t('plan.status.skipped').toLowerCase()}` : ''}
-        </Text>
+        <View style={styles.unit}>
+          <Ionicons name={unit.icon} size={14} color={colors.textSecondary} />
+          <Text variant="bodySmall" tone="secondary">
+            {t(`plan.units.${unit.key}`)} · {item.minutes} min{item.status === 'done' ? `, ${t('plan.status.done').toLowerCase()}` : item.status === 'skipped' ? `, ${t('plan.status.skipped').toLowerCase()}` : ''}
+          </Text>
+        </View>
         {item.focus && !done ? (
           <Text variant="bodySmall" style={{ color: colors.lagoon }}>
             {item.focus}
@@ -355,8 +417,8 @@ const styles = StyleSheet.create({
   goal: { flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'flex-start' },
   bleed: { marginHorizontal: -(space.gutter) },
   exams: { paddingHorizontal: space.gutter, gap: space.sm },
-  exam: { borderWidth: 1, borderRadius: radius.md, paddingVertical: space.sm, paddingLeft: space.sm, paddingRight: space.lg },
-  stack: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  exam: { paddingVertical: space.sm, paddingLeft: space.sm, paddingRight: space.lg },
+  unit: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   sheet: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingVertical: space.md, paddingLeft: space.lg, paddingRight: space.sm },
   check: { width: 28, height: 28, borderRadius: radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
