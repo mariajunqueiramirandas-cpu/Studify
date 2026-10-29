@@ -92,6 +92,7 @@ async function runTask<T>(
   hooks: Hooks | null,
 ): Promise<CallResult<T>> {
   const mode: CallMode = hooks ? "stream" : "sync";
+  (options.signal ?? deps.signal)?.throwIfAborted();
   const reservation = await deps.budget.reserve({
     ctx: call.ctx,
     taskId: call.task.id,
@@ -125,7 +126,7 @@ async function attemptLoop<T>(
   const requestOpts: RequestOpts = {
     timeout: deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxRetries: deps.maxRetries ?? DEFAULT_MAX_RETRIES,
-    ...(options.signal ? { signal: options.signal } : {}),
+    ...((options.signal ?? deps.signal) ? { signal: options.signal ?? deps.signal } : {}),
   };
 
   // One paid request per call (pause_turn continuations aside): no truncation or validation retry.
@@ -136,6 +137,7 @@ async function attemptLoop<T>(
   const requestIds: string[] = [];
 
   for (;;) {
+    (options.signal ?? deps.signal)?.throwIfAborted();
     attempt++;
     const params = buildParams(call, { batch: false, maxTokensClass: cls, messages });
     assertRequestShape(params, { batch: false, allowAssistantTail: continuations > 0 });

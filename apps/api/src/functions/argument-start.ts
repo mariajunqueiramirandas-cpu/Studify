@@ -12,7 +12,7 @@ import { requireAllowedText } from '../shared-p4/moderation.ts';
 export const handler = defineFunction<ArgumentStartReq>({
   name: 'argument-start',
   // A custom theme is checked by moderation.classify, a plain Claude call: that input runs as a job (ADR 0009).
-  deferred: (input) => input.theme_source === 'custom' && !input.theme_id,
+  streamResult: (input) => input.theme_source === 'custom' && !input.theme_id,
   mutating: true,
   aiCall: true,
   input: ArgumentStartReqSchema,

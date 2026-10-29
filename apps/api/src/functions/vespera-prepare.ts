@@ -20,7 +20,7 @@ export const handler = defineFunction<Req>({
     if (exam.data.status === 'cancelled' || exam.data.status === 'done') {
       throw new ApiFailure('invalid_request', { message: 'Essa prova não está mais agendada.' });
     }
-    const jobId = await deps.enqueue('vespera.prepare', { exam_id: input.exam_id, user_id: userId }, { singletonKey: input.exam_id, retryLimit: 2 });
+    const jobId = await deps.execute('vespera.prepare', { exam_id: input.exam_id, user_id: userId }, { singletonKey: input.exam_id, });
     return ctx.json({ status: 'preparing', job_id: jobId ?? '' }, 202);
   },
 });

@@ -1167,7 +1167,8 @@ All ENEM reference tables (`enem_editions`, `enem_skills`, `enem_topics`, `enem_
 #### `ai_jobs` [svc] — PLT-04, ING, all async features
 | Column | Type | Null / default | Notes |
 |---|---|---|---|
-| `type` | text | — | pg-boss job name ([api.md §7](api.md#7-worker-jobs)) |
+| `operation_id` | uuid | — | Unique direct invocation ID; legacy `pgboss_job_id` remains for historical rows |
+| `type` | text | — | Direct operation name ([api.md §7](api.md#7-direct-domain-operations)) |
 | `user_id` | uuid | N | Requester |
 | `subject_id`, `document_id` | uuid | N | |
 | `parent_job_id` | uuid → ai_jobs | N | Groups the stages of one ingestion |

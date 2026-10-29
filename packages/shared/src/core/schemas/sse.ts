@@ -33,8 +33,9 @@ export const SseEventSchema = z.discriminatedUnion('event', [
       stop_reason: z.enum(['end_turn', 'max_tokens', 'refusal']),
       usage_pct_today: z.int().min(0).max(100), // percent only, never dollars (PLT-04.2)
       result: z.unknown().optional(),
+      status: z.int().min(200).max(399).optional(),
     }),
   }),
-  z.object({ event: z.literal('error'), data: ApiErrorBodySchema }),
+  z.object({ event: z.literal('error'), data: ApiErrorBodySchema.extend({ status: z.int().min(400).max(599).optional() }) }),
 ]);
 export type SseEvent = z.infer<typeof SseEventSchema>;

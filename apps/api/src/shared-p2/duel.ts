@@ -214,10 +214,10 @@ export async function recordDuelAnswer(args: RecordAnswerArgs): Promise<RecordAn
     { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
   );
   if (evidence.error) throw evidence.error;
-  await deps.enqueue(
+  await deps.execute(
     'mastery.recompute',
     { user_id: attempt.user_id, node_ids: [question.node_id] },
-    { singletonKey: attempt.user_id, singletonSeconds: 60 },
+    { singletonKey: attempt.user_id, },
   );
   return { kind: 'recorded', correct: outcome.correct, points, timeout: args.timeout };
 }

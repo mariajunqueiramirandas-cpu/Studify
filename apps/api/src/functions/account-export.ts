@@ -25,7 +25,7 @@ export const handler = defineFunction<undefined>({
     const exportId = ctx.deps.newId();
     const inserted = await db.from('data_exports').insert({ id: exportId, user_id: userId, status: 'queued' });
     if (inserted.error) throw inserted.error;
-    await ctx.deps.enqueue('account.export', { export_id: exportId, user_id: userId }, { retryLimit: 3 });
+    await ctx.deps.execute('account.export', { export_id: exportId, user_id: userId }, { });
     return ctx.json({ export_id: exportId }, 202);
   },
 });

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { DEFAULT_APK_URL } from './site.ts';
 
 const Env = z.object({
+  PG_POOL_MAX: z.coerce.number().int().min(4).max(50).default(12),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   SUPABASE_URL: z.url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
@@ -12,15 +13,10 @@ const Env = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   /** Points the SDK at the mock Claude server (packages/ai/src/mock) in local runs and tests. */
   ANTHROPIC_BASE_URL: z.url().optional(),
-  /** Session-mode Postgres connection (Supavisor port 5432). pg-boss needs session mode (docs/engineering/deployment.md). */
+  /** Session-mode Postgres connection (Supavisor port 5432). direct SQL uses session mode (docs/engineering/deployment.md). */
   DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, 'must start with postgres:// or postgresql://'),
   /** Public host without scheme. Unset: studify.vendua.com.br. Empty: custom-scheme links only. */
   BASE_URL: z.string().optional(),
-  /** Schema pg-boss uses. The worker creates it; the API only sends. Must match the worker's PG_BOSS_SCHEMA. */
-  PG_BOSS_SCHEMA: z
-    .string()
-    .regex(/^[a-z_][a-z0-9_]*$/, 'must be a lowercase SQL identifier')
-    .default('pgboss'),
   /** Directory with the built link site. Default: apps/site/dist in the repo (the image sets /app/site). */
   SITE_DIR: z.string().min(1).optional(),
   /** Where /download redirects. Default: the newest GitHub Release's studify.apk (site.ts DEFAULT_APK_URL). */
@@ -33,6 +29,7 @@ const Env = z.object({
 
 export interface ApiConfig {
   port: number;
+  databasePoolMax: number;
   supabaseUrl: string;
   serviceRoleKey: string;
   anonKey: string;
@@ -41,7 +38,6 @@ export interface ApiConfig {
   databaseUrl: string;
   /** Raw BASE_URL: undefined means the default host, '' means custom-scheme links (see shared-p2/util.ts). */
   baseUrl: string | undefined;
-  pgBossSchema: string;
   siteDir: string;
   apkUrl: string;
   resendApiKey: string | undefined;
@@ -82,6 +78,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const v = parsed.data;
   return {
     port: v.PORT,
+    databasePoolMax: v.PG_POOL_MAX,
     supabaseUrl: v.SUPABASE_URL.replace(/\/+$/, ''),
     serviceRoleKey: v.SUPABASE_SERVICE_ROLE_KEY,
     anonKey: v.SUPABASE_ANON_KEY,
@@ -89,7 +86,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     anthropicBaseUrl: v.ANTHROPIC_BASE_URL,
     databaseUrl: v.DATABASE_URL,
     baseUrl: env.BASE_URL === undefined ? undefined : env.BASE_URL.trim(),
-    pgBossSchema: v.PG_BOSS_SCHEMA,
     siteDir: v.SITE_DIR ?? DEFAULT_SITE_DIR,
     apkUrl: v.APK_URL ?? DEFAULT_APK_URL,
     resendApiKey: v.RESEND_API_KEY,

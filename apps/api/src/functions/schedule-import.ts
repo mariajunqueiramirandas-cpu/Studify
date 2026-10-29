@@ -36,7 +36,7 @@ export const handler = defineP2<ScheduleImportInput>({
     });
     if (inserted.error) throw inserted.error;
 
-    const jobId = await p2.enqueue('schedule.import', { schedule_import_id: scheduleImportId }, {
+    const jobId = await p2.execute('schedule.import', { schedule_import_id: scheduleImportId }, {
       singletonKey: `schedule-import:${scheduleImportId}`,
     });
     if (!jobId) throw new ApiFailure('internal_error', { message: 'Não consegui iniciar a leitura do cronograma.' });

@@ -34,7 +34,7 @@ export const handler = defineFunction<z.infer<typeof AccountResetReqSchema>>({
 
     const out = (data ?? { documents: [], exports: [] }) as ResetOutput;
     if (out.documents.length > 0 || out.exports.length > 0) {
-      await ctx.deps.enqueue('account.reset_files', { user_id: user.userId, documents: out.documents, exports: out.exports }, { retryLimit: 5 });
+      await ctx.deps.execute('account.reset_files', { user_id: user.userId, documents: out.documents, exports: out.exports }, { });
     }
     const body: AccountResetRes = { reset: true };
     return ctx.json(body);

@@ -26,15 +26,10 @@ Supabase stays for Postgres, Auth, Storage and Realtime. The free tier is enough
   `apps/api/src/functions/<name>.ts` exporting the same `handler(req, deps)`. The server routes `/api/<name>` to it.
   Request and response behaviour (CORS, 401/405/426 envelopes, Idempotency-Key replay, SSE) is unchanged.
 - The server runs on the owner's **VPS through Dokploy** as a Docker Compose app built from this repository
-  (`docker-compose.yml`, `apps/api/Dockerfile`, `apps/worker/Dockerfile`). The public domain is
+  (`docker-compose.yml`, `apps/api/Dockerfile`). The public domain is
   `studify.vendua.com.br`; the same container serves the link site (`apps/site`, a React build) and `/api`.
-- The **worker moves to Bun as well** (checked locally: pg-boss 12, pdfjs-dist legacy build and @napi-rs/canvas
-  run under Bun). The worker's own tests stay on Vitest under Node.
-- **pg-boss enqueue** uses the real pg-boss client (same version as the worker) started with `supervise`,
-  `schedule` and `migrate` off, so the worker keeps owning the schema. This replaces the hand-written SQL INSERT
-  (ADR 0005 is unchanged).
-- Supabase keeps Postgres, Auth, Storage and Realtime. `DATABASE_URL` is the **session pooler** (port 5432), which
-  pg-boss needs.
+- Ingestion, generation and scheduled operations share this API process as `packages/server-tasks` ([ADR 0010](0010-direct-sse-api.md)). The separate worker and pg-boss client are retired.
+- Supabase keeps Postgres, Auth, Storage and Realtime. `DATABASE_URL` uses the **session pooler** (port 5432) for the API ownership advisory lock and direct SQL.
 - The mobile app calls `EXPO_PUBLIC_API_URL` (default `https://studify.vendua.com.br/api`) instead of
   `<supabase>/functions/v1`. Auth is still the Supabase JWT in the `Authorization` header.
 - `supabase/functions`, the Deno tooling and the Edge Functions section of `supabase/config.toml` are removed.

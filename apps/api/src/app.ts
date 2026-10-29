@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { createHash } from 'node:crypto';
 import { apiError } from '@studify/shared';
 import pkg from '../package.json' with { type: 'json' };
-import { jsonResponse, OPERATION_STATUS_HEADER } from './shared/http.ts';
+import { jsonResponse } from './shared/http.ts';
 import { log } from './log.ts';
 import { mountSite } from './site.ts';
 import { ROUTES } from './routes.ts';
@@ -33,12 +33,10 @@ export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string): Hono 
     await next();
     answered = true;
     // Logged when the response headers are ready: for SSE, that is the start of the stream.
-    const operation = c.res.headers.get(OPERATION_STATUS_HEADER);
     log('info', 'request', {
       method: c.req.method,
       path,
       status: c.res.status,
-      ...(operation ? { operation } : {}),
       ...who,
       ms: Math.round(performance.now() - started),
     });

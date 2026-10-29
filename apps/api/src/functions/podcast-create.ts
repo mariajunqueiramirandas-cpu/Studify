@@ -109,9 +109,13 @@ export const handler = defineFunction<PodcastCreateReq>({
       throw inserted.error;
     }
     const jobId = await createAiJob(deps, { type: 'podcast.generate', userId, subjectId: subject.id, stage: 'podcast' });
-    await deps.enqueue('podcast.generate', { episode_id: episodeId, ai_job_id: jobId, user_id: userId }, { singletonKey: `podcast:${episodeId}` });
-    const body: PodcastCreateRes = { episode_id: episodeId, status: 'queued', cached: false, dropped_topics: allocation.dropped.map((d) => d.title) };
-    return ctx.json(body, 202);
+    await deps.execute('podcast.generate', { episode_id: episodeId, ai_job_id: jobId, user_id: userId }, { singletonKey: `podcast:${episodeId}` });
+    const finished = await db.from('podcast_episodes').select('status').eq('id', episodeId).single();
+    if (finished.error) throw finished.error;
+    if (finished.data?.status === 'failed') throw new ApiFailure('ai_unavailable');
+    const status = finished.data?.status === 'ready' ? 'ready' : 'queued';
+    const body: PodcastCreateRes = { episode_id: episodeId, status, cached: false, dropped_topics: allocation.dropped.map((d) => d.title) };
+    return ctx.json(body, status === 'ready' ? 200 : 202);
   },
 });
 

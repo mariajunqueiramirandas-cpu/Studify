@@ -40,7 +40,7 @@ Use **Supabase**:
 
 - **+** Auth, database, storage, realtime and functions in one place. Local development via `supabase start`.
 - **+** RLS gives defense in depth even if an Edge Function has a bug. Policies are testable SQL.
-- **+** The job queue (pg-boss, [ADR 0005](0005-job-worker-pg-boss.md)) can live in the same Postgres.
+- **+** Future calendar triggers share the same Postgres ([ADR 0010](0010-direct-sse-api.md)); immediate operations run directly.
 - **−** Edge Functions have hard limits (verified 2026-10-26 in [Supabase docs](https://supabase.com/docs/guides/functions/limits): 150 s wall clock on Free / 400 s on paid, 2 s CPU per request, 256 MB memory, 150 s request idle timeout). Long or bulk AI work therefore goes to a separate worker.
 - **−** RLS mistakes are the main privacy risk. Mitigated by the RLS coverage gate and pgTAP suite ([testing-strategy.md §4](../testing-strategy.md#4-database-and-rls-tests)).
 - **−** Vendor coupling to Supabase Auth and Storage APIs. Postgres itself stays portable.

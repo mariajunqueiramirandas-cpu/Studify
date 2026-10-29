@@ -21,11 +21,11 @@ describe('SSE parser', () => {
     expect(messages).toEqual([{ event: 'message', data: 'linha 1\nlinha 2' }]);
   });
 
-  it('dispatches an unterminated trailing message on flush', () => {
+  it('discards an unterminated trailing message on EOF for safe reconnect', () => {
     const messages: SseMessage[] = [];
     const parser = createSseParser((m) => messages.push(m));
     parser.feed('event: done\ndata: {}');
     parser.flush();
-    expect(messages).toEqual([{ event: 'done', data: '{}' }]);
+    expect(messages).toEqual([]);
   });
 });

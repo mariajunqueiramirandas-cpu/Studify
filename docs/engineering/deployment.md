@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Status** | Ready to deploy (first production deploy pending) |
-| **Scope** | Supabase cloud project, the API and worker on the VPS (Dokploy), the public domain, updates, logs |
-| **Related** | [Architecture](architecture.md) · [API](api.md) · [ADR 0008](adr/0008-vps-bun-hono-api.md) · [ADR 0005](adr/0005-job-worker-pg-boss.md) · [Mobile app](mobile-app.md) |
+| **Scope** | Supabase cloud project, the SSE API on the VPS (Dokploy), the public domain, updates, logs |
+| **Related** | [Architecture](architecture.md) · [API](api.md) · [ADR 0008](adr/0008-vps-bun-hono-api.md) · [ADR 0010](adr/0010-direct-sse-api.md) · [Mobile app](mobile-app.md) |
 
 ## 1. What runs where
 
@@ -12,7 +12,6 @@
 |---|---|---|
 | Postgres, Auth, Storage, Realtime | **Supabase cloud**, free tier, region **sa-east-1 (São Paulo)** (SP-16) | Schema comes from `supabase/migrations`. |
 | API server (`apps/api`, Bun + Hono) | **VPS**, Dokploy Compose app, service `api`, port 3000 | Serves `/api/<name>`, `/api/health`, the React link site (`apps/site`, built into the image) at `/`, `/c/*`, `/i/*`, `/q/*`, `/b/*`, `/assets/*`, `/.well-known/assetlinks.json`, and `/download` (302 to the newest release APK; `APK_URL` overrides it). |
-| Worker (`apps/worker`, Bun + pg-boss) | VPS, same Compose app, service `worker` | No domain. One replica. |
 | Public domain | `studify.vendua.com.br` (HTTPS, Let's Encrypt via Dokploy) | The API is under `https://studify.vendua.com.br/api`. |
 
 ## 2. Supabase cloud (free tier)
@@ -31,8 +30,8 @@
 4. **Google provider** (Authentication > Providers > Google): enter the OAuth client id and secret from the Google
    Cloud console (Web application client, the same one as `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`).
    E-mail templates and the Resend sender are pushed from `supabase/config.toml` (apps/mobile/RELEASING.md §8).
-5. **Database URL for the API and worker**: Project Settings > Database > **Session pooler**, port **5432**.
-   Use this string as `DATABASE_URL`. Do not use the transaction pooler (6543): pg-boss needs session mode. Do not
+5. **Database URL for the API**: Project Settings > Database > **Session pooler**, port **5432**.
+   Use this string as `DATABASE_URL`. Do not use the transaction pooler (6543): the API holds a session advisory lock. Do not
    use the direct connection either: on the free tier it is IPv6-only, and the VPS needs IPv4.
 
 Free-tier limits to keep in mind:
@@ -45,7 +44,7 @@ Free-tier limits to keep in mind:
 1. **Create a Compose app**: Project > Create Service > Compose. Source: the Git repository and branch (for example
    `main`). Compose file: `docker-compose.yml` at the repository root. Build path: the repository root.
 2. **Environment**: paste the variables from [`.env.example`](../../.env.example) into the app's Environment tab with
-   real values. Dokploy writes them to `.env` next to the compose file, and both services read it (`env_file`).
+   real values. Dokploy writes them to `.env` next to the compose file, and the API reads it (`env_file`).
    Required: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`, `DATABASE_URL`.
    Keep `PORT=3000` and `BASE_URL=studify.vendua.com.br`. Set `RESEND_API_KEY` too, or guardian mails are not sent.
    Never commit real values.
@@ -54,31 +53,31 @@ Free-tier limits to keep in mind:
    them by hand.
 4. **DNS**: an `A` record `studify.vendua.com.br` pointing to the VPS IP. Wait for it to resolve before enabling
    HTTPS.
-5. **Deploy**. Both images build from the repository root (`apps/api/Dockerfile`, `apps/worker/Dockerfile`).
-   The API image runs `bun apps/api/src/server.ts`; the worker image runs `bun apps/worker/src/index.ts`.
+5. **Deploy**. The single image builds from the repository root (`apps/api/Dockerfile`) and runs `bun apps/api/src/server.ts`.
 6. **Check**: `curl https://studify.vendua.com.br/api/health` returns `{"ok":true,"version":"0.1.0"}`, and
    `https://studify.vendua.com.br/c/ABCDEFGH` returns the link page, and `https://studify.vendua.com.br/download` redirects to
    the newest `studify.apk`.
 
-The compose file joins both services to the external `dokploy-network`, uses `expose` instead of host ports, and has
+The compose file joins the API to the external `dokploy-network`, uses `expose` instead of host ports, and has
 no `container_name`. Do not add published ports: Traefik reaches the API through the network.
 
-## 4. Worker
+## 4. One SSE API service
 
-- **Run one replica.** ADR 0005 keeps one worker instance with per-queue concurrency limits. Scale the VPS up before
-  adding replicas.
-- **Stop gracefully.** The compose file gives the worker 60 s (`stop_grace_period`). On SIGTERM it stops pg-boss and
-  lets in-flight jobs finish, so a deploy does not kill a running ingest.
-- **Schema.** The worker creates the `pgboss` schema and its queues on first start. The API only sends jobs, so
-  deploy the worker before the first API request that enqueues a job (the API retries pg-boss start on each enqueue,
-  so the order is forgiving).
+- Run **one replica**, using **stop-first** deployment ordering. A session advisory lock prevents overlapping API owners. Scale the VPS before changing the live-stream ownership design.
+- Apply `20261028040000_direct_sse_operations.sql` before deploying. On first migration from the queued architecture, drain or explicitly resolve the old backlog and outstanding provider batches, then stop the old worker and API. The new runtime does not consume the old pg-boss schema.
+- Coordinate the API and new mobile build: legacy clients with 30-second JSON deadlines lose the old deferred polling contract. Ship the SSE-capable build as part of the cutover and enforce its minimum version once available.
+- Remove `PG_BOSS_SCHEMA`, `AI_USE_BATCH` and `WORKER_LOG_LEVEL`; use `TASK_LOG_LEVEL`. Keep push, PDF, TTS and model settings on the API container. `PG_POOL_MAX` defaults to 12, with one connection reserved for ownership.
+- SSE sends a heartbeat every 15 seconds. Verify Traefik forwards each frame immediately; disable buffering/compression middleware for `/api/*`, permit at least 45 seconds of network silence, and avoid absolute response timeouts below the operation duration. `X-Accel-Buffering: no` is also sent for proxies that honor it.
+- SIGTERM drains connected and detached operations, then stops the scheduler and closes Postgres. Compose allows 60 seconds; the process forces exit at 50 seconds. Startup marks orphaned work interrupted so a student can retry from saved domain state.
+- Only future calendar triggers are persisted in `private.scheduled_actions`; immediate work bypasses it. Unclaimed deadlines survive restarts. A trigger interrupted after claim is at most once and may require manual recovery; failures are logged, without automatic paid retries.
+- Watch API event-loop delay, memory, active SSE connections and PDF processing load. See [ADR 0010](adr/0010-direct-sse-api.md) for transport limits and scaling constraints.
 
 ## 5. Logs and health
 
 - **API**: JSON lines on stdout (`{"time","level","msg",...}`). Each request logs method, path, status and
   milliseconds to response headers. Authorization headers and bodies are never logged. Errors and warnings go to
   stderr. Dokploy shows them under the service's Logs tab.
-- **Worker**: pino JSON logs (`service: studify-worker`).
+- **Domain operations**: pino JSON logs in the API (`service: studify-api-tasks`).
 - **Health**: the image's HEALTHCHECK and the compose `healthcheck` call `/api/health` every 30 s. An unhealthy
   container is restarted by `restart: unless-stopped` only when the process exits; watch the Dokploy status for
   "unhealthy".
@@ -100,7 +99,6 @@ pnpm install
 cp .env.example .env            # fill in dev values; use a dev Claude key with a spend cap
 pnpm api:dev                    # bun --watch apps/api/src/server.ts on PORT (default 3000)
 pnpm api:test                   # bun test for apps/api
-pnpm --filter @studify/worker dev
 ```
 
 - Local Supabase (`supabase start`) provides Postgres, Auth and Storage at `http://127.0.0.1:54321`. Use its
@@ -114,6 +112,6 @@ pnpm --filter @studify/worker dev
 ## 8. Not yet verified
 
 - The images have not been built or deployed. The image layout (install with `--frozen-lockfile --prod`, then run
-  from `/app`) was reproduced in a scratch copy and both servers started from it. The Dokploy domain and TLS steps
+  from `/app`) was reproduced in a scratch copy and the previous servers started from it; the new single-service image still needs a deployment smoke test. The Dokploy domain and TLS steps
   follow Dokploy's documentation and have not run on the VPS.
 - The `oven/bun:1.4-slim` base image's `bun` user is assumed for `USER bun`; confirm on the first build.

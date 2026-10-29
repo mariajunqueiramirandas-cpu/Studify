@@ -36,10 +36,9 @@ test('config: every missing required variable is listed at once', () => {
   }
 });
 
-test('config: defaults for port, pg-boss schema, base URL and site directory', () => {
+test('config: defaults for port, base URL and site directory', () => {
   const cfg = loadConfig(VALID_ENV);
   assertEquals(cfg.port, 3000);
-  assertEquals(cfg.pgBossSchema, 'pgboss');
   assertEquals(cfg.baseUrl, undefined);
   assertEquals(cfg.siteDir, path.resolve(import.meta.dir, '../../site/dist'));
 });
@@ -51,14 +50,13 @@ test('config: an empty BASE_URL is kept (custom-scheme links); empty optional va
   assertEquals(cfg.port, 8080);
 });
 
-test('config: a malformed DATABASE_URL and an unsafe schema name are rejected', () => {
+test('config: a malformed DATABASE_URL  are rejected', () => {
   try {
-    loadConfig({ ...VALID_ENV, DATABASE_URL: 'mysql://x', PG_BOSS_SCHEMA: 'pg;drop' });
+    loadConfig({ ...VALID_ENV, DATABASE_URL: 'mysql://x' });
     throw new Error('expected a ConfigError');
   } catch (err) {
     assertInstanceOf(err, ConfigError);
     assertStringIncludes((err as ConfigError).problems.join('\n'), 'DATABASE_URL: must start with postgres');
-    assertStringIncludes((err as ConfigError).problems.join('\n'), 'PG_BOSS_SCHEMA');
   }
 });
 

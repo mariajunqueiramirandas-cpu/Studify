@@ -380,7 +380,7 @@ Target: ≥ 90% match rate on pages with a text layer (metric).
 | Upload interrupted / app killed | TUS resumes; the processing pipeline is server-side and unaffected by the app. |
 | User deletes the document during processing | Jobs cancelled; partial nodes removed per §8.6. |
 | Budget runs out mid-pipeline | Current stage finishes; remaining stages pause with `waiting_budget` and resume automatically when budget is available; the outline stays usable. |
-| Claude API outage / 5xx / 429 | SDK retries; pg-boss retries with backoff; after final failure the stage is `failed` with "Tentar de novo". |
+| Claude API outage / 5xx / 429 | Bounded SDK retries within a call; then the stage is `failed` with "Tentar de novo". No whole-operation queue retry (ADR 0010). |
 | Refusal on part of the material (e.g. graphic historical content) | Fallback model attempted; persistent refusal marks only that topic `ai_refused`; the rest proceeds. |
 | Spanish material in an Espanhol class | `is_language_subject` on; content in Spanish, explanations in PT-BR. |
 | Material in mixed languages | Dominant language wins; per-topic language is not supported (open question). |

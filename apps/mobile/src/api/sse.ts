@@ -2,11 +2,12 @@
 export interface SseMessage {
   event: string;
   data: string;
+  id?: string;
 }
 
 export interface SseParser {
   feed(chunk: string): void;
-  /** Dispatches a trailing message that was not terminated by a blank line. */
+  /** Ends the input; an incomplete final event is discarded so a reconnect can safely replay it. */
   flush(): void;
 }
 
@@ -14,10 +15,11 @@ export function createSseParser(onMessage: (message: SseMessage) => void): SsePa
   let buffer = '';
   let event = 'message';
   let data: string[] = [];
+  let id: string | undefined;
 
   const dispatch = () => {
     if (data.length > 0) {
-      onMessage({ event, data: data.join('\n') });
+      onMessage({ event, data: data.join('\n'), ...(id !== undefined ? { id } : {}) });
     }
     event = 'message';
     data = [];
@@ -35,6 +37,7 @@ export function createSseParser(onMessage: (message: SseMessage) => void): SsePa
     if (value.startsWith(' ')) value = value.slice(1);
     if (field === 'event') event = value;
     else if (field === 'data') data.push(value);
+    else if (field === 'id' && !value.includes('\0')) id = value;
   };
 
   return {
@@ -48,10 +51,11 @@ export function createSseParser(onMessage: (message: SseMessage) => void): SsePa
       for (const line of lines) handleLine(line);
     },
     flush() {
-      const rest = buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
+      // A held CR is itself a valid line ending. Other trailing text has no delimiter and is incomplete.
+      if (buffer.endsWith('\r')) handleLine(buffer.slice(0, -1));
       buffer = '';
-      if (rest.length > 0) handleLine(rest);
-      dispatch();
+      event = 'message';
+      data = [];
     },
   };
 }

@@ -2,7 +2,7 @@ name: Android release
 
 # Builds a release APK on the GitHub runner (not EAS cloud), signs it with the persistent release key and
 # publishes it as a GitHub Release. Every push to main that changes the app is a release; pushes that only touch
-# the server (apps/api, apps/worker, apps/site, supabase, docs, other packages) build nothing.
+# the server (apps/api, packages/server-tasks, apps/site, supabase, docs, other packages) build nothing.
 # Setup: apps/mobile/RELEASING.md.
 
 on:

@@ -228,7 +228,7 @@ export const handler = defineFunction<Req>({
     }
 
     for (const g of pending) {
-      await deps.enqueue('grading.answer', { attempt_answer_id: g.answerId }, { singletonKey: g.answerId, retryLimit: 2 });
+      await deps.execute('grading.answer', { attempt_answer_id: g.answerId }, { singletonKey: g.answerId, });
     }
 
     const body: QuizSubmitRes = {

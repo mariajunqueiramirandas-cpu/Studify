@@ -1,38 +1,21 @@
-// Production wiring for the base Deps. Built once at startup from the validated config (server.ts); handlers
-// never build clients themselves. The pg-boss instance is started lazily on the first enqueue, so the API
-// keeps serving while the worker is still creating the schema.
+// One API process owns HTTP streams and direct domain operations. No queue client or consumer.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import pg from 'pg';
-import { PgBoss } from 'pg-boss';
 import type { AnthropicLike } from '@studify/ai';
 import { uuidV7 } from '@studify/shared';
 import type { ApiConfig } from '../config.ts';
 import { log } from '../log.ts';
 import { makeBudgetStore, makeUsageSink } from './budget.ts';
-import type { DeferredJob, Deps } from './deps.ts';
-import { makePgBossEnqueue } from './enqueue.ts';
+import type { Deps } from './deps.ts';
+import { createRuntime, discoverOperations, loadConfig as loadTaskConfig } from '@studify/server-tasks';
 import { withPrivateSchema } from './private-schema.ts';
-
-/**
- * ADR 0009: handlers that call Claude outside a stream run as jobs on this queue, served by the API process itself
- * (it has the handlers and their dependencies). pg-boss makes the work durable: a job whose process dies is
- * retried after `expireInSeconds`. One retry covers a transient failure; the app stops polling after 4 minutes.
- */
-export const INTERACTIVE_QUEUE = 'api.interactive';
-const INTERACTIVE_QUEUE_OPTIONS = { retryLimit: 1, retryDelay: 2, retryBackoff: false, expireInSeconds: 240, policy: 'standard', notify: true } as const;
-/** Deferred calls one API process runs at once. They wait on Claude, not on the CPU. */
-const INTERACTIVE_CONCURRENCY = 16;
-
-export type DeferredRunner = (job: DeferredJob, attempt: { finalAttempt: boolean }) => Promise<void>;
 
 export interface ProdRuntime {
   deps: Deps;
-  /** Warms up pg-boss. Failure is logged, not fatal: the next enqueue retries. */
+  /** Initializes domain operations and calendar triggers. */
   start(): Promise<void>;
-  /** Starts working the interactive queue (ADR 0009). Rejects when pg-boss is not reachable yet; the caller retries. */
-  serveInteractive(run: DeferredRunner): Promise<void>;
-  /** Stops pg-boss gracefully (in-flight sends finish). Safe when pg-boss never started. */
+  /** Drains operations and closes database connections. */
   stop(): Promise<void>;
 }
 
@@ -56,7 +39,7 @@ function minClientVersionOf(db: SupabaseClient): () => Promise<number | null> {
 
 export function buildProdRuntime(config: ApiConfig): ProdRuntime {
   // The private schema is not exposed through PostgREST: db.schema('private') runs over this pool.
-  const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 4, idleTimeoutMillis: 30_000, application_name: 'studify-api' });
+  const pool = new pg.Pool({ connectionString: config.databaseUrl, max: config.databasePoolMax, idleTimeoutMillis: 30_000, application_name: 'studify-api' });
   pool.on('error', (err: Error) => log('warn', 'postgres pool error', { message: err.message }));
   const db = withPrivateSchema(
     createClient(config.supabaseUrl, config.serviceRoleKey, {
@@ -70,47 +53,8 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
     maxRetries: 0,
   }) as unknown as AnthropicLike;
 
-  const boss = new PgBoss({
-    connectionString: config.databaseUrl,
-    schema: config.pgBossSchema,
-    max: 4,
-    // The worker owns the schema, supervision and scheduling. The API sends, and works only its interactive queue.
-    supervise: false,
-    schedule: false,
-    migrate: false,
-    // Wakes the interactive workers as soon as a call is deferred. Falls back to polling when LISTEN is unavailable.
-    useListenNotify: true,
-  });
-  boss.on('error', (err: Error) => log('error', 'pg-boss error', { message: err.message }));
-
-  let starting: Promise<void> | null = null;
-  const ready = (): Promise<void> => {
-    starting ??= boss.start().then(
-      () => undefined,
-      (err: unknown) => {
-        starting = null;
-        throw err;
-      },
-    );
-    return starting;
-  };
-
-  let queueReady: Promise<void> | null = null;
-  const interactiveQueue = (): Promise<void> => {
-    queueReady ??= (async () => {
-      await ready();
-      if ((await boss.getQueue(INTERACTIVE_QUEUE)) === null) {
-        await boss.createQueue(INTERACTIVE_QUEUE, INTERACTIVE_QUEUE_OPTIONS).catch(async (err: unknown) => {
-          // Another API process created it first.
-          if ((await boss.getQueue(INTERACTIVE_QUEUE)) === null) throw err;
-        });
-      }
-    })().catch((err: unknown) => {
-      queueReady = null;
-      throw err;
-    });
-    return queueReady;
-  };
+  let ownership: pg.PoolClient | undefined;
+  let tasks: Awaited<ReturnType<typeof createRuntime>> | undefined;
 
   const deps: Deps = {
     db,
@@ -128,10 +72,20 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
     },
     // One SDK retry: worst case 2 × 120 s stays under Bun's 255 s idle timeout for streams (ADR 0009).
     ai: { client, budget: makeBudgetStore(db), usage: makeUsageSink(db), timeoutMs: 120_000, maxRetries: 1 },
-    enqueue: makePgBossEnqueue(boss, ready),
-    defer: async (job: DeferredJob) => {
-      await interactiveQueue();
-      await boss.send(INTERACTIVE_QUEUE, { ...job });
+    execute: async (name, data, options = {}) => {
+      if (!tasks) throw new Error('server operations have not started');
+      try { return await tasks.registry.execute(name, data, {
+        singletonKey: options.singletonKey,
+        ...(options.startAfterSeconds !== undefined ? { startAfter: options.startAfterSeconds } : {}),
+      }, { onProgress: options.onProgress ? (id, patch) => options.onProgress!(id, { ...patch }) : undefined, signal: options.signal });
+      } catch (error) {
+        // Direct execution has no later worker attempt to repair these placeholders. Make a fresh tap retryable.
+        if (typeof data.ai_job_id === 'string') await db.from('ai_jobs').update({ status: 'failed', error_code: 'ai_failed', finished_at: new Date().toISOString() }).eq('id', data.ai_job_id).in('status', ['queued', 'running']);
+        if (name.startsWith('ingest.') && typeof data.document_id === 'string') await db.from('documents').update({ status: 'failed', error_code: 'ai_failed' }).eq('id', data.document_id).in('status', ['uploaded', 'processing']);
+        if (typeof data.note_id === 'string') await db.from('notes').update({ status: 'failed' }).eq('id', data.note_id).in('status', ['pending', 'generating']);
+        if (typeof data.episode_id === 'string') await db.from('podcast_episodes').update({ status: 'failed', error_code: 'ai_failed' }).eq('id', data.episode_id).in('status', ['queued', 'scripting', 'synthesizing']);
+        throw error;
+      }
     },
     now: () => new Date(),
     newId: () => uuidV7(),
@@ -145,37 +99,41 @@ export function buildProdRuntime(config: ApiConfig): ProdRuntime {
   return {
     deps,
     async start() {
-      try {
-        await ready();
-        log('info', 'pg-boss started', { schema: config.pgBossSchema });
-      } catch (err) {
-        log('warn', 'pg-boss not ready yet; enqueue will retry', { message: errorMessage(err) });
-      }
-    },
-    async serveInteractive(run: DeferredRunner) {
-      await interactiveQueue();
-      await boss.work(
-        INTERACTIVE_QUEUE,
-        { localConcurrency: INTERACTIVE_CONCURRENCY, pollingIntervalSeconds: 0.5, includeMetadata: true },
-        async (jobs) => {
-          for (const job of jobs) {
-            await run(job.data as DeferredJob, { finalAttempt: job.retryCount >= job.retryLimit });
-          }
-        },
-      );
+      // Live fan-out is process-local. Hold ownership for the lifetime of this API, so an overlapping
+      // deployment cannot mistake another process's active calls for interrupted ones.
+      ownership = await pool.connect();
+      ownership.once('error', (error: Error) => {
+        log('error', 'API ownership connection lost; exiting', { message: error.message });
+        process.exit(1); // another process may now own this database; stop all writes immediately
+      });
+      const lease = await ownership.query<{ acquired: boolean }>("select pg_try_advisory_lock(hashtextextended('studify-api-runtime', 0)) as acquired");
+      if (!lease.rows[0]?.acquired) throw new Error('Another Studify API instance is active; deploy with one replica and stop-first ordering.');
+      await ownership.query('select operation_id from public.ai_jobs limit 0');
+      await ownership.query('select id from private.scheduled_actions limit 0');
+      const interrupted = JSON.stringify({ error: { code: 'ai_unavailable', message: 'O servidor reiniciou antes de concluir. Tente novamente.' } });
+      await ownership.query(`update private.idempotency_keys set status_code = 503,
+        response = jsonb_build_object('status', 503, 'contentType', 'application/json', 'body', $1::text)
+        where status_code = 102`, [interrupted]);
+      await ownership.query(`update public.ai_jobs set status = 'failed', error_code = 'interrupted', finished_at = now()
+        where status in ('queued', 'running') and not exists
+        (select 1 from private.scheduled_actions where data->>'ai_job_id' = ai_jobs.id::text)`);
+      await ownership.query(`update public.documents set status = 'failed', error_code = 'ai_failed'
+        where status = 'processing' and exists
+        (select 1 from public.ai_jobs where document_id = documents.id and error_code = 'interrupted')`);
+      await ownership.query("update public.notes set status = 'failed' where status in ('pending', 'generating')");
+      await ownership.query("update public.podcast_episodes set status = 'failed', error_code = 'interrupted' where status in ('queued', 'scripting', 'synthesizing')");
+      const taskConfig = loadTaskConfig({ ...process.env, DATABASE_URL: config.databaseUrl,
+        SUPABASE_URL: config.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: config.serviceRoleKey,
+        ANTHROPIC_API_KEY: config.anthropicApiKey, ANTHROPIC_BASE_URL: config.anthropicBaseUrl,
+      });
+      tasks = await createRuntime(taskConfig, { pool, supabase: db });
+      await tasks.registry.register(await discoverOperations());
+      await tasks.start();
     },
     async stop() {
-      if (starting) {
-        // Deferred calls in progress get time to finish; one cut off is retried by the queue after it expires.
-        await boss.stop({ graceful: true, timeout: 30_000 }).catch((err: unknown) => {
-          log('warn', 'pg-boss stop failed', { message: errorMessage(err) });
-        });
-      }
-      await pool.end().catch(() => undefined);
+      await tasks?.shutdown();
+      if (ownership) { await ownership.query("select pg_advisory_unlock(hashtextextended('studify-api-runtime', 0))"); ownership.release(); }
+      await pool.end();
     },
   };
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }

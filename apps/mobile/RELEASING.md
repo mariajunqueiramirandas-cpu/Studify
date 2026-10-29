@@ -99,7 +99,7 @@ are drawn by the `studify-notify` module.
 2. Create an Expo project (`npx eas-cli@latest init` in `apps/mobile`) and set its id as `EXPO_PUBLIC_EAS_PROJECT_ID`.
 3. In Firebase, create a service-account key for FCM HTTP v1 and upload it to the Expo project
    (`npx eas-cli@latest credentials` → Android → Google Service Account → FCM V1). Expo uses it to deliver.
-4. Give the worker an Expo access token with push permission as `EXPO_ACCESS_TOKEN` (see `apps/worker/.env.example`).
+4. Give the worker an Expo access token with push permission as `EXPO_ACCESS_TOKEN` (see `packages/server-tasks/.env.example`).
 
 Check: on a release build, sign in, allow notifications, and look for a row in `push_tokens` for your user.
 Perfil → Notificações → Ver exemplos sends every layout to the shade without the server.

@@ -499,7 +499,7 @@ export async function recordQuestionAnswer(deps: Deps, trail: TrailRow, row: Ste
     [{ user_id: trail.user_id, node_id: row.concept_id, subject_id: trail.subject_id, source: 'trail', outcome: score, weight, ref_type: 'trail_step', ref_id: row.id, occurred_at: answeredAt }],
     { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
   );
-  const recompute = deps.enqueue('mastery.recompute', { user_id: trail.user_id, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${trail.user_id}`, startAfterSeconds: 60 });
+  const recompute = deps.execute('mastery.recompute', { user_id: trail.user_id, node_ids: [row.concept_id] }, { singletonKey: `mastery.recompute:${trail.user_id}`, startAfterSeconds: 60 });
   const mistake =
     caderno && !correct
       ? saveMistake(deps, trail, row, timeSpentMs, now).catch((err) => {

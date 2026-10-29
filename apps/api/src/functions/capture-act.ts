@@ -230,7 +230,7 @@ async function checkAnswer(ctx: FnContext<CaptureActReq>, capture: CaptureRow, a
         [{ user_id: userId, node_id: capture.node_id, subject_id: capture.subject_id, source: 'quiz_answer', outcome: outcome.score, weight, ref_type: 'camera_capture', ref_id: capture.id, occurred_at: ctx.now.toISOString() }],
         { onConflict: 'ref_type,ref_id,node_id', ignoreDuplicates: true },
       );
-      await deps.enqueue('mastery.recompute', { user_id: userId, node_ids: [capture.node_id] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
+      await deps.execute('mastery.recompute', { user_id: userId, node_ids: [capture.node_id] }, { singletonKey: `mastery.recompute:${userId}`, startAfterSeconds: 60 });
     }
     // A wrong attempt on a saved question goes to the Caderno de Erros.
     if (!correct && capture.question_id) {
@@ -301,7 +301,7 @@ async function addToSubject(ctx: FnContext<CaptureActReq>, capture: CaptureRow, 
     throw inserted.error;
   }
   const jobId = await createAiJob(deps, { type: 'ingest.photos_to_pdf', userId, subjectId: subject.id, documentId, stage: 'photos' });
-  await deps.enqueue('ingest.photos_to_pdf', { subject_id: subject.id, image_paths: capture.image_paths, document_id: documentId, ai_job_id: jobId, user_id: userId }, { retryLimit: 3 });
+  await deps.execute('ingest.photos_to_pdf', { subject_id: subject.id, image_paths: capture.image_paths, document_id: documentId, ai_job_id: jobId, user_id: userId }, { });
   const updated = await deps.db.from('camera_captures').update({ saved: true, document_id: documentId, subject_id: subject.id }).eq('id', capture.id);
   if (updated.error) throw updated.error;
   return ctx.json({ intent: 'add_to_subject', document_id: documentId, job_id: jobId } satisfies CaptureActRes, 202);
@@ -409,7 +409,7 @@ export const handler = defineFunction<CaptureActReq>({
   name: 'capture-act',
   // ADR 0009: `solve` builds the hint ladder with a plain Claude call, so it runs as a job. `explain` and the
   // `solution` reveal stream instead.
-  deferred: (input) => input.intent === 'solve' && input.reveal !== 'solution',
+  streamResult: (input) => input.intent === 'solve' && input.reveal !== 'solution',
   mutating: true,
   aiCall: true,
   input: CaptureActReqSchema,

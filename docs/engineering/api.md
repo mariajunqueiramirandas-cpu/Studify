@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft v1 |
-| **Scope** | Every server interface: direct table access under RLS, Postgres RPC functions, API functions, worker jobs, Realtime channels, push notifications, deep links |
+| **Scope** | Every server interface: direct table access under RLS, Postgres RPC functions, API functions, direct domain operations, Realtime channels, push notifications, deep links |
 | **Consistent with** | [data-model.md](data-model.md) (all table/column names), [architecture.md](architecture.md), [security-privacy.md](security-privacy.md), [mobile-app.md](mobile-app.md), the specs in [docs/specs/](../specs/) |
 | **Schemas** | Request/response shapes are written as TypeScript types; each one is a Zod schema in `packages/shared/src/api/` with the same name, used by the app and the server. |
 
@@ -25,22 +25,20 @@ flowchart LR
   App -- "HTTPS / SSE" --> Edge["API server (Bun + Hono)<br/>/api/name"]
   Edge --> PG
   Edge --> Claude["Claude API"]
-  Edge -- "enqueue" --> Q[("pg-boss")]
-  Worker["Worker"] -- "jobs" --> Q
-  Worker --> Claude
-  Worker --> PG
-  Worker -- "Expo Push" --> Phone["Push"]
+  Edge -- "direct operations" --> Tasks["server-tasks library"]
+  Tasks --> Claude
+  Tasks --> PG
+  Tasks -- "Expo Push" --> Phone["Push"]
   App <-- "postgres_changes / broadcast / presence" --> RT["Realtime"]
   Edge -- "broadcast" --> RT
-  Worker -- "broadcast" --> RT
 ```
 
 | Type | Use it for | Never use it for |
 |---|---|---|
 | **Direct table access** (PostgREST via supabase-js, RLS) | Reading anything the user may see; writing the user's own simple rows (goals, exams, settings, overrides, highlights) | Anything that calls Claude, changes another user's data, needs server timing, or must validate cross-row invariants |
 | **RPC functions** (`supabase.rpc`) | Transactional, AI-free operations with invariants: join a Turma, edit the outline, log a grade, resolve a flag, anonymized insights | Long work; AI calls |
-| **API functions** (`/api/<name>`) | Synchronous AI (tutor, grading, explanations), privileged operations (sign-up gate, sync push, duels/battles), anything that enqueues jobs with budget reservation | Work that runs for minutes — long work goes to the worker (the API server has no platform wall-clock cap, but the worker keeps retries and progress in `ai_jobs`) |
-| **Worker jobs** (pg-boss) | Ingestion, bulk generation (Batch API), audio, nightly recomputation, notifications | Anything the user waits on for < 15 s |
+| **API functions** (`/api/<name>`) | All privileged and AI work, including ingestion and generation, running directly behind SSE | Unauthenticated service-role access |
+| **Calendar triggers** (same API process) | Future deadlines, quiet-hour delivery, budget resets, UTC recurring computations | Interactive request execution |
 | **Realtime** | Live progress, duels, battles, study rooms | Authoritative writes (clients only send presence) |
 
 ---
@@ -93,8 +91,7 @@ RPC functions raise Postgres exceptions with `errcode` `P0001` and a `HINT` cont
 
 - Every **mutating API call** requires an `Idempotency-Key: <uuid v7>` header. The server stores `(user_id, function, key) → response` in `private.idempotency_keys` for 24 h; a retry with the same key returns the stored response (same status and body) without re-running side effects or re-charging AI budget. Same key with a different body → `409 idempotency_mismatch`.
 - App builds that follow running calls send `x-studify-operations: 1` on every call; the two rules below apply only to them (older builds get inline calls and `409 already_exists` for a repeat that is still running).
-- A retry with the same key while the call is **still running** answers `202` with `x-operation-status: running`, `Retry-After: 1` and `{ "status": "running", "operation_key": "<key>" }`. It is a status check, never a conflict: the app waits `Retry-After` and repeats the call with `operation_key` until it gets the stored answer (ADR 0009). A `202` without that header is a final answer.
-- **Deferred calls** (ADR 0009): functions that call Claude outside a stream run as a job on the API's `api.interactive` queue. They always take an `Idempotency-Key`, mutating or not, and the first request already answers `202 running`. An identical call from the same student while one runs (same function and body, another key) joins it: its `operation_key` is the running call's key. The stored answer of a deferred call can be a failure (a `4xx`, or a `5xx` after the queue's retry); each new tap uses a new key.
+- **Direct streaming calls** ([ADR 0010](adr/0010-direct-sse-api.md)): every SSE request uses an `Idempotency-Key`. A duplicate attaches to live work, and an identical structured AI call by the same student can join under a new key; each joined key gets a stored result. There is no `202 running` polling protocol or interactive queue.
 - Rows created offline carry **client-generated UUIDs** (`review_logs.id`, `quiz_attempts.id`, `attempt_answers.id`, `study_sessions.id`, `xp_events.id`, `feed_impressions.id`); inserts are `on conflict (id) do nothing`, so the id itself is the idempotency key.
 
 ### 2.5 Rate limits and AI budget classes
@@ -108,11 +105,11 @@ Every AI-calling endpoint goes through `ai_budget_reserve(user, class_group, fea
 | `C` generation | `note-generate` (deep), `cards-generate-more`, `questions-generate-more` | per item count | 10 req/min; per-topic caps from specs |
 | `D` heavy | `ingest-start`, `podcast-create`, `grade-essay` (ENEM), `prova-provavel-generate`, `enem-simulado-create` (if generation needed) | upfront estimate, adjusted on settle | 3 concurrent jobs per user |
 
-Shared Turma content is charged to the Turma budget (PLT-04.5). When a reservation fails the endpoint returns `402 budget_exhausted` with `resets_at`. Responses of AI endpoints include header `x-ai-usage-today: <0–100>` (percentage, never dollars; PLT-04.2).
+Shared Turma content is charged to the Turma budget (PLT-04.5). When a reservation fails the endpoint returns `402 budget_exhausted` with `resets_at`. JSON responses may include `x-ai-usage-today: <0–100>`. SSE reports usage in its final event so the stream opens without waiting for a budget-read query (percentage, never dollars; PLT-04.2).
 
 ### 2.6 Streaming (SSE)
 
-Streaming endpoints respond with `Content-Type: text/event-stream`. The app reads them with `expo/fetch` streaming. Events:
+All new app calls send `Accept: text/event-stream`. After admission, `meta` and heartbeats cover retrieval and model thinking; structured handlers send their JSON as `done.result`, with the original handler status in `done.status`. Every data frame has a monotonic `id`. Streaming endpoints respond with `Content-Type: text/event-stream`. The app reads them with `expo/fetch` streaming. Events:
 
 ```ts
 type SseEvent =
@@ -127,7 +124,7 @@ type SseEvent =
 
 - Citations arrive as separate events so the UI can render 📄 chips progressively; `start`/`end` offsets refer to the final concatenated text.
 - A `refusal` ends the stream with `done.stop_reason = "refusal"` after the server-side fallback was tried where the model has one (Haiku 5.5 has none, so it ends at once); the app shows the spec's friendly refusal copy.
-- If the connection drops mid-stream (or no byte, heartbeat included, arrives for 45 s), the client re-requests with the same `Idempotency-Key`. The server keeps generating into the stored transcript after the client leaves: the re-request gets `202 running` until the turn is finished, then the whole stream as a replay, whose events the client already showed it skips (ADR 0009).
+- If the connection drops or stalls for 45 seconds, reconnect with the same key and `Last-Event-ID`. The server attaches the connection to the live producer and sends only newer events, or replays the completed transcript. Event IDs prevent duplicate delivery.
 - A stream opens before any plain Claude call the function makes, so the heartbeat covers the wait; errors after that arrive as the `error` event, which the app reads as the same ApiError as an HTTP error.
 
 ### 2.7 Dates and times
@@ -534,7 +531,7 @@ Alias of `questions-generate-more` with `enem_style = true` (kept as one functio
 ### 4.11 Trilha
 
 #### `trail-open` — TRL-01.1–01.3 · class A (first open or outline change) · `POST`
-`Req { subject_id }` → `TrailState`. Creates the student's trail for the subject on first use (`trail.plan`, outline order on failure); re-plans the chapters not started when the outline changed; closes the chapter when its test is passed and a finished Ensine o Lucas lesson on the topic scored ≥ 70 (`state.chapter_done`). 404 when the subject has no topic with material. The step it returns is marked served (resume). A resume (a trail that exists and matches its outline) runs inline and answers 200; only creating or re-planning goes through the job queue (`inlineWhen`).
+`Req { subject_id }` → `TrailState`. Creates the student's trail for the subject on first use (`trail.plan`, outline order on failure); re-plans the chapters not started when the outline changed; closes the chapter when its test is passed and a finished Ensine o Lucas lesson on the topic scored ≥ 70 (`state.chapter_done`). 404 when the subject has no topic with material. The step it returns is marked served (resume). A resume (a trail that exists and matches its outline) runs inline and answers 200; creating or re-planning runs directly inside SSE as well.
 
 #### `trail-prepare` — TRL-01.8 · class A · `POST`
 `Req { trail_id }` → `TrailState`. Generates at most one need (`trail.lesson`, `trail.remediate` or `trail.checkpoint`): the one blocking the next step, else up to `TRAIL.lookahead` (2) lessons ahead within the chapter. A 150 s lease on `trails.preparing_until` serializes generation; a concurrent call returns the state unchanged. Lookahead failures are swallowed.
@@ -603,25 +600,24 @@ sequenceDiagram
   participant A as App
   participant S as Storage
   participant E as API ingest-start
-  participant W as Worker
-  participant R as Realtime
-  A->>A: SHA-256 of file
-  A->>A: insert documents row (status uploaded)
-  A->>S: resumable upload documents/{subject}/{doc}.pdf
-  A->>E: POST ingest-start {document_id} + Idempotency-Key
-  E-->>A: {job_id, mode}
-  W->>W: ingest.document (S0 preflight → S1 outline)
-  W-->>R: ai_jobs progress (postgres_changes)
-  R-->>A: progress → outline visible
-  W->>W: ingest.topic_content (Batch API) → notes, cards, questions
-  W-->>A: push material_ready
+  participant C as Claude
+  A->>S: resumable PDF upload
+  A->>E: POST ingest-start + Idempotency-Key + Accept SSE
+  E-->>A: connected + meta
+  E->>E: create document row and run ingestion directly
+  E-->>A: status: preflight / outline
+  E->>C: outline and standard content calls
+  E-->>A: status: generation progress
+  C-->>E: validated content
+  E-->>A: done.result {job_id, mode}
+
 ```
 
 ---
 
-## 7. Worker jobs
+## 7. Direct domain operations
 
-Queue: pg-boss on the main Postgres. Every job: payload validated with Zod; `retryLimit` + exponential backoff (`retryDelay` 10 s, `retryBackoff: true`) unless stated; `singletonKey` for idempotency where noted; progress mirrored into `ai_jobs` for user-visible jobs; AI jobs reserve budget before each Claude call and settle after.
+The operation catalog below keeps its existing payloads and progress identifiers, but handlers now execute directly inside the API service (`packages/server-tasks`). Queue retry, expiration, pickup and concurrency metadata in older specs are superseded by ADR 0010. Future triggers use the API calendar; ordinary calls bypass it. Progress rows remain in `ai_jobs` for app compatibility and notifications; they are a read model, not an execution queue.
 
 | Job | Features | Trigger | Payload | Retries | Singleton / notes |
 |---|---|---|---|---|---|
@@ -763,7 +759,7 @@ Every notification also carries a **rich payload** (`RichNotificationSchema`, `p
 
 Blocks: `progress {steps[1..6] {label, state done|active|pending|failed}, fraction, state running|done|failed, eta_s?}` (a running progress must use the `live` channel) · `countdown {target_at, label, readiness?, chips[≤4]}` · `goal {done_min, goal_min, streak, shields}` · `duel {me, them {name, score?}, state challenge|your_turn|waiting|won|lost|draw, subject?}` · `score {value, max, label, delta?, breakdown[≤5] {label, value}}` · `card {card_id, front, back?, due, subject?}` · `achievement {name, criterion, emoji}` · `retro {headline, stats[1..3] {label, value}}` · `media {kind podcast, duration_s}` · `digest {lines[1..6]}` · `message {sender, text, conversation?}`.
 
-**Delivery.** The worker builds the payload in `richFor` (`apps/worker/src/lib/rich.ts`) from the type and the rows it names, validates it and keeps it under 3,000 bytes (FCM data limit 4 KB); if that fails it falls back to a `basic` payload made from the title and body. Expo delivers it as JSON in the FCM data (`data.rich`); `StudifyMessagingService` (a subclass of Expo's FCM service) draws it and falls back to Expo's own presentation for anything it does not recognize. `data.rich_cancel = <key>` removes a notification.
+**Delivery.** The worker builds the payload in `richFor` (`packages/server-tasks/src/lib/rich.ts`) from the type and the rows it names, validates it and keeps it under 3,000 bytes (FCM data limit 4 KB); if that fails it falls back to a `basic` payload made from the title and body. Expo delivers it as JSON in the FCM data (`data.rich`); `StudifyMessagingService` (a subclass of Expo's FCM service) draws it and falls back to Expo's own presentation for anything it does not recognize. `data.rich_cancel = <key>` removes a notification.
 
 **Live progress (Uber-style).** For `ingest.document`, `podcast.generate`, `essay.grade` and `pp.generate`, each stage change and terminal state (and at most one update per minute within a stage) enqueues `notify.live`, which sends an **ephemeral** data-only push: no inbox row, no sound, not counted toward the cap, dropped in quiet hours. The key is `doc:{document_id}` for ingestion (so the final "Material pronto" replaces the tracker) and `job:{ai_job_id}` otherwise. On Android 16 (API 36) the module posts it as a **Live Update** (`Notification.ProgressStyle` with one segment per step, a tracker icon, the remaining time (or the percentage) as the status-bar chip, promoted to the lock screen when the student allows it); on older versions it is a custom layout with the drawn tracker. While the app is open it mirrors the same payloads from `ai_jobs` itself (`live-jobs.ts`), so progress appears without a Firebase project too.
 

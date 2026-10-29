@@ -12,8 +12,8 @@ import { claudeDepsFor } from '../shared/deps.ts';
 
 export const handler = defineFunction<z.infer<typeof CardDraftReqSchema>>({
   name: 'card-draft',
-  // Calls Claude outside a stream: runs as a job, the request answers 202 running (ADR 0009).
-  deferred: true,
+  // Structured result computed directly inside SSE (ADR 0010).
+  streamResult: true,
   mutating: true,
   aiCall: true,
   input: CardDraftReqSchema,

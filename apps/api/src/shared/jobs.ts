@@ -1,6 +1,4 @@
-// Shared helpers for enqueueing worker work: an ai_jobs row the app can watch (api §7, ai-pipeline §9),
-// and the matching pg-boss job. The job payload always carries the ai_jobs id so the worker can
-// mirror progress into it.
+// Persistent progress/read model for long domain operations. Execution is direct, not driven by these rows.
 import type { Deps } from './deps.ts';
 
 export interface NewJob {

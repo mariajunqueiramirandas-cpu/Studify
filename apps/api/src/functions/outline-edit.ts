@@ -27,7 +27,7 @@ export const handler = defineFunction<Req>({
     const result = applied.data as OutlineEditRes;
 
     for (const nodeId of result.regenerate_node_ids) {
-      await deps.enqueue('content.regenerate_topic', { node_id: nodeId, user_id: userId }, { retryLimit: 2 });
+      await deps.execute('content.regenerate_topic', { node_id: nodeId, user_id: userId }, { });
     }
 
     const body: OutlineEditRes = { event_ids: result.event_ids, regenerate_node_ids: result.regenerate_node_ids };

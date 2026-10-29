@@ -256,3 +256,17 @@ describe("budget gate (ai-pipeline §9.1)", () => {
     expect(d.budget.reserved[0]?.estimateMicroUsd).toBeGreaterThan(0);
   });
 });
+
+it('inherits operation cancellation into model requests and releases the reservation on abort', async () => {
+  const { client } = fakeClient(() => message({ text: GOOD_CARDS }));
+  const controller = new AbortController();
+  const budget = memoryBudget();
+  let seen: AbortSignal | undefined;
+  client.beta.messages.create = async (_params, options) => {
+    seen = options?.signal;
+    throw Object.assign(new Error('cancelled'), { name: 'APIUserAbortError' });
+  };
+  await expect(callClaude({ ...deps(client), budget, signal: controller.signal }, structuredCall())).rejects.toThrow('cancelled');
+  expect(seen).toBe(controller.signal);
+  expect(budget.settled).toEqual([{ reservationId: 'res-1', micro: 0 }]);
+});

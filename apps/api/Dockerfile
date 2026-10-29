@@ -10,7 +10,7 @@ WORKDIR /repo
 # Manifests first, so the dependency layers are reused until a package.json or the lockfile changes.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
-COPY apps/worker/package.json apps/worker/
+COPY packages/server-tasks/package.json packages/server-tasks/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/site/package.json apps/site/
 COPY packages/ai/package.json packages/ai/
