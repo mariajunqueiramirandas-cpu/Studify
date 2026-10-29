@@ -85,6 +85,8 @@ import { handler as tutorChat } from './functions/tutor-chat.ts';
 import { handler as uploadPhotos } from './functions/upload-photos.ts';
 import { handler as vesperaPrepare } from './functions/vespera-prepare.ts';
 import { handler as visualGenerate } from './functions/visual-generate.ts';
+import { realtimeJoin, realtimeLeave, realtimeStream, realtimeTrack } from './realtime/routes.ts';
+import { storageSign } from './storage/routes.ts';
 
 export type Handler = (req: Request, deps: P2Deps) => Promise<Response>;
 
@@ -154,11 +156,16 @@ export const ROUTES: ReadonlyMap<string, Handler> = new Map<string, Handler>([
   ['quiz-share', quizShare],
   ['quiz-shared-open', quizSharedOpen],
   ['quiz-submit', quizSubmit],
+  ['realtime-join', realtimeJoin],
+  ['realtime-leave', realtimeLeave],
+  ['realtime-stream', realtimeStream],
+  ['realtime-track', realtimeTrack],
   ['report-create', reportCreate],
   ['room-control', roomControl],
   ['schedule-import', scheduleImport],
   ['scope-resolve', scopeResolve],
   ['signup-complete', signupComplete],
+  ['storage-sign', storageSign],
   ['sync-push', syncPush],
   ['teaching-finish', teachingFinish],
   ['teaching-start', teachingStart],

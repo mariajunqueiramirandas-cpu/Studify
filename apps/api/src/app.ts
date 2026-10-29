@@ -10,6 +10,7 @@ import { log } from './log.ts';
 import { mountSite } from './site.ts';
 import { mountDashboard, type DashboardConfig } from './dashboard.ts';
 import { ROUTES } from './routes.ts';
+import { mountStorage } from './storage/routes.ts';
 import type { P2Deps } from './shared-p2/deps.ts';
 
 export const VERSION: string = pkg.version;
@@ -45,6 +46,7 @@ export function createApp(deps: P2Deps, siteDir: string, apkUrl?: string, dashbo
   });
 
   app.get('/api/health', (c) => c.json({ ok: true, version: VERSION }));
+  mountStorage(app, deps);
 
   // All methods reach the function, which answers its own 405 for non-POST (the contract the apps rely on).
   app.all('/api/:name', (c) => {

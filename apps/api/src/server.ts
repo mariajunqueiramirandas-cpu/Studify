@@ -51,6 +51,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }, SHUTDOWN_DEADLINE_MS);
     deadline.unref();
+    // Realtime streams never end on their own; close them so the server can stop. The apps reconnect elsewhere.
+    runtime.deps.realtime?.closeAll();
     await server.stop();
     await drainOperations(runtime.deps);
     await runtime.stop();
