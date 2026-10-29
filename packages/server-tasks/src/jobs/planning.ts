@@ -206,7 +206,7 @@ export async function replanUser(ctx: OperationContext, planCtx: PlanContext, tr
   return { status: 'planned', version, reorganized: run.reorganized, movedMinutes: run.movedMinutes, items: rows.length };
 }
 
-async function planOne(ctx: OperationContext, userId: string, trigger: ReplanTrigger, withReadiness: boolean): Promise<ReplanResult | null> {
+async function planOne(ctx: OperationContext, userId: string, trigger: ReplanTrigger, withReadiness: boolean): Promise<{ result: ReplanResult; planCtx: PlanContext } | null> {
   const planCtx = await loadPlanContext(ctx, userId);
   if (!planCtx) return null;
   const scopeByExam = scopeTopicsByExam(planCtx);
@@ -223,22 +223,42 @@ async function planOne(ctx: OperationContext, userId: string, trigger: ReplanTri
     const rows = snapshots.map((s) => s.row);
     if (rows.length > 0) unwrap(await ctx.supabase.from('readiness_snapshots').upsert(rows, { onConflict: 'user_id,exam_id,local_date' }), 'readiness_snapshots');
   }
-  return result;
+  return { result, planCtx };
+}
+
+/**
+ * GOL-07: the Véspera sheet of a test is written at the start of its eve (the day rollover, 04:00 by default, a few
+ * minutes after this 03:xx run, so the study day is the eve when it runs), right after the plan that holds its
+ * véspera item: the eve screen opens on it instead of starting a generation. Same key as the app's own request.
+ */
+async function prepareEves(ctx: OperationContext, planCtx: PlanContext): Promise<number> {
+  const now = planCtx.now.getTime();
+  let started = 0;
+  for (const exam of planCtx.exams) {
+    const eve = addDays(exam.local_date, -1);
+    const at = wallTimeToInstant(eve, planCtx.rollover, 5, planCtx.timeZone);
+    const onEve = eve === planCtx.today;
+    if (!onEve && (at.getTime() <= now || at.getTime() - now > 24 * 3600_000)) continue;
+    await ctx.execute('vespera.prepare', { exam_id: exam.id, user_id: planCtx.userId }, { singletonKey: exam.id, startAfter: onEve ? 0 : at });
+    started++;
+  }
+  return started;
 }
 
 /** plan.recompute: debounced per user upstream (singleton key user_id, 30 s). */
 export async function handlePlanRecompute(ctx: OperationContext, data: Record<string, unknown>): Promise<ReplanResult | null> {
   const payload = PlanPayload.parse(data);
-  const result = await planOne(ctx, payload.user_id, plannerTriggerOf(payload.trigger), false);
+  const result = (await planOne(ctx, payload.user_id, plannerTriggerOf(payload.trigger), false))?.result ?? null;
   if (result?.status === 'planned') ctx.log.info({ trigger: payload.trigger, version: result.version }, 'plan.recompute: planned');
   return result;
 }
 
 /**
- * plan.nightly: replans missed days and writes readiness snapshots. With no user_ids it fans out
- * (100 users per job) to the profiles whose local time is 03:xx; the hourly schedule makes that daily.
+ * plan.nightly: replans missed days, writes readiness snapshots and starts the Véspera sheets of tomorrow's tests.
+ * With no user_ids it fans out (100 users per job) to the profiles whose local time is 03:xx; the hourly schedule
+ * makes that daily.
  */
-export async function handlePlanNightly(ctx: OperationContext, data: Record<string, unknown>): Promise<{ planned: number; unchanged: number; fanout: number }> {
+export async function handlePlanNightly(ctx: OperationContext, data: Record<string, unknown>): Promise<{ planned: number; unchanged: number; fanout: number; eves?: number }> {
   const payload = NightlyPayload.parse(data);
   if (!payload.user_ids || payload.user_ids.length === 0) {
     const profiles = unwrapRows<{ id: string; timezone: string | null }>(await ctx.supabase.from('profiles').select('id,timezone').is('deleted_at', null), 'profiles');
@@ -252,12 +272,14 @@ export async function handlePlanNightly(ctx: OperationContext, data: Record<stri
   }
   let planned = 0;
   let unchanged = 0;
+  let eves = 0;
   const failed: string[] = [];
   for (const userId of payload.user_ids) {
     try {
-      const result = await planOne(ctx, userId, 'nightly', true);
-      if (result?.status === 'planned') planned++;
+      const run = await planOne(ctx, userId, 'nightly', true);
+      if (run?.result.status === 'planned') planned++;
       else unchanged++;
+      if (run) eves += await prepareEves(ctx, run.planCtx);
     } catch (err) {
       ctx.log.error({ err, userId }, 'plan.nightly: user failed');
       failed.push(userId);
@@ -265,7 +287,7 @@ export async function handlePlanNightly(ctx: OperationContext, data: Record<stri
   }
   // Throwing retries the chunk; users that already planned are unchanged on the retry (input hash).
   if (failed.length > 0) throw new JobDataError(`plan.nightly: ${failed.length} user(s) failed`, 'partial_failure');
-  return { planned, unchanged, fanout: 0 };
+  return { planned, unchanged, fanout: 0, eves };
 }
 
 interface Citation {
