@@ -104,11 +104,6 @@ export function ExplainPanel({ capture }: { capture: CaptureRow }) {
         setError(errorMessage(e.code));
       },
     });
-    handle.current.done.catch((e: { code?: string }) => {
-      if (e.code === 'cancelled') return;
-      setState('error');
-      setError(errorMessage(e.code));
-    });
   };
   const run = (focusText: string | null) => {
     handle.current?.cancel();
@@ -200,14 +195,11 @@ export function SolvePanel({ capture }: { capture: CaptureRow }) {
         const r = d.result as { final?: typeof final } | undefined;
         if (r?.final) setFinal(r.final);
       },
+      // Every failure ends here once (the transport reports network failures as errors too); leaving is not one.
       onError: (e) => {
         setSolution(null);
         overlay.snack(errorMessage(e.code));
       },
-    });
-    h.done.catch((e: { code?: string }) => {
-      setSolution(null);
-      overlay.snack(errorMessage(e.code));
     });
   };
 

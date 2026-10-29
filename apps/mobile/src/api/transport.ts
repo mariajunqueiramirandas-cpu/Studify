@@ -16,7 +16,32 @@ export interface StreamingRequest {
 
 const cancelled = () => new ApiError('cancelled', 0, 'Cancelado.');
 
+/**
+ * Reads one operation's stream to its end, reconnecting with Last-Event-ID. Every failure reaches the consumer as an
+ * `error` event too, not only as the rejection: the server's own error, and also one it never sent (the network gave
+ * up, a deadline passed, the request was refused before the stream opened). A screen that only listens to events
+ * therefore never stays "streaming" forever. Cancelling (the screen left) is not reported.
+ */
 export async function receiveStream(options: StreamingRequest): Promise<void> {
+  let reported = false;
+  let consumerThrew = false;
+  const onEvent = (message: StreamMessage) => {
+    if (message.event === 'error') reported = true;
+    try { options.onEvent(message); }
+    catch (error) { consumerThrew = true; throw error; }
+  };
+  try {
+    await receive({ ...options, onEvent });
+  } catch (error) {
+    if (!reported && !consumerThrew && error instanceof ApiError && error.code !== 'cancelled') {
+      try { options.onEvent({ event: 'error', data: { code: error.code, message: error.message, status: error.status } }); }
+      catch { /* the rejection below still carries the failure */ }
+    }
+    throw error;
+  }
+}
+
+async function receive(options: StreamingRequest): Promise<void> {
   let lastId: string | undefined;
   let delivered = 0;
   let drops = 0;

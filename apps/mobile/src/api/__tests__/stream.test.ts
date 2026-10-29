@@ -72,4 +72,25 @@ describe('SSE streaming transport', () => {
     await expect(receiveStream({ send: async () => { calls++; return response([]); }, onEvent: () => {}, sleep: async () => {} })).rejects.toBeInstanceOf(ApiError);
     expect(calls).toBe(3);
   });
+  it('reports a failure the server never sent as an error event, so a screen never stays streaming', async () => {
+    const events: Array<{ event: string; data: unknown }> = [];
+    await expect(receiveStream({ send: async () => response([encode(frame(1, 'delta', { text: 'meio' }))], true), onEvent: (e) => events.push(e), sleep: async () => {} })).rejects.toMatchObject({ code: 'offline' });
+    expect(events.map((e) => e.event)).toEqual(['delta', 'error']);
+    expect(events[1]!.data).toMatchObject({ code: 'offline', status: 0 });
+    // A refusal before the stream opened (here a 429) is an error event too.
+    const refused: Array<{ event: string; data: unknown }> = [];
+    const busy = { ok: false, status: 429, headers: { get: () => 'application/json' }, text: async () => JSON.stringify({ error: { code: 'rate_limited', message: 'Calma aí.' } }) } as unknown as Response;
+    await expect(receiveStream({ send: async () => busy, onEvent: (e) => refused.push(e) })).rejects.toMatchObject({ code: 'rate_limited' });
+    expect(refused).toEqual([{ event: 'error', data: { code: 'rate_limited', message: 'Calma aí.', status: 429 } }]);
+  });
+  it('reports the server error once, and nothing when the screen cancelled', async () => {
+    const events: string[] = [];
+    await expect(receiveStream({ send: async () => response([encode(frame(1, 'error', { code: 'ai_unavailable', message: 'Fora do ar.' }))]), onEvent: (e) => events.push(e.event) })).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(events).toEqual(['error']);
+    const controller = new AbortController();
+    const quiet: string[] = [];
+    const run = receiveStream({ send: async () => { controller.abort(); return response([], true); }, signal: controller.signal, onEvent: (e) => quiet.push(e.event), sleep: async () => {} });
+    await expect(run).rejects.toMatchObject({ code: 'cancelled' });
+    expect(quiet).toEqual([]);
+  });
 });

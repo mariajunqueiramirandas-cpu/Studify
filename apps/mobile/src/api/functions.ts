@@ -97,5 +97,7 @@ export function streamFunction<TReq>(
       return response;
     },
   }).finally(() => opts.signal?.removeEventListener('abort', cancel));
+  // Screens that follow the events (onError) need not also catch `done`: it never surfaces as an unhandled rejection.
+  done.catch(() => undefined);
   return { cancel, done };
 }
