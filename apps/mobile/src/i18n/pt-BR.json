@@ -600,6 +600,7 @@
     "continue": "Continuar sessão",
     "quick": "Só tenho {n} minutos",
     "quick_title": "Quanto tempo você tem?",
+    "quick_short": "Só tenho",
     "no_goal": "Tem prova chegando? Crie sua Semana de Provas e eu monto o plano.",
     "create_goal": "Criar Semana de Provas",
     "plan_title": "Plano de hoje",
@@ -1115,7 +1116,9 @@
     "version": "Versão {v}",
     "stat_streak": "dias seguidos",
     "stat_minutes": "min hoje",
-    "stat_xp": "XP no total"
+    "stat_xp": "XP no total",
+    "stat_shields": "escudos",
+    "card_title": "Carteirinha de estudante"
   },
   "settings": {
     "title": "Configurações",

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Button, Card, IconTile, ListItem, Screen, Section, Tactile, Text, type IconName, type IconTone } from '../../../components';
@@ -5,7 +6,7 @@ import { useLive } from '../../../db/hooks';
 import { dueCount } from '../../../features/memory/local';
 import { useMistakes } from '../../../features/practice/api';
 import { t } from '../../../i18n';
-import { FONTS, radius, shade, space, useTheme } from '../../../theme';
+import { depth, FONTS, radius, shade, space, useTheme } from '../../../theme';
 
 /** S-PRA-01 Praticar hub: today's deck on top, the ways to practise below it. */
 export default function PracticeHub() {
@@ -74,18 +75,13 @@ function Deck({ due }: { due: number }) {
 
 function Mode({ icon, tone = 'primary', title, hint, onPress }: { icon: IconName; tone?: IconTone; title: string; hint?: string; onPress: () => void }) {
   const { colors: c } = useTheme();
+  // Each way to practise is a coloured key on a ledge of its own colour, like the notebooks on Matérias.
+  const ink = { primary: [c.primarySoft, c.primary], lamp: [c.warningSoft, c.warning], lagoon: [c.infoSoft, c.lagoon], success: [c.successSoft, c.success], danger: [c.dangerSoft, c.danger], neutral: [c.surface2, c.textSecondary] }[tone];
   return (
-    <Tactile
-      onPress={onPress}
-      accessibilityLabel={hint ? `${title}. ${hint}` : title}
-      color={c.surface1}
-      borderColor={c.border}
-      ledge={shade(c.border, 0.14)}
-      borderWidth={2}
-      style={styles.mode}
-      pressedStyle={{ backgroundColor: c.surface2 }}
-    >
-      <IconTile icon={icon} tone={tone} size={44} />
+    <Tactile onPress={onPress} accessibilityLabel={hint ? `${title}. ${hint}` : title} color={ink[0]!} ledge={ink[1]!} depth={depth.md} style={styles.mode}>
+      <View style={[styles.modeIcon, { backgroundColor: c.surface1 }]}>
+        <Ionicons name={icon} size={24} color={ink[1]} />
+      </View>
       <View style={{ gap: space.xxs }}>
         <Text variant="label" weight="bold" numberOfLines={2}>
           {title}
@@ -110,4 +106,5 @@ const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: space.md },
   mode: { width: '48.3%', minHeight: 148, padding: space.lg, justifyContent: 'space-between', gap: space.md },
+  modeIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
 });

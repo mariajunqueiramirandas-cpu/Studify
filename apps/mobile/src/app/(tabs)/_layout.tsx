@@ -1,24 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { View, type ColorValue } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBar, type BottomTabBarProps } from 'expo-router/tabs';
 import { MiniPlayer } from '../../features/podcast/MiniPlayer';
 import type { ComponentProps } from 'react';
 import { t } from '../../i18n';
 import { tap } from '../../lib/haptics';
-import { radius, useTheme } from '../../theme';
+import { radius, shade, space, useTheme } from '../../theme';
 import { Text } from '../../components/Text';
 import { usePendingRequestsBadge } from '../../features/class/api';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-/** The chosen tab's icon sits in a tinted key, so where you are reads at a glance (ux §6 BottomTabBar). */
+/** The chosen tab's icon sits in an inked key, so where you are reads at a glance (ux §6 BottomTabBar). */
 function TabIcon({ name, color, focused }: { name: IconName; color: string; focused: boolean }) {
   const { colors } = useTheme();
   return (
-    <View style={{ width: 56, height: 32, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? colors.primarySoft : 'transparent' }}>
-      <Ionicons name={name} size={22} color={color} />
+    <View style={{ width: 52, height: 30, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? colors.primary : 'transparent' }}>
+      <Ionicons name={name} size={21} color={focused ? colors.onPrimary : color} />
     </View>
   );
 }
@@ -35,12 +34,21 @@ function label({ focused, color, children }: { focused: boolean; color: ColorVal
   );
 }
 
-/** The podcast mini-player sits on top of the tab bar while an episode is loaded (spec 12 §5.1). */
+/**
+ * The tabs are a dock: a key-like bar floating off the screen edges, on its own ledge. The podcast mini-player sits on
+ * top of it while an episode is loaded (spec 12 §5.1).
+ */
 function TabBarWithPlayer(props: BottomTabBarProps) {
+  const { colors } = useTheme();
+  // Some Android gesture bars report a small (or zero) bottom inset, which left the labels under the gesture
+  // pill: keep the dock at least 8 dp clear of it.
+  const bottom = Math.max(props.insets.bottom, 8) + space.xs;
   return (
     <>
       <MiniPlayer />
-      <BottomTabBar {...props} />
+      <View style={{ backgroundColor: colors.bg, paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: bottom }}>
+        <BottomTabBar {...props} insets={{ ...props.insets, bottom: 0 }} />
+      </View>
     </>
   );
 }
@@ -51,10 +59,6 @@ const renderTabBar = (props: BottomTabBarProps) => <TabBarWithPlayer {...props} 
 export default function TabsLayout() {
   const { colors } = useTheme();
   const requests = usePendingRequestsBadge();
-  const insets = useSafeAreaInsets();
-  // Some Android gesture bars report a small (or zero) bottom inset, which left the labels under the gesture
-  // pill. Keep at least 12 dp below the labels, plus a little room above the pill.
-  const bottomPad = Math.max(insets.bottom, 12) + 6;
   return (
     <Tabs
       tabBar={renderTabBar}
@@ -63,9 +67,23 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: { backgroundColor: colors.surface1, borderTopColor: colors.border, height: 62 + bottomPad, paddingTop: 6, paddingBottom: bottomPad },
+        tabBarStyle: {
+          backgroundColor: colors.surface1,
+          height: 72,
+          paddingTop: 6,
+          paddingBottom: 4,
+          borderRadius: radius.xl,
+          borderWidth: 1.5,
+          borderTopWidth: 1.5,
+          borderColor: colors.border,
+          borderTopColor: colors.border,
+          borderBottomWidth: 4,
+          borderBottomColor: shade(colors.border, 0.14),
+          elevation: 0,
+          shadowOpacity: 0,
+        },
         tabBarLabel: label,
-        tabBarItemStyle: { paddingVertical: 2, gap: 2 },
+        tabBarItemStyle: { paddingVertical: 0, gap: 3 },
       }}
     >
       <Tabs.Screen name="today" options={{ title: t('tab.today'), tabBarIcon: icon('sunny', 'sunny-outline') }} />

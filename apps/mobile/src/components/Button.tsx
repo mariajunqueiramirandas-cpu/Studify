@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { tap } from '../lib/haptics';
 import { depth, radius, shade, space, touch, useTheme } from '../theme';
@@ -8,7 +8,7 @@ import { Text } from './Text';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
-type Variant = 'primary' | 'secondary' | 'text' | 'destructive' | 'tonal';
+type Variant = 'primary' | 'secondary' | 'text' | 'destructive' | 'tonal' | 'lamp';
 
 interface ButtonProps {
   label: string;
@@ -47,6 +47,7 @@ export function Button({
   testID,
 }: ButtonProps) {
   const { colors: c } = useTheme();
+  const inBar = useContext(InActionBar);
   // One loud button per screen (primary); the rest stay quieter: a raised paper key, a tinted key or plain text.
   const palette: Record<Variant, { bg: string; fg: string; ledge: string; border?: string }> = {
     primary: { bg: c.primary, fg: c.onPrimary, ledge: shade(c.primary, 0.32) },
@@ -54,9 +55,11 @@ export function Button({
     tonal: { bg: c.primarySoft, fg: c.primary, ledge: shade(c.primarySoft, 0.14) },
     text: { bg: 'transparent', fg: c.primary, ledge: 'transparent' },
     destructive: { bg: c.danger, fg: c.onPrimary, ledge: shade(c.danger, 0.32) },
+    // The loud key on an ink-filled hero, where an indigo primary would disappear.
+    lamp: { bg: c.lamp, fg: c.onLamp, ledge: shade(c.lamp, 0.35) },
   };
   // A disabled key goes grey and flat-coloured instead of fading: it reads as "not yet", not as a washed-out colour.
-  const greyed = disabled && (variant === 'primary' || variant === 'destructive' || variant === 'tonal');
+  const greyed = disabled && (variant === 'primary' || variant === 'destructive' || variant === 'tonal' || variant === 'lamp');
   const p = greyed ? { bg: c.surface2, fg: c.textSecondary, ledge: shade(c.surface2, 0.12) } : palette[variant];
   const inactive = disabled || loading;
   const tone = variant === 'primary' || variant === 'destructive' ? 'onPrimary' : 'accent';
@@ -86,7 +89,8 @@ export function Button({
         accessibilityRole="button"
         onPress={press}
         onPressIn={press ? tap : undefined}
-        style={({ pressed }) => [styles.base, compact && styles.compact, fullWidth && styles.full, styles.textVariant, { opacity: disabled ? 0.45 : pressed ? 0.6 : 1 }, style]}
+        hitSlop={inBar ? 4 : undefined}
+        style={({ pressed }) => [styles.base, compact && styles.compact, fullWidth && styles.full, styles.textVariant, inBar && styles.barText, { opacity: disabled ? 0.45 : pressed ? 0.6 : 1 }, style]}
       >
         {content}
       </Pressable>
@@ -103,7 +107,7 @@ export function Button({
       radius={compact ? radius.md : radius.lg}
       depth={compact ? depth.sm : depth.md}
       haptic={!!press}
-      style={[styles.base, compact && styles.compact, fullWidth && styles.full, disabled && !greyed && { opacity: 0.45 }, style]}
+      style={[styles.base, inBar && styles.barKey, compact && styles.compact, fullWidth && styles.full, disabled && !greyed && { opacity: 0.45 }, style]}
     >
       {content}
     </Tactile>
@@ -145,10 +149,17 @@ export function IconButton({ icon, label, onPress, color, size = 24, disabled, f
   );
 }
 
+/** Buttons inside an ActionBar sit tighter, so the sticky footer stays a strip rather than a slab. */
+const InActionBar = createContext(false);
+
 /** Sticky bottom area for the one primary action of a screen (thumb zone, ux §3). */
 export function ActionBar({ children }: { children: ReactNode }) {
   const { colors: c } = useTheme();
-  return <View style={[styles.actionBar, { backgroundColor: c.bg, borderTopColor: c.border }]}>{children}</View>;
+  return (
+    <InActionBar.Provider value>
+      <View style={[styles.actionBar, { backgroundColor: c.bg, borderTopColor: c.border }]}>{children}</View>
+    </InActionBar.Provider>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -162,13 +173,16 @@ const styles = StyleSheet.create({
   compact: { minHeight: 44, paddingHorizontal: space.lg, paddingVertical: space.sm },
   full: { alignSelf: 'stretch' },
   textVariant: { minHeight: touch.min, paddingHorizontal: space.md, paddingVertical: space.sm },
+  // In the footer a text button is a short line under the key; hitSlop keeps the 48 dp target.
+  barText: { minHeight: 40, paddingVertical: space.xs },
+  barKey: { minHeight: 50, paddingVertical: space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   icon: { width: touch.min, height: touch.min, borderRadius: radius.round, alignItems: 'center', justifyContent: 'center' },
   actionBar: {
     paddingHorizontal: space.gutter,
-    paddingTop: space.md,
-    paddingBottom: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: space.sm,
+    gap: space.xs,
   },
 });

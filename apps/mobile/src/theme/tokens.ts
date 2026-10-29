@@ -33,6 +33,13 @@ export interface Palette {
   highlight: string;
   /** Capi's fur: warm accents next to the mascot. */
   fur: string;
+  /** Deep book-indigo for the one ink-filled hero on a screen (Hoje's mission, the student card). */
+  hero: string;
+  onHero: string;
+  /** Secondary text on the hero. */
+  heroMuted: string;
+  /** Faces of quiet keys and ring tracks on the hero. */
+  heroKey: string;
 }
 
 // "Riverbank study nook": reed-paper days and deep-indigo nights, with the book indigo from Capi's art as the
@@ -63,6 +70,10 @@ const light: Palette = {
   onLamp: '#1E2033',
   highlight: 'rgba(242,179,61,0.42)',
   fur: '#A06A3A',
+  hero: '#3A30B5',
+  onHero: '#FFFFFF',
+  heroMuted: '#CFCBF3',
+  heroKey: 'rgba(255,255,255,0.16)',
 };
 
 const dark: Palette = {
@@ -91,6 +102,10 @@ const dark: Palette = {
   onLamp: '#16162A',
   highlight: 'rgba(244,194,94,0.28)',
   fur: '#D29A63',
+  hero: '#2E2970',
+  onHero: '#F3F2FB',
+  heroMuted: '#BFBAF0',
+  heroKey: 'rgba(255,255,255,0.12)',
 };
 
 // "Alto contraste" (WEL-04, ux §11) raises borders and secondary text.
