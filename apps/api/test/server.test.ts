@@ -17,7 +17,7 @@ const VALID_ENV = {
   SUPABASE_ANON_KEY: 'anon',
   ANTHROPIC_API_KEY: 'sk-test',
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/studify',
-  STORAGE_SIGNING_KEY: 'test-signing-key-0123456789abcdef',
+  STORAGE_SIGNING_KEY: 'x'.repeat(32),
 };
 
 function app() {
