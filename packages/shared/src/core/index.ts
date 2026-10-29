@@ -6,4 +6,5 @@ export * from './time.ts';
 export * from './errors.ts';
 export * from './citations.ts';
 export * from './money.ts';
+export * from './compat.ts';
 export * from './schemas/index.ts';

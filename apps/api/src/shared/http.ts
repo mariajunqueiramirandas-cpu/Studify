@@ -1,7 +1,7 @@
 // Shared request admission and SSE transport. Validation/authentication errors keep their HTTP status;
 // once admitted, a stream opens before any handler work (including retrieval and the first model token).
 import type { ZodError, ZodType } from 'zod';
-import { ApiFailure, IdempotencyKeySchema, SYNC_SCHEMA_VERSION, apiError } from '@studify/shared';
+import { ApiFailure, IdempotencyKeySchema, SYNC_SCHEMA_VERSION, apiError, isSupportedClient } from '@studify/shared';
 import { authenticate, type AuthUser } from './auth.ts';
 import { usagePctToday } from './budget.ts';
 import type { Deps } from './deps.ts';
@@ -14,7 +14,7 @@ export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'authorization, apikey, content-type, accept, last-event-id, idempotency-key, x-studify-version, x-studify-schema, x-device-id, x-client-info',
+    'authorization, apikey, content-type, accept, last-event-id, idempotency-key, x-studify-version, x-studify-schema, x-studify-compat, x-device-id, x-client-info',
   'Access-Control-Expose-Headers': 'x-ai-usage-today, x-request-id, idempotent-replayed',
   'Access-Control-Max-Age': '600',
 };
@@ -62,6 +62,8 @@ function validationFailure(error: ZodError): ApiFailure {
 }
 
 async function checkClientVersion(req: Request, deps: Deps): Promise<void> {
+  // An app older than CLIENT_COMPAT_LEVEL (packages/shared/src/core/compat.ts) is asked to update, automatically.
+  if (!isSupportedClient(req.headers)) throw new ApiFailure('app_update_required');
   const schema = req.headers.get('x-studify-schema');
   if (schema && /^\d+$/.test(schema) && Number(schema) > SYNC_SCHEMA_VERSION) {
     throw new ApiFailure('app_update_required');

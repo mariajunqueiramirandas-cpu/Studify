@@ -1,5 +1,6 @@
 // Structured results and token deltas share one resumable SSE transport (ADR 0010).
 import { uuidv7 } from 'uuidv7';
+import { CLIENT_COMPAT_HEADER, CLIENT_COMPAT_LEVEL } from '@studify/shared';
 import { SYNC_SCHEMA_VERSION } from '../db/sync/constants';
 import { getDeviceId } from '../lib/device';
 import { getApiUrl, getEnv } from './env';
@@ -46,6 +47,7 @@ export async function authHeaders(idempotencyKey: string | null): Promise<Record
     Authorization: `Bearer ${data.session?.access_token ?? env.anonKey}`,
     'x-studify-version': appVersionCode(),
     'x-studify-schema': String(SYNC_SCHEMA_VERSION),
+    [CLIENT_COMPAT_HEADER]: String(CLIENT_COMPAT_LEVEL),
     'x-device-id': getDeviceId(),
     Accept: 'text/event-stream',
   };

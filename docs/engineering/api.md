@@ -53,7 +53,8 @@ supabase-js and sends the session token on every call.
 
 - Every call carries the Supabase Auth session JWT: `Authorization: Bearer <access_token>`. API functions and data endpoints verify it first (`supabase.auth.getUser(jwt)`, which refuses a suspended account with `403 banned`; a verified token is remembered for at most 60 s and never past its expiry, and a suspension forgets the account's tokens, ADR 0011) and authorize explicitly before any service-role query (security-privacy.md §3).
 - Client headers on every API call: `x-studify-version: <android versionCode>`, `x-studify-schema: <sync schema version>`, `x-device-id: <stable per-install id>`.
-- A client below `min_supported_version_code` ([data-model §5.11](data-model.md#511-ai-operations-and-platform) `app_versions`) or with an unknown future schema gets **`426 Upgrade Required`** with code `app_update_required`.
+- The app also sends `x-studify-compat: <CLIENT_COMPAT_LEVEL>` (`packages/shared/src/core/compat.ts`). An app below the level the API requires (a build without the header counts as level 1) gets **`426 Upgrade Required`** with code `app_update_required`; the app then shows its update screen, whose button opens `/download` (the newest release APK). The level is raised in the same change that breaks older apps, so no version is registered by hand. Level 2 is the move to the own backend (ADR 0012).
+- A client below `min_supported_version_code` ([data-model §5.11](data-model.md#511-ai-operations-and-platform) `app_versions`, set from the web dashboard) or with an unknown future schema also gets **`426 Upgrade Required`** with code `app_update_required`.
 
 ### 2.2 Error envelope
 

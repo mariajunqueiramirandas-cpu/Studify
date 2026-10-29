@@ -148,6 +148,16 @@ for (const [name, handler, mutating, invalid] of FUNCTIONS) {
     assertEquals(res.status, 426);
     assertEquals((await json(res)).error.code, 'app_update_required');
   });
+
+  test(`${name}: 426 for an app build older than the compatibility level`, async () => {
+    const h = makeHarness();
+    withUsers(h);
+    const legacy = request(name, { body: invalid ?? {} });
+    legacy.headers.delete('x-studify-compat');
+    const res = await handler(legacy, h.deps);
+    assertEquals(res.status, 426);
+    assertEquals((await json(res)).error.code, 'app_update_required');
+  });
 }
 
 test('OPTIONS answers the CORS preflight without auth', async () => {

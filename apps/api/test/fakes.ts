@@ -5,7 +5,7 @@
 // uses (create, stream with text and citation events, final message), and the budget gate is injectable.
 import type { Db } from '@studify/db';
 import type { AiUsageRow, AnthropicLike, BudgetReserveInput, BudgetReserveResult, BudgetScope, BudgetStore, UsageSink } from '@studify/ai';
-import { uuidV7 } from '@studify/shared';
+import { CLIENT_COMPAT_HEADER, CLIENT_COMPAT_LEVEL, uuidV7 } from '@studify/shared';
 import type { Deps, Execute } from '../src/shared/deps.ts';
 
 export type Row = Record<string, unknown>;
@@ -599,7 +599,7 @@ export function withUsers(h: Harness): void {
 }
 
 export function request(path: string, opts: { token?: string | null; body?: unknown; raw?: string; idem?: string | null; method?: string; headers?: Record<string, string> } = {}): Request {
-  const headers: Record<string, string> = { 'content-type': 'application/json', 'x-studify-version': '100', 'x-studify-schema': '1', 'x-device-id': 'device-1', ...(opts.headers ?? {}) };
+  const headers: Record<string, string> = { 'content-type': 'application/json', 'x-studify-version': '100', 'x-studify-schema': '1', [CLIENT_COMPAT_HEADER]: String(CLIENT_COMPAT_LEVEL), 'x-device-id': 'device-1', ...(opts.headers ?? {}) };
   if (opts.token !== null) headers.authorization = `Bearer ${opts.token ?? ALICE.jwt}`;
   if (opts.idem !== null) headers['idempotency-key'] = opts.idem ?? IDEM_KEY;
   const body = opts.raw ?? (opts.body === undefined ? '{}' : JSON.stringify(opts.body));
