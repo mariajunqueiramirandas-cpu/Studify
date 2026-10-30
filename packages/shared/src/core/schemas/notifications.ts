@@ -213,7 +213,7 @@ export const LIVE_JOB_STEPS = {
   // content step does most of the AI work.
   'ingest.document': [
     { stages: ['S0', 'transcription'], label: 'Lendo o material', weight: 0.1 },
-    { stages: ['S1', 'S1_merge'], label: 'Montando o mapa', weight: 0.15 },
+    { stages: ['S1', 'S1_merge', 'S1_write'], label: 'Montando o mapa', weight: 0.15 },
     { stages: ['S2', 'S3'], label: 'Encontrando conceitos', weight: 0.25 },
     { stages: ['S4', 'done'], label: 'Resumos e cartões', weight: 0.5 },
   ],

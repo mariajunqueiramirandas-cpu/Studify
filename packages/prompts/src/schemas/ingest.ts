@@ -42,6 +42,8 @@ export const Outline = z
     language: LanguageTag,
     detected_kind: z.enum(['slides', 'notes', 'textbook', 'past_test', 'content_list']),
     title_suggestion: z.string().min(1).max(120),
+    /** The document only lists the chapters (sumário, ementa) and explains none of them (ING-03.16). */
+    lists_only: z.boolean(),
     units: z.array(UnitOut).max(30),
   })
   .superRefine((v, ctx) => {
@@ -52,6 +54,27 @@ export const Outline = z
       ctx.addIssue({ code: 'custom', message: 'não é material de estudo: units deve ser vazio', path: ['units'] });
     }
   });
+
+/** T1c output (ING-03.16): the text of each listed topic, written for a document that only lists them. */
+export const WrittenChapters = z.strictObject({
+  topics: z
+    .array(
+      z.strictObject({
+        key: NodeKey,
+        sections: z
+          .array(
+            z.strictObject({
+              heading: z.string().min(1).max(80),
+              paragraphs: z.array(z.string().min(1).max(1500)).min(1).max(6),
+            }),
+          )
+          .min(1)
+          .max(6),
+      }),
+    )
+    .min(1)
+    .max(8),
+});
 
 /** T2 output (ING-03.4): concepts of one topic. */
 export const TopicConcepts = z.strictObject({
