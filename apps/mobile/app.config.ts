@@ -59,8 +59,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: `com.studify.app${packageSuffix}`,
     versionCode: ANDROID_VERSION_CODE,
     ...(GOOGLE_SERVICES_FILE ? { googleServicesFile: GOOGLE_SERVICES_FILE } : {}),
+    // The icon is drawn in assets/icon/ and rendered by scripts/render-icons.mjs.
     adaptiveIcon: {
-      backgroundColor: '#4F46E5',
+      backgroundColor: '#4A3FD1',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
