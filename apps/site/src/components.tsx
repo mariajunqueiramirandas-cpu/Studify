@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { DOWNLOAD_URL } from './config.ts';
 
+/** The link pages: one plain sheet on the desk. Nothing on them fades, the code has to stay readable. */
 export function Page({ brandHref, children }: { brandHref?: string; children: ReactNode }) {
   const mark = (
     <>
@@ -8,32 +9,34 @@ export function Page({ brandHref, children }: { brandHref?: string; children: Re
     </>
   );
   return (
-    <main>
-      {brandHref ? (
-        <a className="brand" href={brandHref}>
-          {mark}
-        </a>
-      ) : (
-        <span className="brand">{mark}</span>
-      )}
-      {children}
-      <footer>studify.vendua.com.br</footer>
-    </main>
+    <div className="desk desk-single">
+      <main className="sheet link-sheet">
+        {brandHref ? (
+          <a className="brand" href={brandHref}>
+            {mark}
+          </a>
+        ) : (
+          <span className="brand">{mark}</span>
+        )}
+        {children}
+      </main>
+      <footer className="desk-footer">studify.vendua.com.br</footer>
+    </div>
   );
 }
 
 export function Hero({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <section>
-      <h1>{title}</h1>
-      <p>{subtitle}</p>
+    <section className="link-hero">
+      <h1 className="title">{title}</h1>
+      <p className="body">{subtitle}</p>
     </section>
   );
 }
 
 export function DownloadButton() {
   return (
-    <a className="btn btn-primary" href={DOWNLOAD_URL}>
+    <a className="key key-primary key-large" href={DOWNLOAD_URL}>
       Baixar o app (Android)
     </a>
   );
@@ -42,7 +45,7 @@ export function DownloadButton() {
 /** Install help. The link page adds the Play Protect step and the "paste the code" step. */
 export function InstallSteps({ withCode }: { withCode: boolean }) {
   return (
-    <details>
+    <details className="install">
       <summary>Como instalar no Android</summary>
       <ol>
         <li>
@@ -88,7 +91,7 @@ export function CodeCard({ label, code }: { label: string; code: string }) {
       <span className="code" aria-live="polite">
         {code}
       </span>
-      <button className="btn btn-soft" type="button" onClick={copy}>
+      <button className="key" type="button" onClick={copy}>
         {copied ? 'Copiado ✓' : 'Copiar'}
       </button>
       <p>Depois de instalar, cole este código no app.</p>
