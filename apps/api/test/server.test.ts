@@ -103,6 +103,7 @@ function siteFixture(): string {
   mkdirSync(path.join(dir, '.well-known'));
   writeFileSync(path.join(dir, 'index.html'), '<!doctype html><div id="root"></div>');
   writeFileSync(path.join(dir, 'assets', 'index-abc123.js'), 'console.log(1)');
+  writeFileSync(path.join(dir, 'assets', 'capi-sleepy-abc123.webp'), 'RIFF');
   writeFileSync(path.join(dir, 'favicon.svg'), '<svg/>');
   writeFileSync(path.join(dir, '_redirects'), '/c/* /index.html 200');
   writeFileSync(path.join(dir, '.well-known', 'assetlinks.json'), '[]');
@@ -129,6 +130,10 @@ test('site: the landing page, the link routes, the bundle and the App Links file
   assertEquals(bundle.status, 200);
   assertStringIncludes(bundle.headers.get('content-type') ?? '', 'text/javascript');
   assertStringIncludes(bundle.headers.get('cache-control') ?? '', 'immutable');
+
+  const capi = await a.request('/assets/capi-sleepy-abc123.webp');
+  assertEquals(capi.status, 200);
+  assertEquals(capi.headers.get('content-type'), 'image/webp');
 
   const assetlinks = await a.request('/.well-known/assetlinks.json');
   assertEquals(assetlinks.status, 200);
