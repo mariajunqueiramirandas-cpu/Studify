@@ -29,10 +29,11 @@ describe('builders', () => {
         expect(first).toBe(second);
       });
 
-      it('places at most 4 cache breakpoints and always caches the system prefix', () => {
+      it('places at most 4 cache breakpoints and caches the system prefix unless the task opts out', () => {
         const built = task.build(input);
         expect(countBreakpoints(task, built)).toBeLessThanOrEqual(4);
-        expect(built.system.at(-1)?.cache_control?.ttl).toBeTruthy();
+        if (task.cache === null) expect(countBreakpoints(task, built)).toBe(0);
+        else expect(built.system.at(-1)?.cache_control?.ttl).toBe(task.cache);
       });
 
       it('marks document blocks with citations only in citations mode (all-or-none)', () => {

@@ -157,6 +157,8 @@ export interface AiUsageRow {
   effort: Effort;
   input_tokens: number;
   output_tokens: number;
+  /** Part of output_tokens spent on thinking (usage.output_tokens_details.thinking_tokens); null when not reported. */
+  thinking_tokens: number | null;
   cache_creation_5m_tokens: number;
   cache_creation_1h_tokens: number;
   cache_read_tokens: number;

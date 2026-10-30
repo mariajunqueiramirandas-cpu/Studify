@@ -43,7 +43,7 @@ function replyBody(input: ArgumentReplyInput): string {
 /** School mode: replies cite the student's material (📄) with the Citations API. */
 export const argumentReply = defineTask<ArgumentReplyInput>({
   id: 'argument.reply',
-  version: 1,
+  version: 2,
   features: ['INT-03.3', 'INT-03.5', 'INT-03.6', 'INT-03.8'],
   effort: 'medium',
   maxTokensClass: 'M',
@@ -180,7 +180,7 @@ export interface ArgumentThemesInput {
 
 export const argumentThemes = defineTask<ArgumentThemesInput, ReturnType<typeof ArgumentThemes.parse>>({
   id: 'argument.themes',
-  version: 1,
+  version: 2,
   features: ['INT-03.2'],
   effort: 'low',
   maxTokensClass: 'XS',

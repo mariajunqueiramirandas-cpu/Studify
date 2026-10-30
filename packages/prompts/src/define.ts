@@ -16,8 +16,8 @@ import type {
 } from './types.ts';
 
 export interface BuildContext {
-  /** Default TTL for breakpoints this task places on its own blocks (documents, outline text). */
-  ttl: CacheTtl;
+  /** Default TTL for breakpoints this task places on its own blocks (documents, outline text); undefined: none. */
+  ttl: CacheTtl | undefined;
 }
 
 export interface BuildResult {
@@ -48,8 +48,12 @@ export interface TaskConfig<I, O> {
   output: OutputConfig<O>;
   /** Static system fragments, in fixed order. Never depends on input (cache-friendly). */
   system: readonly string[];
-  /** TTL of the system breakpoint. Batch waves use 1h (ai-pipeline §6.2). */
-  cache: CacheTtl;
+  /**
+   * TTL of the system breakpoint and of the breakpoints the builder places. Batch waves use 1h (ai-pipeline §6.2).
+   * null for a prompt no later call reuses (one call per topic slice): a cache write nobody reads costs 1.25–2× the
+   * input it replaces, and the output schema is part of the prefix, so other tasks never read it either.
+   */
+  cache: CacheTtl | null;
   build: (input: I, ctx: BuildContext) => BuildResult;
 }
 
@@ -60,6 +64,8 @@ export interface TaskDef<I, O> {
   readonly features: readonly string[];
   readonly effort: Effort;
   readonly maxTokensClass: MaxTokensClass;
+  /** null: the prompt carries no cache breakpoint (TaskConfig.cache). */
+  readonly cache: CacheTtl | null;
   readonly runs: RunMode;
   readonly budget: BudgetClass;
   readonly outputMode: OutputMode;
@@ -116,13 +122,13 @@ export function defineTask<I, O = undefined>(config: TaskConfig<I, O>): TaskDef<
   const jsonSchema = config.output.mode === 'structured' ? toJsonSchema(config.output.schema) : undefined;
   const systemText = config.system.join('\n\n');
   const system: TextBlock[] = config.system.map((value, index, all) =>
-    index === all.length - 1
+    index === all.length - 1 && config.cache
       ? { type: 'text', text: value, cache_control: { type: 'ephemeral', ttl: config.cache } }
       : { type: 'text', text: value },
   );
 
   function build(input: I): BuiltPrompt {
-    const result = config.build(input, { ttl: config.cache });
+    const result = config.build(input, { ttl: config.cache ?? undefined });
     const messages = normalizeCitations(result.messages, outputMode);
     const breakpoints = countBreakpoints(system, messages);
     if (breakpoints > MAX_BREAKPOINTS) {
@@ -156,6 +162,7 @@ export function defineTask<I, O = undefined>(config: TaskConfig<I, O>): TaskDef<
     features: config.features,
     effort: config.effort,
     maxTokensClass: config.maxTokensClass,
+    cache: config.cache,
     runs: config.runs,
     budget: config.budget,
     outputMode,

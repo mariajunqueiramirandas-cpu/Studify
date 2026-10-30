@@ -97,6 +97,13 @@ function addInto(target: UsageTotals, add: UsageTotals): void {
   target.code_execution_seconds += add.code_execution_seconds;
 }
 
+/** Thinking share of the output, as the API reports it (absent on older responses and on errors). */
+export function thinkingTokensOf(message: BetaMessage | undefined): number | null {
+  const details = (message?.usage as { output_tokens_details?: { thinking_tokens?: number | null } | null } | undefined)
+    ?.output_tokens_details;
+  return typeof details?.thinking_tokens === "number" ? details.thinking_tokens : null;
+}
+
 export interface UsageRowInput {
   ctx: BudgetContext;
   task: { id: string; version: number };
@@ -135,6 +142,7 @@ export function buildUsageRow(input: UsageRowInput): AiUsageRow {
     effort: effortFor(task),
     input_tokens: totals.input_tokens,
     output_tokens: totals.output_tokens,
+    thinking_tokens: thinkingTokensOf(message),
     cache_creation_5m_tokens: totals.cache_creation_5m_tokens,
     cache_creation_1h_tokens: totals.cache_creation_1h_tokens,
     cache_read_tokens: totals.cache_read_tokens,

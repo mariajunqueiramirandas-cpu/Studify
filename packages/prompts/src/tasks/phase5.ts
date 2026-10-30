@@ -144,7 +144,7 @@ const MNEMONIC_RULES = [
 
 export const mnemonicsSuggest = defineTask<MnemonicInput, ReturnType<typeof MnemonicOptions.parse>>({
   id: 'mnemonics.suggest',
-  version: 1,
+  version: 2,
   features: ['MEM-06.2', 'MEM-06.3', 'MEM-06.5', 'MEM-06.6'],
   effort: 'medium',
   maxTokensClass: 'S',
@@ -225,7 +225,7 @@ const MERGE_RULES = [
 
 export const divideMerge = defineTask<DivideMergeInput>({
   id: 'divide.merge',
-  version: 1,
+  version: 2,
   features: ['SOC-06.4', 'SOC-06.5'],
   effort: 'high',
   maxTokensClass: 'L',

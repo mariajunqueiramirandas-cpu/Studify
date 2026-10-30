@@ -40,7 +40,7 @@ const TLDR_RULES = [
 
 export const notesTldr = defineTask<TldrInput>({
   id: 'notes.tldr',
-  version: 1,
+  version: 2,
   features: ['LRN-01.2'],
   effort: 'low',
   maxTokensClass: 'M',
@@ -48,7 +48,7 @@ export const notesTldr = defineTask<TldrInput>({
   budget: 'content',
   output: { mode: 'citations' },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, CITATIONS, FORMAT, NOTE_BASE, TLDR_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
@@ -92,7 +92,7 @@ export const STUDY_NOTE_RULES = [
 
 export const notesStudy = defineTask<StudyNoteInput>({
   id: 'notes.study',
-  version: 1,
+  version: 2,
   features: ['LRN-01.3', 'LRN-02.6'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -100,7 +100,7 @@ export const notesStudy = defineTask<StudyNoteInput>({
   budget: 'content',
   output: { mode: 'citations' },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, CITATIONS, FORMAT, NOTE_BASE, STUDY_NOTE_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
@@ -132,7 +132,7 @@ const DEEP_RULES = [
 
 export const notesDeep = defineTask<DeepNoteInput>({
   id: 'notes.deep',
-  version: 1,
+  version: 2,
   features: ['LRN-01.4'],
   effort: 'high',
   maxTokensClass: 'L',
@@ -224,7 +224,7 @@ export const glossaryDefine = defineTask<GlossaryInput, ReturnType<typeof Glossa
   budget: 'content',
   output: { mode: 'structured', schema: GlossaryTerms },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, GLOSSARY_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
@@ -264,7 +264,7 @@ const STYLE_RULES: Record<RestyleStyle, string> = {
 
 export const explainRestyle = defineTask<RestyleInput>({
   id: 'explain.restyle',
-  version: 1,
+  version: 2,
   features: ['LRN-03'],
   effort: 'low',
   effortFor: (input) => (input.style === 'passo_a_passo' ? 'medium' : 'low'),

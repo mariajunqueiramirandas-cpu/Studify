@@ -4,6 +4,7 @@ import { test } from 'bun:test';
 import { assert, assertEquals } from './assert.ts';
 import { ALICE, BOB, makeHarness, parseSse, request, json, type FakeReply } from './fakes.ts';
 import { IDS, mcq, seedWorld, v7 } from './world.ts';
+import { getTask } from '@studify/prompts';
 import { handler as quizSubmit } from '../src/functions/quiz-submit.ts';
 import { handler as quizCreate } from '../src/functions/quiz-create.ts';
 import { handler as gradeAnswer } from '../src/functions/grade-answer.ts';
@@ -180,7 +181,7 @@ test('cards-generate-more: stores new cards with original source pages and drops
 test('explain: a shared explanation is streamed from the cache with no Claude call', async () => {
   const h = makeHarness();
   await seedWorld(h);
-  h.db.seed('explanations', { id: v7(640), subject_id: IDS.subject, target_type: 'concept', target_id: IDS.concept, paragraph_index: null, style: 'simpler', language: 'pt-BR', body: 'Clorofila é a cor verde das folhas.', citations: [], personal_for_user_id: null, prompt_version: 'explain.restyle@v1' });
+  h.db.seed('explanations', { id: v7(640), subject_id: IDS.subject, target_type: 'concept', target_id: IDS.concept, paragraph_index: null, style: 'simpler', language: 'pt-BR', body: 'Clorofila é a cor verde das folhas.', citations: [], personal_for_user_id: null, prompt_version: getTask('explain.restyle').promptVersion });
   const res = await explain(request('explain', { idem: v7(641), body: { target_type: 'concept', target_id: IDS.concept, style: 'simpler' } }), h.deps);
   const frames = parseSse(await res.text());
   assertEquals(frames.map((f) => f.event), ['meta', 'delta', 'done']);

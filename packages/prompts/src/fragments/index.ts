@@ -40,6 +40,8 @@ export const GROUNDING = [
 
 export const CITATIONS = [
   'Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.',
+  '- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.',
+  '- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.',
 ].join('\n');
 
 export const PEDAGOGY = [

@@ -3,6 +3,7 @@
 
 import type { ZodIssue } from "zod";
 import { mapCitation } from "./pdf.ts";
+import { fixedListKey, fixedListLength, rawJsonSchema } from "./request.ts";
 import type {
   BetaContentBlock,
   BetaTextCitation,
@@ -83,6 +84,8 @@ export function parseStructured<T>(text: string, task: TaskDef<T>): ParseResult<
   } catch {
     return { ok: false, issues: "output is not valid JSON" };
   }
+  const raw = rawJsonSchema(task.output.schema);
+  json = restoreFixedLists(json, raw, raw);
   let parsed = task.output.schema.safeParse(json);
   let dropped = 0;
   let droppedIssues = "";
@@ -127,6 +130,61 @@ function withoutItems(root: Record<string, unknown>, bad: ReadonlyMap<string, Re
     out[key] = (root[key] as unknown[]).filter((_, i) => !indexes.has(i));
   }
   return out;
+}
+
+/**
+ * Turns the objects that stand for fixed-length lists (toJsonSchema) back into lists, walking the JSON beside the
+ * schema it was written against. Anything that does not have that shape is left as is for Zod to judge.
+ */
+export function restoreFixedLists(value: unknown, node: unknown, root: Record<string, unknown>): unknown {
+  if (!node || typeof node !== "object" || value === null || typeof value !== "object") return value;
+  let schema = node as Record<string, unknown>;
+  if (typeof schema.$ref === "string") {
+    const target = resolveRef(root, schema.$ref);
+    if (!target) return value;
+    schema = target;
+  }
+  const branches = (schema.anyOf ?? schema.oneOf) as unknown[] | undefined;
+  if (Array.isArray(branches)) {
+    for (const branch of branches) {
+      const restored = restoreFixedLists(value, branch, root);
+      if (restored !== value) return restored;
+    }
+    return value;
+  }
+  const length = fixedListLength(schema);
+  if (length !== null && !Array.isArray(value)) {
+    const object = value as Record<string, unknown>;
+    const keys = Array.from({ length }, (_, i) => fixedListKey(i));
+    if (Object.keys(object).length !== length || !keys.every((k) => k in object)) return value;
+    return keys.map((k) => restoreFixedLists(object[k], schema.items, root));
+  }
+  if (Array.isArray(value)) {
+    return schema.items && typeof schema.items === "object" ? value.map((item) => restoreFixedLists(item, schema.items, root)) : value;
+  }
+  const properties = schema.properties as Record<string, unknown> | undefined;
+  if (!properties) return value;
+  const object = value as Record<string, unknown>;
+  let out: Record<string, unknown> | null = null;
+  for (const [key, child] of Object.entries(properties)) {
+    if (!(key in object)) continue;
+    const restored = restoreFixedLists(object[key], child, root);
+    if (restored !== object[key]) {
+      out ??= { ...object };
+      out[key] = restored;
+    }
+  }
+  return out ?? value;
+}
+
+function resolveRef(root: Record<string, unknown>, ref: string): Record<string, unknown> | null {
+  if (!ref.startsWith("#/")) return null;
+  let at: unknown = root;
+  for (const part of ref.slice(2).split("/")) {
+    if (!at || typeof at !== "object") return null;
+    at = (at as Record<string, unknown>)[part.replace(/~1/g, "/").replace(/~0/g, "~")];
+  }
+  return at && typeof at === "object" ? (at as Record<string, unknown>) : null;
 }
 
 function stripFence(text: string): string {

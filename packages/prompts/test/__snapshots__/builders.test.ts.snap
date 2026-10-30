@@ -21,10 +21,6 @@ exports[`builders > acheOErro.generate > matches the stored snapshot (schema exc
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -118,10 +114,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: escreva 5 itens de "Ache o Erro" do tópico.
 - Cada item é uma afirmação, um parágrafo curto ou uma resolução passo a passo, dividido em 3 a 8 segmentos S1, S2, S3… em ordem (frases, trechos ou passos; até 400 caracteres cada). Uma afirmação curta também é dividida em pelo menos 3 trechos.
 - Exatamente um segmento tem um erro plantado, plausível e baseado num engano comum do material. Um item (e só um) pode não ter erro: error_segment_id, error_type e corrected_text ficam null.
@@ -255,7 +247,7 @@ Celulares distraem e reduzem a atenção.
       "role": "user",
     },
   ],
-  "promptVersion": "argument.reply@v1",
+  "promptVersion": "argument.reply@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -295,7 +287,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -516,7 +510,7 @@ Mapa (JSON, dado):
       "role": "user",
     },
   ],
-  "promptVersion": "argument.themes@v1",
+  "promptVersion": "argument.themes@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -708,7 +702,7 @@ Habilidades CH/CN/LC (JSON):
       "role": "user",
     },
   ],
-  "promptVersion": "atualidades.structure@v1",
+  "promptVersion": "atualidades.structure@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -800,7 +794,7 @@ Explicações, feedback e justificativas: em português do Brasil.",
       "role": "user",
     },
   ],
-  "promptVersion": "camera.explain@v1",
+  "promptVersion": "camera.explain@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -847,7 +841,9 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -969,7 +965,7 @@ Explicações, feedback e justificativas: em português do Brasil.",
       "role": "user",
     },
   ],
-  "promptVersion": "camera.solveFull@v1",
+  "promptVersion": "camera.solveFull@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -1010,7 +1006,9 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -1411,10 +1409,6 @@ exports[`builders > cards.generate > matches the stored snapshot (schema exclude
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -1509,10 +1503,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: crie cartões de repetição espaçada para o tópico.
 - Atômico: um fato ou ideia por cartão. Resposta com até 15 palavras. Frente até 200 caracteres; verso até 300.
 - Pergunta específica e sem ambiguidade ("Qual organela produz ATP?", não "Fale sobre a mitocôndria"). Nada de perguntas de sim ou não.
@@ -1919,7 +1909,7 @@ Idioma do conteúdo gerado (títulos, notas, frases de cartões, enunciados, ter
       "role": "user",
     },
   ],
-  "promptVersion": "divide.merge@v1",
+  "promptVersion": "divide.merge@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -1955,7 +1945,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -2118,7 +2110,7 @@ Habilidade: CN-H14 (competência 4).",
       "role": "user",
     },
   ],
-  "promptVersion": "enem.bank.explain@v1",
+  "promptVersion": "enem.bank.explain@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -2272,7 +2264,7 @@ Transcreva a questão dos recortes.",
       "role": "user",
     },
   ],
-  "promptVersion": "enem.bank.transcribe@v1",
+  "promptVersion": "enem.bank.transcribe@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -2395,7 +2387,7 @@ Explicações, feedback e justificativas: em português do Brasil.",
       "role": "user",
     },
   ],
-  "promptVersion": "enem.question.generate@v1",
+  "promptVersion": "enem.question.generate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -2647,7 +2639,7 @@ Redação (dado, linhas numeradas):
       "role": "user",
     },
   ],
-  "promptVersion": "essay.grade@v1",
+  "promptVersion": "essay.grade@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -2854,7 +2846,7 @@ Idioma do conteúdo gerado (títulos, notas, frases de cartões, enunciados, ter
       "role": "user",
     },
   ],
-  "promptVersion": "explain.restyle@v1",
+  "promptVersion": "explain.restyle@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -2890,7 +2882,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -2934,10 +2928,6 @@ exports[`builders > feed.generate > matches the stored snapshot (schema excluded
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -3033,10 +3023,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: escreva itens do Feed de Estudos para um tópico: micro-aulas, perguntas rápidas, diagramas e "Você sabia?".
 - Por conceito: 1 micro_lesson e 2 quick_question. Por tópico: 1 ou 2 did_you_know. Um diagram para cada página com figura da lista (até 3).
 - micro_lesson: uma ideia. title é um gancho (pergunta ou fato surpreendente). body até 280 caracteres (cerca de 40 palavras), lido em até 15 segundos. formula_latex só se houver uma fórmula essencial.
@@ -3073,10 +3059,6 @@ exports[`builders > feed.topUp > matches the stored snapshot (schema excluded: i
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -3176,10 +3158,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: escreva itens do Feed de Estudos para um tópico: micro-aulas, perguntas rápidas, diagramas e "Você sabia?".
 - Por conceito: 1 micro_lesson e 2 quick_question. Por tópico: 1 ou 2 did_you_know. Um diagram para cada página com figura da lista (até 3).
 - micro_lesson: uma ideia. title é um gancho (pergunta ou fato surpreendente). body até 280 caracteres (cerca de 40 palavras), lido em até 15 segundos. formula_latex só se houver uma fórmula essencial.
@@ -3344,10 +3322,6 @@ exports[`builders > glossary.define > matches the stored snapshot (schema exclud
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -3419,10 +3393,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: escreva o glossário do tópico: uma definição para cada termo listado (e para outros termos centrais do material deste tópico, se houver). No máximo 40 termos no total.
 - term: até 80 caracteres.
 - definition: até 40 palavras e 300 caracteres, no idioma do conteúdo. Em matéria de idioma, em português do Brasil.
@@ -4136,10 +4106,6 @@ exports[`builders > ingest.topicDetail > matches the stored snapshot (schema exc
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -4213,10 +4179,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: identifique os conceitos de um tópico do material. Cada conceito é uma ideia que se ensina separadamente (um teorema, um processo, uma causa, um tipo de organismo, uma fórmula).
 - De 2 a 8 conceitos quando o tópico permitir. Não repita conceitos já listados como existentes.
 - key: identificador curto e único (c1, c2…). page_start e page_end: páginas originais onde o conceito aparece.
@@ -4250,10 +4212,6 @@ exports[`builders > ingest.transcribePages > matches the stored snapshot (schema
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "data": "JVBERi0xLjQK",
             "media_type": "application/pdf",
@@ -4296,10 +4254,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: transcreva fielmente as páginas enviadas (digitais ou escaneadas), para leitura e busca no app.
 - Transcreva o texto como está, sem resumir, traduzir ou corrigir. Mantenha a ordem de leitura.
 - Fórmulas e símbolos matemáticos em LaTeX ($…$). Tabelas em Markdown simples.
@@ -4900,7 +4854,7 @@ Idioma do conteúdo: pt-BR. Para vocabulário estrangeiro, a palavra-chave liga 
       "role": "user",
     },
   ],
-  "promptVersion": "mnemonics.suggest@v1",
+  "promptVersion": "mnemonics.suggest@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -5079,7 +5033,7 @@ Idioma do conteúdo gerado (títulos, notas, frases de cartões, enunciados, ter
       "role": "user",
     },
   ],
-  "promptVersion": "notes.deep@v1",
+  "promptVersion": "notes.deep@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -5115,7 +5069,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -5167,10 +5123,6 @@ exports[`builders > notes.study > matches the stored snapshot (schema excluded: 
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "citations": {
             "enabled": true,
           },
@@ -5226,7 +5178,7 @@ Idioma do conteúdo gerado (títulos, notas, frases de cartões, enunciados, ter
       "role": "user",
     },
   ],
-  "promptVersion": "notes.study@v1",
+  "promptVersion": "notes.study@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -5262,7 +5214,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -5278,10 +5232,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: escreva o Resumo do tópico em Markdown. Use as seções H2 exigidas na mensagem, nesta ordem, e nenhuma outra seção H2.
 ## Ideia central — a ideia mais importante do tópico, em 2 ou 3 frases.
 ## Explicando — o conteúdo explicado com clareza, na ordem em que o material apresenta.
@@ -5392,10 +5342,6 @@ exports[`builders > notes.tldr > matches the stored snapshot (schema excluded: i
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "citations": {
             "enabled": true,
           },
@@ -5446,7 +5392,7 @@ Idioma do conteúdo gerado (títulos, notas, frases de cartões, enunciados, ter
       "role": "user",
     },
   ],
-  "promptVersion": "notes.tldr@v1",
+  "promptVersion": "notes.tldr@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -5482,7 +5428,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -5498,10 +5446,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: escreva o Resumo rápido do tópico.
 - De 5 a 8 bullets, até 120 palavras no total.
 - Só as ideias essenciais. Sem introdução, sem conclusão.
@@ -5957,7 +5901,7 @@ Explicações, feedback e justificativas: em português do Brasil.",
       "role": "user",
     },
   ],
-  "promptVersion": "podcast.handAnswer@v1",
+  "promptVersion": "podcast.handAnswer@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -5993,7 +5937,9 @@ Regras de segurança (valem sempre):
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {
@@ -6539,10 +6485,6 @@ exports[`builders > problems.generate > matches the stored snapshot (schema excl
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -6594,7 +6536,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "problems.generate@v2",
+  "promptVersion": "problems.generate@v3",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -6635,10 +6577,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tarefa: monte uma lista de problemas do tópico, em ordem crescente de dificuldade, com 3 exemplos resolvidos antes.
 - worked_examples: 3 exemplos com todos os passos (o app esconde o último passo do 2º e os dois últimos do 3º).
 - problems: a quantidade pedida. Cada problema tem statement, given (variáveis e valores numéricos usados), final_answer, answer_format (numeric, expression ou choice), unit, tolerance, solution_steps, 3 dicas e source_pages.
@@ -6675,10 +6613,6 @@ exports[`builders > questions.generate > matches the stored snapshot (schema exc
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral",
-          },
           "source": {
             "file_id": "file_bio_slice_1",
             "type": "file",
@@ -6778,10 +6712,6 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "cache_control": {
-        "ttl": "1h",
-        "type": "ephemeral",
-      },
       "text": "Tipos e payload: payload_json é o objeto payload do tipo escrito como JSON (uma string). Use exatamente este formato, com todas as chaves (null onde não se aplica):
 - mcq_single: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null},…],"correct":"B"}. 5 alternativas (A a E), como nas provas brasileiras; 4 (A a D) só quando o material mostra questões com 4 alternativas. Ids em ordem; rationale diz por que está certa ou errada; misconception_concept_key é a chave do conceito do erro ou null.
 - multi_select: {"options":[{"id":"A","text":"…","rationale":"…","misconception_concept_key":null,"value":null},…],"correct":["A","C"],"somatoria":false}. 4 ou 5 alternativas, de 2 a 4 corretas; value é 1, 2, 4, 8… só em somatória.
@@ -7586,7 +7516,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "trail.checkpoint@v1",
+  "promptVersion": "trail.checkpoint@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -7741,7 +7671,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "trail.lesson@v1",
+  "promptVersion": "trail.lesson@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -8017,7 +7947,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "trail.reinforce@v1",
+  "promptVersion": "trail.reinforce@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -8181,7 +8111,7 @@ Retorne apenas o objeto estruturado pedido.",
       "role": "user",
     },
   ],
-  "promptVersion": "trail.remediate@v1",
+  "promptVersion": "trail.remediate@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -8590,7 +8520,7 @@ Explicações, feedback e justificativas: em português do Brasil.",
       "role": "system",
     },
   ],
-  "promptVersion": "tutor.turn@v1",
+  "promptVersion": "tutor.turn@v2",
   "system": [
     {
       "text": "Contexto: você trabalha no Studify, um app de estudos usado por estudantes no Brasil. O usuário é um(a) estudante, provavelmente entre 12 e 18 anos.
@@ -8641,7 +8571,9 @@ Sem HTML bruto, sem imagens externas, sem links inventados.",
       "type": "text",
     },
     {
-      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.",
+      "text": "Citações: toda afirmação factual deve ter citação ao documento. Analogias e exemplos inventados podem existir, mas precisam ser claramente apresentados como analogia ou exemplo e não podem trazer fatos novos sobre a matéria.
+- A citação fica presa automaticamente ao trecho que você escreve com base no documento, e esse trecho acompanha as palavras do material. Por isso, escreva cada fato do documento uma vez só, direto no trecho citado, sem uma frase sua antes ou depois dizendo a mesma coisa.
+- Frases suas, sem citação, servem para ligar ideias, explicar o porquê ou dar um exemplo marcado como exemplo; nunca para repetir o que um trecho citado já diz.",
       "type": "text",
     },
     {

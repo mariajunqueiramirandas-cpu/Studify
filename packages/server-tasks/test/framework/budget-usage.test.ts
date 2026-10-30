@@ -93,6 +93,7 @@ describe('usageParams', () => {
     price_version: 'v1',
     latency_ms: 1,
     ttft_ms: null,
+    thinking_tokens: null,
     request_id: 'msg_1',
     batch_id: 'batch_1',
     custom_id: 'c',

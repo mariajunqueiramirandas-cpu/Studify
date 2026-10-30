@@ -111,7 +111,7 @@ const TRANSCRIBE_RULES = [
 
 export const enemBankTranscribe = defineTask<EnemBankTranscribeInput, ReturnType<typeof EnemItemTranscription.parse>>({
   id: 'enem.bank.transcribe',
-  version: 1,
+  version: 2,
   features: ['ENM-02.2', 'ENM-02.8'],
   effort: 'medium',
   maxTokensClass: 'M',
@@ -147,7 +147,7 @@ const EXPLAIN_RULES = [
 
 export const enemBankExplain = defineTask<EnemBankExplainInput, ReturnType<typeof EnemItemExplanation.parse>>({
   id: 'enem.bank.explain',
-  version: 1,
+  version: 2,
   features: ['ENM-02.5'],
   effort: 'high',
   maxTokensClass: 'L',
@@ -227,7 +227,7 @@ const GENERATE_RULES = [
 
 export const enemQuestionGenerate = defineTask<EnemQuestionGenerateInput, ReturnType<typeof EnemGeneratedItems.parse>>({
   id: 'enem.question.generate',
-  version: 1,
+  version: 2,
   features: ['ENM-03.1', 'ENM-03.2', 'ENM-03.3', 'ENM-03.5'],
   effort: 'high',
   maxTokensClass: 'L',
@@ -287,7 +287,7 @@ function anchorsBlock(): string {
 
 export const essayGrade = defineTask<EssayGradeInput, ReturnType<typeof EssayGrade.parse>>({
   id: 'essay.grade',
-  version: 1,
+  version: 2,
   features: ['ENM-05.2', 'ENM-05.3', 'ENM-05.4', 'ENM-05.5', 'ENM-05.6'],
   effort: 'high',
   maxTokensClass: 'XL',
@@ -441,7 +441,7 @@ const STRUCTURE_RULES = [
 
 export const atualidadesStructure = defineTask<AtualidadesStructureInput, ReturnType<typeof AtualidadesDigest.parse>>({
   id: 'atualidades.structure',
-  version: 1,
+  version: 2,
   features: ['ENM-09.2', 'ENM-09.3'],
   effort: 'medium',
   maxTokensClass: 'L',

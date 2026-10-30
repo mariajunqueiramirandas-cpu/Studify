@@ -15,7 +15,7 @@ The execution policy is [ADR 0010](adr/0010-direct-sse-api.md): all student work
 
 ## 1. Principles
 
-1. **One provider, one default model.** Every task uses `claude-haiku-5-5` at effort `high` (owner decision of 2026-10-27, ADR 0003 amendment). A per-task model or effort override needs an owner decision and eval evidence. Engineering never changes a task's model or effort for cost on its own.
+1. **One provider, one default model.** Every task uses `claude-haiku-5-5` with adaptive thinking at the effort its prompt declares, capped at `medium` (owner decisions of 2026-10-27; eval evidence 2026-10-30, ADR 0003). A per-task model or effort override needs an owner decision and eval evidence. Engineering never changes a task's model or effort for cost on its own.
 2. **Grounded or labeled.** Output either cites the student's material (Citations API or validated `source_pages`) or is explicitly labeled as general knowledge (TUT-04, INT-03 ENEM mode).
 3. **Validate everything.** Every structured output is re-validated with Zod before storage; nothing off-schema is stored ([architecture §5](architecture.md#5-cross-cutting-conventions)).
 4. **Material is data.** PDFs, photos, transcriptions, student answers, Turma names and peer questions never carry instructions ([security-privacy §8.1](security-privacy.md#81-prompt-injection-and-untrusted-content)).
@@ -38,9 +38,9 @@ The execution policy is [ADR 0010](adr/0010-direct-sse-api.md): all student work
 
 | Topic | Rule | Why |
 |---|---|---|
-| Thinking | Omit `thinking` (adaptive is the default and the only mode on Haiku 5.5; `{type: "adaptive"}` is also accepted). Never send `budget_tokens`: it returns 400. | Thinking is adaptive on Haiku 5.5 and Opus 5.5. |
+| Thinking | Omit `thinking` (adaptive is Haiku 5.5's default; `{type: "adaptive"}` is also accepted). Never send `budget_tokens`: it returns 400. Haiku 5.5 accepts `{type: "disabled"}` at effort ≤ `high`, but Studify does not use it: in the 2026-10-30 eval (ADR 0003) it cut latency ~2–3× and raised factual errors ~7×. | Thinking is where Haiku 5.5's quality comes from on these tasks. |
 | Thinking display | Default (`omitted`). Studify never shows the model's reasoning to students and never asks the model to write its reasoning into the answer. | Avoids `reasoning_extraction` refusals and keeps answers short. |
-| Effort | `output_config.effort` is **`high` for every task**, from `effortFor()` in `packages/ai` (owner decision 2026-10-27). The per-task `effort` values in §3 and in the prompt definitions are documented hints and are **not sent**. Per-task overrides need an owner decision and eval evidence. | One owner-set policy. Effort is part of the cache key (§6.2). |
+| Effort | `output_config.effort` is the task's declared effort **capped at `medium`** (`effortFor()` / `MAX_EFFORT` in `packages/ai`; owner decision 2026-10-27). `low` was measured on 2026-10-30 and lost quality on every task tried (ADR 0003). Per-task overrides need an owner decision and eval evidence. | Effort is the reliable thinking control on Haiku 5.5, and part of the cache key (§6.2). |
 | `max_tokens` | Sized for **thinking + reply** by class (§2.3). Visible reply length is set in the prompt and checked by validation, never by `max_tokens`. | Thinking counts toward `max_tokens`; tight limits truncate. |
 | Streaming | Required for any call whose `max_tokens` class is L or XL and for every user-facing prose call. Use `.stream()` + `finalMessage()` when we don't forward deltas. | Avoids HTTP timeouts; low time-to-first-token in the app. |
 | Sampling params | Never send `temperature`, `top_p`, `top_k`. | Rejected on every model on API version `2026-10-21`, Haiku 5.5 included. |
@@ -360,7 +360,8 @@ The Citations API and structured outputs (`output_config.format`) **cannot be co
 
 - Schemas live in `packages/shared/schemas/ai/*.ts` as Zod; the JSON schema sent to the API is generated from the Zod schema. `additionalProperties: false` everywhere.
 - The API rejects `minItems` above 1 and ignores `maxLength` and numeric ranges, so `toJsonSchema` removes length, count and range keywords and **restates each one in the node's `description`** ("até 300 caracteres", "de 3 a 8 itens", "valor >= 1 e <= 5"): the model reads every limit Zod enforces. **Zod validation always runs** after the response; cross-field rules (sums, ids in order, "correct among the options") are stated in the task prompt.
-- New schemas compile on first use (one-time latency, cached ~24 h by the API). Pre-warm new schema versions with a staging call after deploy so the first student doesn't pay the latency.
+- **Exact counts are enforced by the grammar.** A list with an exact length (`.length(n)`, 2 ≤ n ≤ 12) is sent as an object with `n` required keys `item_1…item_n`, whose item schema is shared once under `definitions` (copying it per key makes the API reject the schema as "compiled grammar is too large"); `parseStructured` turns it back into a list before Zod. Without this, "exatamente 4 itens" was only a request: `trail.reinforce` wrote 3 test questions whenever it thought less, and the whole call failed. Ranged lists (`min`…`max`) stay lists with the range in the description.
+- New schemas compile on first use (one-time latency, cached ~24 h by the API). Pre-warm new schema versions with a staging call after deploy so the first student doesn't pay the latency. The page and label enums (`x-choice`) are per slice, so the first call of each task on a new topic compiles a new grammar: measured at ~2.5 s of extra time to first token (~6 s for the Trilha schemas).
 - **No validation retry** (R13). When every Zod issue sits inside items of a top-level list (`items.3.text`), those items are dropped and the rest is kept (`salvage` on the result, logged); otherwise the item/job is marked `failed` with `error_code = 'ai_invalid_output'` and the user sees the spec's fallback (e.g. manual topic picker for GOL-03).
 - Field order matters for streamed structured outputs: put the field the app renders first at the top of the schema (`lucas_reply` in `S:LucasTurn`).
 
@@ -368,6 +369,7 @@ The Citations API and structured outputs (`output_config.format`) **cannot be co
 
 - The response comes back as several `text` blocks; some carry `citations`. The server concatenates text into the stored body and records each citation as `{start, end, document_id, page_start, page_end, cited_text}` with offsets into the concatenated body (spec 02 §7).
 - Structure that structured outputs would normally enforce (fixed H2 sections in `notes.study`, ≤ 4 lines in ✋ answers) is enforced by the prompt and checked after generation; a failed check triggers one regeneration, then the note is stored with `low_citation_coverage` / format warnings (spec 02 §8.1).
+- Cited spans follow the material's wording, so a model that also writes its own sentence for the same fact says it twice (measured on Haiku 5.5: tutor answers restated a cited fact in 7 of 16 spans). The `CITATIONS` fragment says the citation attaches to the sentence automatically and each fact is written once; uncited sentences only connect, explain or give a labeled example.
 - **Never send cited text back with its `citations` inside a user message** (API `2026-10-21` → 400). Replaying the assistant's own cited blocks unchanged in a thread is fine.
 
 ### 5.3 Two-call patterns
@@ -436,9 +438,11 @@ Placement rules: it must follow a user message and be the last entry or be follo
 
 Not used in general (traffic within a topic wave keeps caches warm). One exception: when the student opens "Aprofundado" (L3) or a tutor thread on a topic whose slice was just used by the outline lane, nothing extra is needed. Pre-warming would only be considered if p50 tutor first-token latency misses its 3 s target.
 
-### 6.5 Expected savings
+### 6.5 What is cached, and what is not (measured 2026-10-30)
 
-For a topic wave of ~6 calls on the same 10K-token slice, caching turns 6 × 10K full-price input reads into 1 write (1.25×) + 5 reads (0.05×): ~0.5 vs 6 input-equivalents. Output tokens (including thinking) dominate cost anyway (§9.5).
+The output schema (`output_config.format`, or its absence) is part of the cached prefix, like effort and the thinking setting: two calls with the same system prompt and documents but different schemas do not share a cache entry. So the tasks of a topic wave (`ingest.topicDetail`, `cards.generate`, `questions.generate`, `feed.generate`, `notes.*`, `glossary.define`…) never read each other's cache, and a cache entry is only usable once the first response has started, so `questions.generate`'s parallel parts cannot read each other's either. A write nobody reads costs 1.25× (5 min) or 2× (1 h) the input it replaces.
+
+**Rule: only a prompt that the same task sends again keeps a breakpoint** — threads (tutor, Lucas, argumentation), Trilha steps (every concept of a topic reads the same slice minutes apart), outline-scoped classification and the essay anchors. The one-shot topic tasks set `cache: null` (no breakpoint at all): `ingest.topicDetail`, `ingest.transcribePages`, `cards.generate`, `questions.generate`, `feed.generate`, `feed.topUp`, `notes.tldr`, `notes.study`, `glossary.define`, `acheOErro.generate`, `problems.generate` (the list is pinned in `packages/prompts/test/registry.test.ts`). A cold cache adds almost no time to first token on Haiku 5.5 (measured), so this costs no speed. Output tokens (including thinking) dominate cost anyway (§9.5).
 
 ### 6.6 Threads must be append-only (preserved thinking)
 
@@ -657,8 +661,9 @@ sequenceDiagram
 | `budget_class` | `content` / `user` / `system` |
 | `mode` | `sync` / `stream` / `batch` |
 | `model_requested`, `model_served` | Served model differs after a server-side fallback |
-| `effort` | The effort sent (owner policy, `high` for every task), not the prompt hint |
+| `effort` | The effort sent (the task's effort capped at `medium`) |
 | `input_tokens`, `output_tokens` | `output_tokens` includes thinking |
+| `thinking_tokens` | The thinking part of `output_tokens` (`usage.output_tokens_details.thinking_tokens`); null when not reported |
 | `cache_creation_5m_tokens`, `cache_creation_1h_tokens`, `cache_read_tokens` | From `usage.cache_creation` breakdown |
 | `server_tool_uses` | Web searches, code-execution time (from `usage`) |
 | `stop_reason`, `refusal_category` | |
@@ -784,6 +789,7 @@ Worker jobs carry `ai_jobs.id`; a retried job checks which items already exist (
 - **Per call:** `ai_usage` row (§9.2) with `request_id`; Sentry breadcrumbs carry task id, prompt version, latency and stop reason — never prompt or response content (minors' data).
 - **Dashboards (owner):** cost per day by feature and budget class; cost per page ingested; cache read ratio per task family; refusal rate by subject and category; invalid-output rate per task; p50/p95 latency (outline, tutor TTFT, scope match); Batch wave duration; fallback usage.
 - **Alerts:** global spend ≥ 80% of the monthly cap; a user > 5× the median daily spend (security-privacy §7); refusal rate > 2% on a subject; invalid output > 5% on a task; zero cache reads on a family that should cache.
+- **Bench and blind judge:** `packages/server-tasks/bench/` runs the real prompts of the main tasks on a PDF against the real API (`ai-bench.ts`: latency, time to first token, thinking and cache tokens, validity, restated citations; thinking and effort can be overridden) and grades saved outputs blind against the PDF with Opus (`judge.ts`). Each run spends real money: owner approval as in testing-strategy §6.7.
 - **Evals:** fixtures, metrics (schema validity, citation accuracy, item quality rubric, grading agreement, prompt-injection resistance), regression gating and cost approval are in [testing-strategy §6](testing-strategy.md#6-ai-evals). Every `TaskDef` declares its eval slice.
 
 ## 12. Server tools and non-Claude AI services

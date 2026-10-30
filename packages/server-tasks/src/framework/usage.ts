@@ -33,6 +33,7 @@ export function usageParams(row: AiUsageRow): unknown[] {
     row.refusal_category,
     row.latency_ms,
     row.prompt_version,
+    row.thinking_tokens,
   ];
 }
 
@@ -41,10 +42,10 @@ insert into public.ai_usage (
   user_id, class_group_id, subject_id, job_id, document_id, node_id, feature, task, model,
   fallback_model, request_id, batch, effort, input_tokens, output_tokens,
   cache_creation_input_tokens, cache_read_input_tokens, server_tool_uses, cost_micro_usd,
-  price_version, stop_reason, refusal_category, latency_ms, prompt_version
+  price_version, stop_reason, refusal_category, latency_ms, prompt_version, thinking_tokens
 ) values (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20,
-  $21, $22, $23, $24
+  $21, $22, $23, $24, $25
 )`;
 
 /**

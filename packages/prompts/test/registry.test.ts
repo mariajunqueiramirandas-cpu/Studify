@@ -19,6 +19,25 @@ describe('task registry', () => {
     }
   });
 
+  // A cache write nobody reads costs more than no cache, and the output schema is part of the cached prefix, so
+  // only a prompt the same task sends again (threads, Trilha steps, outline-scoped calls) keeps a breakpoint.
+  it('caches only prompts a later call reuses: the one-shot topic tasks send none', () => {
+    const uncached = TASKS.filter((t) => t.cache === null).map((t) => t.id).sort();
+    expect(uncached).toEqual([
+      'acheOErro.generate',
+      'cards.generate',
+      'feed.generate',
+      'feed.topUp',
+      'glossary.define',
+      'ingest.topicDetail',
+      'ingest.transcribePages',
+      'notes.study',
+      'notes.tldr',
+      'problems.generate',
+      'questions.generate',
+    ]);
+  });
+
   it('declares features, effort, class and budget for every task', () => {
     for (const task of TASKS) {
       expect(task.features.length, task.id).toBeGreaterThan(0);

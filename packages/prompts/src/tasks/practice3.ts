@@ -103,7 +103,7 @@ export const acheOErroGenerate = defineTask<AcheOErroInput, ReturnType<typeof Ac
   budget: 'content',
   output: { mode: 'structured', schema: AcheOErroItems },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, ACHE_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
@@ -142,7 +142,7 @@ const PROBLEM_RULES = [
 
 export const problemsGenerate = defineTask<ProblemsGenerateInput, ReturnType<typeof ProblemSet.parse>>({
   id: 'problems.generate',
-  version: 2,
+  version: 3,
   features: ['PRA-08.1', 'PRA-08.2', 'PRA-08.6'],
   effort: 'high',
   maxTokensClass: 'L',
@@ -150,7 +150,7 @@ export const problemsGenerate = defineTask<ProblemsGenerateInput, ReturnType<typ
   budget: 'content',
   output: { mode: 'structured', schema: ProblemSet },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, PROBLEM_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
