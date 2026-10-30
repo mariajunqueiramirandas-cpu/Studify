@@ -2,7 +2,7 @@
 // read fades on the app's forgetting curve, key words turn into blanks, and recalling them brings the ink back.
 import { useEffect } from 'react';
 import capiSleepy from './assets/capi-sleepy.webp';
-import { DownloadButton, InstallSteps } from './components.tsx';
+import { BrandMark, DownloadButton, InstallSteps } from './components.tsx';
 import { ErosionFilters, MemoryMap, PageChip, Sheet, Txt } from './forgetting.tsx';
 import { startClock } from './page-store.ts';
 import { Flashcard, PlanChart, SurpriseQuiz, Tutor } from './widgets.tsx';
@@ -28,9 +28,7 @@ export function Landing() {
           <div className="copy-in">
             <header className="sheet-header">
               <span className="brand">
-                <span className="brand-mark" aria-hidden="true">
-                  S
-                </span>
+                <BrandMark />
                 Studify
               </span>
               <span className="fields" aria-hidden="true">

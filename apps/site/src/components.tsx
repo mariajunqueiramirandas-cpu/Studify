@@ -1,11 +1,16 @@
 import { useState, type ReactNode } from 'react';
 import { DOWNLOAD_URL } from './config.ts';
 
+/** The Studify mark: the app icon (Capi over the open book), the same file as the favicon. */
+export function BrandMark() {
+  return <img className="brand-mark" src="/favicon.svg" width={34} height={34} alt="" />;
+}
+
 /** The link pages: one plain sheet on the desk. Nothing on them fades, the code has to stay readable. */
 export function Page({ brandHref, children }: { brandHref?: string; children: ReactNode }) {
   const mark = (
     <>
-      <span className="brand-mark" aria-hidden="true">S</span>Studify
+      <BrandMark />Studify
     </>
   );
   return (
