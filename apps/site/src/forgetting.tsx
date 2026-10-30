@@ -7,7 +7,7 @@ import {
   dismissNotice,
   markRead,
   notify,
-  onFrame,
+  onTick,
   pageStore,
   review,
   setPaused,
@@ -41,29 +41,54 @@ function matrix(e: number): string {
   return `0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${STEEPNESS} 0 0 0 ${b.toFixed(3)}`;
 }
 
-/** One pair of filters per sheet (display type, body text), driven every frame from the page clock. */
+/** Forgetting moves the ink in steps this big: each step repaints the sheet, which costs on a cheap phone. */
+const FORGET_STEP = 0.015;
+const REINK_MS = 550;
+
+/** One pair of filters per sheet (display type, body text), driven by the page clock. */
 export function ErosionFilters() {
   const ref = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     const shown = new Map<SheetId, number>();
-    let last = performance.now();
-    return onFrame((s) => {
-      const t = performance.now();
-      const dt = Math.min(0.1, (t - last) / 1000);
-      last = t;
+    const reinking = new Map<SheetId, { from: number; start: number }>();
+    let frame = 0;
+
+    const paint = (id: SheetId, e: number) => {
+      shown.set(id, e);
+      const svg = ref.current;
+      svg?.querySelector(`#erode-${id}-d feColorMatrix`)?.setAttribute('values', matrix(e));
+      svg?.querySelector(`#erode-${id}-b feColorMatrix`)?.setAttribute('values', matrix(Math.min(e, BODY_CAP)));
+    };
+
+    // Re-inking floods back in about half a second, on animation frames only while it runs.
+    const animate = (t: number) => {
+      frame = 0;
+      for (const [id, { from, start }] of reinking) {
+        const k = Math.min(1, (t - start) / REINK_MS);
+        const target = sheetErosion(pageStore.get(), id);
+        paint(id, target + (from - target) * (1 - k) ** 3);
+        if (k === 1) reinking.delete(id);
+      }
+      if (reinking.size) frame = requestAnimationFrame(animate);
+    };
+
+    const stop = onTick((s) => {
       for (const id of SHEETS) {
+        if (reinking.has(id)) continue;
         const target = sheetErosion(s, id);
-        const prev = shown.get(id) ?? 0;
-        // Re-inking floods back in about half a second; forgetting follows the clock.
-        const next = reducedMotion() || target > prev ? target : prev + (target - prev) * Math.min(1, dt * 7);
-        if (Math.abs(next - prev) < 0.003 && shown.has(id)) continue;
-        shown.set(id, next);
-        const svg = ref.current;
-        svg?.querySelector(`#erode-${id}-d feColorMatrix`)?.setAttribute('values', matrix(next));
-        svg?.querySelector(`#erode-${id}-b feColorMatrix`)?.setAttribute('values', matrix(Math.min(next, BODY_CAP)));
+        const prev = shown.get(id);
+        if (prev === undefined) paint(id, target);
+        else if (target < prev - FORGET_STEP && !reducedMotion()) {
+          reinking.set(id, { from: prev, start: performance.now() });
+          if (!frame) frame = requestAnimationFrame(animate);
+        } else if (Math.abs(target - prev) >= FORGET_STEP || (target === 0 && prev !== 0)) paint(id, target);
       }
     });
+    return () => {
+      stop();
+      cancelAnimationFrame(frame);
+    };
   }, []);
 
   return (
@@ -318,9 +343,32 @@ export function PageChip({ page, passage, label }: { page: number; passage: stri
 
 const NOTICE_MS = 6000;
 
+function Diamond({ trace, r }: { trace: unknown; r: number }) {
+  return (
+    <svg className="diamond" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <rect x="3.5" y="3.5" width="9" height="9" transform="rotate(45 8 8)" className="diamond-rim" />
+      <rect
+        x="3.5"
+        y="3.5"
+        width="9"
+        height="9"
+        transform="rotate(45 8 8)"
+        className="diamond-fill"
+        style={{ opacity: trace ? Math.max(0.12, (r - 0.45) / 0.55) : 0 }}
+      />
+    </svg>
+  );
+}
+
+/**
+ * The page's memory, sheet by sheet, with the clock and the pause button. On a phone it is a bar under the thumb
+ * (the sheets' diamonds, the page's memory and the clock) that opens into the full map; on a wide screen, a rail.
+ */
 export function MemoryMap() {
   const s = usePage((state) => state);
   const notice = s.notice;
+  const [open, setOpen] = useState(false);
+  const summaryRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!notice || notice.kind === 'away') return;
@@ -341,42 +389,68 @@ export function MemoryMap() {
     }
   }, [anyBlank]);
 
+  const sheets = SHEETS.map((id) => {
+    const trace = s.traces[id] ?? null;
+    return { id, trace, r: retrievability(trace, s.now), level: levelOf(trace, s.now) };
+  });
+  const read = sheets.filter((x) => x.trace);
+  const average = read.length ? `${Math.round((read.reduce((sum, x) => sum + x.r, 0) / read.length) * 100)}%` : '—';
+  const clock = formatClock(s.now);
+
   return (
-    <aside className="hud" aria-label="Mapa da memória desta página">
-      <p className="hud-title">Mapa da memória</p>
-      <ol className="hud-sheets">
-        {SHEETS.map((id, i) => {
-          const trace = s.traces[id] ?? null;
-          const level = levelOf(trace, s.now);
-          const r = retrievability(trace, s.now);
-          const pct = trace ? `${Math.round(r * 100)}%` : '';
-          return (
+    <aside
+      className={`hud${open ? ' is-open' : ''}`}
+      aria-label="Mapa da memória desta página"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          setOpen(false);
+          summaryRef.current?.focus();
+        }
+      }}
+    >
+      <div id="hud-panel" className="hud-panel">
+        <p className="hud-title">Mapa da memória</p>
+        <ol className="hud-sheets">
+          {sheets.map(({ id, trace, r, level }, i) => (
             <li key={id}>
-              <a href={`#${id}`} className={`hud-sheet level-${level}`}>
-                <svg className="diamond" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                  <rect x="3.5" y="3.5" width="9" height="9" transform="rotate(45 8 8)" className="diamond-rim" />
-                  <rect
-                    x="3.5"
-                    y="3.5"
-                    width="9"
-                    height="9"
-                    transform="rotate(45 8 8)"
-                    className="diamond-fill"
-                    style={{ opacity: trace ? Math.max(0.12, (r - 0.45) / 0.55) : 0 }}
-                  />
-                </svg>
+              <a href={`#${id}`} className={`hud-sheet level-${level}`} onClick={() => setOpen(false)}>
+                <Diamond trace={trace} r={r} />
                 <span className="hud-page">p. {i + 1}</span>
-                <span className="hud-pct">{pct}</span>
+                <span className="hud-pct">{trace ? `${Math.round(r * 100)}%` : ''}</span>
                 <span className="hud-level">{LEVEL_LABEL[level]}</span>
               </a>
             </li>
-          );
-        })}
-      </ol>
-      <div className="hud-clock">
-        <span className="hud-time">{formatClock(s.now)}</span>
-        <span className="hud-rate">1 segundo aqui vale 1 hora</span>
+          ))}
+        </ol>
+        <div className="hud-clock">
+          <span className="hud-time">{clock}</span>
+          <span className="hud-rate">1 segundo aqui vale 1 hora</span>
+        </div>
       </div>
+      <button
+        ref={summaryRef}
+        type="button"
+        className="hud-summary"
+        aria-expanded={open}
+        aria-controls="hud-panel"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="hud-dots" aria-hidden="true">
+          {sheets.map(({ id, trace, r, level }) => (
+            <span key={id} className={`level-${level}`}>
+              <Diamond trace={trace} r={r} />
+            </span>
+          ))}
+        </span>
+        <span className="hud-summary-text">
+          <span className="hud-average">Memória {average}</span>
+          <span className="hud-summary-time">{clock}</span>
+        </span>
+        <svg className="chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M3.5 10l4.5-4.5 4.5 4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="sr-only">{open ? 'Fechar o mapa da memória' : 'Abrir o mapa da memória'}</span>
+      </button>
       <button type="button" className="key hud-pause" aria-pressed={s.paused} onClick={() => setPaused(!s.paused)}>
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
           {s.paused ? <path d="M5 3.5v9l7-4.5z" fill="currentColor" /> : <path d="M5 3.5h2v9H5zM9 3.5h2v9H9z" fill="currentColor" />}

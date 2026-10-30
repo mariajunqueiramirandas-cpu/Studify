@@ -29,8 +29,14 @@ App Links, mobile-app.md §2.3). `src/App.tsx` picks the page: the landing page 
 ## The landing page: a página que esquece
 
 The landing page is an apostila about Studify that forgets itself, so the visitor sees the problem the app solves
-before reading about it. One second on the page is one hour (the clock is in the Mapa da Memória rail, or the bar at
-the bottom on a phone).
+before reading about it. One second on the page is one hour.
+
+It is built phone first, for students opening a WhatsApp link on an Android phone: the base styles are a 360 dp
+screen (checked down to 320), the download button sits in the first screen's thumb zone, every target is at least
+48 dp (blanks and page chips in running text get an invisible 48 px touch area), and the Mapa da Memória is a bar under
+the thumb (the sheets, the page's memory, the clock, pause) that opens into the full map. From 960 px it becomes a
+rail beside the sheets. The clock ticks 10 times a second and the ink repaints in steps, so a cheap phone is not
+redrawing filters on every frame.
 
 - **Forgetting.** A sheet starts fading once it has been on screen for 1.5 s. Its memory follows the app's own FSRS
   forgetting curve and default weights (`ts-fsrs`, as in `packages/shared/src/learning`), starting as weak as a card

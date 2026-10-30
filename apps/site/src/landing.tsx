@@ -47,16 +47,10 @@ export function Landing() {
             </h1>
             <p className="body">
               <span id="passagem-memoria" className="passage">
-                <Txt at={0.62}>
-                  {'Não é culpa sua: é assim que a [memória|internet|preguiça] funciona. O que a gente lê uma vez só começa a sumir no mesmo dia.'}
-                </Txt>
-              </span>
-            </p>
-            <p className="body">
+                <Txt at={0.62}>{'Não é culpa sua: é assim que a [memória|internet|preguiça] funciona.'}</Txt>
+              </span>{' '}
               <span id="passagem-relogio" className="passage">
-                <Txt at={0.7}>
-                  {'Aqui o tempo corre: cada segundo nesta página vale uma [hora|semana|aula]. Continue lendo e repare no que acontece com o que ficou pra trás.'}
-                </Txt>
+                <Txt at={0.76}>{'Aqui, cada segundo vale uma [hora|semana|aula]. Continue lendo e veja o que acontece com o que ficou pra trás.'}</Txt>
               </span>
             </p>
             <div className="app-layer">

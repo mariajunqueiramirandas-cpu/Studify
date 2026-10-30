@@ -65,7 +65,7 @@ const INTENTS: Intent[] = [
     keys: ['esquec', 'memoria', 'apag', 'lembr', 'curva', 'fsrs', 'segundo', 'hora', 'relogio'],
     answer: {
       kind: 'grounded',
-      text: 'O que a gente lê uma vez só começa a sumir no mesmo dia. Nesta página o tempo corre rápido, um segundo vale uma hora, então dá pra ver acontecer.',
+      text: 'É assim que a memória funciona: o que a gente lê uma vez só começa a sumir no mesmo dia. Nesta página um segundo vale uma hora, então dá pra ver acontecer.',
       cite: cite(1, 'passagem-memoria'),
     },
   },

@@ -1,5 +1,5 @@
 // The things you do on the page. They never fade: what you practice stays (only what you read erodes).
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import capiCelebrating from './assets/capi-celebrating.webp';
 import capiCurious from './assets/capi-curious.webp';
 import { PageChip } from './forgetting.tsx';
@@ -71,6 +71,8 @@ export function Flashcard() {
 // ---------- p. 3: the plan, as memory over the days until the exam ----------
 
 const CHART_H = 250;
+const MIN_DAYS = 3;
+const MAX_DAYS = 30;
 const PAD = { top: 18, right: 132, bottom: 44, left: 40 };
 
 function useWidth<T extends HTMLElement>(fallback: number) {
@@ -115,7 +117,15 @@ export function PlanChart() {
           <label htmlFor={sliderId}>
             Sua prova é daqui a <strong>{days} dias</strong>
           </label>
-          <input id={sliderId} type="range" min={3} max={30} value={days} onChange={(e) => setDays(Number(e.target.value))} />
+          <input
+            id={sliderId}
+            type="range"
+            min={MIN_DAYS}
+            max={MAX_DAYS}
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            style={{ '--fill': `${((days - MIN_DAYS) / (MAX_DAYS - MIN_DAYS)) * 100}%` } as CSSProperties}
+          />
         </div>
       </div>
 

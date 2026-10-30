@@ -96,40 +96,41 @@ export function startOver() {
 
 // ---------- the clock ----------
 
+/** Ten ticks a second: enough for the clock and the ink, and light on a cheap phone's battery. */
+const TICK_MS = 100;
+/** A gap this long between ticks is the phone sleeping or the tab frozen, not a slow tick. */
+const GAP_MS = 20_000;
+
 let last = 0;
+let hiddenAt: number | null = null;
 let running = false;
 const ticks = new Set<(s: PageState) => void>();
 
-/** Per-frame callbacks (the erosion filters); React subscribers only hear the clock every EMIT_MS. */
-export function onFrame(cb: (s: PageState) => void): () => void {
+/** Called on every tick after the clock moves (the erosion filters). */
+export function onTick(cb: (s: PageState) => void): () => void {
   ticks.add(cb);
   return () => {
     ticks.delete(cb);
   };
 }
 
-const EMIT_MS = 100;
-let lastEmit = 0;
-
-function frame(t: number) {
-  const dt = (t - last) / 1000;
+/** `quiet`: the caller reports the absence itself (coming back to the tab). */
+function tick(quiet = false) {
+  const t = performance.now();
+  const ms = t - last;
   last = t;
-  if (!state.paused && dt > 0) {
-    const hours = dt * PAGE_HOURS_PER_SECOND;
-    // A long gap is the tab coming back from the background: time went on, and the page says so.
-    if (dt > 20 && hours >= AWAY_NOTICE_HOURS) away(hours);
-    state = { ...state, now: state.now + hours };
-    if (t - lastEmit >= EMIT_MS) {
-      lastEmit = t;
-      emit(state);
-    }
+  if (!state.paused && ms > 0) {
+    if (ms > GAP_MS && !quiet) away(ms);
+    emit({ ...state, now: state.now + (ms / 1000) * PAGE_HOURS_PER_SECOND });
   }
   for (const cb of ticks) cb(state);
-  requestAnimationFrame(frame);
 }
 
-function away(hours: number) {
-  const seconds = Math.round(hours / PAGE_HOURS_PER_SECOND);
+/** Real time away, as a notice in page time when it is worth one. The clock itself keeps counting. */
+function away(ms: number) {
+  const hours = (ms / 1000) * PAGE_HOURS_PER_SECOND;
+  if (state.paused || hours < AWAY_NOTICE_HOURS) return;
+  const seconds = Math.round(ms / 1000);
   const real = seconds < 120 ? `${seconds} segundos` : seconds < 7200 ? `${Math.round(seconds / 60)} minutos` : `${Math.round(seconds / 3600)} horas`;
   noticeAway(real, hours);
 }
@@ -176,11 +177,17 @@ export function startClock() {
   load();
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') save();
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = performance.now();
+      save();
+    } else if (hiddenAt !== null) {
+      // Switching to WhatsApp and back: time went on, and the page says so.
+      const ms = performance.now() - hiddenAt;
+      hiddenAt = null;
+      tick(true);
+      away(ms);
+    }
   });
-  requestAnimationFrame((t) => {
-    last = t;
-    lastEmit = t;
-    requestAnimationFrame(frame);
-  });
+  last = performance.now();
+  setInterval(tick, TICK_MS);
 }
