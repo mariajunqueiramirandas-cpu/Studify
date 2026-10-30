@@ -142,7 +142,8 @@ Array.prototype.slice.call(root.children).forEach(function(h){
 });
 function post(o){window.ReactNativeWebView.postMessage(JSON.stringify(o));}
 function h(){post({type:'height',value:root.getBoundingClientRect().height+8});}
-document.addEventListener('click',function(e){var a=e.target.closest('a');if(!a)return;e.preventDefault();post({type:'link',href:a.getAttribute('href')});});
+function rectOf(a,e){var rs=a.getClientRects(),r=rs[0]||a.getBoundingClientRect();for(var i=0;i<rs.length;i++){if(e.clientY>=rs[i].top&&e.clientY<=rs[i].bottom){r=rs[i];break;}}return{x:r.left,y:r.top,width:r.width,height:r.height};}
+document.addEventListener('click',function(e){var a=e.target.closest('a');if(!a)return;e.preventDefault();post({type:'link',href:a.getAttribute('href'),rect:rectOf(a,e)});});
 new ResizeObserver(h).observe(root);h();
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(h);
 </script></body></html>`;

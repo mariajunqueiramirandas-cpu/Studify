@@ -1,9 +1,10 @@
 import MarkdownIt from 'markdown-it';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { t } from '../i18n';
 import { useOverlay } from './Overlay';
+import type { Anchor } from './Popover';
 import { boldFamily, FONTS, radius, space, useTheme, type Palette } from '../theme';
 import { documentHtml, hasMath, noteBody, renderMath } from './reader-html';
 import { Text } from './Text';
@@ -17,8 +18,8 @@ export interface MarkdownViewProps {
   markdown: string;
   /** cite:N links are emitted as chips; resolved by the caller (TRU-01). */
   onCitation?: (index: number) => void;
-  /** term:<slug> links underline key terms (S-MAT-13). */
-  onTerm?: (term: string) => void;
+  /** term:<slug> links underline key terms (S-MAT-13); `anchor` is where the tapped word sits on screen. */
+  onTerm?: (term: string, anchor: Anchor | null) => void;
   /** Key terms to underline automatically (dotted underline, ux §7.3). */
   terms?: string[];
   citations?: unknown[];
@@ -29,16 +30,23 @@ export function MarkdownView({ markdown, onCitation, onTerm, terms }: MarkdownVi
   const theme = useTheme();
   const overlay = useOverlay();
   const [height, setHeight] = useState(80);
+  const box = useRef<ComponentRef<typeof View>>(null);
   const html = useMemo(() => {
     return documentHtml(noteBody(markdown, terms, t('global.source')), theme.colors, { fontScale: 1, easyReading: theme.easyReading, mode: 'reader' });
   }, [markdown, terms, theme.colors, theme.easyReading]);
 
   const onMessage = async (e: WebViewMessageEvent) => {
-    const msg = JSON.parse(e.nativeEvent.data) as { type: string; value?: number; href?: string };
+    const msg = JSON.parse(e.nativeEvent.data) as { type: string; value?: number; href?: string; rect?: Anchor };
     if (msg.type === 'height' && msg.value) setHeight(Math.ceil(msg.value));
     if (msg.type === 'link' && msg.href) {
       if (msg.href.startsWith('cite:')) onCitation?.(Number(msg.href.slice(5)));
-      else if (msg.href.startsWith('term:')) onTerm?.(decodeURIComponent(msg.href.slice(5)));
+      else if (msg.href.startsWith('term:')) {
+        const term = decodeURIComponent(msg.href.slice(5));
+        const rect = msg.rect;
+        // The page does not scroll inside the WebView, so its CSS pixels are dp from the view's own corner.
+        if (rect && box.current) box.current.measureInWindow((x, y) => onTerm?.(term, { x: x + rect.x, y: y + rect.y, width: rect.width, height: rect.height }));
+        else onTerm?.(term, null);
+      }
       else if (/^https?:/.test(msg.href)) {
         const domain = new URL(msg.href).host;
         if (await overlay.confirm({ title: `Abrir ${domain}?`, message: msg.href, confirmLabel: 'Abrir' })) void Linking.openURL(msg.href);
@@ -47,12 +55,14 @@ export function MarkdownView({ markdown, onCitation, onTerm, terms }: MarkdownVi
   };
 
   return (
-    <View style={{ height, width: '100%' }}>
+    <View ref={box} collapsable={false} style={{ height, width: '100%' }}>
       <WebView
         originWhitelist={['about:blank']}
         source={{ html }}
         onMessage={onMessage}
         scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         style={{ backgroundColor: 'transparent' }}
         javaScriptEnabled
         textZoom={100}
@@ -157,6 +167,8 @@ export function MathView({ text, variant = 'body', align }: { text: string; vari
         originWhitelist={['about:blank']}
         source={{ html }}
         scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         style={{ backgroundColor: 'transparent' }}
         onMessage={(e) => {
           const msg = JSON.parse(e.nativeEvent.data) as { type: string; value?: number };

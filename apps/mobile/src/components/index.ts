@@ -17,3 +17,4 @@ export * from './OcclusionImage';
 export * from './Capi';
 export * from './Tactile';
 export * from './GenerationStatus';
+export * from './Popover';
