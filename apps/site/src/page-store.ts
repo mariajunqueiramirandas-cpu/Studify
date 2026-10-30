@@ -23,7 +23,8 @@ export interface PageState {
   notice: Notice | null;
 }
 
-const STORAGE_KEY = 'studify.pagina-que-esquece.v1';
+/** The localStorage item that keeps a visit (the name of a stored item, not a credential). */
+const STORAGE_ITEM = 'studify.pagina-que-esquece.v1';
 /** A real absence shorter than this (one page day) is not worth a notice. */
 const AWAY_NOTICE_HOURS = 24;
 
@@ -144,7 +145,7 @@ function noticeAway(real: string, hours: number) {
 function save() {
   try {
     const saved: Saved = { now: state.now, paused: state.paused, traces: state.traces, savedAt: Date.now() };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    localStorage.setItem(STORAGE_ITEM, JSON.stringify(saved));
   } catch {
     // Private mode or blocked storage: the page simply starts fresh next time.
   }
@@ -153,7 +154,7 @@ function save() {
 function load() {
   let saved: Saved | null = null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_ITEM);
     saved = raw ? (JSON.parse(raw) as Saved) : null;
   } catch {
     saved = null;

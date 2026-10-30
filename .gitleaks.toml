@@ -6,4 +6,5 @@ useDefault = true
 [allowlist]
 description = "Test fixtures, not secrets"
 # A placeholder signing key used by the API tests in commit 51c305e (now 'x'.repeat(32)); it stays in the history.
-regexes = ['''test-signing-key-0123456789abcdef''']
+# The link site's localStorage item name, assigned to a constant named STORAGE_KEY in commit 78734e0 (now STORAGE_ITEM).
+regexes = ['''test-signing-key-0123456789abcdef''', '''studify\.pagina-que-esquece\.v1''']
