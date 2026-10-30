@@ -496,7 +496,7 @@ Twelve subject hues the student can choose from, each with a light-theme value (
 - **Study objects look like study objects:** flashcards are index cards with a rule under the header, subjects are notebooks with a coloured binding, exam countdowns are calendar leaves, a subject colour on a card is a bookmark ribbon, the plan is a checklist.
 - **Mascot:** **Capi**, a capybara, drawn as illustrations per stage (filhote, jovem, adulta, sábia) and mood (comemorando, curiosa, focada, descansando, sonolenta), with unlockable accessories drawn on top from per-pose anchors (`apps/mobile/src/components/capi-anchors.ts`). Scenes for empty, first-run and offline moments. Capi never guilt-trips; hiding Capi also swaps the scenes for icons.
 - **Icons:** Ionicons outline at 24 dp, filled variant for the active tab.
-- **App icon and logo:** to be designed; must read at 48 dp on a busy home screen.
+- **App icon:** Capi peeking over an open book, paws on the top edge, one line of the left page under the lamp-yellow highlighter, on the book indigo with a soft lamp glow. It reads at 48 dp on a busy home screen: the brown head, the white book and the yellow stroke carry it. Drawn on Android's 108 dp adaptive grid with the art inside the 66 dp safe circle, plus a themed-icon silhouette; sources in `apps/mobile/assets/icon/`, rendered to the app PNGs and the site and painel favicons by `apps/mobile/scripts/render-icons.mjs`. The link site and the painel show the same favicon file as their header mark.
 
 ## 10. Motion
 

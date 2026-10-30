@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <!-- App icon background: the book indigo (primary) with a soft lamp glow behind Capi. -->
+  <defs>
+    <radialGradient id="lamp" cx="54" cy="40" r="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5D53E0"/><stop offset="1" stop-color="#4A3FD1"/>
+    </radialGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#lamp)"/>
+</svg>
