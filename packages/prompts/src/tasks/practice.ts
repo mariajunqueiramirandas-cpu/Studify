@@ -83,7 +83,7 @@ export const questionsGenerate = defineTask<QuestionsInput, ReturnType<typeof To
   budget: 'content',
   output: { mode: 'structured', schema: TopicQuestions },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, QUESTIONS_TASK, QUESTION_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => questionsMessages(input, ctx.ttl),
 });
 
@@ -101,7 +101,7 @@ export const questionsMore = defineTask<QuestionsInput, ReturnType<typeof TopicQ
   build: (input, ctx) => questionsMessages(input, ctx.ttl),
 });
 
-function questionsMessages(input: QuestionsInput, ttl: CacheTtl) {
+function questionsMessages(input: QuestionsInput, ttl: CacheTtl | undefined) {
   const docs = documentBlocks(input.slices, ttl);
   const quotas = Object.entries(input.quotas)
     .filter(([, n]) => typeof n === 'number' && n > 0)

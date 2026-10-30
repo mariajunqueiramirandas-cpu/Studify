@@ -110,6 +110,7 @@ async function synthesizeAnswer(p2: P2Deps, userId: string, interactionId: strin
       price_version: `tts:${tts.microUsdPerChar}`,
       latency_ms: 0,
       ttft_ms: null,
+      thinking_tokens: null,
       request_id: null,
       batch_id: null,
       custom_id: null,

@@ -39,7 +39,7 @@ export interface CardsInput {
   languageSubject: boolean;
 }
 
-function buildCards(input: CardsInput, ttl: CacheTtl) {
+function buildCards(input: CardsInput, ttl: CacheTtl | undefined) {
   const docs = documentBlocks(input.slices, ttl);
   const body = lines(
     section('Tópico (JSON):', stableStringify(input.topic)),
@@ -61,7 +61,7 @@ export const cardsGenerate = defineTask<CardsInput, ReturnType<typeof TopicCards
   budget: 'content',
   output: { mode: 'structured', schema: TopicCards },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, CARD_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => buildCards(input, ctx.ttl),
 });
 

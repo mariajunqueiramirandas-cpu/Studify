@@ -1,0 +1,11 @@
+import { readFileSync } from 'node:fs';
+import Anthropic from '@anthropic-ai/sdk';
+import { getTask } from '@studify/prompts';
+import { toPdfSlices } from '../src/ingest/tasks.ts';
+const pdf = readFileSync(process.argv[2]!).toString('base64');
+const slices = toPdfSlices([{ id: 's', documentId: 'd', title: 'Biologia — Apostila', pages: [1,2,3,4,5,6,7], tokenCount: null, source: { kind: 'base64', data: pdf } }]);
+const topic = { title: 'Respiração celular', objectives: ['Explicar a glicólise.'], concepts: [{ key: 'c1', title: 'Glicólise', keyTerms: ['glicólise'], formulas: [] }] };
+const built = getTask('notes.tldr').build({ topic, slices, contentLanguage: 'pt-BR', languageSubject: false } as never);
+const sdk = new Anthropic();
+const m = await sdk.beta.messages.create({ model: 'claude-haiku-5-5', max_tokens: 8000, output_config: { effort: 'medium' }, system: built.system as never, messages: built.messages as never });
+for (const b of m.content) console.log(JSON.stringify(b).slice(0, 400));

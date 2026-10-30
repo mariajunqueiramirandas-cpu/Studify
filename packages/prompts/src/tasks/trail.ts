@@ -115,7 +115,7 @@ function stepContext(input: TrailStepBase) {
 // every lesson, re-teaching and chapter test of the chapter reuses the same document prefix.
 export const trailLesson = defineTask<TrailLessonInput, ReturnType<typeof TrailLesson.parse>>({
   id: 'trail.lesson',
-  version: 1,
+  version: 2,
   features: ['TRL-01.4', 'TRL-01.5'],
   effort: 'medium',
   maxTokensClass: 'M',
@@ -143,10 +143,11 @@ export interface TrailReinforceInput extends TrailLessonInput {
   askedStems: readonly string[];
 }
 
-// Same system and documents as trail.lesson, so the call reads the cache the lesson call just wrote.
+// Same system and documents as trail.lesson. Its schema differs, so it keeps its own cache entry (the output format is
+// part of the cached prefix): the next concept's trail.reinforce on this topic reads it.
 export const trailReinforce = defineTask<TrailReinforceInput, ReturnType<typeof TrailReinforcement.parse>>({
   id: 'trail.reinforce',
-  version: 1,
+  version: 2,
   features: ['TRL-01.6', 'TRL-01.7'],
   effort: 'medium',
   maxTokensClass: 'L',
@@ -181,7 +182,7 @@ export interface TrailRemediateInput extends TrailLessonInput {
 
 export const trailRemediate = defineTask<TrailRemediateInput, ReturnType<typeof TrailRemediation.parse>>({
   id: 'trail.remediate',
-  version: 1,
+  version: 2,
   features: ['TRL-01.6'],
   effort: 'medium',
   maxTokensClass: 'M',
@@ -223,7 +224,7 @@ export interface TrailCheckpointInput extends TrailStepBase {
 
 export const trailCheckpoint = defineTask<TrailCheckpointInput, ReturnType<typeof TrailCheckpoint.parse>>({
   id: 'trail.checkpoint',
-  version: 1,
+  version: 2,
   features: ['TRL-01.7'],
   effort: 'medium',
   maxTokensClass: 'L',

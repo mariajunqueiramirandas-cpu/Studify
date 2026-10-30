@@ -1,9 +1,22 @@
 # 0003 — Claude API as the only LLM, Haiku 5.5 by default
 
-| Status | Accepted, amended 2026-10-27 (default model, effort and refusal fallback; see Amendment) |
+| Status | Accepted, amended 2026-10-27 (default model, effort and refusal fallback; see Amendment) and 2026-10-30 (thinking and effort evidence) |
 |---|---|
-| Date | 2026-10-26 (amended 2026-10-27) |
+| Date | 2026-10-26 (amended 2026-10-27, 2026-10-30) |
 | Related | [AI pipeline](../ai-pipeline.md) · [Architecture](../architecture.md) · [Security & privacy](../security-privacy.md) · [Testing strategy](../testing-strategy.md) |
+
+## Amendment — 2026-10-30 (thinking and effort: eval evidence, no policy change)
+
+Point 2 of the 2026-10-27 amendment was revised the same day: each task runs at the effort its prompt declares, **capped at `medium`** (`MAX_EFFORT` in `packages/ai`), because `high` doubled every call's time. `medium` is also Haiku 5.5's own default. On 2026-10-30 the main generation tasks were measured against the real API on a 7-page PT-BR biology PDF (`packages/server-tasks/bench`), and the outputs were graded blind by `claude-opus-5-5` against the PDF:
+
+| Setting (Haiku 5.5) | Mean score (1–10) | Factual errors per output | Speed vs today |
+|---|---|---|---|
+| adaptive thinking, `medium` (today) | **6.85** (7.50 in a second, 12-output run) | **0.15** | — |
+| adaptive thinking, `low` | 6.30 (6.33) | 0.45 | ~1.5–3× faster |
+| thinking `disabled`, `low` | 5.10 | 1.00 | ~2–3× faster |
+| thinking `disabled`, `medium` | 4.65 | 1.15 | ~2–3× faster |
+
+Ten tasks, two outputs each per setting (the second run: three tasks, four outputs each). Thinking is 30–65% of the output tokens on the slow tasks (`trail.reinforce`, `questions.generate`, `feed.generate`) and is what makes them slow, but turning it off or lowering effort costs quality on every task measured. Anthropic's guidance agrees: on Haiku 5.5, effort is the reliable control (prompting it to "answer directly" does not stop it thinking), and with thinking off it can skip a needed tool call when JSON output is requested. **Decision: keep adaptive thinking at the `medium` cap; no task moves to `low` or to thinking off.** Revisit only with a larger eval per task. `ai_usage.thinking_tokens` now records the thinking share of every call.
 
 ## Amendment — 2026-10-27 (owner decision)
 

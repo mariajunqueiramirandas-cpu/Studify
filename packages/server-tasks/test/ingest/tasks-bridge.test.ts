@@ -27,7 +27,8 @@ describe('prompts to @studify/ai bridge', () => {
       expect.objectContaining({ id: 'slice-1', documentId: DOC, pages: [4, 5, 6], base64: 'QUJD' }),
     ]);
     expect(prepared.call.system.length).toBeGreaterThan(0);
-    expect(prepared.call.system.at(-1)?.cacheTtl).toBe('1h');
+    // notes.tldr runs once per topic: no cache breakpoint (a write nobody reads costs more than none).
+    expect(prepared.call.system.some((b) => b.cacheTtl)).toBe(false);
     // Citations on every document block (all-or-none, ai-pipeline §5.2).
     const first = (prepared.call.messages[0]?.content as unknown as Array<Record<string, unknown>>)[0];
     expect(first).toMatchObject({ type: 'document', citations: { enabled: true } });

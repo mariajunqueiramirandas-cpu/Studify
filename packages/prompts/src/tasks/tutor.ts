@@ -125,7 +125,7 @@ function modeInstruction(input: TutorTurnInput): string {
 
 export const tutorTurn = defineTask<TutorTurnInput>({
   id: 'tutor.turn',
-  version: 1,
+  version: 2,
   features: ['TUT-01', 'TUT-02', 'TUT-03', 'TUT-04', 'TUT-05'],
   effort: 'medium',
   maxTokensClass: 'M',

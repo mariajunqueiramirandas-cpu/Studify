@@ -198,7 +198,7 @@ export const ingestTopicDetail = defineTask<TopicDetailInput, ReturnType<typeof 
   budget: 'content',
   output: { mode: 'structured', schema: TopicConcepts },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, TOPIC_DETAIL_RULES.join('\n')],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks(input.slices, ctx.ttl);
     const body = lines(
@@ -279,7 +279,7 @@ export const ingestTranscribePages = defineTask<TranscribePagesInput, ReturnType
   budget: 'content',
   output: { mode: 'structured', schema: PageTranscriptions },
   system: [SAFETY, UNTRUSTED_DATA, FORMAT, TRANSCRIBE_RULES.join('\n')],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => {
     const docs = documentBlocks([input.slice], ctx.ttl);
     const body = lines(

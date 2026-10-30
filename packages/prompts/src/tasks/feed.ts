@@ -29,7 +29,7 @@ export interface FeedInput {
   leastCoveredConceptKeys?: readonly string[];
 }
 
-function feedMessages(input: FeedInput, ttl: CacheTtl) {
+function feedMessages(input: FeedInput, ttl: CacheTtl | undefined) {
   const docs = documentBlocks(input.slices, ttl);
   const body = lines(
     section('Tópico (JSON):', stableStringify(input.topic)),
@@ -54,7 +54,7 @@ export const feedGenerate = defineTask<FeedInput, ReturnType<typeof FeedItems.pa
   budget: 'content',
   output: { mode: 'structured', schema: FeedItems },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, FEED_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => feedMessages(input, ctx.ttl),
 });
 
@@ -68,6 +68,6 @@ export const feedTopUp = defineTask<FeedInput, ReturnType<typeof FeedItems.parse
   budget: 'content',
   output: { mode: 'structured', schema: FeedItems },
   system: [SAFETY, UNTRUSTED_DATA, PTBR_STYLE, GROUNDING, FORMAT, FEED_RULES],
-  cache: '1h',
+  cache: null,
   build: (input, ctx) => feedMessages(input, ctx.ttl),
 });

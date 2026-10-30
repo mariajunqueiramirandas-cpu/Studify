@@ -64,16 +64,75 @@ const UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
  * Zod schema to the JSON schema sent as output_config.format, with additionalProperties: false. The API rejects or
  * ignores length, count and range keywords, so each one is removed and restated in the node's description: the model
  * reads the limit there and writes within it on the first attempt, instead of failing Zod after the fact.
+ * A list of an exact length is sent as an object with that many required keys (see fixedListLength), so decoding
+ * writes exactly that many items; parseStructured turns it back into a list before Zod runs.
  */
 export function toJsonSchema(schema: z.ZodType, choices: Choices = {}): Record<string, unknown> {
-  const raw = z.toJSONSchema(schema, { target: "draft-7", io: "output" }) as Record<string, unknown>;
-  return stripSchema(raw, choices) as Record<string, unknown>;
+  const defs: Record<string, unknown> = {};
+  const out = stripSchema(rawJsonSchema(schema), choices, defs) as Record<string, unknown>;
+  return Object.keys(defs).length > 0 ? { ...out, definitions: { ...(out.definitions as object | undefined), ...defs } } : out;
 }
 
-function stripSchema(node: unknown, choices: Choices): unknown {
-  if (Array.isArray(node)) return node.map((child) => stripSchema(child, choices));
+const rawSchemas = new WeakMap<z.ZodType, Record<string, unknown>>();
+
+/** The Zod schema as plain draft-7 JSON schema, before stripSchema (cached per schema). */
+export function rawJsonSchema(schema: z.ZodType): Record<string, unknown> {
+  let raw = rawSchemas.get(schema);
+  if (!raw) {
+    raw = z.toJSONSchema(schema, { target: "draft-7", io: "output" }) as Record<string, unknown>;
+    rawSchemas.set(schema, raw);
+  }
+  return raw;
+}
+
+/** Longest exact-length list sent as an object; longer ones stay lists with the count in the description. */
+const MAX_FIXED_LIST = 12;
+
+/** Key of item i (0-based) of a fixed-length list sent as an object. */
+export function fixedListKey(i: number): string {
+  return `item_${i + 1}`;
+}
+
+/**
+ * The length of a list with an exact item count (2..12), else null. The API accepts minItems of 0 or 1 only and no
+ * tuple forms, so without this a "exatamente 4 itens" list is only a request in the description, and a model writing
+ * 3 loses the whole call to Zod.
+ */
+export function fixedListLength(node: Record<string, unknown>): number | null {
+  if (node.type !== "array" || !node.items || typeof node.items !== "object" || Array.isArray(node.items)) return null;
+  const min = node.minItems;
+  const max = node.maxItems;
+  return typeof min === "number" && min === max && min >= 2 && min <= MAX_FIXED_LIST ? min : null;
+}
+
+/**
+ * `fixedLists` collects the item schemas of fixed-length lists, sent once under `definitions` and referenced from each
+ * key: copying the item into every key multiplies the grammar ("The compiled grammar is too large"). Tool schemas
+ * pass no collector and keep their lists.
+ */
+function stripSchema(node: unknown, choices: Choices, fixedLists?: Record<string, unknown>): unknown {
+  if (Array.isArray(node)) return node.map((child) => stripSchema(child, choices, fixedLists));
   if (!node || typeof node !== "object") return node;
   const source = node as Record<string, unknown>;
+  const length = fixedLists ? fixedListLength(source) : null;
+  if (fixedLists && length !== null) {
+    const item = stripSchema(source.items, choices, fixedLists);
+    const serialized = JSON.stringify(item);
+    let name = Object.keys(fixedLists).find((k) => JSON.stringify(fixedLists[k]) === serialized);
+    if (!name) {
+      name = `fixed_item_${Object.keys(fixedLists).length + 1}`;
+      fixedLists[name] = item;
+    }
+    const ref = { $ref: `#/definitions/${name}` };
+    const keys = Array.from({ length }, (_, i) => fixedListKey(i));
+    return {
+      type: "object",
+      properties: Object.fromEntries(keys.map((k) => [k, ref])),
+      required: keys,
+      additionalProperties: false,
+      ...(typeof source.description === "string" && source.description ? { description: source.description } : {}),
+    };
+  }
   // A value that must be one the prompt showed: an enum of this call's values (decoding allows nothing else).
   const kind = source[CHOICE_KEYWORD] as ChoiceKind | undefined;
   const allowed = kind ? choices[kind] : undefined;
@@ -84,7 +143,7 @@ function stripSchema(node: unknown, choices: Choices): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(source)) {
     if (UNSUPPORTED_SCHEMA_KEYWORDS.has(key) || key === CHOICE_KEYWORD) continue;
-    out[key] = stripSchema(value, choices);
+    out[key] = stripSchema(value, choices, fixedLists);
   }
   const limits = describeLimits(source);
   if (limits) {

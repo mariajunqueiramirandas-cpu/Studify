@@ -132,7 +132,7 @@ const EXPLAIN_RULES = [
 
 export const cameraExplain = defineTask<CameraExplainInput>({
   id: 'camera.explain',
-  version: 1,
+  version: 2,
   features: ['CAM-01.1', 'CAM-01.2', 'CAM-01.3'],
   effort: 'medium',
   maxTokensClass: 'M',
@@ -232,7 +232,7 @@ const FULL_RULES = [
 
 export const cameraSolveFull = defineTask<CameraSolveFullInput>({
   id: 'camera.solveFull',
-  version: 1,
+  version: 2,
   features: ['CAM-02.5', 'CAM-02.6', 'CAM-02.7'],
   effort: 'high',
   maxTokensClass: 'L',

@@ -1202,6 +1202,7 @@ Published to Realtime (§8). Index `(subject_id, created_at desc)`, `(user_id, s
 | `batch` | bool | false | Batch API (50% price) |
 | `effort` | text | N | |
 | `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` | int | 0 | From `usage` |
+| `thinking_tokens` | int | N | Thinking part of `output_tokens` (`usage.output_tokens_details.thinking_tokens`) |
 | `server_tool_uses` | jsonb | N | e.g. `{web_search_requests: 3}` |
 | `cost_micro_usd` | bigint | — | Computed with the price table version in `price_version` |
 | `price_version` | text | — | |

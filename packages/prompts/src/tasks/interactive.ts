@@ -108,7 +108,7 @@ export interface PodcastHandInput {
 
 export const podcastHandAnswer = defineTask<PodcastHandInput>({
   id: 'podcast.handAnswer',
-  version: 1,
+  version: 2,
   features: ['INT-01.8', 'INT-01.10'],
   effort: 'low',
   maxTokensClass: 'M',

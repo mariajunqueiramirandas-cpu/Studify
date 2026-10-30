@@ -77,6 +77,7 @@ export function usageRecord(row: AiUsageRow): Record<string, unknown> {
     refusal_category: row.refusal_category,
     latency_ms: row.latency_ms,
     prompt_version: row.prompt_version,
+    thinking_tokens: row.thinking_tokens,
   };
 }
 
