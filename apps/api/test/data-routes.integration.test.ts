@@ -99,3 +99,31 @@ maybe('every data route answers its example over SSE, with no database error', a
   expect(failures).toEqual([]);
   expect(DATA_ROUTES.length).toBeGreaterThan(0);
 });
+
+maybe('a signed-in student without a profile yet gets a clean refusal from a write, not a 500', async () => {
+  // The account exists (the API writes auth.users on the first verified token), but sign-up is not finished.
+  const noProfile = crypto.randomUUID();
+  const auth = {
+    getUser: async () => ({ data: { user: { id: noProfile, email: 'np@studify.test' } }, error: null }),
+    admin: {},
+  } as unknown as DbAuth;
+  await pool.query(`insert into auth.users (id, email) values ($1, 'np@studify.test')`, [noProfile]);
+  try {
+    const db = createDb({ pool, auth });
+    const fake = createFakeDeps({ db: createFakeDb() });
+    const deps: P2Deps = { ...fake.deps, db, asUser: (user) => db.asUser({ sub: user.userId, role: 'authenticated', email: user.email }), newId: () => crypto.randomUUID() };
+    const solo = createApp(deps, path.join(tmpdir(), 'no-site'));
+    const res = await solo.request('/api/push-token-save', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer any', 'Content-Type': 'application/json', Accept: 'text/event-stream', 'Idempotency-Key': '0190b000-0000-7000-8000-' + crypto.randomUUID().slice(-12) },
+      body: JSON.stringify({ token: 'ExponentPushToken[x]', device_id: 'device-np' }),
+    });
+    const text = await res.text();
+    const error = /event: error\ndata: (.+)/.exec(text)?.[1];
+    expect(error).toBeDefined();
+    expect(JSON.parse(error!).code).not.toBe('internal_error');
+  } finally {
+    await pool.query('delete from auth.users where id = $1', [noProfile]);
+  }
+});
+

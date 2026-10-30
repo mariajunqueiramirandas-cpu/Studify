@@ -10,11 +10,20 @@ const appLinkHost = new URL(BASE_URL).host;
 const nameSuffix = ENV === 'production' ? '' : ENV === 'preview' ? ' (prévia)' : ' (dev)';
 const packageSuffix = ENV === 'production' ? '' : `.${ENV}`;
 
-// Android build numbering. The GitHub release workflow (.github/workflows/android-release.yml) sets
-// ANDROID_VERSION_CODE to run_number + offset and may set APP_VERSION_SUFFIX (e.g. "-beta.1").
-// Without them the version stays BASE_VERSION and versionCode keeps Expo's default.
-const BASE_VERSION = '0.2.0';
+// Android build numbering. The GitHub release workflow (.github/workflows/android-release.yml) builds every
+// app-changing push to main and sets APP_BUILD_NUMBER to its run number, ANDROID_VERSION_CODE to run_number + offset,
+// and may set APP_VERSION_SUFFIX (e.g. "-beta.1"). The version name is BASE_VERSION.<build>, so every release has a
+// new one without a commit: 0.2.57, 0.2.58, ... Raise BASE_VERSION by hand for a milestone (0.3, 1.0).
+// A local build without these is BASE_VERSION.0 and keeps Expo's default versionCode.
+const BASE_VERSION = '0.2';
 const APP_VERSION_SUFFIX = process.env.APP_VERSION_SUFFIX ?? '';
+
+function parseBuildNumber(raw: string | undefined): number {
+  if (!raw) return 0;
+  if (!/^\d+$/.test(raw)) throw new Error(`APP_BUILD_NUMBER must be a whole number, got "${raw}".`);
+  return Number(raw);
+}
+const APP_BUILD_NUMBER = parseBuildNumber(process.env.APP_BUILD_NUMBER);
 
 function parseVersionCode(raw: string | undefined): number | undefined {
   if (!raw) return undefined;
@@ -37,7 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: `Studify${nameSuffix}`,
   slug: 'studify',
   scheme: 'studify',
-  version: `${BASE_VERSION}${APP_VERSION_SUFFIX}`,
+  version: `${BASE_VERSION}.${APP_BUILD_NUMBER}${APP_VERSION_SUFFIX}`,
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',

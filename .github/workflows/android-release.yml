@@ -65,6 +65,8 @@ jobs:
       EXPO_PUBLIC_BASE_URL: ${{ vars.EXPO_PUBLIC_BASE_URL || 'https://studify.vendua.com.br' }}
       EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://studify.vendua.com.br/api' }}
       APP_VERSION_SUFFIX: ${{ vars.APP_VERSION_SUFFIX }}
+      # The version name's last part (app.config.ts): every release gets a new version, 0.2.<run number>.
+      APP_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - name: Only build releases from main
         run: |
