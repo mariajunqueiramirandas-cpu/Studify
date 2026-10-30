@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
-import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailState, TrailStep, TrailStepAnswer } from '@studify/shared';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Pressable, View } from 'react-native';
+import type { TrailAnswerReq, TrailAnswerRes, TrailGradeRes, TrailState, TrailStep } from '@studify/shared';
 import {
   ActionBar,
   BottomSheet,
@@ -12,16 +12,18 @@ import {
   Celebrate,
   EmptyState,
   ErrorState,
-  IconButton,
   MarkdownView,
-  Options,
   PageChips,
+  Popover,
   ProgressBar,
   RichContent,
   RichText,
   Screen,
+  TermCard,
   Text,
   useOverlay,
+  type Anchor,
+  type IconName,
 } from '../../components';
 import { isApiError } from '../../api/errors';
 import { ExplainSheet } from '../../features/learn/ExplainSheet';
@@ -31,10 +33,13 @@ import { rememberLearned } from '../../features/trail/learned';
 import { openTutor } from '../../features/tutor/open';
 import { useSubject } from '../../features/subjects/api';
 import { answerStep, gradeStep, openTrail, prepareTrail, settleStep } from '../../features/trail/api';
+import { TrailHeader } from '../../features/trail/TrailHeader';
+import { TrailOptions } from '../../features/trail/TrailOptions';
+import { Explanation, VerdictBar } from '../../features/trail/TrailFeedback';
 import { queryClient } from '../../api/queryClient';
 import { cheer, thud } from '../../lib/haptics';
 import { t } from '../../i18n';
-import { radius, shade, space, useTheme } from '../../theme';
+import { radius, space, useTheme } from '../../theme';
 import { messageFor } from '../../api/messages';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -83,7 +88,7 @@ export default function TrailScreen() {
   const [selected, setSelected] = useState<string | null>(null);
   const [answer, setAnswer] = useState<Answered | null>(null);
   const [milestone, setMilestone] = useState<Milestone | null>(null);
-  const [term, setTerm] = useState<{ term: string; definition: string } | null>(null);
+  const [term, setTerm] = useState<{ term: string; definition: string; anchor: Anchor | null } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [explainId, setExplainId] = useState<string | null>(null);
   const [bossBusy, setBossBusy] = useState(false);
@@ -309,16 +314,8 @@ export default function TrailScreen() {
   }
 
   const chapter = state?.chapters[state.chapter_index];
-  const header = state ? (
-    <View style={{ paddingHorizontal: space.gutter, gap: space.xs, paddingBottom: space.sm }}>
-      <ProgressBar value={state.progress} height={10} label={t('trail.title')} />
-      {chapter && state.status !== 'completed' ? (
-        <Text variant="label" tone="secondary" numberOfLines={1}>
-          {t('trail.chapter_label', { i: state.chapter_index + 1, n: state.chapters.length })} · {chapter.title}
-        </Text>
-      ) : null}
-    </View>
-  ) : null;
+  // The verdict bar's tint runs on under the footer, to the screen's edge.
+  const verdictTint = answer && step && answer.stepId === step.id && !milestone && !waiting ? (answer.grade.correct ? c.successSoft : c.dangerSoft) : undefined;
 
   const footer = (() => {
     if (!state || waiting || milestone) {
@@ -353,13 +350,7 @@ export default function TrailScreen() {
         </ActionBar>
       );
     }
-    if (answer) {
-      return (
-        <ActionBar>
-          <Button label={t('trail.continue')} onPress={() => void advance()} />
-        </ActionBar>
-      );
-    }
+    if (answer) return <VerdictBar correct={answer.grade.correct} letter={answer.grade.correct_option} onContinue={() => void advance()} />;
     return (
       <ActionBar>
         <Button label={t('trail.check')} disabled={!selected} disabledReason={t('trail.pick_one')} onPress={() => void submit(selected as TrailAnswerReq['response'])} />
@@ -368,13 +359,7 @@ export default function TrailScreen() {
   })();
 
   return (
-    <Screen
-      title=""
-      immersive
-      header={header}
-      actions={state ? <IconButton icon="map-outline" label={t('trail.plan_open')} onPress={() => setPlanOpen(true)} /> : null}
-      footer={footer}
-    >
+    <Screen root immersive header={<TrailHeader state={state} onMap={() => setPlanOpen(true)} />} footer={footer} footerColor={verdictTint}>
       {!state || waiting ? (
         <Preparing first={!state} capiStage={capi.visible ? capi.stage : null} />
       ) : milestone ? (
@@ -398,7 +383,10 @@ export default function TrailScreen() {
           selected={selected}
           onSelect={setSelected}
           answer={answer?.stepId === step.id ? answer : null}
-          onTerm={(name) => setTerm(step.terms.find((x) => x.term.toLowerCase() === name.toLowerCase()) ?? null)}
+          onTerm={(name, anchor) => {
+            const found = step.terms.find((x) => x.term.toLowerCase() === name.toLowerCase());
+            setTerm(found ? { ...found, anchor } : null);
+          }}
           onExplain={() => setExplainId(step.id)}
           onAskTutor={() => openTutor({ type: 'topic', subject_id: subjectId, node_id: chapter?.topic_id }, { prefill: step.kind === 'question' ? t('trail.tutor_prefill', { stem: step.stem.slice(0, 300) }) : undefined })}
         />
@@ -408,43 +396,16 @@ export default function TrailScreen() {
 
       <ExplainSheet visible={!!explainId} onClose={() => setExplainId(null)} target={explainId ? { target_type: 'trail_step', target_id: explainId } : null} subjectId={subjectId} />
 
-      <BottomSheet visible={!!term} onClose={() => setTerm(null)} title={term?.term}>
-        {term ? <RichContent variant="reading" text={term.definition} /> : null}
-      </BottomSheet>
+      <Popover visible={!!term} anchor={term?.anchor ?? null} onClose={() => setTerm(null)}>
+        {term ? (
+          <TermCard term={term.term} onClose={() => setTerm(null)}>
+            <RichContent variant="reading" text={term.definition} />
+          </TermCard>
+        ) : null}
+      </Popover>
 
       <BottomSheet visible={planOpen} onClose={() => setPlanOpen(false)} title={t('trail.plan')}>
-        {state?.goal ? (
-          <View style={{ gap: space.xxs, marginBottom: space.sm }}>
-            <Text variant="label" tone="accent">
-              {t('trail.goal')}
-            </Text>
-            <Text>{state.goal}</Text>
-          </View>
-        ) : null}
-        {state?.chapters.map((ch, i) => (
-          <View key={ch.topic_id} style={{ flexDirection: 'row', gap: space.md, paddingVertical: space.sm }}>
-            <Ionicons
-              name={ch.status === 'done' ? 'checkmark-circle' : ch.status === 'current' ? 'play-circle' : 'ellipse-outline'}
-              size={26}
-              color={ch.status === 'done' ? c.success : ch.status === 'current' ? c.primary : c.textSecondary}
-            />
-            <View style={{ flex: 1, gap: space.xxs }}>
-              <Text weight={ch.status === 'current' ? 'bold' : undefined}>{`${i + 1}. ${ch.title}`}</Text>
-              {ch.why && ch.status !== 'done' ? (
-                <Text variant="bodySmall" tone="secondary">
-                  {ch.why}
-                </Text>
-              ) : null}
-              {ch.status === 'current'
-                ? ch.concepts.map((concept) => (
-                    <Text key={concept.id} variant="bodySmall" tone={concept.state === 'current' ? 'accent' : 'secondary'}>
-                      {concept.state === 'cleared' ? '✓' : concept.state === 'shaky' ? '•' : concept.state === 'current' ? '▶' : '○'} {concept.title} · {t(`trail.concept_${concept.state}`)}
-                    </Text>
-                  ))
-                : null}
-            </View>
-          </View>
-        ))}
+        {state ? <PlanView state={state} /> : null}
         {bossButton}
       </BottomSheet>
     </Screen>
@@ -506,13 +467,87 @@ function TeachView({ teach, capiStage }: { teach: NonNullable<TrailState['teach'
   );
 }
 
-const LABEL: Record<TrailStep['purpose'], string> = {
-  lesson: 'trail.lesson',
-  remedial_lesson: 'trail.remedial_lesson',
-  practice: 'trail.practice',
-  remedial_question: 'trail.remedial_question',
-  checkpoint: 'trail.checkpoint',
+const TAG: Record<TrailStep['purpose'], { key: string; icon: IconName; tone: 'primary' | 'lagoon' | 'lamp' }> = {
+  lesson: { key: 'trail.lesson', icon: 'book-outline', tone: 'primary' },
+  remedial_lesson: { key: 'trail.remedial_lesson', icon: 'refresh', tone: 'lagoon' },
+  practice: { key: 'trail.practice', icon: 'help-circle-outline', tone: 'primary' },
+  remedial_question: { key: 'trail.remedial_question', icon: 'refresh', tone: 'lagoon' },
+  checkpoint: { key: 'trail.checkpoint', icon: 'flag-outline', tone: 'lamp' },
 };
+
+/** What kind of step this is (a small tinted tag), with the concept it teaches on its own line, never cut short. */
+function StepTag({ step }: { step: TrailStep }) {
+  const { colors: c } = useTheme();
+  const tag = TAG[step.purpose];
+  const ink = tag.tone === 'lagoon' ? c.lagoon : tag.tone === 'lamp' ? c.warning : c.primary;
+  const soft = tag.tone === 'lagoon' ? `${c.lagoon}22` : tag.tone === 'lamp' ? c.warningSoft : c.primarySoft;
+  const label = step.kind === 'question' && step.position ? t(tag.key, { i: step.position.index, n: step.position.total }) : t(tag.key);
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={{ flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: space.xs, backgroundColor: soft, borderRadius: radius.sm, paddingHorizontal: space.sm, paddingVertical: space.xs }}>
+        <Ionicons name={tag.icon} size={16} color={ink} />
+        <Text variant="label" weight="bold" style={{ color: ink }}>
+          {label}
+        </Text>
+      </View>
+      <Text variant="bodySmall" tone="secondary" numberOfLines={2}>
+        {step.concept_title}
+      </Text>
+    </View>
+  );
+}
+
+/** The lesson's key terms as keys under the text: the same floating definition as tapping the word itself. */
+function Keywords({ terms, onTerm }: { terms: string[]; onTerm: (term: string, anchor: Anchor | null) => void }) {
+  const { colors: c } = useTheme();
+  return (
+    <View style={{ gap: space.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface1, borderRadius: radius.lg, padding: space.lg }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Ionicons name="bookmark" size={16} color={c.lagoon} />
+        <Text variant="label" style={{ color: c.lagoon }}>
+          {t('trail.keywords')}
+        </Text>
+      </View>
+      <Text variant="bodySmall" tone="secondary">
+        {t('trail.term_hint')}
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        {terms.map((term) => (
+          <KeywordChip key={term} term={term} onPress={(anchor) => onTerm(term, anchor)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function KeywordChip({ term, onPress }: { term: string; onPress: (anchor: Anchor | null) => void }) {
+  const { colors: c } = useTheme();
+  const ref = useRef<ComponentRef<typeof View>>(null);
+  return (
+    <Pressable
+      ref={ref}
+      accessibilityRole="button"
+      accessibilityLabel={term}
+      onPress={() => (ref.current ? ref.current.measureInWindow((x, y, width, height) => onPress({ x, y, width, height })) : onPress(null))}
+      style={({ pressed }) => ({
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        borderColor: c.lagoon,
+        backgroundColor: pressed ? `${c.lagoon}33` : `${c.lagoon}14`,
+        borderRadius: radius.md,
+        paddingHorizontal: space.md,
+        minHeight: 40,
+        justifyContent: 'center',
+      })}
+    >
+      <Text variant="label" style={{ color: c.lagoon }}>
+        {term}
+      </Text>
+    </Pressable>
+  );
+}
+
+const readMinutes = (markdown: string) => Math.max(1, Math.round(markdown.split(/\s+/).filter(Boolean).length / 200));
 
 function StepView({
   step,
@@ -531,35 +566,36 @@ function StepView({
   selected: string | null;
   onSelect: (id: string) => void;
   answer: Answered | null;
-  onTerm: (term: string) => void;
+  onTerm: (term: string, anchor: Anchor | null) => void;
   onExplain: () => void;
   onAskTutor: () => void;
 }) {
   const { colors: c } = useTheme();
   const terms = step.terms.map((x) => x.term);
-  const label = step.kind === 'question' && step.position ? t(LABEL[step.purpose], { i: step.position.index, n: step.position.total }) : t(LABEL[step.purpose]);
   const intro = step.purpose === 'checkpoint' && step.kind === 'question' && step.position?.index === 1 && checkpoint;
   return (
-    <View style={{ gap: space.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Text variant="label" weight="bold" tone="accent">
-          {label}
-        </Text>
-        <Text variant="label" tone="secondary" numberOfLines={1} style={{ flex: 1 }}>
-          · {step.concept_title}
-        </Text>
-      </View>
-      {intro ? <Text tone="secondary">{t('trail.checkpoint_intro', { n: checkpoint.total })}</Text> : null}
+    <View style={{ gap: space.lg }}>
+      <StepTag step={step} />
+      {intro ? (
+        <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', backgroundColor: c.warningSoft, borderRadius: radius.md, padding: space.md }}>
+          <Ionicons name="flag" size={18} color={c.warning} />
+          <Text style={{ flex: 1 }}>{t('trail.checkpoint_intro', { n: checkpoint.total })}</Text>
+        </View>
+      ) : null}
 
       {step.kind === 'lesson' ? (
         <>
-          <Text variant="display">{step.title}</Text>
+          <View style={{ gap: space.sm }}>
+            <Text variant="display">{step.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+              <Ionicons name="time-outline" size={16} color={c.textSecondary} />
+              <Text variant="bodySmall" tone="secondary">
+                {t('trail.read_time', { n: readMinutes(step.body) })}
+              </Text>
+            </View>
+          </View>
           <MarkdownView markdown={step.body} terms={terms} onTerm={onTerm} />
-          {terms.length ? (
-            <Text variant="bodySmall" tone="secondary">
-              {t('trail.term_hint')}
-            </Text>
-          ) : null}
+          {terms.length ? <Keywords terms={terms} onTerm={onTerm} /> : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
             <Button compact variant="tonal" icon="sparkles-outline" label={t('notes.explain')} onPress={onExplain} />
             <Button compact variant="text" icon="chatbubbles-outline" label={t('trail.ask_tutor')} onPress={onAskTutor} />
@@ -568,19 +604,18 @@ function StepView({
       ) : (
         <>
           <MarkdownView markdown={step.stem} terms={terms} onTerm={onTerm} />
-          <Options
-            options={step.options.map((o) => ({ id: o.id, text: o.text }))}
-            selected={selected ? [selected] : []}
-            correct={answer ? [answer.grade.correct_option] : undefined}
-            disabled={!!answer}
+          <TrailOptions
+            options={step.options}
+            selected={selected}
             onSelect={onSelect}
+            reveal={answer ? { correct: answer.grade.correct_option, picked: selected, rationales: step.answer.rationales } : null}
           />
           {answer ? (
-            <Feedback
-              answer={answer}
+            <Explanation
               feedback={step.answer}
-              picked={selected}
-              borderColor={answer.grade.correct ? c.success : c.danger}
+              correct={answer.grade.correct}
+              saved={!!answer.settle?.mistake_id}
+              reteach={!!answer.settle?.state.preparing && !answer.grade.correct}
               onExplain={onExplain}
               onAskTutor={onAskTutor}
             />
@@ -592,72 +627,87 @@ function StepView({
   );
 }
 
-function Feedback({
-  answer,
-  feedback,
-  picked,
-  borderColor,
-  onExplain,
-  onAskTutor,
-}: {
-  answer: Answered;
-  feedback: TrailStepAnswer;
-  picked: string | null;
-  borderColor: string;
-  onExplain: () => void;
-  onAskTutor: () => void;
-}) {
+/** "Sua trilha": the whole path as a timeline, the chapter you're on opened up to its concepts. */
+function PlanView({ state }: { state: TrailState }) {
   const { colors: c } = useTheme();
-  const { grade, settle } = answer;
-  const reteach = !!settle?.state.preparing && !grade.correct;
-  const saved = !!settle?.mistake_id;
-  const pickedRow = feedback.rationales.find((r) => r.id === picked);
-  const right = feedback.rationales.find((r) => r.id === grade.correct_option);
+  const conceptIcon = { cleared: 'checkmark-circle', shaky: 'alert-circle', current: 'radio-button-on', upcoming: 'ellipse-outline' } as const;
+  const conceptColor = { cleared: c.success, shaky: c.warning, current: c.primary, upcoming: c.textSecondary };
   return (
-    <View
-      accessibilityLiveRegion="polite"
-      style={{ borderWidth: 2, borderBottomWidth: 5, borderColor, borderBottomColor: shade(borderColor, 0.25), borderRadius: radius.xl, padding: space.lg, gap: space.md, backgroundColor: c.surface1 }}
-    >
-      <RichText variant="heading" style={{ color: borderColor }}>
-        {grade.correct ? t('trail.correct') : t('trail.wrong', { letter: grade.correct_option })}
-      </RichText>
-      {!grade.correct && pickedRow ? (
-        <View style={{ gap: space.xxs }}>
-          <Text variant="label">{t('trail.why_wrong', { letter: pickedRow.id })}</Text>
-          <RichContent variant="reading" text={pickedRow.rationale} />
+    <View style={{ gap: space.lg }}>
+      <View style={{ gap: space.xs }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Text variant="label" tone="secondary">
+            {t('trail.overall', { pct: Math.round(state.progress * 100) })}
+          </Text>
+          <Text variant="label" tone="secondary">
+            {t('trail.chapter_short', { i: Math.min(state.chapter_index + 1, state.chapters.length), n: state.chapters.length })}
+          </Text>
+        </View>
+        <ProgressBar value={state.progress} height={10} color={c.success} label={t('trail.title')} />
+      </View>
+      {state.goal ? (
+        <View style={{ gap: space.xxs, backgroundColor: c.surface1, borderRadius: radius.md, padding: space.md }}>
+          <Text variant="label" tone="accent">
+            {t('trail.goal')}
+          </Text>
+          <Text>{state.goal}</Text>
         </View>
       ) : null}
-      {right ? (
-        <View style={{ gap: space.xxs }}>
-          <Text variant="label">{t('trail.why_right', { letter: right.id })}</Text>
-          <RichContent variant="reading" text={right.rationale} />
-        </View>
-      ) : null}
-      <RichContent variant="reading" text={feedback.explanation} />
-      {feedback.tip ? (
-        <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', backgroundColor: c.infoSoft, borderRadius: radius.md, padding: space.md }}>
-          <Ionicons name="bulb-outline" size={20} color={c.info} />
-          <View style={{ flex: 1, gap: space.xxs }}>
-            <Text variant="label" style={{ color: c.info }}>
-              {t('trail.tip')}
-            </Text>
-            <RichContent text={feedback.tip} />
-          </View>
-        </View>
-      ) : null}
-      {reteach ? (
-        <Text variant="bodySmall" tone="secondary">
-          {t('trail.reteach_soon')}
-        </Text>
-      ) : null}
-      {saved ? (
-        <Text variant="bodySmall" tone="secondary">
-          {t('trail.saved_to_caderno')}
-        </Text>
-      ) : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-        {!grade.correct ? <Button compact variant="tonal" icon="chatbubbles-outline" label={t('quiz.dont_understand')} onPress={onAskTutor} /> : null}
-        <Button compact variant="text" icon="sparkles-outline" label={t('notes.explain')} onPress={onExplain} />
+      <View>
+        {state.chapters.map((ch, i) => {
+          const last = i === state.chapters.length - 1;
+          const done = ch.status === 'done';
+          const cur = ch.status === 'current';
+          const ink = done ? c.success : cur ? c.primary : c.border;
+          return (
+            <View key={ch.topic_id} style={{ flexDirection: 'row', gap: space.md }}>
+              <View style={{ alignItems: 'center', width: 32 }}>
+                <View style={{ width: 32, height: 32, borderRadius: radius.md, borderWidth: 2, borderColor: ink, backgroundColor: done || cur ? ink : c.surface1, alignItems: 'center', justifyContent: 'center' }}>
+                  {done ? (
+                    <Ionicons name="checkmark" size={18} color={c.onPrimary} />
+                  ) : cur ? (
+                    <Ionicons name="play" size={14} color={c.onPrimary} />
+                  ) : (
+                    <Text variant="label" tone="secondary">
+                      {i + 1}
+                    </Text>
+                  )}
+                </View>
+                {!last ? <View style={{ flex: 1, width: 2, minHeight: space.md, backgroundColor: done ? c.success : c.border, marginVertical: space.xxs }} /> : null}
+              </View>
+              <View style={{ flex: 1, paddingBottom: last ? 0 : space.md }}>
+                <View style={cur ? { backgroundColor: c.primarySoft, borderRadius: radius.md, padding: space.md, gap: space.xs } : { gap: space.xxs, paddingTop: space.xs }}>
+                  {cur ? (
+                    <Text variant="label" tone="accent">
+                      {t('trail.status_current')}
+                    </Text>
+                  ) : null}
+                  <Text weight={cur ? 'bold' : undefined} tone={ch.status === 'upcoming' ? 'secondary' : 'primary'}>
+                    {ch.title}
+                  </Text>
+                  {ch.why && !done ? (
+                    <Text variant="bodySmall" tone="secondary">
+                      {ch.why}
+                    </Text>
+                  ) : null}
+                  {cur
+                    ? ch.concepts.map((concept) => (
+                        <View key={concept.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                          <Ionicons name={conceptIcon[concept.state]} size={16} color={conceptColor[concept.state]} />
+                          <Text variant="bodySmall" style={{ flex: 1 }} weight={concept.state === 'current' ? 'bold' : undefined}>
+                            {concept.title}
+                          </Text>
+                          <Text variant="bodySmall" style={{ color: conceptColor[concept.state] }}>
+                            {t(`trail.concept_${concept.state}`)}
+                          </Text>
+                        </View>
+                      ))
+                    : null}
+                </View>
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );

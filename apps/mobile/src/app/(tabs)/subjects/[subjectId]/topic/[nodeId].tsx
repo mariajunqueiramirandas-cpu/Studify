@@ -23,6 +23,7 @@ import {
   Text,
   useOnline,
   useOverlay,
+  type Anchor,
 } from '../../../../../components';
 import { useSession } from '../../../../../features/auth/session';
 import { messageFor } from '../../../../../api/messages';
@@ -295,6 +296,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
   const [explain, setExplain] = useState(false);
   const [flag, setFlag] = useState(false);
   const [term, setTerm] = useState<string | null>(null);
+  const [termAnchor, setTermAnchor] = useState<Anchor | null>(null);
   const [deep, setDeep] = useState<{ text: string; streaming: boolean } | null>(null);
   const depthLabels = options('notes.depths');
   const opened = useRef(Date.now());
@@ -356,7 +358,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
       ) : note ? (
         <View style={{ gap: space.md }}>
           {note.low_citation_coverage ? <Banner kind="neutral" message="Tem pouco conteúdo sobre isso no seu material." /> : null}
-          <MarkdownView markdown={note.body} terms={keyTerms} onTerm={setTerm} onCitation={(i) => {
+          <MarkdownView markdown={note.body} terms={keyTerms} onTerm={(name, at) => (setTermAnchor(at), setTerm(name))} onCitation={(i) => {
             const c = note.citations[i];
             if (c) router.push({ pathname: '/subjects/[subjectId]/document/[documentId]', params: { subjectId, documentId: c.document_id, page: String(c.page_start), ...(c.cited_text ? { cite: c.cited_text.slice(0, 300) } : {}) } });
           }} />
@@ -405,7 +407,7 @@ function NotesTab({ subjectId, nodeId, readyTopics, totalTopics, keyTerms, onRet
           />
         )
       )}
-      <TermSheet term={termRow ?? null} visible={!!term} onClose={() => setTerm(null)} subjectId={subjectId} nodeId={nodeId} />
+      <TermSheet term={termRow ?? null} visible={!!term} anchor={termAnchor} onClose={() => setTerm(null)} subjectId={subjectId} nodeId={nodeId} />
     </View>
   );
 }

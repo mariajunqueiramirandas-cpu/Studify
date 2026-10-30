@@ -62,6 +62,8 @@ interface ScreenProps {
   context?: ReactNode;
   /** Sticky primary action area (ActionBar). */
   footer?: ReactNode;
+  /** Fills the strip under the footer (the system bar inset) when the footer has its own colour. */
+  footerColor?: string;
   children?: ReactNode;
   scroll?: boolean;
   /** Immersive screens hide chrome (ux §3). */
@@ -85,6 +87,7 @@ export function Screen({
   actions,
   context,
   footer,
+  footerColor,
   children,
   scroll = true,
   immersive,
@@ -133,7 +136,7 @@ export function Screen({
       ) : (
         <View style={{ flex: 1 }}>{body}</View>
       )}
-      {footer ? <View style={{ paddingBottom: bottomInset, backgroundColor: bg }}>{footer}</View> : null}
+      {footer ? <View style={{ paddingBottom: bottomInset, backgroundColor: footerColor ?? bg }}>{footer}</View> : null}
     </KeyboardAvoidingView>
   );
 }
