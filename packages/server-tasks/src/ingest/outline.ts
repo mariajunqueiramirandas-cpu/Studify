@@ -145,7 +145,7 @@ export async function runOutlineCalls(
   }
 }
 
-async function withS1Retries<T extends CallResult<unknown>>(env: PipelineEnv, call: () => Promise<T>): Promise<T> {
+export async function withS1Retries<T extends CallResult<unknown>>(env: PipelineEnv, call: () => Promise<T>): Promise<T> {
   let attempt = 0;
   for (;;) {
     try {

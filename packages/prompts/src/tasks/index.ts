@@ -41,6 +41,7 @@ export type AnyTaskDef = TaskDef<any, any>;
 export const TASKS: readonly AnyTaskDef[] = [
   ingest.ingestOutline,
   ingest.ingestOutlineMerge,
+  ingest.ingestWriteChapters,
   ingest.ingestTopicDetail,
   ingest.ingestPrerequisites,
   ingest.ingestTranscribePages,

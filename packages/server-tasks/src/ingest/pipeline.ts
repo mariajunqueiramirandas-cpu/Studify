@@ -17,11 +17,13 @@ import { extractPages, type PageExtraction } from './pdf-text.ts';
 import { renderPages } from './pdf-render.ts';
 import { spansFile } from './pdf-spans.ts';
 import { writeOutline, runOutlineCalls } from './outline.ts';
+import { isApostila, listOfApostila, writeApostila, writtenApostila } from './apostila.ts';
+import type { OutlineOut } from './outline-normalize.ts';
 import { runPrerequisites } from './prereq.ts';
 import { topicItem, topicItems, runItemNow, runWaveNow, submitWave, transcriptionItem, transcriptionRuns, type PollOutcomeSummary, type SubmitInput, type WavePlan } from './waves.ts';
 import { loadTopicBundle, missingQuestionParts, sourcesOf, topicSliceRefs, contentLanguageOf, isQuantitativeTopic, type TopicBundle } from './topics.ts';
 import { expandKinds, type TopicKind } from './custom-id.ts';
-import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
+import { listNodes, documentHasNodes, documentHasPages, loadDocument, nodeSourcesOfDocument, patchDocument, setContentStatus, setPageAssets, upsertPages, scannedPages, topicsWithConcepts, type DocumentPatch, type DocumentRecord, type PageRecord, loadSubject } from './repo.ts';
 import { MAX_UPLOAD_BYTES, MAX_PAGES } from './limits.ts';
 import { aiLane, mapLimit } from './concurrency.ts';
 import { STANDARD_WAVE_CONCURRENCY } from '../framework/concurrency-defaults.ts';
@@ -94,15 +96,22 @@ async function notifyDocument(stage: Stage, doc: DocumentRecord, userId: string 
   }
 }
 
+/** A status change of a document, mirrored on the chapter list it was written from (ING-03.16). */
+async function setDocumentStatus(stage: Stage, doc: DocumentRecord, patch: DocumentPatch): Promise<void> {
+  await patchDocument(stage.sql, doc.id, patch);
+  const list = await listOfApostila(stage.sql, doc);
+  if (list) await patchDocument(stage.sql, list, patch);
+}
+
 async function failDocument(stage: Stage, doc: DocumentRecord, code: string, userId: string | null, aiJobId: string | null): Promise<void> {
-  await patchDocument(stage.sql, doc.id, { status: 'failed', errorCode: code });
+  await setDocumentStatus(stage, doc, { status: 'failed', errorCode: code });
   if (aiJobId) await applyProgress(stage.sql, aiJobId, { status: 'failed', error_code: code });
   await notifyDocument(stage, doc, userId, 'failed', code);
 }
 
 /** Parks the document until the budget resets (ai-pipeline §9.1, spec 01 §9). */
 async function parkForBudget(stage: Stage, doc: DocumentRecord, payload: IngestPayload, resetsAt: string | undefined): Promise<void> {
-  await patchDocument(stage.sql, doc.id, { status: 'waiting_budget' });
+  await setDocumentStatus(stage, doc, { status: 'waiting_budget' });
   if (payload.aiJobId) await applyProgress(stage.sql, payload.aiJobId, { status: 'waiting_budget' });
   const tz = await timezoneOf(stage.sql, payload.userId ?? doc.uploadedBy);
   const when = resetsAt ? localMidnightOn(resetsAt, tz) : nextLocalMidnight(stage.ctx.now(), tz);
@@ -160,6 +169,11 @@ export async function runIngestDocument(ctx: OperationContext, store: ObjectStor
 
     // ---- S1 ----------------------------------------------------------------
     if (!(await documentHasNodes(sql, doc.id))) {
+      const apostila = await writtenApostila(sql, doc.id);
+      if (apostila) {
+        await continueInApostila(stage, apostila, payload);
+        return;
+      }
       const mergePath = (await listNodes(sql, doc.subjectId)).length > 0;
       if (payload.aiJobId) await applyProgress(sql, payload.aiJobId, { stage: mergePath ? 'S1_merge' : 'S1', status: 'running' });
       const pageCount = current.pageCount ?? (await pageCountOf(sql, doc.id));
@@ -175,6 +189,10 @@ export async function runIngestDocument(ctx: OperationContext, store: ObjectStor
         await failDocument(stage, current, outline.code, payload.userId, payload.aiJobId);
         return;
       }
+      if (outline.outline.lists_only && outline.outline.is_study_material && !isApostila(pdf)) {
+        await expandList(stage, current, outline.outline, payload);
+        return;
+      }
       const written = await writeOutline(ctx.sql, current, outline.outline, pageCount);
       if (!written.normalized.isStudyMaterial) {
         await failDocument(stage, current, 'not_study_material', payload.userId, payload.aiJobId);
@@ -184,7 +202,7 @@ export async function runIngestDocument(ctx: OperationContext, store: ObjectStor
     }
 
     if (payload.mode === 'outline_only') {
-      await patchDocument(sql, doc.id, { status: 'ready' });
+      await setDocumentStatus(stage, current, { status: 'ready' });
       if (payload.aiJobId) await applyProgress(sql, payload.aiJobId, { stage: 'S1', status: 'succeeded' });
       return;
     }
@@ -218,6 +236,31 @@ export async function runIngestDocument(ctx: OperationContext, store: ObjectStor
     }
     throw err;
   }
+}
+
+/**
+ * ING-03.16: the document only lists its chapters, so they are written into an apostila that carries the map and the
+ * content from here on. The list keeps `processing` and takes the apostila's status when it settles.
+ */
+async function expandList(stage: Stage, list: DocumentRecord, outline: OutlineOut, payload: IngestPayload): Promise<void> {
+  if (payload.aiJobId) await applyProgress(stage.sql, payload.aiJobId, { stage: 'S1_write', status: 'running' });
+  await patchDocument(stage.sql, list.id, { language: outline.language, detectedKind: outline.detected_kind });
+  const written = await writeApostila(stage.env, list, outline, { jobId: payload.aiJobId });
+  if (written.status === 'failed') {
+    await failDocument(stage, list, written.code, payload.userId, payload.aiJobId);
+    return;
+  }
+  stage.ctx.log.info({ apostila: written.documentId }, 'chapter list written into an apostila');
+  await continueInApostila(stage, written.documentId, payload);
+}
+
+/** The apostila runs the rest of the pipeline under the list's job, so the student follows one progress bar. */
+async function continueInApostila(stage: Stage, apostilaId: string, payload: IngestPayload): Promise<void> {
+  await stage.ctx.execute(
+    'ingest.document',
+    { document_id: apostilaId, mode: payload.mode === 'outline_only' ? 'outline_only' : 'full', user_id: payload.userId, ai_job_id: payload.aiJobId },
+    { singletonKey: `ingest:${apostilaId}`, startAfter: 0 },
+  );
 }
 
 /**
@@ -304,7 +347,8 @@ async function preflightAndExtract(
   // Every page is read by the AI, not only scanned ones: the PDF's own text layer is often garbled (fonts,
   // columns, formulas). Its text stays as the fallback until a transcription replaces it, and its positioned
   // spans keep serving the citation highlights.
-  const all = pages.map((p) => p.pageNumber);
+  // An apostila's text layer is the text Studify wrote: nothing to read again.
+  const all = pre.apostila ? [] : pages.map((p) => p.pageNumber);
   if (all.length > 0) {
     await ctx.execute('ingest.transcribe_pages', { document_id: doc.id, pages: all, user_id: payload.userId, ai_job_id: payload.aiJobId }, {
       singletonKey: `transcribe:${doc.id}`,
@@ -867,12 +911,12 @@ async function finalizeDocument(stage: Stage, doc: DocumentRecord, payload: Inge
   const total = Number(counts.rows[0]?.total ?? '0');
   const allFailed = total > 0 && ready === 0;
   if (allFailed) {
-    await patchDocument(sql, doc.id, { status: 'failed', errorCode: 'ai_failed' });
+    await setDocumentStatus(stage, doc, { status: 'failed', errorCode: 'ai_failed' });
     if (payload.aiJobId) await applyProgress(sql, payload.aiJobId, { status: 'failed', error_code: 'ai_failed', items_total: total, items_done: total });
     await notifyDocument(stage, doc, payload.userId, 'failed', 'ai_failed');
     return;
   }
-  await patchDocument(sql, doc.id, { status: 'ready' });
+  await setDocumentStatus(stage, doc, { status: 'ready' });
   if (payload.aiJobId) await applyProgress(sql, payload.aiJobId, { status: 'succeeded', stage: 'S4', items_total: total, items_done: total });
   await notifyDocument(stage, doc, payload.userId, 'ready');
   await prepareTrailContent(stage, doc, payload.userId ?? doc.uploadedBy);

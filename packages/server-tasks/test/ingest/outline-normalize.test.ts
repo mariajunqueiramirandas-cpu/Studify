@@ -5,6 +5,7 @@ const RAW: OutlineOut = {
   is_study_material: true,
   language: 'pt-BR',
   detected_kind: 'slides',
+  lists_only: false,
   title_suggestion: 'Biologia',
   units: [
     {

@@ -2,6 +2,7 @@
 // bookmarks. Returns a code for every rejection so the document row can show the matching PT-BR message.
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRef } from 'pdf-lib';
 import { openPdf } from './pdfjs.ts';
+import { isApostila } from './apostila.ts';
 
 export const MAX_BYTES = 100 * 1024 * 1024;
 export const MAX_PAGES = 1000;
@@ -9,7 +10,7 @@ export const MAX_PAGES = 1000;
 export type PreflightCode = 'unsupported_type' | 'too_large' | 'password_protected' | 'corrupt' | 'empty' | 'too_many_pages';
 
 export type PreflightResult =
-  | { ok: true; pageCount: number; hasBookmarks: boolean; cutStarts: number[] }
+  | { ok: true; pageCount: number; hasBookmarks: boolean; cutStarts: number[]; apostila: boolean }
   | { ok: false; code: PreflightCode };
 
 export interface PreflightLimits {
@@ -53,7 +54,7 @@ export async function preflightPdf(bytes: Uint8Array, limits: PreflightLimits = 
   if (pageCount > maxPages) return { ok: false, code: 'too_many_pages' };
 
   const cutStarts = readBookmarkStarts(lib);
-  return { ok: true, pageCount, hasBookmarks: cutStarts.length > 0, cutStarts };
+  return { ok: true, pageCount, hasBookmarks: cutStarts.length > 0, cutStarts, apostila: isApostila(lib) };
 }
 
 /**

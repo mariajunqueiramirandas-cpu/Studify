@@ -113,7 +113,8 @@ const outlineTopic = {
   page_start: 3, page_end: 4, match_existing_node_id: null,
 };
 const outlineUnit = { key: 'u1', title: 'Células', summary: 'Estrutura e funções.', page_start: 3, page_end: 4, match_existing_node_id: null, topics: [outlineTopic] };
-const outline = { is_study_material: true, language: 'pt-BR', detected_kind: 'notes', title_suggestion: 'Biologia', units: [outlineUnit] };
+const outline = { is_study_material: true, language: 'pt-BR', detected_kind: 'notes', title_suggestion: 'Biologia', lists_only: false, units: [outlineUnit] };
+const writtenChapters = { topics: [{ key: 'T1', sections: [{ heading: 'O que é', paragraphs: ['A respiração celular libera energia da glicose.'] }] }] };
 
 const pageRef = (doc = 'D1') => ({ doc, page_start: 3, page_end: 4 });
 
@@ -357,6 +358,7 @@ export const SCHEMA_CASES: SchemaCase[] = [
   { name: 'SingleQuestion', schema: S.SingleQuestion, valid: { question: asDraft('true_false', payloads.true_false) }, invalid: { question: withPayload('numeric', payloads.numeric) } },
   { name: 'DiagnosticQuestions', schema: S.DiagnosticQuestions, valid: { questions: [asDraft('mcq_single', payloads.mcq_single)] }, invalid: { questions: [asDraft('essay_question', payloads.essay_question)] } },
   { name: 'Outline', schema: S.Outline, valid: outline, invalid: { ...outline, is_study_material: false } },
+  { name: 'WrittenChapters', schema: S.WrittenChapters, valid: writtenChapters, invalid: { topics: [{ key: 'T1', sections: [] }] } },
   { name: 'TopicConcepts', schema: S.TopicConcepts, valid: { concepts: [{ key: 'c1', title: 'ATP', summary: 'Energia.', page_start: 3, page_end: 3, key_terms: ['ATP'], formulas: [] }], study_minutes: 12 }, invalid: { concepts: [] } },
   { name: 'PrereqEdges', schema: S.PrereqEdges, valid: { edges: [{ node_key: 't2', prerequisite_key: 't1', reason: 'Precisa da glicólise.' }] }, invalid: { edges: [{ node_key: 't1', prerequisite_key: 't1', reason: 'x' }] } },
   { name: 'PageTranscriptions', schema: S.PageTranscriptions, valid: { pages: [{ page: 3, text: 'texto', confidence: 'high' }] }, invalid: { pages: [{ page: 3, text: 'texto', confidence: 'ok' }] } },

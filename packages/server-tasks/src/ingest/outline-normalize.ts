@@ -27,6 +27,8 @@ export interface OutlineOut {
   language: string;
   detected_kind: 'slides' | 'notes' | 'textbook' | 'past_test' | 'content_list';
   title_suggestion: string;
+  /** The document only lists its chapters: they get written (ING-03.16, apostila.ts). */
+  lists_only: boolean;
   units: OutlineUnitOut[];
 }
 

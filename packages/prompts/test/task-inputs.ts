@@ -54,6 +54,18 @@ export const TASK_INPUTS: Record<string, unknown> = {
     sliceOutlines: [{ units: [{ key: 'u1', title: 'Células' }] }, { units: [{ key: 'u2', title: 'Genética' }] }],
     existing: [],
   },
+  'ingest.writeChapters': {
+    subjectName: 'Biologia',
+    fileName: 'sumario-bio.pdf',
+    unit: { title: 'Células', summary: 'Estrutura e funções da célula.' },
+    topics: [
+      { key: 'T1', title: 'Respiração celular', summary: 'Como a célula obtém energia.', objectives: topic.objectives },
+      { key: 'T2', title: 'Fotossíntese', summary: 'Como plantas produzem glicose.', objectives: ['Explicar a fase clara.'] },
+    ],
+    otherUnitTitles: ['Genética'],
+    contentLanguage: 'pt-BR',
+    languageSubject: false,
+  },
   'ingest.topicDetail': {
     topic: { key: 't1', title: topic.title, summary: 'Como a célula obtém energia.', objectives: topic.objectives },
     siblingTitles: ['Fotossíntese'],

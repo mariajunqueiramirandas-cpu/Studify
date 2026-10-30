@@ -2,7 +2,7 @@
 // The prompts TaskDef builds `messages` and `system` in the Messages API shape already; this file only
 // renames fields, attaches the real Zod schema (needed for the JSON schema sent to the API) and records
 // which slice each document block refers to, so citations map back to original pages.
-import { getTask, AcheOErroItems, Outline, PageTranscriptions, PrereqEdges, ProblemSet, TopicCards, TopicConcepts, TopicQuestions, FeedItems, GlossaryTerms, TrailLesson, TrailPlan, TrailReinforcement, type BuiltPrompt, type PdfSlice, type TextBlock } from '@studify/prompts';
+import { getTask, AcheOErroItems, Outline, PageTranscriptions, PrereqEdges, ProblemSet, TopicCards, TopicConcepts, TopicQuestions, FeedItems, GlossaryTerms, TrailLesson, TrailPlan, TrailReinforcement, WrittenChapters, type BuiltPrompt, type PdfSlice, type TextBlock } from '@studify/prompts';
 import { choicesFromPages } from '@studify/ai';
 import type { BudgetContext, Choices, DocumentSlice, SystemBlock, TaskCall, TaskDef as AiTaskDef } from '@studify/ai';
 import type { z } from 'zod';
@@ -11,6 +11,7 @@ import type { z } from 'zod';
 const SCHEMA_BY_TASK: Readonly<Record<string, z.ZodType>> = {
   'ingest.outline': Outline,
   'ingest.outlineMerge': Outline,
+  'ingest.writeChapters': WrittenChapters,
   'ingest.topicDetail': TopicConcepts,
   'ingest.prerequisites': PrereqEdges,
   'ingest.transcribePages': PageTranscriptions,

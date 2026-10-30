@@ -80,12 +80,46 @@ function respond(req: MockRequest): MockResponse | undefined {
   if (body.includes('transcreva fielmente as páginas enviadas')) {
     return text({ pages: [1, 2, 3].map((page) => ({ page, text: `Página ${page} lida pela IA.`, confidence: 'high' })) });
   }
+  // ING-03.16: a chapter list (sumário) is written into an apostila; its topics reuse the canned content below.
+  if (body.includes('organize o material em um mapa de conhecimento') && body.includes('Sumário de Biologia')) {
+    return text({
+      is_study_material: true,
+      language: 'pt-BR',
+      detected_kind: 'content_list',
+      title_suggestion: 'Biologia celular',
+      lists_only: true,
+      units: [
+        {
+          key: 'u1',
+          title: 'Célula',
+          summary: 'A célula e suas partes.',
+          page_start: 1,
+          page_end: 1,
+          match_existing_node_id: null,
+          topics: [
+            { key: 't1', title: TOPIC_ORGANELAS, summary: 'Organelas da célula.', learning_objectives: ['Identificar organelas'], page_start: 1, page_end: 1, match_existing_node_id: null },
+            { key: 't2', title: TOPIC_MEMBRANA, summary: 'Membrana plasmática.', learning_objectives: ['Explicar a membrana'], page_start: 1, page_end: 1, match_existing_node_id: null },
+          ],
+        },
+      ],
+    });
+  }
+  if (body.includes('o estudante enviou só a lista de capítulos')) {
+    const section = (heading: string, paragraph: string) => ({ heading, paragraphs: [paragraph] });
+    return text({
+      topics: [
+        { key: 'T1', sections: [section('O que são', 'Mitocôndria produz ATP para a célula. Organelas são estruturas internas.'), section('Exemplos', 'Ribossomos e retículo.')] },
+        { key: 'T2', sections: [section('O que é', 'A membrana plasmática controla a passagem de substâncias.'), section('Estrutura', 'Ela é uma bicamada lipídica.')] },
+      ],
+    });
+  }
   if (body.includes('organize o material em um mapa de conhecimento') && body.includes('Slides Aula 2')) {
     return text({
       is_study_material: true,
       language: 'pt-BR',
       detected_kind: 'slides',
       title_suggestion: 'Ribossomos',
+      lists_only: false,
       units: [
         {
           key: 'u1',
@@ -107,6 +141,7 @@ function respond(req: MockRequest): MockResponse | undefined {
       language: 'pt-BR',
       detected_kind: 'slides',
       title_suggestion: 'Biologia celular',
+      lists_only: false,
       units: [
         {
           key: 'u1',
@@ -277,7 +312,9 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     }
     const docId = randomUUID();
     const bytes = opts.bytes ?? await textPdf(
-      opts.title
+      opts.title === 'Sumário de Biologia'
+        ? [['Sumário', 'Unidade 1: Célula', '1.1 Organelas', '1.2 Membrana']]
+        : opts.title
         ? [['Ribossomos sintetizam proteínas.'], ['O núcleo guarda o DNA.']]
         : [
             ['Mitocôndria produz ATP para a célula.', 'Organelas são estruturas internas.'],
@@ -646,6 +683,78 @@ describe.skipIf(!DB_READY)('ingest.document end to end (Postgres + mock Claude)'
     } finally {
       mock.setHandler(respond);
     }
+  }, 180_000);
+
+  it('writes the chapters of a PDF that only lists them into an apostila that carries the map and content', async () => {
+    const store = new FakeObjectStore();
+    const { userId, subjectId, docId, storagePath, bytes } = await seed({ title: 'Sumário de Biologia' });
+    store.put('documents', storagePath, bytes, 'application/pdf');
+    const { backend, registry, expo, push } = runtime(store);
+    await registry.register([...ingestJobs, ...contentJobs, ...batchJobs, ...filesJobs, ...builtinJobs(() => push), ...materialCheckStub, ...trailJobs]);
+    const stages: string[] = [];
+    setProgressListener((_id, patch) => {
+      if (patch.stage) stages.push(patch.stage);
+    });
+
+    // The app's upload hands its own job row in (ingest-start), as here.
+    const { rows: jobRows } = await pool.query<{ id: string }>(
+      `insert into public.ai_jobs (type, user_id, subject_id, document_id, status) values ('ingest.document', $1, $2, $3, 'queued') returning id`,
+      [userId, subjectId, docId],
+    );
+    const aiJobId = jobRows[0]!.id;
+    await registry.execute('ingest.document', { document_id: docId, mode: 'full', user_id: userId, ai_job_id: aiJobId });
+    await backend.drain(4000);
+    setProgressListener(null);
+    expect(backend.failedJobs).toEqual([]);
+    expect(stages).toEqual(expect.arrayContaining(['S1', 'S1_write', 'S2', 'S4']));
+    // One progress bar for the student: the list's job runs on through the apostila and ends there.
+    const job = await pool.query<{ status: string; stage: string }>(`select status, stage from public.ai_jobs where id = $1`, [aiJobId]);
+    expect(job.rows[0]).toEqual({ status: 'succeeded', stage: 'S4' });
+
+    // The list stays in the subject without nodes and took the apostila's final status.
+    const docs = await pool.query<{ id: string; title: string; kind: string; status: string; detected_kind: string | null; page_count: number; storage_path: string }>(
+      `select id, title, kind, status, detected_kind, page_count, storage_path from public.documents where subject_id = $1 order by created_at, id`,
+      [subjectId],
+    );
+    expect(docs.rows).toHaveLength(2);
+    const list = docs.rows.find((d) => d.id === docId)!;
+    const apostila = docs.rows.find((d) => d.id !== docId)!;
+    expect(list).toMatchObject({ status: 'ready', detected_kind: 'content_list' });
+    expect(apostila).toMatchObject({ title: 'Apostila Studify: Sumário de Biologia', kind: 'notes', status: 'ready', page_count: 3 });
+    expect((await store.download('documents', apostila.storage_path)).byteLength).toBeGreaterThan(0);
+
+    // The map is the list's, on the apostila's pages: a cover, then one page per topic.
+    const sources = await pool.query<{ title: string; document_id: string; page_start: number; page_end: number }>(
+      `select n.title, s.document_id, s.page_start, s.page_end from public.node_sources s join public.knowledge_nodes n on n.id = s.node_id
+        where n.subject_id = $1 and n.kind = 'topic' order by s.page_start`,
+      [subjectId],
+    );
+    expect(sources.rows).toEqual([
+      { title: TOPIC_ORGANELAS, document_id: apostila.id, page_start: 2, page_end: 2 },
+      { title: TOPIC_MEMBRANA, document_id: apostila.id, page_start: 3, page_end: 3 },
+    ]);
+    const topicStatus = await pool.query<{ content_status: string }>(`select content_status from public.knowledge_nodes where subject_id = $1 and kind = 'topic'`, [subjectId]);
+    expect(topicStatus.rows.map((r) => r.content_status)).toEqual(['ready', 'ready']);
+    const cards = await pool.query<{ n: string }>(`select count(*)::text as n from public.cards where subject_id = $1 and origin = 'generated'`, [subjectId]);
+    expect(Number(cards.rows[0]?.n)).toBeGreaterThan(0);
+
+    // Studify wrote the apostila's text: its pages keep the PDF's own text and are not read again by the AI.
+    const pages = await pool.query<{ text_source: string; text: string }>(`select text_source, text from public.document_pages where document_id = $1 order by page_number`, [apostila.id]);
+    expect(pages.rows.map((r) => r.text_source)).toEqual(['pdf_text_layer', 'pdf_text_layer', 'pdf_text_layer']);
+    expect(pages.rows[2]?.text).toContain('bicamada lipídica');
+    const usage = await pool.query<{ task: string }>(`select task from public.ai_usage where subject_id = $1`, [subjectId]);
+    expect(usage.rows.filter((r) => r.task === 'ingest.writeChapters')).toHaveLength(1);
+    expect(usage.rows.filter((r) => r.task === 'ingest.outline')).toHaveLength(1);
+    expect(expo.sent.filter((m) => m.data.type === 'material_ready')).toHaveLength(1);
+
+    // Running the list again reuses the apostila: no second outline or chapter writing.
+    const callsBefore = mock.requests.length;
+    await pool.query(`update public.documents set status = 'processing' where id = $1`, [docId]);
+    await registry.execute('ingest.document', { document_id: docId, mode: 'resume', user_id: userId });
+    await backend.drain(400);
+    expect(mock.requests.length).toBe(callsBefore);
+    const count = await pool.query<{ n: string }>(`select count(*)::text as n from public.documents where subject_id = $1`, [subjectId]);
+    expect(count.rows[0]?.n).toBe('2');
   }, 180_000);
 
   it('fails a password-protected PDF in S0 with the password message and makes no AI call', async () => {
