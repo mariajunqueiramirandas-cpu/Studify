@@ -1,12 +1,14 @@
-// The tutor on p. 4 answers only from this page, like the app's tutor answers only from the student's material
-// (TUT-01, TUT-04): every answer cites a sheet, and a question the page does not cover gets "isso não está aqui".
-import type { SheetId } from './page-store.ts';
+// The tutor demo answers only from this page, like the app's tutor answers only from the student's material
+// (TUT-01, TUT-04): every answer cites the section it came from, and a question the page does not cover gets
+// "isso não está aqui".
+
+/** Section ids of the landing page (landing.tsx). */
+export type SectionId = 'como-funciona' | 'cartoes' | 'plano' | 'tutor' | 'recursos' | 'turma' | 'baixar';
 
 export interface Citation {
-  sheet: SheetId | 'p6';
-  /** Element id of the cited passage, highlighted when the chip is tapped. */
-  passage: string;
-  page: number;
+  section: SectionId;
+  /** The section as named on the citation link. */
+  label: string;
 }
 
 export type TutorAnswer =
@@ -18,9 +20,19 @@ interface Intent {
   answer: TutorAnswer;
 }
 
-const cite = (page: number, passage: string): Citation => ({ sheet: `p${page}` as Citation['sheet'], passage, page });
+const SECTION_LABEL: Record<SectionId, string> = {
+  'como-funciona': 'Como funciona',
+  cartoes: 'Cartões',
+  plano: 'Plano',
+  tutor: 'Tutor',
+  recursos: 'Recursos',
+  turma: 'Turma',
+  baixar: 'Baixar o app',
+};
 
-const MISSING = 'Isso não está nesta apostila. Pergunte sobre o que está escrito aqui, como o plano ou os cartões.';
+const cite = (section: SectionId): Citation => ({ section, label: SECTION_LABEL[section] });
+
+const MISSING = 'Isso não está nesta página. Pergunte sobre o Studify, como o plano ou os cartões.';
 
 // Checked in order: the first intent with a matching key wins.
 const INTENTS: Intent[] = [
@@ -35,46 +47,58 @@ const INTENTS: Intent[] = [
   { keys: ['preco', 'pagar', 'pago', 'gratis', 'custa', 'dinheiro', 'assinatura'], answer: { kind: 'missing', text: MISSING } },
   {
     keys: ['iphone', 'ios', 'apple'],
-    answer: { kind: 'grounded', text: 'Ainda não. Por enquanto o Studify é só para Android.', cite: cite(6, 'passagem-android') },
+    answer: { kind: 'grounded', text: 'Ainda não. Por enquanto o Studify é só para Android.', cite: cite('baixar') },
   },
   {
     keys: ['turma', 'amig', 'colega', 'classe', 'junto', 'grupo', 'duelo', 'batalha'],
     answer: {
       kind: 'grounded',
       text: 'Dá. Quem organiza a turma manda os PDFs uma vez e todo mundo estuda pelo mesmo material, com duelos e batalha ao vivo.',
-      cite: cite(6, 'passagem-turma'),
+      cite: cite('turma'),
     },
   },
   {
     keys: ['err', 'caderno'],
     answer: {
       kind: 'grounded',
-      text: 'Eu mostro a certa, explico o porquê e guardo o erro no Caderno de Erros, que vira um cartão pra você revisar.',
-      cite: cite(5, 'passagem-erros'),
+      text: 'Eu mostro a certa, explico o porquê e guardo o erro no Caderno de Erros, que vira revisão.',
+      cite: cite('recursos'),
     },
+  },
+  {
+    keys: ['enem', 'redacao', 'vestibular'],
+    answer: {
+      kind: 'grounded',
+      text: 'Tem um modo ENEM: as 4 áreas + Redação, simulados com TRI e correção de redação.',
+      cite: cite('recursos'),
+    },
+  },
+  {
+    keys: ['offline', 'internet', 'wifi'],
+    answer: { kind: 'grounded', text: 'Os cartões funcionam sem internet. Quando a conexão volta, eu sincronizo tudo.', cite: cite('recursos') },
   },
   {
     keys: ['plano', 'prova', 'data', 'calendario', 'semana', 'cronograma', 'dia'],
     answer: {
       kind: 'grounded',
       text: 'Você me diz a data da prova e eu divido o conteúdo pelos dias que faltam, com cada revisão marcada pouco antes de você esquecer. Perdeu um dia? Eu reorganizo.',
-      cite: cite(3, 'passagem-plano'),
+      cite: cite('plano'),
     },
   },
   {
-    keys: ['esquec', 'memoria', 'apag', 'lembr', 'curva', 'fsrs', 'segundo', 'hora', 'relogio'],
+    keys: ['esquec', 'memoria', 'apag', 'lembr', 'curva', 'fsrs', 'revis', 'cart', 'flashcard'],
     answer: {
       kind: 'grounded',
-      text: 'É assim que a memória funciona: o que a gente lê uma vez só começa a sumir no mesmo dia. Nesta página um segundo vale uma hora, então dá pra ver acontecer.',
-      cite: cite(1, 'passagem-memoria'),
+      text: 'Cada cartão volta pouco antes de você esquecer. Errou, ele volta em minutos; achou fácil, só daqui a dias.',
+      cite: cite('cartoes'),
     },
   },
   {
-    keys: ['pdf', 'material', 'slide', 'apostila', 'resumo', 'cart', 'flashcard', 'quest', 'quiz', 'como funciona', 'o que'],
+    keys: ['pdf', 'material', 'slide', 'apostila', 'resumo', 'quest', 'quiz', 'como funciona', 'o que'],
     answer: {
       kind: 'grounded',
       text: 'Você manda o material da aula e eu transformo em resumos, cartões e questões. Cada um mostra a página de onde saiu.',
-      cite: cite(2, 'passagem-material'),
+      cite: cite('como-funciona'),
     },
   },
   {
@@ -82,7 +106,7 @@ const INTENTS: Intent[] = [
     answer: {
       kind: 'grounded',
       text: 'Toque em Baixar o app (Android) e siga os passos de instalação. Por enquanto o Studify funciona por convite.',
-      cite: cite(6, 'passagem-android'),
+      cite: cite('baixar'),
     },
   },
 ];

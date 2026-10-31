@@ -1,20 +1,22 @@
 import { describe, expect, test } from 'vitest';
-import { SUGGESTIONS, answer, normalize } from '../src/tutor.ts';
+import { SUGGESTIONS, answer, normalize, type SectionId } from '../src/tutor.ts';
 
-describe('the tutor on p. 4', () => {
-  test('questions about the page are answered with the page they came from', () => {
-    const cases: [string, number][] = [
-      ['Funciona no iPhone?', 6],
-      ['Dá pra estudar com a turma?', 6],
-      ['E se eu errar uma questão?', 5],
-      ['Como funciona o plano até a prova?', 3],
-      ['Por que eu esqueço?', 1],
-      ['O que vira o meu PDF?', 2],
+describe('the tutor demo', () => {
+  test('questions about the page are answered with the section they came from', () => {
+    const cases: [string, SectionId][] = [
+      ['Funciona no iPhone?', 'baixar'],
+      ['Dá pra estudar com a turma?', 'turma'],
+      ['E se eu errar uma questão?', 'recursos'],
+      ['Como funciona o plano até a prova?', 'plano'],
+      ['Por que eu esqueço?', 'cartoes'],
+      ['O que vira o meu PDF?', 'como-funciona'],
+      ['Tem ENEM?', 'recursos'],
+      ['Funciona offline?', 'recursos'],
     ];
-    for (const [question, page] of cases) {
+    for (const [question, section] of cases) {
       const a = answer(question);
       expect(a.kind, question).toBe('grounded');
-      if (a.kind === 'grounded') expect(a.cite.page, question).toBe(page);
+      if (a.kind === 'grounded') expect(a.cite.section, question).toBe(section);
     }
   });
 
