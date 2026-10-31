@@ -31,6 +31,8 @@ export interface PlanContext {
   mapOrder: Map<string, number>;
   /** κ, the student's measured pace (overall and per subject). */
   pace: { overall: number; bySubject: Map<string, number> };
+  /** Daily goal in minutes (profiles.settings.daily_goal_minutes, default 20): sizes the mastery track. */
+  dailyGoal: number;
 }
 
 type MaterialSourceKind = 'slides' | 'notes' | 'textbook' | 'other';
@@ -59,6 +61,8 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
   const rollover = prefs?.day_rollover_hour ?? DEFAULT_ROLLOVER_HOUR;
   const memory = (profile.settings?.memory ?? null) as { desired_retention?: number } | null;
   const retention = typeof memory?.desired_retention === 'number' ? memory.desired_retention : null;
+  const goalSetting = Number(profile.settings?.daily_goal_minutes);
+  const dailyGoal = Number.isFinite(goalSetting) && goalSetting > 0 ? goalSetting : DEFAULT_DAILY_GOAL_MINUTES;
   const now = ctx.now();
   const today = studyDayFor(now, timeZone, rollover);
 
@@ -186,8 +190,12 @@ export async function loadPlanContext(ctx: OperationContext, userId: string): Pr
     reviewMinutesByDay,
     mapOrder: mapOrderOf(nodes),
     pace,
+    dailyGoal,
   };
 }
+
+/** The app's default daily goal (Meta do dia). */
+const DEFAULT_DAILY_GOAL_MINUTES = 20;
 
 /** Days of finished learn blocks that feed κ. */
 const PACE_WINDOW_DAYS = 60;

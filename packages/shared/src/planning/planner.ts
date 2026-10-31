@@ -34,6 +34,12 @@ export const DEFAULT_PLAN_SETTINGS: PlanSettings = {
   reviewCapFactor: 0.6,
 };
 
+/** Mastery track: topics no test covers are worked until m ≥ 0.8, planned a week ahead. */
+const MASTERY_TARGET = 0.8;
+const MASTERY_HORIZON_DAYS = 7;
+/** The goal is a target, not a cap: a day takes mastery work while ≥ 5 min of it are left, and may end ≤ 5 min over. */
+const MASTERY_SLACK_MIN = 5;
+
 const LEARN_MIN_PER_PAGE: Record<MaterialKind, number> = { slides: 1.5, notes: 3, textbook: 4, other: 3 };
 
 /** Upper bound of est_learn_minutes from the page formula alone (spec 07 §8.2.2). */
@@ -107,6 +113,8 @@ interface Unit {
   /** Mock blocks are exempt from the 1.5 × q soft cap (§11.5 step 3). */
   exemptFromCap: boolean;
   reasonParams: Record<string, string | number>;
+  /** Overrides the kind's reason key (mastery units). */
+  reasonKey?: string;
   tie: string;
 }
 
@@ -618,6 +626,108 @@ function repairByMoves(res: PlaceResult, blocks: Block[], p: Prepared): Block[] 
   return res.unplaced;
 }
 
+// ---------------------------------------------------------------- mastery track
+
+/**
+ * Units for the topics no active test covers and the student does not master yet: learn when unstudied, then one
+ * practice at a time (`practice:mastery:<topic>:<n>`, n = practices already done), a day after the previous one.
+ */
+function masteryUnits(p: Prepared, examTopics: ReadonlySet<string>, doneKeys: ReadonlySet<string>, doneDay: ReadonlyMap<string, PlanDay>, end: PlanDay): Unit[] {
+  const out: Unit[] = [];
+  const base = { examIds: [], primaryExam: '', sameDayAfterDep: false, exemptFromCap: false, reasonKey: 'plan.reason.mastery', deadline: end };
+  for (const t of [...p.topicById.values()].sort(topicOrder)) {
+    if (t.isPlaceholder || examTopics.has(t.id)) continue;
+    const m = t.mastery ?? 0;
+    if (t.studied && m >= MASTERY_TARGET) continue;
+    const learnKey = `learn:${t.id}`;
+    const learning = !t.studied && !doneKeys.has(learnKey);
+    if (learning) {
+      out.push({
+        ...base,
+        key: learnKey,
+        kind: 'learn',
+        topicId: t.id,
+        subjectId: t.subjectId,
+        mapOrder: t.order,
+        minutes: Math.ceil(estLearnMinutes(t.sources) * (t.pace ?? p.settings.pace) - EPS),
+        earliest: p.today,
+        dependsOn: null,
+        priority: 1,
+        reasonParams: { topic: t.id },
+        tie: learnKey,
+      });
+    }
+    const prefix = `practice:mastery:${t.id}:`;
+    let n = 0;
+    let last: PlanDay | null = null;
+    for (const k of doneKeys) {
+      if (!k.startsWith(prefix)) continue;
+      n++;
+      const d = doneDay.get(k);
+      if (d !== undefined && (last === null || d > last)) last = d;
+    }
+    const key = `${prefix}${n}`;
+    out.push({
+      ...base,
+      key,
+      kind: 'practice',
+      topicId: t.id,
+      subjectId: t.subjectId,
+      mapOrder: t.order,
+      minutes: 10,
+      earliest: last === null ? p.today : effectiveDay(addDays(last, 1), p.today),
+      dependsOn: learning ? learnKey : null,
+      priority: 1 - m,
+      reasonParams: { topic: t.id, masteryPct: Math.round(m * 100) },
+      tie: key,
+    });
+  }
+  return out;
+}
+
+/**
+ * Places mastery blocks in what the tests leave of each day's goal: goal − reviews − minutes already planned, within
+ * capacity. Practice on the weakest topics comes before new learning, so what was started gets mastered first. The
+ * first block of a day always fits the goal, later ones within the slack; learn parts stay in order and a practice
+ * comes a day after its learn.
+ */
+function placeMastery(units: Unit[], p: Prepared, res: PlaceResult, goal: number, plannedOn: ReadonlyMap<PlanDay, number>, skip: ReadonlySet<string>): void {
+  const size = Math.max(p.settings.minBlockMin, Math.min(p.settings.maxBlockMin, goal));
+  const blocks = expandBlocks(units, size, p.settings.minBlockMin).filter((b) => !skip.has(b.id));
+  const rank = (b: Block): number => (b.kind === 'practice' ? 0 : 1);
+  blocks.sort((a, b) => rank(a) - rank(b) || b.priority - a.priority || a.mapOrder - b.mapOrder || compareIds(a.id, b.id));
+  const partsOf = new Map<string, Block[]>();
+  for (const b of blocks.slice().sort((a, b) => compareIds(a.id, b.id))) partsOf.set(b.key, [...(partsOf.get(b.key) ?? []), b]);
+  const subjectsOn = new Map<PlanDay, Set<string>>();
+  for (const { block, day } of res.placed.values()) {
+    if (block.subjectId !== null) subjectsOn.set(day, (subjectsOn.get(day) ?? new Set()).add(block.subjectId));
+  }
+
+  for (const d of p.days) {
+    let budget = goal - (p.R.get(d) ?? 0) - (plannedOn.get(d) ?? 0);
+    let first = true;
+    const subjects = subjectsOn.get(d) ?? new Set<string>();
+    for (const b of blocks) {
+      if (budget < MASTERY_SLACK_MIN) break;
+      if (res.placed.has(b.id) || d < b.earliest || d > b.deadline) continue;
+      if ((!first && b.minutes > budget + MASTERY_SLACK_MIN) || b.minutes > (res.remaining.get(d) ?? 0)) continue;
+      const parts = partsOf.get(b.key) ?? [];
+      if (parts.slice(0, parts.indexOf(b)).some((x) => !res.placed.has(x.id))) continue;
+      if (b.dependsOn !== null) {
+        const dep = partsOf.get(b.dependsOn) ?? [];
+        if (dep.some((x) => !res.placed.has(x.id))) continue;
+        const dd = res.lastDay.get(b.dependsOn);
+        if (dd !== undefined && dd >= d) continue;
+      }
+      if (b.subjectId !== null && !subjects.has(b.subjectId) && subjects.size >= p.settings.maxSubjectsPerDay) continue;
+      commit(b, d, res);
+      if (b.subjectId !== null) subjects.add(b.subjectId);
+      budget -= b.minutes;
+      first = false;
+    }
+  }
+}
+
 // ---------------------------------------------------------------- triage (§11.5 step 2)
 
 function unitsServing(units: Map<string, Unit>, examId: string): number {
@@ -705,8 +815,10 @@ export function buildPlan(input: PlanInput, trigger: ReplanTrigger): PlanRun {
     topicsOf.set(e.id, list.sort(topicOrder));
   }
 
-  // Horizon: today … last test date (units are due on D − 1 at the latest).
-  const horizonEnd = active.reduce<PlanDay>((acc, e) => (e.localDate > acc ? e.localDate : acc), today);
+  // Horizon: today … last test date (units are due on D − 1 at the latest), and at least a week with the mastery track.
+  const masteryGoal = desperate ? 0 : Math.max(0, Math.round(input.masteryMinutesPerDay ?? 0));
+  const masteryEnd = addDays(today, MASTERY_HORIZON_DAYS - 1);
+  const horizonEnd = active.reduce<PlanDay>((acc, e) => (e.localDate > acc ? e.localDate : acc), masteryGoal > 0 ? masteryEnd : today);
   const days: PlanDay[] = [];
   for (let d = today; dayDiff(d, horizonEnd) >= 0; d = addDays(d, 1)) days.push(d);
 
@@ -963,6 +1075,15 @@ export function buildPlan(input: PlanInput, trigger: ReplanTrigger): PlanRun {
     }
   }
 
+  // Mastery track: topics no test covers, in what the tests leave of the daily goal.
+  if (masteryGoal > 0) {
+    const examTopics = new Set([...topicsOf.values()].flatMap((list) => list.map((t) => t.id)));
+    const plannedOn = new Map(fixedMinOn);
+    for (const { block, day } of result.placed.values()) plannedOn.set(day, (plannedOn.get(day) ?? 0) + block.minutes);
+    const mastery = masteryUnits(prepared, examTopics, doneKeys, doneDay, masteryEnd).filter((u) => !fixedIds.has(u.key));
+    placeMastery(mastery, prepared, result, masteryGoal, plannedOn, fixedIds);
+  }
+
   // Assemble items. Fixed items keep their state; placed blocks become `planned`.
   const items: PlanItem[] = [];
   const toItem = (
@@ -1002,7 +1123,7 @@ export function buildPlan(input: PlanInput, trigger: ReplanTrigger): PlanRun {
         demanding: b.kind === 'learn' || b.kind === 'mock',
         pinned: false,
         status: 'planned',
-        reason: { key: REASON_KEY[b.kind], params: b.reasonParams },
+        reason: { key: b.reasonKey ?? REASON_KEY[b.kind], params: b.reasonParams },
       }),
     );
   }

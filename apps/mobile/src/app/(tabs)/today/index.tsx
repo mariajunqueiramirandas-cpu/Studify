@@ -294,8 +294,9 @@ export default function Today() {
       {/* The coach's day counts go stale: show it only when it was written today or yesterday (GOL-04.10). */}
       {activeGoal && coach.data && daysBetween(parseDate(coach.data.localDate), parseDate(plan.day)) <= 1 ? <CoachCard coach={coach.data} /> : null}
 
-      {activeGoal ? (
-        <Section title={t('today.plan_title')} action={<Button compact variant="text" label={t('dashboard.title')} onPress={() => router.push(`/goal/${activeGoal.id}`)} />}>
+      {/* Without a test the plan still works toward mastery, so the day's trail shows whenever there is one. */}
+      {activeGoal || plan.items.length > 0 ? (
+        <Section title={t('today.plan_title')} action={activeGoal ? <Button compact variant="text" label={t('dashboard.title')} onPress={() => router.push(`/goal/${activeGoal.id}`)} /> : undefined}>
           {inGoodWindow && pending.some((i) => isDemandingUnit(i.unitType)) ? (
             <Text variant="bodySmall" tone="accent">
               {t('energy.good_now')}
@@ -317,11 +318,8 @@ export default function Today() {
           </View>
           {plan.items.length === 0 && !dueN ? <Text tone="secondary">{t('today.all_clear')}</Text> : null}
         </Section>
-      ) : (
-        <>
-          <OfferCard icon="calendar-outline" title={t('today.no_goal')} action={t('today.create_goal')} onPress={() => router.push('/goal/new')} />
-        </>
-      )}
+      ) : null}
+      {activeGoal ? null : <OfferCard icon="calendar-outline" title={t('today.no_goal')} action={t('today.create_goal')} onPress={() => router.push('/goal/new')} />}
       {void db}
     </Screen>
   );

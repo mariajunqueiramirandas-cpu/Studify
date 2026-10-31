@@ -177,6 +177,8 @@ export async function replanUser(ctx: OperationContext, planCtx: PlanContext, tr
     mode: planCtx.desperate ? 'desperate' : 'normal',
     pace: planCtx.pace,
     topicWeights: (scope) => coachTopicWeights(scope, (id) => estLearnMinutes(planCtx.sourcesByNode.get(id) ?? []), coach),
+    // Topics no test covers are worked toward mastery in what the tests leave of the daily goal; ENEM has its own plan.
+    masteryMinutesPerDay: enem ? null : planCtx.dailyGoal,
   });
   const run: PlanRun = buildPlan(built.input, trigger);
   // No-op check on the resulting plan, not the input hash: the hash includes the previous items, so it

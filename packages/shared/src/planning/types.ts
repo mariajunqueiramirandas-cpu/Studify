@@ -127,6 +127,12 @@ export interface PlanInput {
   sessionStartedToday?: boolean;
   mode?: 'normal' | 'desperate';
   desperate?: DesperateOptions;
+  /**
+   * The student's daily goal in minutes (profiles.settings.daily_goal_minutes). When set, each day of the next week
+   * also gets mastery work on the topics no scheduled test covers (learn, then practice until mastery reaches 0.8),
+   * in whatever the tests leave of that goal after reviews. Absent or 0 → the plan only works toward tests.
+   */
+  masteryMinutesPerDay?: number | null;
   settings?: Partial<PlanSettings>;
 }
 
