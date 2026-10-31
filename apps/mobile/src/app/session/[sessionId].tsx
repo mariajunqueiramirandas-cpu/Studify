@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { uuidv7 } from 'uuidv7';
 import { ActionBar, Button, Card, Row, Screen, SessionProgress, Text, useOnline, useOverlay } from '../../components';
@@ -51,7 +51,7 @@ export default function SessionRunner() {
     let budget = limit ?? Infinity;
     if (due) {
       const m = Math.max(2, Math.round((due * REVIEW_SECONDS) / 60));
-      out.push({ key: 'review', kind: 'review', label: t('review.today', { n: due, min: m }).replace(/\*\*/g, ''), minutes: Math.min(m, budget), needsInternet: false });
+      out.push({ key: 'review', kind: 'review', label: t('today.reviews_due', { n: due }), minutes: Math.min(m, budget), needsInternet: false });
       budget -= m;
     }
     for (const item of plan.items.filter((i) => i.status === 'planned')) {
@@ -131,6 +131,12 @@ export default function SessionRunner() {
     router.replace({ pathname: '/session/end', params: { minutes: String(minutes), cards: '0', topics: String([...done].filter((k) => blocks.find((b) => b.key === k)?.kind === 'learn').length) } });
   };
 
+  // A session that is only the due cards has nothing to sequence: open the review in place of this screen.
+  const loneReview = blocks.length === 1 && blocks[0]!.kind === 'review';
+  useEffect(() => {
+    if (loneReview) router.replace({ pathname: '/review', params: { source: 'session' } });
+  }, [loneReview]);
+
   const next = blocks.find((b) => !done.has(b.key));
   const progress = blocks.length ? done.size / blocks.length : 1;
 
@@ -143,13 +149,13 @@ export default function SessionRunner() {
       }}
       footer={
         <ActionBar>
-          {next ? <Button label={`${t('global.continue')}: ${next.label}`} onPress={() => open(next)} /> : <Button label={t('global.done')} onPress={finish} />}
+          {next ? <Button label={`${done.size ? t('global.continue') : t('today.start_item')}: ${t(`session.blocks.${next.kind}`)}`} onPress={() => open(next)} /> : <Button label={t('global.done')} onPress={finish} />}
         </ActionBar>
       }
     >
       <SessionProgress value={progress} label={t('session.title')} />
       <WellbeingNudge surface="session" />
-      {blocks.length === 0 ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
+      {blocks.length === 0 ? <Text tone="secondary">{t('today.all_clear')}</Text> : null}
       {blocks.map((b, i) => {
         const isDone = done.has(b.key);
         return (

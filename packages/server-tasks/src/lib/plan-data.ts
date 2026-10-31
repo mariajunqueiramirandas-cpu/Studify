@@ -155,6 +155,8 @@ export interface PlanBuildData {
   pace?: { overall: number; bySubject: ReadonlyMap<string, number> };
   /** ω per scope topic of a test (the AI coach priorities, GOL-04.10); null keeps the default ∝ learn minutes. */
   topicWeights?: (scopeTopicIds: readonly string[]) => Record<string, number> | null;
+  /** Daily goal for the mastery track (topics no test covers); null plans for tests only. */
+  masteryMinutesPerDay?: number | null;
 }
 
 /** Coach texts per topic, written on that topic's plan items (reason_params.coach). */
@@ -273,6 +275,7 @@ export function buildPlanInput(data: PlanBuildData): BuiltPlanInput {
     mode: data.mode,
     settings: settingsFrom(data.prefs),
   };
+  if (data.masteryMinutesPerDay) input.masteryMinutesPerDay = data.masteryMinutesPerDay;
   if (data.editedDay) input.editedDay = data.editedDay;
   if (data.sessionStartedToday !== undefined) input.sessionStartedToday = data.sessionStartedToday;
   if (data.mode === 'desperate' && data.desperate) {

@@ -122,6 +122,18 @@ describe('plan.recompute (GOL-04)', () => {
     expect(env.db.rows('plan_items').some((i) => i.id === doneId)).toBe(true);
   });
 
+  it('plans toward mastery for a student with no tests, sized by the daily goal', async () => {
+    for (const e of env.db.rows('exams')) e.status = 'cancelled';
+    const profile = env.db.rows('profiles').find((p) => p.id === USER)!;
+    profile.settings = { ...(profile.settings ?? {}), daily_goal_minutes: 30 };
+    const res = await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'exam_changed' });
+    expect(res).toMatchObject({ status: 'planned' });
+    const items = env.db.rows('plan_items');
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => i.goal_id === null && i.exam_id === null && i.reason_key === 'plan.reason.mastery')).toBe(true);
+    expect(items.some((i) => i.node_ids?.includes(TOPIC))).toBe(true);
+  });
+
   it('returns null for an account that no longer has a profile', async () => {
     env.db.seed('profiles', []);
     expect(await handlePlanRecompute(env.ctx, { user_id: USER, trigger: 'nightly' })).toBeNull();

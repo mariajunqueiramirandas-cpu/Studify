@@ -411,3 +411,87 @@ describe('GOL-04 snapshots per scenario', () => {
     expect(lines(run)).toMatchSnapshot();
   });
 });
+
+describe('Mastery track (topics no test covers)', () => {
+  const free: PlanTopic[] = [
+    { id: 'M1', subjectId: 'mat', order: 1, sources: [{ kind: 'notes', pages: 5 }], studied: true, mastery: 0.3 },
+    { id: 'M2', subjectId: 'mat', order: 2, sources: [{ kind: 'notes', pages: 5 }], studied: true, mastery: 0.9 },
+    { id: 'M3', subjectId: 'mat', order: 3, sources: [{ kind: 'notes', pages: 5 }], studied: false, mastery: null },
+  ];
+  const noExams = (goal: number | null, reviews = 5): PlanInput => ({
+    today: TODAY,
+    timeZone: 'America/Sao_Paulo',
+    exams: [],
+    topics: free,
+    availability: { minutesByWeekday: [60, 60, 60, 60, 60, 90, 90] },
+    reviewForecast: forecast(reviews, TODAY, addDays(TODAY, 6)),
+    masteryMinutesPerDay: goal,
+  });
+  const minutesOn = (run: PlanRun, day: string): number => run.items.filter((i) => i.day === day).reduce((a, i) => a + i.minutes, 0);
+
+  it('without a daily goal, no exams means no plan', () => {
+    expect(buildPlan(noExams(null), 'nightly').items).toEqual([]);
+  });
+
+  it('with no exams, plans a week of mastery work within the daily goal', () => {
+    const run = buildPlan(noExams(20), 'nightly');
+    expect(run.items.length).toBeGreaterThan(0);
+    const days = new Set(run.items.map((i) => i.day));
+    for (const d of days) {
+      expect(d >= TODAY && d <= addDays(TODAY, 6)).toBe(true);
+      // Goal 20 − 5 min of reviews = 15 left: one block always fits, more only within 5 min over.
+      const day = run.items.filter((i) => i.day === d);
+      expect(day.length === 1 || minutesOn(run, d) <= 15 + 5).toBe(true);
+    }
+    expect(run.items.every((i) => i.examIds.length === 0 && i.reason.key === 'plan.reason.mastery')).toBe(true);
+    expect(run.feasible).toBe(true);
+  });
+
+  it('practices the weak studied topic first, skips the mastered one, and learns the new one before practicing it', () => {
+    const run = buildPlan(noExams(20), 'nightly');
+    const first = run.items.filter((i) => i.day === TODAY)[0];
+    expect(first?.unitKey).toBe('practice:mastery:M1:0');
+    expect(run.items.some((i) => i.topicId === 'M2')).toBe(false);
+    const learnDays = run.items.filter((i) => i.unitKey === 'learn:M3').map((i) => i.day);
+    const practice = run.items.find((i) => i.unitKey === 'practice:mastery:M3:0');
+    expect(learnDays.length).toBeGreaterThan(0);
+    if (practice) expect(practice.day > learnDays.sort().at(-1)!).toBe(true);
+  });
+
+  it('after a practice is done, schedules the next one from the following day', () => {
+    const run = buildPlan(
+      {
+        ...noExams(20),
+        previous: [{ id: 'practice:mastery:M1:0', unitKey: 'practice:mastery:M1:0', unitType: 'practice', examIds: [], topicId: 'M1', day: TODAY, minutes: 10, status: 'done', pinned: false }],
+      },
+      'manual_edit',
+    );
+    const next = run.items.find((i) => i.unitKey === 'practice:mastery:M1:1');
+    expect(next?.day).toBe(addDays(TODAY, 1));
+  });
+
+  it('leaves topics a test covers to the exam plan and never displaces exam work', () => {
+    const base = worked(70);
+    const withFree: PlanInput = { ...base, topics: [...topics, ...free], reviewForecast: forecast(10, TODAY, addDays(TODAY, 6)) };
+    const examOnly = buildPlan({ ...withFree }, 'nightly');
+    const both = buildPlan({ ...withFree, masteryMinutesPerDay: 60 }, 'nightly');
+    const examLines = (run: PlanRun) => lines({ ...run, items: run.items.filter((i) => i.examIds.length > 0 || i.unitType === 'vespera') });
+    expect(examLines(both)).toEqual(examLines(examOnly));
+    const mastery = both.items.filter((i) => i.reason.key === 'plan.reason.mastery');
+    expect(mastery.every((i) => ['M1', 'M3'].includes(i.topicId ?? ''))).toBe(true);
+    // Days the tests already fill past the goal get no mastery work.
+    for (const d of new Set(mastery.map((i) => i.day))) {
+      const exam = both.items.filter((i) => i.day === d && i.reason.key !== 'plan.reason.mastery').reduce((a, i) => a + i.minutes, 0);
+      expect(exam + 10).toBeLessThan(60 + 10);
+    }
+  });
+
+  it('desperate mode ignores the mastery track', () => {
+    const run = buildPlan({ ...noExams(20), mode: 'desperate', desperate: { minutesPerDay: 60, coveredExamIds: [] } }, 'nightly');
+    expect(run.items).toEqual([]);
+  });
+
+  it('is deterministic', () => {
+    expect(lines(buildPlan(noExams(30), 'nightly'))).toEqual(lines(buildPlan(noExams(30), 'nightly')));
+  });
+});

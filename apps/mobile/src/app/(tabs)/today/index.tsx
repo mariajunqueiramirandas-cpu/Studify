@@ -162,7 +162,12 @@ export default function Today() {
   const weekday = weekdayLong(today);
   const dateLine = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${longDate(today)}`;
 
-  const startSession = (minutes?: number) => router.push({ pathname: '/session/[sessionId]', params: { sessionId: 'new', ...(minutes ? { minutes: String(minutes) } : {}) } });
+  // With nothing planned but cards due, the session would be a single review step: go straight to the cards.
+  const reviewsOnly = pending.length === 0 && dueN > 0;
+  const startSession = (minutes?: number) =>
+    reviewsOnly
+      ? router.push({ pathname: '/review', params: { source: 'session' } })
+      : router.push({ pathname: '/session/[sessionId]', params: { sessionId: 'new', ...(minutes ? { minutes: String(minutes) } : {}) } });
 
   const toggleItem = async (item: TodayItem, status: 'done' | 'skipped') => {
     try {
@@ -174,7 +179,7 @@ export default function Today() {
   };
 
   const quickStart = pending.length > 0 || dueN > 0;
-  const planLine = plan.items.length ? t('today.summary', { minutes: plan.minutes, subjects: plan.subjects }) : t('today.nothing_planned');
+  const planLine = plan.items.length ? t('today.summary', { minutes: plan.minutes, subjects: plan.subjects }) : dueN ? t('today.nothing_planned') : t('today.all_clear');
 
   return (
     <Screen
@@ -236,8 +241,8 @@ export default function Today() {
             </View>
           </Pressable>
         ) : null}
-        <Button variant="lamp" label={quickStart ? t('today.start') : t('review.all_done')} icon={quickStart ? 'play' : undefined} onPress={() => startSession()} disabled={!quickStart} />
-        {quickStart ? (
+        <Button variant="lamp" label={reviewsOnly ? t('today.start_review', { count: dueN }) : quickStart ? t('today.start') : t('review.all_done')} icon={quickStart ? 'play' : undefined} onPress={() => startSession()} disabled={!quickStart} />
+        {quickStart && !reviewsOnly ? (
           <View style={styles.quick}>
             <Ionicons name="hourglass-outline" size={16} color={colors.heroMuted} />
             <Text variant="bodySmall" style={{ color: colors.heroMuted, flex: 1 }} numberOfLines={1}>
@@ -289,8 +294,9 @@ export default function Today() {
       {/* The coach's day counts go stale: show it only when it was written today or yesterday (GOL-04.10). */}
       {activeGoal && coach.data && daysBetween(parseDate(coach.data.localDate), parseDate(plan.day)) <= 1 ? <CoachCard coach={coach.data} /> : null}
 
-      {activeGoal ? (
-        <Section title={t('today.plan_title')} action={<Button compact variant="text" label={t('dashboard.title')} onPress={() => router.push(`/goal/${activeGoal.id}`)} />}>
+      {/* Without a test the plan still works toward mastery, so the day's trail shows whenever there is one. */}
+      {activeGoal || plan.items.length > 0 ? (
+        <Section title={t('today.plan_title')} action={activeGoal ? <Button compact variant="text" label={t('dashboard.title')} onPress={() => router.push(`/goal/${activeGoal.id}`)} /> : undefined}>
           {inGoodWindow && pending.some((i) => isDemandingUnit(i.unitType)) ? (
             <Text variant="bodySmall" tone="accent">
               {t('energy.good_now')}
@@ -310,14 +316,10 @@ export default function Today() {
               />
             ))}
           </View>
-          {plan.items.length === 0 && !dueN ? <Text tone="secondary">{t('today.nothing_planned')}</Text> : null}
+          {plan.items.length === 0 && !dueN ? <Text tone="secondary">{t('today.all_clear')}</Text> : null}
         </Section>
-      ) : (
-        <>
-          {dueN > 0 ? <ReviewStop due={dueN} last /> : null}
-          <OfferCard icon="calendar-outline" title={t('today.no_goal')} action={t('today.create_goal')} onPress={() => router.push('/goal/new')} />
-        </>
-      )}
+      ) : null}
+      {activeGoal ? null : <OfferCard icon="calendar-outline" title={t('today.no_goal')} action={t('today.create_goal')} onPress={() => router.push('/goal/new')} />}
       {void db}
     </Screen>
   );
