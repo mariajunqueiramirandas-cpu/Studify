@@ -1,184 +1,273 @@
-// The landing page: an apostila about Studify that forgets itself. One second on the page is one hour; what you
-// read fades on the app's forgetting curve, key words turn into blanks, and recalling them brings the ink back.
-import { useEffect } from 'react';
-import capiSleepy from './assets/capi-sleepy.webp';
-import { BrandMark, DownloadButton, InstallSteps } from './components.tsx';
-import { ErosionFilters, MemoryMap, PageChip, Sheet, Txt } from './forgetting.tsx';
-import { startClock } from './page-store.ts';
-import { Flashcard, PlanChart, SurpriseQuiz, Tutor } from './widgets.tsx';
+// The landing page: one page that scrolls, like any other. What makes it Studify is what is on it: study objects
+// (the teacher's page, an index card, a calendar leaf), the highlighter, Capi, and demos of the app that work.
+import capiCelebrating from './assets/capi-celebrating.webp';
+import capiFocused from './assets/capi-focused.webp';
+import { DownloadButton, InstallSteps, SiteFooter, SiteHeader } from './components.tsx';
+import { Flashcard, PlanChart, Tutor } from './widgets.tsx';
 
-function Staple() {
+/** A word under the lamp-yellow highlighter, the app's mark for what you must remember. */
+function Hl({ children }: { children: string }) {
+  return <mark className="hl">{children}</mark>;
+}
+
+/** The hero picture: the class material on the left, what Studify makes of it on top. Decorative. */
+function HeroArt() {
   return (
-    <svg className="staple" viewBox="0 0 64 20" aria-hidden="true" focusable="false">
-      <path d="M4 15V7a3 3 0 0 1 3-3h50a3 3 0 0 1 3 3v8" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
-    </svg>
+    <div className="hero-art" aria-hidden="true">
+      <div className="art-page">
+        <span className="art-page-head">
+          <b>Biologia</b> · Transporte pela membrana
+        </span>
+        <p>
+          <b>Osmose:</b> passagem de água através de uma membrana semipermeável, do meio hipotônico para o meio
+          hipertônico.
+        </p>
+        <span className="art-lines">
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="art-folio">12</span>
+      </div>
+      <div className="art-card">
+        <span className="art-card-head">
+          <span className="ribbon" />
+          Biologia
+        </span>
+        <p>Na osmose, a água passa pra qual meio?</p>
+        <span className="art-card-src">p. 12</span>
+      </div>
+      <div className="art-quiz">
+        <span className="art-quiz-q">Hipertônico é o meio…</span>
+        <span className="art-opt">A · menos concentrado</span>
+        <span className="art-opt art-opt-right">B · mais concentrado ✓</span>
+      </div>
+      <div className="leaf art-leaf">
+        <span className="leaf-top">prova</span>
+        <span className="leaf-num">12</span>
+        <span className="leaf-foot">dias</span>
+      </div>
+      <img className="art-capi" src={capiFocused} alt="" width={180} height={180} />
+    </div>
   );
 }
 
+const STEPS = [
+  {
+    title: 'Mande o material',
+    text: 'Slides do professor(a), apostila, anotações, prova antiga. Em PDF, do jeito que você recebeu.',
+  },
+  {
+    title: 'Receba o estudo pronto',
+    text: 'Eu leio tudo e faço resumos, cartões e questões. Cada um mostra a página de onde saiu.',
+  },
+  {
+    title: 'Siga o plano até a prova',
+    text: 'Diga a data. Eu divido o conteúdo pelos dias que faltam e marco cada revisão na hora certa.',
+  },
+];
+
+const MORE = [
+  { title: 'Quizzes e simulados', text: 'Questões do seu material, do treino rápido ao simulado com tempo.' },
+  { title: 'Caderno de Erros', text: 'Cada erro fica guardado com o motivo e vira revisão.' },
+  { title: 'Semana de Provas', text: 'Várias matérias, cada uma com sua data. O plano equilibra todas.' },
+  { title: 'Modo Véspera', text: 'Na noite antes da prova, uma revisão leve e cama cedo.' },
+  { title: 'ENEM', text: 'As 4 áreas + Redação, simulados com TRI e correção de redação.' },
+  { title: 'Funciona offline', text: 'Revise os cartões sem internet. Eu sincronizo quando a conexão voltar.' },
+];
+
 export function Landing() {
-  useEffect(startClock, []);
-
   return (
-    <div className="desk">
-      <ErosionFilters />
-      <MemoryMap />
-      <main className="stack">
-        <Sheet id="p1" page={1} labelledBy="t1" className="sheet-hero">
-          <Staple />
-          <div className="copy-in">
-            <header className="sheet-header">
-              <span className="brand">
-                <BrandMark />
-                Studify
-              </span>
-              <span className="fields" aria-hidden="true">
-                <span>Nome:</span>
-                <span className="field-line" />
-                <span>Turma:</span>
-                <span className="field-line field-short" />
-              </span>
-            </header>
-            <h1 id="t1" className="display">
-              <Txt display at={0.4}>
-                {'Você vai [esquecer|decorar|amar] esta [página|matéria|frase].'}
-              </Txt>
-            </h1>
-            <p className="body">
-              <span id="passagem-memoria" className="passage">
-                <Txt at={0.62}>{'Não é culpa sua: é assim que a [memória|internet|preguiça] funciona.'}</Txt>
-              </span>{' '}
-              <span id="passagem-relogio" className="passage">
-                <Txt at={0.76}>{'Aqui, cada segundo vale uma [hora|semana|aula]. Continue lendo e veja o que acontece com o que ficou pra trás.'}</Txt>
-              </span>
-            </p>
-            <div className="app-layer">
-              <DownloadButton />
-              <p className="hint">Quando uma palavra sumir, toque na lacuna e tente lembrar.</p>
-            </div>
-          </div>
-        </Sheet>
+    <div className="site">
+      <a className="skip" href="#conteudo">
+        Pular para o conteúdo
+      </a>
+      <SiteHeader landing />
 
-        <Sheet id="p2" page={2} labelledBy="t2">
-          <h2 id="t2" className="title">
-            <Txt display at={0.45}>
-              {'O que você só lê, [apaga|brilha|cansa].'}
-            </Txt>{' '}
-            <span className="keeps">O que você pratica, fica.</span>
-          </h2>
-          <p className="body">
-            <span id="passagem-material" className="passage">
-              <Txt at={0.5}>
-                {'Mande o material da aula: slides do professor(a), apostila, anotações, prova antiga. Eu leio tudo e transformo em [resumos|memes|vídeos], cartões e questões. Cada um mostra a [página|nota|hora] de onde saiu.'}
-              </Txt>
-            </span>
-          </p>
-          <div className="made-from">
-            <div className="made-left">
-              <figure className="xerox">
+      <main id="conteudo">
+        <section className="hero">
+          <div className="wrap hero-in">
+            <div className="hero-copy">
+              <p className="eyebrow">Para a Semana de Provas e o ENEM</p>
+              <h1 className="h1">
+                Mande o PDF da aula. Receba o <Hl>estudo pronto.</Hl>
+              </h1>
+              <p className="lead">
+                O Studify transforma o material das suas aulas em resumos, cartões e questões, e monta um plano até o
+                dia da prova. Cada resposta mostra a página de onde saiu.
+              </p>
+              <div className="hero-actions">
+                <DownloadButton />
+                <a className="key key-large key-ghost" href="#como-funciona">
+                  Ver como funciona
+                </a>
+              </div>
+              <p className="note">Só para Android, por enquanto. Funciona por convite.</p>
+            </div>
+            <HeroArt />
+          </div>
+        </section>
+
+        <section id="como-funciona" className="section" aria-labelledby="como-funciona-t">
+          <div className="wrap">
+            <p className="eyebrow">Como funciona</p>
+            <h2 id="como-funciona-t" className="h2">
+              Do PDF à prova em três passos.
+            </h2>
+            <ol className="steps">
+              {STEPS.map((s, i) => (
+                <li key={s.title} className="step">
+                  <span className="step-num" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  <h3>{s.title}</h3>
+                  <p>{s.text}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section id="cartoes" className="section section-tint" aria-labelledby="cartoes-t">
+          <div className="wrap feature">
+            <div className="feature-copy">
+              <p className="eyebrow">Cartões</p>
+              <h2 id="cartoes-t" className="h2">
+                Cada cartão volta <Hl>pouco antes</Hl> de você esquecer.
+              </h2>
+              <p className="lead">
+                Você responde e diz como foi lembrar. Errou? O cartão volta em minutos. Achou fácil? Só daqui a dias. É
+                assim que a memória segura até a prova.
+              </p>
+              <ul className="ticks">
+                <li>Feitos do seu material, com a página de onde saíram</li>
+                <li>Repetição espaçada com FSRS: os intervalos do cartão de teste são os do app</li>
+                <li>Uns minutos por dia, no ônibus ou no intervalo</li>
+              </ul>
+            </div>
+            <div className="feature-demo">
+              <p className="demo-label">Teste aqui: vire o cartão e diga como foi.</p>
+              <figure className="source">
                 <figcaption>
-                  <strong>Biologia</strong>
-                  <span>Transporte pela membrana</span>
+                  <strong>Biologia</strong> · Transporte pela membrana
                 </figcaption>
-                <p id="fonte-osmose" className="passage">
+                <p id="fonte-osmose">
                   <b>Osmose:</b> passagem de água através de uma membrana semipermeável, do meio hipotônico (menos
                   concentrado) para o meio hipertônico (mais concentrado).
                 </p>
-                <span className="xerox-page" aria-label="página 12">
+                <span className="source-page" aria-label="página 12">
                   12
                 </span>
               </figure>
-              <div className="summary">
-                <h3>Resumo</h3>
-                <p className="reading">
-                  <Txt at={0.75}>{'**Osmose** é a passagem de **água** por uma membrana, do meio **menos concentrado** pro **mais concentrado**.'}</Txt>{' '}
-                  <PageChip page={12} passage="fonte-osmose" />
-                </p>
-              </div>
-            </div>
-            <div className="made-right">
-              <h3>Cartão</h3>
               <Flashcard />
             </div>
           </div>
-        </Sheet>
+        </section>
 
-        <Sheet id="p3" page={3} labelledBy="t3">
-          <h2 id="t3" className="title">
-            <Txt display at={0.45}>
-              {'Me diga a data da prova. Eu monto o [resto|lanche|grupo].'}
-            </Txt>
-          </h2>
-          <p className="body">
-            <span id="passagem-plano" className="passage">
-              <Txt at={0.55}>
-                {'Eu divido o conteúdo pelos dias que faltam e marco cada revisão pouco antes de você [esquecer|dormir|desistir]. Perdeu um dia? Eu reorganizo o plano, sem drama.'}
-              </Txt>
-            </span>
-          </p>
-          <PlanChart />
-        </Sheet>
-
-        <Sheet id="p4" page={4} labelledBy="t4">
-          <h2 id="t4" className="title">
-            <Txt display at={0.45}>
-              {'Pergunte. Eu mostro a [página|resposta|cola].'}
-            </Txt>
-          </h2>
-          <p className="body">
-            <span id="passagem-tutor" className="passage">
-              <Txt at={0.55}>
-                {'O tutor responde com base no seu material e aponta de onde tirou cada resposta. Se a resposta não estiver lá, eu [aviso|invento|enrolo] em vez de inventar.'}
-              </Txt>
-            </span>
-          </p>
-          <Tutor />
-        </Sheet>
-
-        <Sheet id="p5" page={5} labelledBy="t5">
-          <h2 id="t5" className="title">
-            <Txt display at={0.45}>
-              {'Prova [surpresa|final|oral].'}
-            </Txt>
-          </h2>
-          <p className="body">
-            <Txt at={0.9}>{'Você leu tudo isso há algumas horas, no relógio desta página. Vamos ver o que ficou.'}</Txt>
-          </p>
-          <p className="body">
-            <span id="passagem-erros" className="passage">
-              <Txt at={0.6}>{'No app, cada erro vai pro [Caderno de Erros|lixo|esquecimento] e vira um cartão pra você revisar.'}</Txt>
-            </span>
-          </p>
-          <SurpriseQuiz />
-        </Sheet>
-
-        <Sheet id="p6" page={6} labelledBy="t6" className="sheet-back">
-          <h2 id="t6" className="title">
-            Agora com o seu material.
-          </h2>
-          <p className="body">
-            Baixe o app, entre com o seu convite e mande o PDF da próxima prova. Eu cuido do resto: resumos, cartões,
-            questões e o plano até o dia.
-          </p>
-          <p className="body">
-            <span id="passagem-turma" className="passage">
-              Melhor ainda com a turma: quem organiza manda os PDFs uma vez e todo mundo estuda pelo mesmo material, com
-              duelos e batalha ao vivo.
-            </span>
-          </p>
-          <DownloadButton />
-          <InstallSteps withCode={false} />
-          <p className="note">
-            <span id="passagem-android" className="passage">
-              Por enquanto o Studify é só para Android e funciona por convite.
-            </span>
-          </p>
-          <div className="goodnight">
-            <img src={capiSleepy} alt="" width={128} height={128} />
-            <p>Dormir bem também é estudar: é no sono que a memória fixa o que você revisou.</p>
+        <section id="plano" className="section" aria-labelledby="plano-t">
+          <div className="wrap feature feature-flip">
+            <div className="feature-copy">
+              <p className="eyebrow">Plano</p>
+              <h2 id="plano-t" className="h2">
+                Me diga a data da prova. <Hl>Eu monto o resto.</Hl>
+              </h2>
+              <p className="lead">
+                Eu divido o conteúdo pelos dias que faltam e marco cada revisão pouco antes de você esquecer. Perdeu um
+                dia? Eu reorganizo o plano, sem drama.
+              </p>
+              <ul className="ticks">
+                <li>Uma tela "Hoje" com o que fazer, num botão só</li>
+                <li>Várias provas na mesma semana, cada uma com sua data</li>
+                <li>Na véspera, revisão leve e cama cedo</li>
+              </ul>
+            </div>
+            <div className="feature-demo">
+              <p className="demo-label">Arraste e veja o plano mudar.</p>
+              <div className="panel">
+                <PlanChart />
+              </div>
+            </div>
           </div>
-        </Sheet>
-        <footer className="desk-footer">studify.vendua.com.br</footer>
+        </section>
+
+        <section id="tutor" className="section section-tint" aria-labelledby="tutor-t">
+          <div className="wrap feature">
+            <div className="feature-copy">
+              <p className="eyebrow">Tutor</p>
+              <h2 id="tutor-t" className="h2">
+                Pergunte. Eu mostro <Hl>de onde tirei.</Hl>
+              </h2>
+              <p className="lead">
+                O tutor responde com base no seu material e aponta a página de cada resposta. Se não estiver lá, eu aviso
+                em vez de inventar.
+              </p>
+              <ul className="ticks">
+                <li>Responde direto, puxa o raciocínio com perguntas ou te testa: você escolhe</li>
+                <li>Conhecimento geral só quando você pede, e marcado como tal</li>
+              </ul>
+            </div>
+            <div className="feature-demo">
+              <p className="demo-label">Este tutor só conhece esta página. Pergunte.</p>
+              <Tutor />
+            </div>
+          </div>
+        </section>
+
+        <section id="recursos" className="section" aria-labelledby="recursos-t">
+          <div className="wrap">
+            <p className="eyebrow">Recursos</p>
+            <h2 id="recursos-t" className="h2">
+              E tem mais.
+            </h2>
+            <ul className="tiles">
+              {MORE.map((m) => (
+                <li key={m.title} className="tile">
+                  <h3>{m.title}</h3>
+                  <p>{m.text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section id="turma" className="section section-band" aria-labelledby="turma-t">
+          <div className="wrap band">
+            <img className="band-capi" src={capiCelebrating} alt="" width={200} height={200} />
+            <div className="band-copy">
+              <h2 id="turma-t" className="h2">
+                Melhor ainda com a turma.
+              </h2>
+              <p className="lead">
+                Quem organiza manda os PDFs uma vez e todo mundo estuda pelo mesmo material. Depois é desafiar: duelos 1
+                contra 1 e batalha ao vivo na sala.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="baixar" className="section" aria-labelledby="baixar-t">
+          <div className="wrap get">
+            <div className="get-copy">
+              <h2 id="baixar-t" className="h2">
+                Comece pela próxima prova.
+              </h2>
+              <p className="lead">
+                Baixe o app, entre com o seu convite e mande o PDF. Eu cuido do resto: resumos, cartões, questões e o
+                plano até o dia.
+              </p>
+              <DownloadButton />
+              <p className="note">Por enquanto o Studify é só para Android e funciona por convite.</p>
+            </div>
+            <div className="panel get-steps">
+              <h3>Como instalar no Android</h3>
+              <InstallSteps withCode={false} />
+            </div>
+          </div>
+        </section>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

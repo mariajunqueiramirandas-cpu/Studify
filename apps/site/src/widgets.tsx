@@ -1,13 +1,11 @@
-// The things you do on the page. They never fade: what you practice stays (only what you read erodes).
+// The landing page's demos: small working pieces of the app, run on this page's own content.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
-import capiCelebrating from './assets/capi-celebrating.webp';
 import capiCurious from './assets/capi-curious.webp';
-import { PageChip } from './forgetting.tsx';
+import { Cite } from './components.tsx';
 import { newCardRatings, planCurve, type RatingKey } from './memory.ts';
-import { review, type SheetId } from './page-store.ts';
 import { SUGGESTIONS, answer, type TutorAnswer } from './tutor.ts';
 
-// ---------- p. 2: one card made from the teacher's page ----------
+// ---------- one card made from the teacher's page ----------
 
 const CARD_FRONT = 'Na osmose, a água passa pra qual meio?';
 
@@ -34,7 +32,9 @@ export function Flashcard() {
           <>
             <p className="card-band">{CARD_FRONT}</p>
             <p className="card-face">Pro meio mais concentrado, o hipertônico.</p>
-            <PageChip page={12} passage="fonte-osmose" />
+            <Cite target="fonte-osmose" label="Ver a página 12 do material">
+              p. 12
+            </Cite>
           </>
         )}
       </article>
@@ -68,7 +68,7 @@ export function Flashcard() {
   );
 }
 
-// ---------- p. 3: the plan, as memory over the days until the exam ----------
+// ---------- the plan, as memory over the days until the exam ----------
 
 const CHART_H = 250;
 const MIN_DAYS = 3;
@@ -208,7 +208,7 @@ export function PlanChart() {
   );
 }
 
-// ---------- p. 4: a tutor that only knows this page ----------
+// ---------- a tutor that only knows this page ----------
 
 type Message = { id: number; from: 'you'; text: string } | { id: number; from: 'tutor'; answer: TutorAnswer; general: boolean };
 
@@ -249,7 +249,7 @@ export function Tutor() {
     <div className="tutor">
       <img className="tutor-capi" src={capiCurious} alt="" width={112} height={112} />
       <div ref={logRef} className="tutor-log" aria-live="polite">
-        <p className="msg msg-tutor">Pergunte qualquer coisa sobre esta apostila. Eu respondo com base nela e mostro a página.</p>
+        <p className="msg msg-tutor">Pergunte qualquer coisa sobre o Studify. Eu respondo só com o que está nesta página e mostro de onde tirei.</p>
         {log.map((m) =>
           m.from === 'you' ? (
             <p key={m.id} className="msg msg-you">
@@ -258,7 +258,11 @@ export function Tutor() {
           ) : (
             <div key={m.id} className={`msg msg-tutor${m.answer.kind === 'missing' ? ' msg-missing' : ''}`}>
               <p>{m.answer.text}</p>
-              {m.answer.kind === 'grounded' && <PageChip page={m.answer.cite.page} passage={m.answer.cite.passage} />}
+              {m.answer.kind === 'grounded' && (
+                <Cite target={m.answer.cite.section} label={`Ver a seção ${m.answer.cite.label}`}>
+                  {m.answer.cite.label}
+                </Cite>
+              )}
               {m.answer.kind === 'missing' && m.answer.general && !m.general && (
                 <button type="button" className="key key-small" onClick={() => showGeneral(m.id)}>
                   Responder mesmo assim
@@ -272,7 +276,7 @@ export function Tutor() {
             </div>
           ),
         )}
-        {thinking && <p className="msg msg-tutor msg-thinking">Procurando na apostila…</p>}
+        {thinking && <p className="msg msg-tutor msg-thinking">Procurando na página…</p>}
       </div>
       <div className="suggestions" role="group" aria-label="Sugestões de pergunta">
         {SUGGESTIONS.map((s) => (
@@ -297,117 +301,6 @@ export function Tutor() {
           Perguntar
         </button>
       </form>
-    </div>
-  );
-}
-
-// ---------- p. 5: prova surpresa about the page itself ----------
-
-interface Question {
-  stem: string;
-  options: string[];
-  right: number;
-  sheet: SheetId;
-  passage: string;
-  page: number;
-}
-
-const QUESTIONS: Question[] = [
-  { stem: 'Nesta página, quanto vale um segundo?', options: ['Um minuto', 'Uma hora', 'Um dia'], right: 1, sheet: 'p1', passage: 'passagem-relogio', page: 1 },
-  {
-    stem: 'Quando o Studify marca uma revisão?',
-    options: ['Pouco antes de você esquecer', 'Todo dia, no mesmo horário', 'Só na véspera da prova'],
-    right: 0,
-    sheet: 'p3',
-    passage: 'passagem-plano',
-    page: 3,
-  },
-  {
-    stem: 'Se a resposta não está no seu material, o tutor…',
-    options: ['inventa uma resposta', 'procura na internet', 'avisa que não está lá'],
-    right: 2,
-    sheet: 'p4',
-    passage: 'passagem-tutor',
-    page: 4,
-  },
-];
-
-const LETTERS = ['A', 'B', 'C'];
-
-export function SurpriseQuiz() {
-  const [picks, setPicks] = useState<(number | null)[]>(() => QUESTIONS.map(() => null));
-  const [refreshed, setRefreshed] = useState<boolean[]>(() => QUESTIONS.map(() => false));
-  const done = picks.every((p) => p !== null);
-  const score = picks.filter((p, i) => p === QUESTIONS[i]!.right).length;
-
-  const pick = (qi: number, oi: number) => {
-    if (picks[qi] !== null) return;
-    const q = QUESTIONS[qi]!;
-    // Answering is a recall of the sheet the question came from: getting it right inks that sheet again.
-    const trace = review(q.sheet, oi === q.right);
-    setPicks((p) => p.map((v, i) => (i === qi ? oi : v)));
-    setRefreshed((r) => r.map((v, i) => (i === qi ? Boolean(trace) && oi === q.right : v)));
-  };
-
-  const redo = () => {
-    setPicks(QUESTIONS.map(() => null));
-    setRefreshed(QUESTIONS.map(() => false));
-  };
-
-  return (
-    <div className="quiz">
-      <ol className="questions">
-        {QUESTIONS.map((q, qi) => {
-          const chosen = picks[qi];
-          const answered = chosen !== null && chosen !== undefined;
-          return (
-            <li key={q.stem} className="question">
-              <p className="stem">{q.stem}</p>
-              <div className="options" role="group" aria-label={q.stem}>
-                {q.options.map((o, oi) => {
-                  const state = !answered ? '' : oi === q.right ? ' is-right' : oi === chosen ? ' is-wrong' : ' is-off';
-                  return (
-                    <button key={o} type="button" className={`key option${state}`} disabled={answered} onClick={() => pick(qi, oi)}>
-                      <span className="letter" aria-hidden="true">
-                        {LETTERS[oi]}
-                      </span>
-                      {o}
-                    </button>
-                  );
-                })}
-              </div>
-              {answered && (
-                <p className="feedback" role="status">
-                  {chosen === q.right ? (
-                    <>Acertou! {refreshed[qi] && `A p. ${q.page} ficou nítida de novo.`}</>
-                  ) : (
-                    <>Não foi dessa vez. A certa é a {LETTERS[q.right]}.</>
-                  )}{' '}
-                  <PageChip page={q.page} passage={q.passage} label={`Rever na p. ${q.page}`} />
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      {done && (
-        <div className="result" role="status">
-          {score === QUESTIONS.length && <img src={capiCelebrating} alt="" width={120} height={120} />}
-          <div>
-            <p className="result-score">
-              Você acertou {score} de {QUESTIONS.length}.
-            </p>
-            <p>
-              {score === QUESTIONS.length
-                ? 'Mandou bem! Lembrar sem olhar é o que mais fixa a memória.'
-                : 'No app, o que você errou já estaria virando cartão no Caderno de Erros.'}
-            </p>
-            <button type="button" className="key" onClick={redo}>
-              Refazer
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

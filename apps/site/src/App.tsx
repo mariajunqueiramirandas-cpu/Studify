@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { CodeCard, DownloadButton, Hero, InstallSteps, Page } from './components.tsx';
+import { CodeCard, DownloadButton, Hero, InstallHelp, Page } from './components.tsx';
 import { APP_SCHEME } from './config.ts';
 import { Landing } from './landing.tsx';
 import { linkKindOf, parseSharedLink, type SharedLink } from './links.ts';
@@ -17,12 +17,12 @@ function LinkPage({ link }: { link: SharedLink | null }) {
       />
       {link?.label && <CodeCard label={link.label} code={link.shown} />}
       {link && (
-        <a className="key key-primary key-large" href={link.deepLink}>
+        <a className="key key-large" href={link.deepLink}>
           Já tenho o app: abrir
         </a>
       )}
       <DownloadButton />
-      <InstallSteps withCode />
+      <InstallHelp withCode />
       <p className="note">Por enquanto o Studify é só para Android.</p>
     </Page>
   );

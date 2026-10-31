@@ -1,18 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import {
-  erosion,
-  firstRead,
-  formatClock,
-  formatSpan,
-  levelOf,
-  newCardRatings,
-  planCurve,
-  recall,
-  retrievability,
-} from '../src/memory.ts';
+import { firstRead, formatSpan, newCardRatings, planCurve, recall, retrievability } from '../src/memory.ts';
 
-describe('the page memory', () => {
-  test('a sheet read once fades on the FSRS curve: 90% after one stability, then lower and lower', () => {
+describe('the memory model', () => {
+  test('material read once fades on the FSRS curve: 90% after one stability, then lower and lower', () => {
     const read = firstRead(0);
     expect(retrievability(read, 0)).toBe(1);
     expect(retrievability(read, read.stability * 24)).toBeCloseTo(0.9, 5);
@@ -21,9 +11,8 @@ describe('the page memory', () => {
     expect(later[3]).toBeLessThan(0.7);
   });
 
-  test('an unread sheet is not forgotten', () => {
+  test('with no trace there is nothing to forget', () => {
     expect(retrievability(null, 1000)).toBe(1);
-    expect(levelOf(null, 1000)).toBe('unread');
   });
 
   test('remembering grows stability, more when it was harder; missing shrinks it', () => {
@@ -36,24 +25,7 @@ describe('the page memory', () => {
     expect(late.at).toBe(100);
   });
 
-  test('erosion starts just under 92% and is full by 58%', () => {
-    expect(erosion(1)).toBe(0);
-    expect(erosion(0.92)).toBe(0);
-    expect(erosion(0.75)).toBeGreaterThan(0.4);
-    expect(erosion(0.58)).toBe(1);
-    expect(erosion(0)).toBe(1);
-  });
-
-  test('levels follow the Mapa da Memória labels', () => {
-    const read = firstRead(0);
-    expect(levelOf(read, 1)).toBe('strong');
-    expect(levelOf(read, 300)).toBe('almost');
-  });
-
-  test('the page clock and spans read like the app', () => {
-    expect(formatClock(0)).toBe('Dia 1, 19:00');
-    expect(formatClock(5.5)).toBe('Dia 2, 00:30');
-    expect(formatClock(24 * 1200)).toBe('Dia 1.201, 19:00');
+  test('spans read like the app', () => {
     expect(formatSpan(0.5)).toBe('30 min');
     expect(formatSpan(1)).toBe('1 hora');
     expect(formatSpan(48)).toBe('2 dias');
